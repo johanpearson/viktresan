@@ -102,3 +102,8 @@ export function formatRate(kgPerWeek: number): string {
 export function decimalInput(value: number): string {
   return String(Math.round(value * 10) / 10).replace('.', ',');
 }
+
+/** 1250 → "1 250 ml". */
+export function formatMl(value: number): string {
+  return `${formatInt(Math.round(value))} ml`;
+}

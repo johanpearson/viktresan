@@ -39,7 +39,9 @@ src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore → { route, sub }
 src/lib/features.ts     Funktionsbrytare: FEATURES, useFeatures() (filter/isEnabled), lagras i settings
 src/lib/pwaUpdate.ts    Registrerar sw.js, söker uppdateringar, toast-tillstånd, SKIP_WAITING
 src/lib/version.ts      Version, commit och byggtid (Vite define)
-src/lib/calendar.ts     Månadsrutnät + vad som loggats per dag (buildDayIndex)
+src/lib/calendar.ts     Månads-/veckorutnät + vad som loggats/planerats per dag (buildDayIndex)
+src/lib/water.ts        Vattenmål (33 ml × trendvikt, 100 ml) och summor per dag
+src/lib/workouts.ts     Träning: scheman → pass, status, obesvarade/dagens/kommande pass
 src/lib/dayMarkers.ts   Loggtyper per dag (Kalender, Översikt → Idag), med funktion
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
 src/lib/useAppData.ts   Hook: läser vikt, midja, steg + profil; `reload()` returnerar ny data
@@ -70,8 +72,10 @@ src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …)
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
-                        (Dag | Egna | Historik), Kalender, Framsteg (Historik | Bilder), Inställningar
-e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat); hjälpare i helpers.ts.
+                        (Dag | Egna | Historik), Kalender (Månad | Vecka), Framsteg (Historik | Bilder),
+                        Inställningar
+e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning); hjälpare i
+                        helpers.ts. training.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
@@ -86,19 +90,22 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
 - **Funktionsbrytare** (`features.ts`, Inställningar → Funktioner): steg, midja, mat, vatten,
-  träning, glp1, bilder. Lagras i `settings` under `features`. Avstängd = dold överallt, datan
+  träning, glp1, bilder. Lagras i `settings` under `features` med `version` (`FLAGS_VERSION`);
+  lagrade värden för en funktion från före dess `availableSince` ignoreras (de var alltid "av"). Avstängd = dold överallt, datan
   ligger kvar och exporteras. Inga spridda if-satser: listor av vyer/flikar/rutor/markörer har
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
-  `<Feature id="…">`. Vatten, träning och GLP-1 är `available: false` ("Kommer snart") tills
-  de byggs – lägg då till en post i `LOG_TYPES` (Logga) och `DAY_MARKERS`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 4`). Object stores:
+  `<Feature id="…">`. GLP-1 är `available: false` ("Kommer snart") tills den byggs – lägg då
+  till en post i `LOG_TYPES` (Logga) och `DAY_MARKERS`, sätt `availableSince` och höj `FLAGS_VERSION`.
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 5`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
   `foods` (v4, egna livsmedel `egen:<uuid>` + cachade Open Food Facts-träffar `off:<ean>`, index `by-ean`),
   `meals` (v4, sparade måltider med ingredienser i gram), `foodLog` (v4, matlogg, index `by-date`),
-  `favorites` (v4, nyckel `foodId`).
-  Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5).
+  `favorites` (v4, nyckel `foodId`), `water` (v5, en post per tillfälle, index `by-date`),
+  `workouts` (v5, pass, index `by-date`), `workoutPlans` (v5, återkommande scheman).
+  Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5)
+  och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Livsmedels-id:n: `lv:<nummer>`, `egen:…`, `off:<ean>`, `maltid:<id>`.
   Midja och steg sparas med `upsertWaist`/`upsertSteps` (samma dag skrivs över, `createdAt` behålls).
@@ -118,6 +125,20 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Adaptiv TDEE: fönster ≤ 28 dagar t.o.m. igår, kräver ≥ 14 dagar med både vikt och matlogg och
   ≥ 80 % loggade dagar; regression på dagsvikterna, vikt = 0,9 × längd × täckning × precision
   (halveras om skattningen kläms till 0,6–1,6 × formeln).
+- **Vatten**: mål = eget `waterGoalMl`, annars 33 ml × senaste EMA-trendvikten avrundat till 100 ml
+  (utan mätningar: startvikten). `addWater` håller `createdAt` strikt växande per dag så att
+  `undoLastWater` ("Ångra senaste") alltid tar dagens senaste post. Ring + snabbknappar i Översikt → Idag,
+  valfri mängd i Logga → Vatten, historik i Framsteg → Historik.
+- **Träning**: pass (`Workout`) har datum, valfri tid (`HH:MM`, lokal), typ (förval + egna ur tidigare
+  pass), längd, valfri intensitet/anteckning och status `planerad`/`genomford`/`hoppad`. Scheman
+  (`WorkoutPlan`: veckodagar 0 = mån, tid, start/slut) genereras till pass vid visning
+  (`workoutsBetween`) och sparas först när de besvaras, med id `<planId>:<datum>` som då ersätter det
+  genererade. Ett planerat pass vars tid passerat (utan tid: när dagen är slut) är _obesvarat_ och
+  visas i "Blev passet av?" överst på Översikt (`findUnanswered`, 28 dagar bakåt). Idag visar dagens
+  pass (utom obesvarade) med Klar / Hoppa över; Klar öppnar `CompleteWorkoutSheet` med planens längd
+  och intensitet förifyllda. Kommande = tre nästa planerade efter idag. Kalenderns dagsvy har
+  statusväljare (ändra i efterhand) och Klar. Prickar: genomfört fylld, planerat ring, obesvarat röd,
+  hoppat grå fyrkant (`DayMarker.dots`).
 - **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Mat-vyn) hämtas med
   `npm run livsmedel` och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
   ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
@@ -143,11 +164,13 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 3`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 4`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
-    bildmetadata med `file`, `foods`, `meals`, `foodLog`, `favorites`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    bildmetadata med `file`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
+    `workoutPlans`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
-    `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor.
+    `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
+    vatten och träning och ger tomma listor.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.

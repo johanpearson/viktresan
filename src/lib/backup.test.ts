@@ -18,7 +18,10 @@ import {
   type Snapshot,
   type StepsEntry,
   type WaistEntry,
+  type WaterEntry,
   type WeightEntry,
+  type Workout,
+  type WorkoutPlan,
 } from '../db/db.ts';
 import {
   BACKUP_FORMAT,
@@ -129,6 +132,50 @@ const favorites: Favorite[] = [{ foodId: 'lv:2', createdAt: 11 }];
 
 const foodData = { foods, meals, foodLog, favorites };
 
+const water: WaterEntry[] = [
+  { id: 'v1', date: '2026-01-08', ml: 250, createdAt: 12 },
+  { id: 'v2', date: '2026-01-08', ml: 500, createdAt: 13, updatedAt: 14 },
+];
+
+const workoutPlans: WorkoutPlan[] = [
+  {
+    id: 'plan1',
+    type: 'Löpning',
+    weekdays: [0, 2, 4],
+    time: '07:00',
+    durationMin: 30,
+    intensity: 'medel',
+    startDate: '2026-01-05',
+    createdAt: 15,
+  },
+];
+
+const workouts: Workout[] = [
+  {
+    id: 'plan1:2026-01-07',
+    date: '2026-01-07',
+    time: '07:00',
+    type: 'Löpning',
+    durationMin: 35,
+    intensity: 'hog',
+    status: 'genomford',
+    planId: 'plan1',
+    createdAt: 16,
+  },
+  {
+    id: 'w2',
+    date: '2026-01-10',
+    type: 'Klättring',
+    durationMin: 90,
+    note: 'Egen typ',
+    status: 'hoppad',
+    createdAt: 17,
+    updatedAt: 18,
+  },
+];
+
+const trainingData = { water, workouts, workoutPlans };
+
 const weights: WeightEntry[] = [
   { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
   {
@@ -174,7 +221,10 @@ const photos: PhotoEntry[] = [
 ];
 
 async function seed(): Promise<void> {
-  await applySnapshot({ profile, weights, waist, steps, photos, ...foodData }, 'replace');
+  await applySnapshot(
+    { profile, weights, waist, steps, photos, ...foodData, ...trainingData },
+    'replace',
+  );
 }
 
 /** Gör om bilderna till byte-arrayer så att snapshots kan jämföras med toEqual. */
@@ -308,6 +358,9 @@ describe('backup validering', () => {
     meals: [],
     foodLog: [],
     favorites: [],
+    water: [],
+    workouts: [],
+    workoutPlans: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -386,9 +439,13 @@ describe('backup validering', () => {
         weights: [{ ...valid.weights[0], evil: '<script>' }],
         steps: [{ ...valid.steps[0], evil: '<script>' }],
         foodLog: [{ ...foodLog[1], evil: '<script>', per100: { ...foodLog[1]?.per100, x: 1 } }],
+        workouts: [{ ...workouts[0], evil: '<script>' }],
+        workoutPlans: [{ ...workoutPlans[0], evil: '<script>' }],
       }),
     });
     const contents = await readBackup(file);
+    expect(contents.snapshot.workouts).toEqual([workouts[0]]);
+    expect(contents.snapshot.workoutPlans).toEqual(workoutPlans);
     expect(contents.snapshot.weights).toEqual(valid.weights);
     expect(contents.snapshot.steps).toEqual(valid.steps);
     expect(contents.snapshot.foodLog).toEqual([foodLog[1]]);
@@ -449,6 +506,9 @@ describe('import av version 1 (kombinerade mätningar)', () => {
     meals: [],
     foodLog: [],
     favorites: [],
+    water: [],
+    workouts: [],
+    workoutPlans: [],
     profile,
     weights: [
       { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
@@ -562,6 +622,77 @@ describe('import av version 2 (utan mat)', () => {
   });
 });
 
+describe('import av version 3 (utan vatten och träning)', () => {
+  it('läser in maten och ger tomma listor för vatten och träning', async () => {
+    const v3 = {
+      format: BACKUP_FORMAT,
+      version: 3,
+      exportedAt: NOW.toISOString(),
+      profile,
+      weights,
+      waist,
+      steps,
+      photos: [],
+      ...foodData,
+    };
+    const contents = await readBackup(zipOf({ 'backup.json': JSON.stringify(v3) }));
+    expect(contents.snapshot).toEqual({
+      ...emptySnapshot(),
+      profile,
+      weights,
+      waist,
+      steps,
+      ...foodData,
+    });
+  });
+});
+
+describe('validering av vatten och träning', () => {
+  async function manifestWith(patch: Record<string, unknown>) {
+    const base = {
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportedAt: NOW.toISOString(),
+      profile: null,
+      weights: [],
+      waist: [],
+      steps: [],
+      photos: [],
+      foods: [],
+      meals: [],
+      foodLog: [],
+      favorites: [],
+      ...trainingData,
+      ...patch,
+    };
+    return errorOf(readBackup(zipOf({ 'backup.json': JSON.stringify(base) })));
+  }
+
+  it('avvisar ogiltiga poster', async () => {
+    const cases: Record<string, unknown>[] = [
+      { water: [{ id: 'x', date: '2026-01-01', ml: -5, createdAt: 1 }] },
+      { workouts: [{ ...workouts[1], status: 'kanske' }] },
+      { workouts: [{ ...workouts[0], time: '25:00' }] },
+      { workoutPlans: [{ ...workoutPlans[0], weekdays: [] }] },
+      { workoutPlans: [{ ...workoutPlans[0], weekdays: [1, 1] }] },
+      { workouts: [workouts[0], workouts[0]] },
+      { profile: { ...profile, waterGoalMl: 99_999 } },
+    ];
+    for (const patch of cases) {
+      expect((await manifestWith(patch)).code, JSON.stringify(patch)).toBe('invalid-data');
+    }
+    expect((await manifestWith({ water: undefined })).message).toMatch(/Vatten/);
+  });
+
+  it('behåller eget vattenmål i profilen', async () => {
+    const withGoal = { ...profile, waterGoalMl: 2500 };
+    const contents = await readBackup(
+      await createBackup({ ...emptySnapshot(), profile: withGoal }, { now: NOW }),
+    );
+    expect(contents.snapshot.profile).toEqual(withGoal);
+  });
+});
+
 describe('import slå ihop', () => {
   it('lägger till nya poster, senast ändrade vinner och befintlig profil behålls', async () => {
     await seed();
@@ -599,6 +730,16 @@ describe('import slå ihop', () => {
         { foodId: 'lv:2', createdAt: 99 },
         { foodId: 'lv:3', createdAt: 12 },
       ],
+      water: [
+        // Äldre version av v2 → ignoreras; ny post läggs till.
+        { id: 'v2', date: '2026-01-08', ml: 100, createdAt: 13 },
+        { id: 'v3', date: '2026-01-09', ml: 330, createdAt: 20 },
+      ],
+      workouts: [
+        // Status ändrad senare på den andra enheten → ersätter.
+        { ...(workouts[1] as Workout), status: 'genomford', updatedAt: 30 },
+      ],
+      workoutPlans: [{ ...(workoutPlans[0] as WorkoutPlan), id: 'plan2', weekdays: [5] }],
     };
     await applySnapshot(imported, 'merge');
 
@@ -626,6 +767,16 @@ describe('import slå ihop', () => {
       { foodId: 'lv:2', createdAt: 11 },
       { foodId: 'lv:3', createdAt: 12 },
     ]);
+    expect(after.water.map((w) => [w.id, w.ml])).toEqual([
+      ['v1', 250],
+      ['v2', 500],
+      ['v3', 330],
+    ]);
+    expect(after.workouts.map((w) => [w.id, w.status])).toEqual([
+      ['plan1:2026-01-07', 'genomford'],
+      ['w2', 'genomford'],
+    ]);
+    expect(after.workoutPlans.map((p) => p.id)).toEqual(['plan1', 'plan2']);
   });
 
   it('tar profilen från säkerhetskopian om det inte finns någon', async () => {
@@ -637,12 +788,18 @@ describe('import slå ihop', () => {
 describe('summarizeBackup', () => {
   it('sammanfattar innehållet', async () => {
     const contents = await readBackup(
-      await createBackup({ profile, weights, waist, steps, photos, ...foodData }, { now: NOW }),
+      await createBackup(
+        { profile, weights, waist, steps, photos, ...foodData, ...trainingData },
+        { now: NOW },
+      ),
     );
     expect(summarizeBackup(contents)).toEqual({
       foodLog: 2,
       foods: 2,
       meals: 1,
+      water: 2,
+      workouts: 2,
+      workoutPlans: 1,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,

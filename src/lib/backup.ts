@@ -1,10 +1,12 @@
 /**
- * Säkerhetskopiering: hela databasen (profil, vikt, midja, steg, bilder, mat) som en zip-fil,
+ * Säkerhetskopiering: hela databasen (profil, vikt, midja, steg, bilder, mat, vatten, träning)
+ * som en zip-fil,
  * valfritt krypterad med lösenord (PBKDF2-SHA-256 → AES-256-GCM via Web Crypto).
  *
  * Okrypterad zip:
  *   backup.json        format, version, exportedAt, profil, weights, waist, steps, bildmetadata,
- *                      foods, meals, foodLog, favorites (sedan version 3)
+ *                      foods, meals, foodLog, favorites (sedan version 3),
+ *                      water, workouts, workoutPlans (sedan version 4)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -26,16 +28,22 @@ import {
   type Snapshot,
   type StepsEntry,
   type WaistEntry,
+  type WaterEntry,
   type WeightEntry,
+  type Workout,
+  type WorkoutPlan,
 } from '../db/db.ts';
 import { isIsoDate } from './dates.ts';
 import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
 import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
+import { isTime } from './validation.ts';
+import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
+import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -79,6 +87,10 @@ export interface BackupSummary {
   /** Egna livsmedel och sparade måltider. */
   foods: number;
   meals: number;
+  /** Vattenposter, pass och återkommande scheman. */
+  water: number;
+  workouts: number;
+  workoutPlans: number;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -110,6 +122,9 @@ interface PlainManifest {
   meals: SavedMeal[];
   foodLog: FoodLogEntry[];
   favorites: Favorite[];
+  water: WaterEntry[];
+  workouts: Workout[];
+  workoutPlans: WorkoutPlan[];
 }
 
 interface EncryptedManifest {
@@ -160,6 +175,9 @@ export async function createBackup(
     meals: snapshot.meals,
     foodLog: snapshot.foodLog,
     favorites: snapshot.favorites,
+    water: snapshot.water,
+    workouts: snapshot.workouts,
+    workoutPlans: snapshot.workoutPlans,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -257,6 +275,8 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     ...snapshot.steps,
     ...snapshot.photos,
     ...snapshot.foodLog,
+    ...snapshot.water,
+    ...snapshot.workouts,
   ]
     .map((e) => e.date)
     .sort();
@@ -272,6 +292,9 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     foodLog: snapshot.foodLog.length,
     foods: snapshot.foods.length,
     meals: snapshot.meals.length,
+    water: snapshot.water.length,
+    workouts: snapshot.workouts.length,
+    workoutPlans: snapshot.workoutPlans.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -357,6 +380,8 @@ function parsePlain(
       photos: parsedPhotos,
       // Version 1–2 saknar mat.
       ...(version >= 3 ? parseFoodData(manifest) : emptyFoodData()),
+      // Version 1–3 saknar vatten och träning.
+      ...(version >= 4 ? parseTrainingData(manifest) : emptyTrainingData()),
     },
   };
 }
@@ -417,6 +442,28 @@ function parseFoodData(manifest: Record<string, unknown>): FoodData {
   return result;
 }
 
+type TrainingData = Pick<Snapshot, 'water' | 'workouts' | 'workoutPlans'>;
+
+function emptyTrainingData(): TrainingData {
+  return { water: [], workouts: [], workoutPlans: [] };
+}
+
+function parseTrainingData(manifest: Record<string, unknown>): TrainingData {
+  const { water, workouts, workoutPlans } = manifest;
+  if (!Array.isArray(water) || !Array.isArray(workouts) || !Array.isArray(workoutPlans)) {
+    throw invalid('Vatten- eller träningsdata saknas.');
+  }
+  const result: TrainingData = {
+    water: water.map((w, i) => parseWaterRecord(w, i)),
+    workouts: workouts.map((w, i) => parseWorkoutRecord(w, i)),
+    workoutPlans: workoutPlans.map((p, i) => parsePlanRecord(p, i)),
+  };
+  assertUniqueKeys(result.water, (w) => w.id, 'vattenpost');
+  assertUniqueKeys(result.workouts, (w) => w.id, 'pass');
+  assertUniqueKeys(result.workoutPlans, (p) => p.id, 'schema');
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Validering. Posterna byggs upp på nytt så att okända fält aldrig når databasen.
 
@@ -456,6 +503,15 @@ function parseProfileRecord(value: unknown): Profile {
     if (typeof value.ratePerWeekKg !== 'number' || !RATE_OPTIONS.includes(value.ratePerWeekKg))
       throw bad();
     profile.ratePerWeekKg = value.ratePerWeekKg;
+  }
+  if (value.waterGoalMl !== undefined) {
+    if (
+      !isInt(value.waterGoalMl) ||
+      value.waterGoalMl < WATER_GOAL_MIN_ML ||
+      value.waterGoalMl > WATER_GOAL_MAX_ML
+    )
+      throw bad();
+    profile.waterGoalMl = value.waterGoalMl;
   }
   return profile;
 }
@@ -658,6 +714,114 @@ function parseFavoriteRecord(value: unknown, index: number): Favorite {
   const bad = () => invalid(`Favorit nr ${index + 1} i säkerhetskopian är ogiltig.`);
   if (!isRecord(value) || !isId(value.foodId) || !isTimestamp(value.createdAt)) throw bad();
   return { foodId: value.foodId, createdAt: value.createdAt };
+}
+
+function parseWaterRecord(value: unknown, index: number): WaterEntry {
+  const bad = () => invalid(`Vattenpost nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isDate(value.date) ||
+    !isInt(value.ml) ||
+    value.ml < 1 ||
+    value.ml > WATER_ENTRY_MAX_ML
+  ) {
+    throw bad();
+  }
+  return { id: value.id, date: value.date, ml: value.ml, ...parseTimes(value, bad) };
+}
+
+function isDuration(value: unknown): value is number {
+  return isInt(value) && value >= 1 && value <= 600;
+}
+
+function parseOptionalIntensity(value: unknown, bad: () => BackupError): Intensity | undefined {
+  if (value === undefined) return undefined;
+  const intensity = INTENSITIES.find((i) => i.id === value);
+  if (!intensity) throw bad();
+  return intensity.id;
+}
+
+function parseOptionalNote(value: unknown, bad: () => BackupError): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length > 500) throw bad();
+  return value;
+}
+
+function parseWorkoutRecord(value: unknown, index: number): Workout {
+  const bad = () => invalid(`Pass nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  const status = isRecord(value) ? WORKOUT_STATUSES.find((s) => s.id === value.status) : undefined;
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isDate(value.date) ||
+    !isName(value.type) ||
+    !isDuration(value.durationMin) ||
+    !status
+  ) {
+    throw bad();
+  }
+  const workout: Workout = {
+    id: value.id,
+    date: value.date,
+    type: value.type,
+    durationMin: value.durationMin,
+    status: status.id,
+    ...parseTimes(value, bad),
+  };
+  if (value.time !== undefined) {
+    if (typeof value.time !== 'string' || !isTime(value.time)) throw bad();
+    workout.time = value.time;
+  }
+  const intensity = parseOptionalIntensity(value.intensity, bad);
+  if (intensity) workout.intensity = intensity;
+  const note = parseOptionalNote(value.note, bad);
+  if (note !== undefined) workout.note = note;
+  if (value.planId !== undefined) {
+    if (!isId(value.planId)) throw bad();
+    workout.planId = value.planId;
+  }
+  return workout;
+}
+
+function parsePlanRecord(value: unknown, index: number): WorkoutPlan {
+  const bad = () => invalid(`Schema nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isName(value.type) ||
+    !Array.isArray(value.weekdays) ||
+    value.weekdays.length === 0 ||
+    typeof value.time !== 'string' ||
+    !isTime(value.time) ||
+    !isDuration(value.durationMin) ||
+    !isDate(value.startDate)
+  ) {
+    throw bad();
+  }
+  const weekdays: number[] = [];
+  for (const d of value.weekdays as unknown[]) {
+    if (!isInt(d) || d < 0 || d > 6 || weekdays.includes(d)) throw bad();
+    weekdays.push(d);
+  }
+  const plan: WorkoutPlan = {
+    id: value.id,
+    type: value.type,
+    weekdays: weekdays.sort((a, b) => a - b),
+    time: value.time,
+    durationMin: value.durationMin,
+    startDate: value.startDate,
+    ...parseTimes(value, bad),
+  };
+  const intensity = parseOptionalIntensity(value.intensity, bad);
+  if (intensity) plan.intensity = intensity;
+  const note = parseOptionalNote(value.note, bad);
+  if (note !== undefined) plan.note = note;
+  if (value.endDate !== undefined) {
+    if (!isDate(value.endDate) || value.endDate < plan.startDate) throw bad();
+    plan.endDate = value.endDate;
+  }
+  return plan;
 }
 
 function parsePhotoRecord(

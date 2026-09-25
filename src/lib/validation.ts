@@ -10,6 +10,8 @@ import {
 import { normalizeEan } from './barcode.ts';
 import { parseDecimal } from './format.ts';
 import type { Nutrients } from './nutrition.ts';
+import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
+import { INTENSITIES, WORKOUT_STATUSES, type Intensity, type WorkoutStatus } from './workouts.ts';
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -234,4 +236,150 @@ export function parseLogAmount(
   }
   if (value == null || value <= 0 || value > 5000) return fail('Ange mängd i gram (1–5 000).');
   return { ok: true, value: { grams: value } };
+}
+
+function parseWholeNumber(text: string): number | null {
+  const clean = text.trim().replace(/\s/g, '');
+  if (!/^\d+$/.test(clean)) return null;
+  return Number(clean);
+}
+
+/** En vattenpost i ml (1–3 000). */
+export function parseWaterAmount(text: string): Parsed<number> {
+  const ml = parseWholeNumber(text);
+  if (ml == null || ml < 1 || ml > WATER_ENTRY_MAX_ML)
+    return fail(`Ange mängd i ml (1–${formatThousands(WATER_ENTRY_MAX_ML)}).`);
+  return { ok: true, value: ml };
+}
+
+/** Eget vattenmål i ml. Tomt = standardmålet (`null`). */
+export function parseWaterGoal(text: string): Parsed<number | null> {
+  if (text.trim() === '') return { ok: true, value: null };
+  const ml = parseWholeNumber(text);
+  if (ml == null || ml < WATER_GOAL_MIN_ML || ml > WATER_GOAL_MAX_ML) {
+    return fail(
+      `Ange ett mål i ml (${formatThousands(WATER_GOAL_MIN_ML)}–${formatThousands(WATER_GOAL_MAX_ML)}) eller lämna fältet tomt.`,
+    );
+  }
+  return { ok: true, value: ml };
+}
+
+function formatThousands(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function isTime(value: string): boolean {
+  return TIME.test(value);
+}
+
+function parseType(text: string): string | null {
+  const type = text.trim();
+  return type === '' || type.length > 60 ? null : type;
+}
+
+function parseDuration(text: string): number | null {
+  const min = parseWholeNumber(text);
+  return min == null || min < 1 || min > 600 ? null : min;
+}
+
+function parseIntensity(value: string): Intensity | undefined {
+  return INTENSITIES.find((i) => i.id === value)?.id;
+}
+
+export interface WorkoutFields {
+  date: string;
+  /** '' = hela dagen. */
+  time: string;
+  type: string;
+  duration: string;
+  /** '' = ej angiven. */
+  intensity: string;
+  note: string;
+  status: string;
+}
+
+export interface WorkoutValues {
+  date: string;
+  time?: string;
+  type: string;
+  durationMin: number;
+  intensity?: Intensity;
+  note?: string;
+  status: WorkoutStatus;
+}
+
+export function parseWorkoutFields(fields: WorkoutFields): Parsed<WorkoutValues> {
+  if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
+  const time = fields.time.trim();
+  if (time !== '' && !isTime(time)) return fail('Ange tid som TT:MM eller lämna fältet tomt.');
+  const type = parseType(fields.type);
+  if (type == null) return fail('Ange typ av pass (högst 60 tecken).');
+  const durationMin = parseDuration(fields.duration);
+  if (durationMin == null) return fail('Ange längd i minuter (1–600).');
+  const status = WORKOUT_STATUSES.find((s) => s.id === fields.status)?.id;
+  if (!status) return fail('Välj status.');
+  const value: WorkoutValues = { date: fields.date, type, durationMin, status };
+  if (time !== '') value.time = time;
+  const intensity = parseIntensity(fields.intensity);
+  if (intensity) value.intensity = intensity;
+  const note = fields.note.trim();
+  if (note !== '') value.note = note.slice(0, 500);
+  return { ok: true, value };
+}
+
+export interface PlanFields {
+  type: string;
+  weekdays: readonly number[];
+  time: string;
+  duration: string;
+  intensity: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface PlanValues {
+  type: string;
+  weekdays: number[];
+  time: string;
+  durationMin: number;
+  intensity?: Intensity;
+  startDate: string;
+  endDate?: string;
+}
+
+/** Återkommande schema: minst en veckodag och en tid. */
+export function parsePlanFields(fields: PlanFields): Parsed<PlanValues> {
+  const type = parseType(fields.type);
+  if (type == null) return fail('Ange typ av pass (högst 60 tecken).');
+  const weekdays = [...new Set(fields.weekdays)]
+    .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+    .sort((a, b) => a - b);
+  if (weekdays.length === 0) return fail('Välj minst en veckodag.');
+  if (!isTime(fields.time.trim())) return fail('Ange tid som TT:MM.');
+  const durationMin = parseDuration(fields.duration);
+  if (durationMin == null) return fail('Ange längd i minuter (1–600).');
+  if (!isIsoDate(fields.startDate)) return fail('Ange ett giltigt startdatum.');
+  const endDate = fields.endDate.trim();
+  if (endDate !== '' && !isIsoDate(endDate)) return fail('Ange ett giltigt slutdatum.');
+  if (endDate !== '' && endDate < fields.startDate)
+    return fail('Slutdatum kan inte ligga före startdatum.');
+  const value: PlanValues = {
+    type,
+    weekdays,
+    time: fields.time.trim(),
+    durationMin,
+    startDate: fields.startDate,
+  };
+  const intensity = parseIntensity(fields.intensity);
+  if (intensity) value.intensity = intensity;
+  if (endDate !== '') value.endDate = endDate;
+  return { ok: true, value };
+}
+
+/** Faktisk längd när ett pass bockas av. */
+export function parseDurationField(text: string): Parsed<number> {
+  const min = parseDuration(text);
+  return min == null ? fail('Ange längd i minuter (1–600).') : { ok: true, value: min };
 }

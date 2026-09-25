@@ -14,7 +14,12 @@ import {
   putWeight,
 } from './db/db.ts';
 import { todayIso } from './lib/dates.ts';
-import { DEFAULT_FLAGS, resetFeaturesForTests, type FeatureId } from './lib/features.ts';
+import {
+  DEFAULT_FLAGS,
+  FLAGS_VERSION,
+  resetFeaturesForTests,
+  type FeatureId,
+} from './lib/features.ts';
 import { deleteTestDb } from './test/db.ts';
 
 // uPlot behöver canvas, som jsdom saknar. Graferna testas i e2e.
@@ -28,12 +33,12 @@ afterEach(async () => {
 
 async function renderAt(hash: string, off: FeatureId[] = []) {
   if (off.length > 0) {
-    await setSetting(
-      SETTING_FEATURES,
-      Object.fromEntries(
+    await setSetting(SETTING_FEATURES, {
+      ...Object.fromEntries(
         Object.keys(DEFAULT_FLAGS).map((id) => [id, !off.includes(id as FeatureId)]),
       ),
-    );
+      version: FLAGS_VERSION,
+    });
   }
   window.location.hash = hash;
   render(<App />);
@@ -184,12 +189,18 @@ describe('funktionsbrytare', () => {
   it('allt påslaget: alla vyer visar steg, midja, mat och bilder', async () => {
     const v = await observe([]);
     expect(v.nav).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-    expect(v.today).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
+    expect(v.today).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
     expect(v.calorieCard).toBe(true);
-    expect(v.tiles).toEqual(['log-tile-vikt', 'log-tile-midja', 'log-tile-steg']);
+    expect(v.tiles).toEqual([
+      'log-tile-vikt',
+      'log-tile-midja',
+      'log-tile-steg',
+      'log-tile-vatten',
+      'log-tile-traning',
+    ]);
     expect(v.tabs).toEqual(['Historik', 'Bilder']);
     expect(v.history).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
-    expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
+    expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Vatten', 'Träning', 'Bilder']);
     expect(v.day).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
     expect(v.matPage).toBe('Mat');
     expect(v.bilderTab).toBe(true);
@@ -197,8 +208,13 @@ describe('funktionsbrytare', () => {
 
   it('steg av: döljs i Logga, Översikt, Kalender och grafer', async () => {
     const v = await observe(['steg']);
-    expect(v.tiles).toEqual(['log-tile-vikt', 'log-tile-midja']);
-    expect(v.today).toEqual(['Vikt', 'Midja', 'Mat', 'Bilder']);
+    expect(v.tiles).toEqual([
+      'log-tile-vikt',
+      'log-tile-midja',
+      'log-tile-vatten',
+      'log-tile-traning',
+    ]);
+    expect(v.today).toEqual(['Vatten', 'Mat', 'Träning']);
     expect(v.history).not.toContain('Steg');
     expect(v.history).toContain('Midjemått');
     expect(v.legend).not.toContain('Steg');
@@ -208,8 +224,13 @@ describe('funktionsbrytare', () => {
 
   it('midjemått av: döljs i Logga, Översikt, Kalender och historik', async () => {
     const v = await observe(['midja']);
-    expect(v.tiles).toEqual(['log-tile-vikt', 'log-tile-steg']);
-    expect(v.today).toEqual(['Vikt', 'Steg', 'Mat', 'Bilder']);
+    expect(v.tiles).toEqual([
+      'log-tile-vikt',
+      'log-tile-steg',
+      'log-tile-vatten',
+      'log-tile-traning',
+    ]);
+    expect(v.today).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
     expect(v.history).not.toContain('Midjemått');
     expect(v.history).toContain('Steg');
     expect(v.legend).not.toContain('Midja');
@@ -220,11 +241,11 @@ describe('funktionsbrytare', () => {
     const v = await observe(['mat']);
     expect(v.nav).toEqual(['Översikt', 'Logga', 'Kalender', 'Framsteg']);
     expect(v.calorieCard).toBe(false);
-    expect(v.today).toEqual(['Vikt', 'Midja', 'Steg', 'Bilder']);
+    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
     expect(v.legend).not.toContain('Mat');
     expect(v.day).not.toContain('Mat');
     expect(v.matPage).toBe('Översikt');
-    expect(v.tiles).toHaveLength(3);
+    expect(v.tiles).toHaveLength(5);
   });
 
   it('bilder av: fliken döljs i Framsteg och i Kalender', async () => {
@@ -233,7 +254,17 @@ describe('funktionsbrytare', () => {
     expect(v.bilderTab).toBe(false);
     expect(v.legend).not.toContain('Bilder');
     expect(v.day).not.toContain('Bilder');
-    expect(v.today).toEqual(['Vikt', 'Midja', 'Steg', 'Mat']);
+    expect(v.today).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
+  });
+
+  it('vatten och träning av: döljs i Logga, Översikt, Kalender och historik', async () => {
+    const v = await observe(['vatten', 'traning']);
+    expect(v.tiles).toEqual(['log-tile-vikt', 'log-tile-midja', 'log-tile-steg']);
+    expect(v.today).toEqual(['Steg', 'Mat']);
+    expect(screen.queryByTestId('water-ring')).not.toBeInTheDocument();
+    expect(v.history).not.toContain('Vatten');
+    expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
+    expect(screen.queryByRole('list', { name: 'Träningsstatus' })).not.toBeInTheDocument();
   });
 
   it('brytaren i Inställningar ändrar vyerna direkt, datan ligger kvar', async () => {
@@ -259,7 +290,7 @@ describe('funktionsbrytare', () => {
 
   it('kommande funktioner visas men kan inte slås på', async () => {
     await renderAt('#/installningar');
-    for (const name of [/^Vatten/, /^Träning/, /^GLP-1/]) {
+    for (const name of [/^GLP-1/]) {
       const toggle = await screen.findByRole('switch', { name });
       expect(toggle).toBeDisabled();
       expect(toggle).not.toBeChecked();

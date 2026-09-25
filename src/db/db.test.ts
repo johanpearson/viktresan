@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  addWater,
   DB_NAME,
   DB_VERSION,
   deleteFood,
@@ -19,12 +20,20 @@ import {
   listPhotos,
   listSteps,
   listWaist,
+  listWater,
   listWeights,
+  listWorkoutPlans,
+  listWorkouts,
   putFood,
   putFoodLog,
   putMeal,
   putPhoto,
   putWeight,
+  putWorkout,
+  putWorkoutPlan,
+  deleteWorkout,
+  deleteWorkoutPlan,
+  undoLastWater,
   resetDbForTests,
   saveProfile,
   setFavorite,
@@ -137,7 +146,10 @@ describe('db', () => {
       'settings',
       'steps',
       'waist',
+      'water',
       'weights',
+      'workoutPlans',
+      'workouts',
     ]);
   });
 
@@ -252,12 +264,12 @@ describe('db', () => {
     expect(await getOldestEntryTime()).toBe(20);
   });
 
-  it('migrerar v2 → v4 i ett steg: lägger till matstores och behåller data', async () => {
+  it('migrerar v2 → senaste i ett steg: lägger till matstores och behåller data', async () => {
     await createV2Database([
       { id: 'a', date: '2026-01-01', weightKg: 90, steps: 5000, createdAt: 1 },
     ]);
     const db = await getDb();
-    expect(db.version).toBe(4);
+    expect(db.version).toBe(DB_VERSION);
     expect(await listWeights()).toEqual([
       { id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 },
     ]);
@@ -267,16 +279,111 @@ describe('db', () => {
     expect(await listFavorites()).toEqual([]);
   });
 
-  it('migrerar v3 → v4: lägger till matstores och behåller data', async () => {
+  it('migrerar v3 → senaste: lägger till mat-, vatten- och träningsstores och behåller data', async () => {
     await createV3Database();
     const db = await getDb();
-    expect(db.version).toBe(4);
+    expect(db.version).toBe(DB_VERSION);
     expect([...db.objectStoreNames]).toEqual(
-      expect.arrayContaining(['foods', 'meals', 'foodLog', 'favorites']),
+      expect.arrayContaining([
+        'foods',
+        'meals',
+        'foodLog',
+        'favorites',
+        'water',
+        'workouts',
+        'workoutPlans',
+      ]),
     );
     expect(await listWeights()).toHaveLength(1);
     expect(await listSteps()).toEqual([{ date: '2026-01-01', steps: 5000, createdAt: 1 }]);
     expect(await listFoodLog()).toEqual([]);
+  });
+
+  it('migrerar v4 → v5: lägger till vatten och träning och behåller maten', async () => {
+    await createV3Database();
+    // Öppna som v4 med den riktiga koden vore att köra om v5-blocket; bygg v4 för hand.
+    await resetDbForTests();
+    const raw = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 4);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const foods = db.createObjectStore('foods', { keyPath: 'id' });
+        foods.createIndex('by-ean', 'ean');
+        db.createObjectStore('meals', { keyPath: 'id' });
+        const foodLog = db.createObjectStore('foodLog', { keyPath: 'id' });
+        foodLog.createIndex('by-date', 'date');
+        db.createObjectStore('favorites', { keyPath: 'foodId' });
+        foods.put({ id: 'egen:x', name: 'X', source: 'egen', per100: {}, createdAt: 1 });
+      };
+      req.onsuccess = () => {
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        reject(req.error ?? new Error('open failed'));
+      };
+    });
+    raw.close();
+    const db = await getDb();
+    expect(db.version).toBe(5);
+    expect(await listFoods()).toHaveLength(1);
+    expect(await listWeights()).toHaveLength(1);
+    expect(await listWater()).toEqual([]);
+    expect(await listWorkouts()).toEqual([]);
+    expect(await listWorkoutPlans()).toEqual([]);
+  });
+
+  it('vatten: flera poster per dag, ångra tar bort dagens senaste', async () => {
+    await addWater('2026-09-25', 250, 1);
+    await addWater('2026-09-25', 500, 3);
+    await addWater('2026-09-24', 330, 5);
+    expect((await listWater()).map((w) => [w.date, w.ml])).toEqual([
+      ['2026-09-24', 330],
+      ['2026-09-25', 250],
+      ['2026-09-25', 500],
+    ]);
+    expect((await undoLastWater('2026-09-25'))?.ml).toBe(500);
+    expect((await listWater()).map((w) => w.ml)).toEqual([330, 250]);
+    expect(await undoLastWater('2026-09-23')).toBeNull();
+    // Samma millisekund: ordningen behålls ändå.
+    await addWater('2026-09-26', 100, 50);
+    await addWater('2026-09-26', 200, 50);
+    expect((await undoLastWater('2026-09-26'))?.ml).toBe(200);
+    expect(await getOldestEntryTime()).toBe(1);
+  });
+
+  it('pass och scheman: sparas, listas och tas bort', async () => {
+    await putWorkoutPlan({
+      id: 'p',
+      type: 'Löpning',
+      weekdays: [0, 2, 4],
+      time: '07:00',
+      durationMin: 30,
+      startDate: '2026-09-14',
+      createdAt: 1,
+    });
+    await putWorkout({
+      id: 'b',
+      date: '2026-09-20',
+      type: 'Yoga',
+      durationMin: 20,
+      status: 'planerad',
+      createdAt: 3,
+    });
+    await putWorkout({
+      id: 'p:2026-09-14',
+      date: '2026-09-14',
+      type: 'Löpning',
+      durationMin: 35,
+      status: 'genomford',
+      planId: 'p',
+      createdAt: 4,
+    });
+    expect((await listWorkouts()).map((w) => w.id)).toEqual(['p:2026-09-14', 'b']);
+    expect((await listWorkoutPlans()).map((p) => p.id)).toEqual(['p']);
+    await deleteWorkout('b');
+    await deleteWorkoutPlan('p');
+    expect((await listWorkouts()).map((w) => w.id)).toEqual(['p:2026-09-14']);
+    expect(await listWorkoutPlans()).toEqual([]);
   });
 
   it('matlogg: sparas, listas i datumordning och tas bort', async () => {

@@ -4,6 +4,7 @@ import { deleteTestDb } from '../test/db.ts';
 import {
   DEFAULT_FLAGS,
   FEATURES,
+  FLAGS_VERSION,
   filterEnabled,
   initFeatures,
   parseFlags,
@@ -23,8 +24,8 @@ describe('parseFlags', () => {
       steg: true,
       midja: true,
       mat: true,
-      vatten: false,
-      traning: false,
+      vatten: true,
+      traning: true,
       glp1: false,
       bilder: true,
     });
@@ -39,9 +40,42 @@ describe('parseFlags', () => {
 
   it('kommande funktioner kan inte slås på', () => {
     const upcoming = FEATURES.filter((f) => !f.available);
-    expect(upcoming.map((f) => f.id)).toEqual(['vatten', 'traning', 'glp1']);
+    expect(upcoming.map((f) => f.id)).toEqual(['glp1']);
     const flags = parseFlags(Object.fromEntries(upcoming.map((f) => [f.id, true])));
     for (const f of upcoming) expect(flags[f.id]).toBe(false);
+  });
+});
+
+describe('nya funktioner', () => {
+  it('äldre lagrade "av" för vatten och träning (då kommande) ignoreras', () => {
+    const old = {
+      steg: false,
+      midja: true,
+      mat: true,
+      vatten: false,
+      traning: false,
+      bilder: true,
+    };
+    const flags = parseFlags(old);
+    expect(flags.steg).toBe(false);
+    expect(flags.vatten).toBe(true);
+    expect(flags.traning).toBe(true);
+  });
+
+  it('efter version 2 gäller lagrade val även för vatten och träning', () => {
+    const flags = parseFlags({ version: FLAGS_VERSION, vatten: false, traning: true });
+    expect(flags.vatten).toBe(false);
+    expect(flags.traning).toBe(true);
+  });
+});
+
+describe('setFeature', () => {
+  it('vatten och träning kan slås av och på', async () => {
+    await initFeatures();
+    await setFeature('vatten', false);
+    expect(parseFlags(await getSetting(SETTING_FEATURES)).vatten).toBe(false);
+    await setFeature('vatten', true);
+    expect(parseFlags(await getSetting(SETTING_FEATURES)).vatten).toBe(true);
   });
 });
 
@@ -61,7 +95,11 @@ describe('lagring', () => {
   it('sparar ändringar i IndexedDB och läser dem vid nästa start', async () => {
     await initFeatures();
     await setFeature('mat', false);
-    expect(await getSetting(SETTING_FEATURES)).toEqual({ ...DEFAULT_FLAGS, mat: false });
+    expect(await getSetting(SETTING_FEATURES)).toEqual({
+      ...DEFAULT_FLAGS,
+      mat: false,
+      version: FLAGS_VERSION,
+    });
 
     resetFeaturesForTests();
     await setSetting(SETTING_FEATURES, { ...DEFAULT_FLAGS, bilder: false });
@@ -71,6 +109,7 @@ describe('lagring', () => {
       ...DEFAULT_FLAGS,
       bilder: false,
       steg: false,
+      version: FLAGS_VERSION,
     });
   });
 });

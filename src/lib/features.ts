@@ -19,7 +19,15 @@ export interface FeatureInfo {
   defaultOn: boolean;
   /** Finns det något att visa ännu? Kommande funktioner kan inte slås på. */
   available: boolean;
+  /**
+   * Inställningsversionen då funktionen blev tillgänglig. Äldre lagrade värden för
+   * den (alltid "av", eftersom den inte gick att slå på) ignoreras.
+   */
+  availableSince?: number;
 }
+
+/** Version av den lagrade inställningen. Höj när en kommande funktion blir tillgänglig. */
+export const FLAGS_VERSION = 2;
 
 /** Ordningen här styr ordningen under Inställningar → Funktioner. */
 export const FEATURES: readonly FeatureInfo[] = [
@@ -47,16 +55,18 @@ export const FEATURES: readonly FeatureInfo[] = [
   {
     id: 'vatten',
     label: 'Vatten',
-    description: 'Logga hur mycket du dricker.',
-    defaultOn: false,
-    available: false,
+    description: 'Logga hur mycket du dricker mot ett dagligt mål.',
+    defaultOn: true,
+    available: true,
+    availableSince: 2,
   },
   {
     id: 'traning',
     label: 'Träning',
-    description: 'Logga träningspass.',
-    defaultOn: false,
-    available: false,
+    description: 'Planera och logga träningspass, även återkommande.',
+    defaultOn: true,
+    available: true,
+    availableSince: 2,
   },
   {
     id: 'glp1',
@@ -98,12 +108,15 @@ export function filterEnabled<T extends FeatureGated>(
 
 /**
  * Tolkar det lagrade värdet. Okända nycklar släpps, saknade får standardläget och
- * funktioner som inte finns ännu är alltid av.
+ * funktioner som inte finns ännu är alltid av. Värden sparade innan en funktion blev
+ * tillgänglig (`availableSince`) räknas som saknade.
  */
 export function parseFlags(raw: unknown): FeatureFlags {
   const stored = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const version = typeof stored.version === 'number' ? stored.version : 1;
   const flags = { ...DEFAULT_FLAGS };
   for (const f of FEATURES) {
+    if (f.availableSince != null && version < f.availableSince) continue;
     const value = stored[f.id];
     if (typeof value === 'boolean') flags[f.id] = value && f.available;
   }
@@ -154,9 +167,9 @@ export function initFeatures(): Promise<void> {
 }
 
 export async function setFeature(id: FeatureId, on: boolean): Promise<void> {
-  const flags = parseFlags({ ...state.flags, [id]: on });
+  const flags = parseFlags({ ...state.flags, [id]: on, version: FLAGS_VERSION });
   setState({ loaded: true, flags });
-  await setSetting(SETTING_FEATURES, flags);
+  await setSetting(SETTING_FEATURES, { ...flags, version: FLAGS_VERSION });
 }
 
 export function resetFeaturesForTests(): void {

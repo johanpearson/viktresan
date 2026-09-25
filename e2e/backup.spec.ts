@@ -65,6 +65,34 @@ const DATA = {
     },
   ],
   favorites: [{ foodId: 'egen:bulle', createdAt: 1_700_000_000_000 }],
+  water: [
+    { id: 'v1', date: isoDaysFromToday(-1), ml: 250, createdAt: 1_700_000_100_000 },
+    { id: 'v2', date: isoDaysFromToday(-1), ml: 500, createdAt: 1_700_000_110_000 },
+  ],
+  workoutPlans: [
+    {
+      id: 'plan1',
+      type: 'Löpning',
+      weekdays: [0, 2, 4],
+      time: '07:00',
+      durationMin: 30,
+      intensity: 'medel',
+      startDate: isoDaysFromToday(-14),
+      createdAt: 1_700_000_000_000,
+    },
+  ],
+  workouts: [
+    {
+      id: 'w1',
+      date: isoDaysFromToday(-2),
+      time: '18:00',
+      type: 'Klättring',
+      durationMin: 90,
+      note: 'Egen typ',
+      status: 'genomford',
+      createdAt: 1_700_000_090_000,
+    },
+  ],
   weights: [
     { id: 'a', date: isoDaysFromToday(-30), weightKg: 90, createdAt: 1_700_000_000_000 },
     {
@@ -138,6 +166,9 @@ test('export → import ger identisk data', async ({ page }) => {
   expect(before.foods).toHaveLength(1);
   expect(before.meals).toHaveLength(1);
   expect(before.favorites).toHaveLength(1);
+  expect(before.water).toHaveLength(2);
+  expect(before.workouts).toHaveLength(1);
+  expect(before.workoutPlans).toHaveLength(1);
 
   await openSettings(page);
   await expect(page.getByTestId('last-export')).toHaveText('Ingen export gjord ännu.');
@@ -157,6 +188,8 @@ test('export → import ger identisk data', async ({ page }) => {
   await expect(preview.getByTestId('preview-photos')).toHaveText('1 (12 B)');
   await expect(preview.getByTestId('preview-food-log')).toHaveText('2');
   await expect(preview.getByTestId('preview-foods')).toHaveText('1 + 1');
+  await expect(preview.getByTestId('preview-water')).toHaveText('2');
+  await expect(preview.getByTestId('preview-workouts')).toHaveText('1 + 1');
   await expect(preview).toContainText('Krypterad');
 
   await preview.getByLabel(/Ersätt all befintlig data/).check();

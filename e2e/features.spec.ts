@@ -93,12 +93,12 @@ test('allt på som standard', async ({ page }) => {
   const errors = collectErrors(page);
   const v = await observe(page);
   expect(v.navLabels).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-  expect(v.todayLabels).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
+  expect(v.todayLabels).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
   expect(v.calorieCard).toBe(1);
-  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg']);
+  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg', 'Vatten', 'Träning']);
   expect(v.tabs).toEqual(['Historik', 'Bilder']);
   expect(v.sections).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
-  expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
+  expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Vatten', 'Träning', 'Bilder']);
   await expect(page.getByTestId('calendar-value-bilder')).toHaveText(/1 bild/);
   expect(errors).toEqual([]);
 });
@@ -106,7 +106,7 @@ test('allt på som standard', async ({ page }) => {
 test('steg av döljer steg i Logga, Översikt, Kalender och grafer', async ({ page }) => {
   await setFeature(page, /^Steg/, false);
   const v = await observe(page);
-  expect(v.tiles).toEqual(['Vikt', 'Midja']);
+  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Vatten', 'Träning']);
   expect(v.todayLabels).not.toContain('Steg');
   expect(v.sections).not.toContain('Steg');
   await page.goto('./#/framsteg');
@@ -121,7 +121,7 @@ test('steg av döljer steg i Logga, Översikt, Kalender och grafer', async ({ pa
 test('midjemått av döljer midja i Logga, Översikt, Kalender och historik', async ({ page }) => {
   await setFeature(page, /^Midjemått/, false);
   const v = await observe(page);
-  expect(v.tiles).toEqual(['Vikt', 'Steg']);
+  expect(v.tiles).toEqual(['Vikt', 'Steg', 'Vatten', 'Träning']);
   expect(v.todayLabels).not.toContain('Midja');
   expect(v.sections).not.toContain('Midjemått');
   expect(v.legend).not.toContain('Midja');
@@ -200,7 +200,7 @@ test('avstängda funktioner: datan ligger kvar, exporteras och syns igen', async
 
 test('kommande funktioner kan inte slås på', async ({ page }) => {
   await page.goto('./#/installningar');
-  for (const name of [/^Vatten/, /^Träning/, /^GLP-1/]) {
+  for (const name of [/^GLP-1/]) {
     const toggle = page.getByRole('switch', { name });
     await expect(toggle).toBeDisabled();
     await expect(toggle).not.toBeChecked();

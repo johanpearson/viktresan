@@ -88,7 +88,7 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await expect(page.getByTestId('forecast')).toContainText(/[−-]1,0 kg\/vecka/);
   await expect(page.getByTestId('forecast')).toContainText('når du målet omkring');
 
-  await expect(page.getByTestId('today-vikt')).toContainText('86,0 kg');
+  await expect(page.getByTestId('today-card')).toBeVisible();
 
   // Framsteg → Historik: graf med tre punkter, trend och mål + lista.
   await nav(page).getByRole('link', { name: 'Framsteg' }).tap();
