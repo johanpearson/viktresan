@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Mat', 'Bilder'] as const;
+const SECTIONS = ['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg'] as const;
 
 /** Samlar CSP-överträdelser och konsolfel så att varje test kan kräva noll. */
 function collectErrors(page: Page): string[] {
@@ -39,8 +39,8 @@ test('kugghjulet på Översikt öppnar Inställningar', async ({ page }) => {
 });
 
 test('bottennavigeringen är solid och döljer inget innehåll', async ({ page }) => {
-  await page.goto('./#/logga');
-  await expect(page.getByRole('button', { name: 'Spara', exact: true })).toBeVisible();
+  await page.goto('./#/installningar');
+  await expect(page.getByRole('button', { name: 'Sök efter uppdatering' })).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Huvudmeny' });
 
   // Helt ogenomskinlig bakgrund.
@@ -208,7 +208,7 @@ test('viktgrafen ritas utan CSP-fel', async ({ page }) => {
     db.close();
   });
 
-  await page.goto('./#/historik');
+  await page.goto('./#/framsteg');
   await page.getByRole('button', { name: 'Allt' }).tap();
   await expect(page.getByRole('img', { name: /Viktgraf/ }).locator('canvas')).toBeVisible();
   expect(errors).toEqual([]);

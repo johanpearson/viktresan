@@ -1,11 +1,17 @@
-import { NAV_ROUTES, hrefFor, type Route } from '../routes.ts';
+import { hrefFor, type Route } from '../routes.ts';
 import { NavIcon } from './NavIcon.tsx';
 
-export function NavBar({ current }: { current: Route }) {
+interface NavBarProps {
+  /** Routes att visa – redan filtrerade på påslagna funktioner. */
+  routes: readonly Route[];
+  current: Route;
+}
+
+export function NavBar({ routes, current }: NavBarProps) {
   return (
     <nav className="nav" aria-label="Huvudmeny">
       <ul className="nav-list">
-        {NAV_ROUTES.map((route) => {
+        {routes.map((route) => {
           const active = route.id === current.id;
           return (
             <li key={route.id}>

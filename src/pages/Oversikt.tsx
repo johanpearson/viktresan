@@ -1,8 +1,11 @@
+import type { ReactNode } from 'react';
 import { BackupReminder } from '../components/BackupReminder.tsx';
 import { CaloriePlanCard } from '../components/CaloriePlanCard.tsx';
+import { Feature } from '../components/Feature.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
+import { TodayCard } from '../components/TodayCard.tsx';
 import type { FoodLogEntry, Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatBmi, formatDate, formatKg, formatShortDate } from '../lib/format.ts';
@@ -37,7 +40,9 @@ export function Oversikt() {
           (kugghjulet) – startvikt, längd och mål.
         </EmptyState>
       ) : (
-        <Summary profile={data.profile} weights={data.weights} foodLog={data.foodLog} />
+        <Summary profile={data.profile} weights={data.weights} foodLog={data.foodLog}>
+          <TodayCard data={data} />
+        </Summary>
       )}
     </Page>
   );
@@ -47,9 +52,11 @@ interface SummaryProps {
   profile: Profile;
   weights: WeightEntry[];
   foodLog: FoodLogEntry[];
+  /** Visas direkt under dagens vikt. */
+  children?: ReactNode;
 }
 
-function Summary({ profile, weights, foodLog }: SummaryProps) {
+function Summary({ profile, weights, foodLog, children }: SummaryProps) {
   const today = todayIso();
   const daily = dailyWeights(weights);
   const latest = daily[daily.length - 1];
@@ -79,6 +86,8 @@ function Summary({ profile, weights, foodLog }: SummaryProps) {
           {trendKg != null && daily.length > 1 ? ` · Trend ${formatKg(trendKg)}` : ''}
         </p>
       </div>
+
+      {children}
 
       <div className="card">
         <dl className="stats">
@@ -113,7 +122,9 @@ function Summary({ profile, weights, foodLog }: SummaryProps) {
         </p>
       </div>
 
-      <CaloriePlanCard profile={profile} result={plan} />
+      <Feature id="mat">
+        <CaloriePlanCard profile={profile} result={plan} />
+      </Feature>
 
       <section className="card" aria-labelledby="weeks-title">
         <h2 className="card-title" id="weeks-title">

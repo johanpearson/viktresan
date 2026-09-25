@@ -142,8 +142,8 @@ async function readStoredPhotos(page: Page): Promise<StoredPhoto[]> {
 
 test('ladda upp, visa, jämföra och ta bort progressbilder', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('./#/bilder');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Bilder');
+  await page.goto('./#/framsteg/bilder');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Framsteg');
   await expect(page.getByText('Här samlas dina progressbilder')).toBeVisible();
   await expect(page.getByTestId('photo-storage')).toHaveText('0 st · 0 B');
   await expect(page.getByTestId('storage-usage')).toContainText(/\d/);
