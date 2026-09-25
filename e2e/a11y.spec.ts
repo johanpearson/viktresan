@@ -1,13 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { isoDaysFromToday, seed } from './helpers.ts';
+import { isoDaysFromToday, openLog, seed } from './helpers.ts';
 
 const ROUTES = [
   ['Översikt', './'],
   ['Logga', './#/logga'],
-  ['Historik', './#/historik'],
   ['Mat', './#/mat'],
-  ['Bilder', './#/bilder'],
+  ['Kalender', './#/kalender'],
+  ['Framsteg', './#/framsteg'],
+  ['Framsteg', './#/framsteg/bilder'],
   ['Inställningar', './#/installningar'],
 ] as const;
 
@@ -91,16 +92,25 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await page.waitForLoadState('networkidle');
         await expectNoViolations(page, label);
       }
-      // Logga → Midja med data och anteckningsfältet.
+      // Logga: panelerna för vikt (med anteckningsfältet), midja och steg.
       await page.goto('./#/logga');
+      await openLog(page, 'vikt');
       await page.getByRole('button', { name: 'Lägg till anteckning' }).tap();
       await expectNoViolations(page, 'Logga vikt med anteckning');
-      await page.getByRole('button', { name: 'Midja', exact: true }).tap();
+      await openLog(page, 'midja');
       await expect(page.getByTestId('waist-entry')).toHaveCount(1);
       await expectNoViolations(page, 'Logga midja');
-      await page.getByRole('button', { name: 'Steg', exact: true }).tap();
-      await expect(page.getByRole('img', { name: 'Stapelgraf med steg per dag' })).toBeVisible();
+      await openLog(page, 'steg');
       await expectNoViolations(page, 'Logga steg');
+      // Framsteg → Historik med steggraf och midjemått.
+      await page.goto('./#/framsteg');
+      await expect(page.getByRole('img', { name: 'Stapelgraf med steg per dag' })).toBeVisible();
+      await expect(page.getByTestId('waist-history')).toBeVisible();
+      await expectNoViolations(page, 'Framsteg historik');
+      // Kalender: en dag med data vald.
+      await page.goto('./#/kalender');
+      await expect(page.getByTestId('calendar-value-vikt')).toBeVisible();
+      await expectNoViolations(page, 'Kalender');
       // Mat: loggformulär, egna livsmedel, måltid och historik.
       await page.goto('./#/mat');
       await page.getByTestId('quick-pick').first().tap();

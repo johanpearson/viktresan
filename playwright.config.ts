@@ -18,6 +18,8 @@ export default defineConfig({
   // E2E körs mot produktionsbygget så att CSP och service worker testas på riktigt.
   webServer: {
     command: 'npm run build && npm run preview',
+    // Slår på preview-serverns låtsade "ny version" (se e2eNewVersion i vite.config.ts).
+    env: { VIKTRESAN_E2E: '1' },
     url: `http://localhost:${PORT}/viktresan/`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

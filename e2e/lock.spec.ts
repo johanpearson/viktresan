@@ -85,5 +85,5 @@ test('utan plattformsautentiserare kan låset inte slås på', async ({ page }) 
   });
   await page.goto('./#/installningar');
   await expect(page.getByTestId('lock-unsupported')).toBeVisible();
-  await expect(page.getByRole('switch')).toHaveCount(0);
+  await expect(page.getByRole('switch', { name: /Lås appen/ })).toHaveCount(0);
 });

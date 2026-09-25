@@ -1,9 +1,38 @@
 /// <reference types="vitest/config" />
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 const BASE = '/viktresan/';
+
+/**
+ * Versionsinformation som visas under Inställningar → Om appen. Deploy-workflowen
+ * sätter APP_COMMIT och APP_BUILD_TIME; lokalt läses commit från git.
+ */
+function buildInfo(): { version: string; commit: string; buildTime: string } {
+  const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+    version: string;
+  };
+  let commit = process.env.APP_COMMIT?.slice(0, 7);
+  if (!commit) {
+    try {
+      commit = execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString()
+        .trim();
+    } catch {
+      commit = 'dev';
+    }
+  }
+  return {
+    version: pkg.version,
+    commit,
+    buildTime: process.env.APP_BUILD_TIME ?? new Date().toISOString(),
+  };
+}
+
+const BUILD_INFO = buildInfo();
 
 /**
  * Strikt Content Security Policy. Allt laddas från den egna origin:en –
@@ -48,14 +77,52 @@ function cspMetaTag(): Plugin {
   };
 }
 
+/**
+ * Endast för e2e (VIKTRESAN_E2E=1, sätts av playwright.config.ts): låtsas att en
+ * ny version är deployad för webbläsarkontexter med kakan `e2e-ny-version=1`.
+ * sw.js får då ett tillägg (ny byte-sekvens = ny version) som svarar "v2" på
+ * meddelandet "version?". Playwright kan inte fånga webbläsarens egen hämtning
+ * av sw.js, därför görs det i preview-servern. Påverkar aldrig bygget.
+ */
+function e2eNewVersion(): Plugin {
+  return {
+    name: 'viktresan-e2e-new-version',
+    configurePreviewServer(server) {
+      if (process.env.VIKTRESAN_E2E !== '1') return;
+      const swPath = `${server.config.root}/${server.config.build.outDir}/sw.js`;
+      server.middlewares.use((req, res, next) => {
+        const newVersion = /(?:^|;\s*)e2e-ny-version=1(?:;|$)/.test(req.headers.cookie ?? '');
+        if (!newVersion || req.url?.split('?')[0] !== `${BASE}sw.js`) {
+          next();
+          return;
+        }
+        const body =
+          readFileSync(swPath, 'utf8') +
+          "\nself.addEventListener('message', (e) => { if (e.data === 'version?') e.ports[0].postMessage('v2'); });\n";
+        res.setHeader('Content-Type', 'text/javascript');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.end(body);
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base: BASE,
+  define: {
+    __APP_VERSION__: JSON.stringify(BUILD_INFO.version),
+    __APP_COMMIT__: JSON.stringify(BUILD_INFO.commit),
+    __APP_BUILD_TIME__: JSON.stringify(BUILD_INFO.buildTime),
+  },
   plugins: [
     react(),
     cspMetaTag(),
+    e2eNewVersion(),
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      // Ny version tar inte över av sig själv – appen visar "Ny version finns" och
+      // användaren väljer när (se src/lib/pwaUpdate.ts, som också registrerar sw.js).
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Viktresan',
@@ -87,8 +154,10 @@ export default defineConfig({
         navigateFallback: `${BASE}index.html`,
         cleanupOutdatedCaches: true,
         // Ta kontroll över sidan direkt vid första besöket, så att den fungerar
-        // offline utan att först behöva laddas om.
+        // offline utan att först behöva laddas om. En uppdatering väntar däremot
+        // (skipWaiting sker först när användaren trycker Uppdatera).
         clientsClaim: true,
+        skipWaiting: false,
       },
     }),
   ],

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { EmptyState, Page } from '../components/Page.tsx';
+import { EmptyState } from '../components/Page.tsx';
 import { PhotoCompare } from '../components/PhotoCompare.tsx';
 import { PhotoViewer } from '../components/PhotoViewer.tsx';
 import { deletePhoto, newId, putPhoto, type WeightEntry } from '../db/db.ts';
@@ -18,6 +18,7 @@ function weightTextFor(date: string, weights: readonly WeightEntry[]): string {
   return day ? day.weightKg.toFixed(1).replace('.', ',') : '';
 }
 
+/** Framsteg → Bilder: progressbilder, galleri och jämförelse. */
 export function Bilder() {
   const { data } = useAppData();
   const { photos, reload } = usePhotos();
@@ -61,7 +62,7 @@ export function Bilder() {
   }
 
   return (
-    <Page title="Bilder">
+    <>
       {data && <AddPhoto weights={data.weights} onAdded={reload} />}
 
       {compared && (
@@ -140,7 +141,7 @@ export function Bilder() {
           }}
         />
       )}
-    </Page>
+    </>
   );
 }
 

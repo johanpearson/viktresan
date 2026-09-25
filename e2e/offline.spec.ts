@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
-import { collectErrors, isoDaysFromToday } from './helpers.ts';
+import { collectErrors, isoDaysFromToday, openLog } from './helpers.ts';
 
-const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Mat', 'Bilder'] as const;
+const SECTIONS = ['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg'] as const;
 
 test('appen fungerar i flygplansläge efter första laddningen', async ({ page, context }) => {
   const errors = collectErrors(page);
@@ -37,10 +37,11 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
   await page.getByRole('button', { name: 'Spara profil' }).tap();
   await expect(page.getByText('Profilen är sparad.')).toBeVisible();
   await page.goto('./#/logga');
+  await openLog(page, 'vikt');
   await page.getByLabel('Vikt (kg)').fill('88,5');
   await page.getByRole('button', { name: 'Spara', exact: true }).tap();
   await expect(page.getByRole('status')).toContainText('Sparade 88,5 kg');
-  await page.getByRole('button', { name: 'Steg', exact: true }).tap();
+  await openLog(page, 'steg');
   await page.getByLabel('Antal steg').fill('4321');
   await page.getByRole('button', { name: 'Spara', exact: true }).tap();
   await expect(page.getByRole('status')).toContainText('Sparade 4 321 steg');
@@ -57,8 +58,9 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
 
   // En ny flik (kallstart) med djuplänk fungerar också offline.
   const second = await context.newPage();
-  await second.goto('./#/historik');
-  await expect(second.getByRole('heading', { level: 1 })).toHaveText('Historik');
+  await second.goto('./#/framsteg/bilder');
+  await expect(second.getByRole('heading', { level: 1 })).toHaveText('Framsteg');
+  await expect(second.getByRole('heading', { name: 'Ny bild' })).toBeVisible();
   await second.goto('./');
   await expect(second.getByTestId('current-weight')).toHaveText('88,5 kg');
   // Ikoner och manifest finns i cachen.

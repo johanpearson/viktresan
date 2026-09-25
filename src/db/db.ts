@@ -485,9 +485,22 @@ export async function listPhotos(): Promise<PhotoEntry[]> {
   return all.sort(byDateThenCreated);
 }
 
+/** Datum för alla bilder (en post per bild), utan att läsa in bilddatan. */
+export async function listPhotoDates(): Promise<string[]> {
+  const db = await getDb();
+  const dates: string[] = [];
+  let cursor = await db.transaction('photos').store.index('by-date').openKeyCursor();
+  while (cursor) {
+    dates.push(cursor.key);
+    cursor = await cursor.continue();
+  }
+  return dates;
+}
+
 /** Nycklar i `settings`-storen. */
 export const SETTING_LAST_EXPORT = 'lastExportAt';
 export const SETTING_LOCK = 'lock';
+export const SETTING_FEATURES = 'features';
 
 export async function getSetting(key: string): Promise<unknown> {
   const db = await getDb();

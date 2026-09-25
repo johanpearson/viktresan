@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { AboutApp } from '../components/AboutApp.tsx';
 import { ExportBackup } from '../components/ExportBackup.tsx';
+import { FeatureSettings } from '../components/FeatureSettings.tsx';
 import { ImportBackup } from '../components/ImportBackup.tsx';
 import { LockSettings } from '../components/LockSettings.tsx';
 import { Page } from '../components/Page.tsx';
@@ -13,6 +15,7 @@ import {
 } from '../lib/storage.ts';
 import { useAppData } from '../lib/useAppData.ts';
 import { useBackupStatus } from '../lib/useBackupStatus.ts';
+import { versionLine } from '../lib/version.ts';
 
 const PERSISTENCE_TEXT: Record<PersistenceState, string> = {
   persisted: 'Beständig – webbläsaren rensar inte din data automatiskt.',
@@ -63,6 +66,7 @@ export function Installningar() {
           />
         )}
       </div>
+      <FeatureSettings />
       <section className="card" aria-labelledby="backup-title">
         <h2 className="card-title" id="backup-title">
           Säkerhetskopia
@@ -109,6 +113,10 @@ export function Installningar() {
         )}
         <p className="muted">All data lagras endast lokalt på den här enheten.</p>
       </div>
+      <AboutApp />
+      <footer className="app-footer" data-testid="app-footer">
+        {versionLine()}
+      </footer>
     </Page>
   );
 }

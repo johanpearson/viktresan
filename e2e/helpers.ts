@@ -236,3 +236,13 @@ export async function sendToBackground(page: Page): Promise<void> {
 }
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type LogType = 'vikt' | 'midja' | 'steg';
+
+/** Logga → trycker på rutan och väntar in panelen (bottom sheet) med formuläret. */
+export async function openLog(page: Page, type: LogType): Promise<void> {
+  const open = page.getByRole('dialog');
+  if (await open.isVisible()) await open.getByRole('button', { name: 'Stäng' }).tap();
+  await page.getByTestId(`log-tile-${type}`).tap();
+  await page.getByRole('dialog').waitFor();
+}

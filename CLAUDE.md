@@ -33,9 +33,14 @@ i molnmiljön.
 index.html              Skal; CSP-meta injiceras vid bygge (vite.config.ts)
 vite.config.ts          base, CSP-plugin, vite-plugin-pwa (manifest + Workbox), vitest
 src/main.tsx            Startpunkt; anropar navigator.storage.persist(), lindar App i LockGate
-src/App.tsx             Layout: header, aktiv sida, bottennavigering
-src/routes.ts           Route-tabell (id, hash-path, svensk etikett)
-src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore
+src/App.tsx             Layout: header, aktiv sida, uppdateringstoast, bottennavigering
+src/routes.ts           Route-tabell (id, hash-path, svensk etikett, ev. funktion), gamla adresser
+src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore → { route, sub }
+src/lib/features.ts     Funktionsbrytare: FEATURES, useFeatures() (filter/isEnabled), lagras i settings
+src/lib/pwaUpdate.ts    Registrerar sw.js, söker uppdateringar, toast-tillstånd, SKIP_WAITING
+src/lib/version.ts      Version, commit och byggtid (Vite define)
+src/lib/calendar.ts     Månadsrutnät + vad som loggats per dag (buildDayIndex)
+src/lib/dayMarkers.ts   Loggtyper per dag (Kalender, Översikt → Idag), med funktion
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
 src/lib/useAppData.ts   Hook: läser vikt, midja, steg + profil; `reload()` returnerar ny data
 src/lib/usePhotos.ts    Hook: läser bilder + skapar/frigör object URLs
@@ -64,8 +69,8 @@ src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore
 src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …)
-src/pages/              En komponent per sektion: Översikt, Logga (Vikt | Midja | Steg), Historik,
-                        Mat (Dag | Egna | Historik), Bilder, Inställningar
+src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
+                        (Dag | Egna | Historik), Kalender, Framsteg (Historik | Bilder), Inställningar
 e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat); hjälpare i helpers.ts.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
@@ -76,8 +81,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 
 - **Routing** är hash-baserad (`#/logga`) – GitHub Pages saknar SPA-fallback och det
   fungerar offline utan serverstöd. Ny sida: lägg till i `ROUTES` + `PAGES` i `App.tsx`.
-  Bottennavigeringen visar routes med `inNav: true` (5 st); Inställningar nås via kugghjulet
-  i Översikts rubrikrad (`Page`-propen `action`).
+  Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
+  filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad.
+  Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
+  och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
+- **Funktionsbrytare** (`features.ts`, Inställningar → Funktioner): steg, midja, mat, vatten,
+  träning, glp1, bilder. Lagras i `settings` under `features`. Avstängd = dold överallt, datan
+  ligger kvar och exporteras. Inga spridda if-satser: listor av vyer/flikar/rutor/markörer har
+  ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
+  `<Feature id="…">`. Vatten, träning och GLP-1 är `available: false` ("Kommer snart") tills
+  de byggs – lägg då till en post i `LOG_TYPES` (Logga) och `DAY_MARKERS`.
 - **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 4`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
@@ -92,7 +105,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
-  när låset är på). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  när låset är på), `features` (funktionsbrytarna). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -112,8 +125,15 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (enda externa anropet, bara streckkoden skickas) och cachas i `foods`.
 - **Grafer**: uPlot (`WeightChart`, `StepsChart`, `IntakeChart`). Färger läses från CSS-variabler
   (`--accent`, `--chart-point`, `--chart-goal`).
-- **PWA**: `vite-plugin-pwa` i `generateSW`-läge, `registerType: 'autoUpdate'`.
-  Registrering sker via extern `registerSW.js` (inget inline-skript).
+- **PWA**: `vite-plugin-pwa` i `generateSW`-läge, `registerType: 'prompt'`, `injectRegister: false`,
+  `clientsClaim: true`. `pwaUpdate.ts` registrerar `sw.js` (bundlad kod, `updateViaCache: 'none'`)
+  och söker uppdateringar vid start och vid `visibilitychange` (högst var 30:e minut) samt via
+  "Sök efter uppdatering" (Inställningar → Om appen). Väntande worker → toast "Ny version finns";
+  Uppdatera = `SKIP_WAITING` + omladdning vid `controllerchange`. `sw.js` precachas aldrig och
+  `index.html` precachas med revision. E2E: preview-servern serverar en "ny" sw.js för kontexter
+  med kakan `e2e-ny-version=1` (bara med `VIKTRESAN_E2E=1`, se `e2eNewVersion` i vite.config.ts).
+- **Version**: `__APP_VERSION__` (package.json), `__APP_COMMIT__`, `__APP_BUILD_TIME__` via Vite
+  `define`. Deploy-workflowen sätter `APP_COMMIT`/`APP_BUILD_TIME`; lokalt läses git.
 - **Bilder**: `compressImage()` skalar ner via canvas och kör `stripMetadata()` på resultatet
   (orientering bakas in via `createImageBitmap`). Kodningen är injicerbar (`ImageCodec`) för tester.
 - **Beständig lagring**: `requestPersistence()` vid start; status + knapp i Inställningar.

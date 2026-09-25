@@ -17,6 +17,7 @@
   --macro-protein: #0f766e;
   --macro-carbs: #b45309;
   --macro-fat: #7c3aed;
+  --dot-waist: #db2777;
 
   --radius: 16px;
   --tap: 56px;
@@ -52,6 +53,7 @@
     --macro-protein: #2dd4bf;
     --macro-carbs: #fbbf24;
     --macro-fat: #c4b5fd;
+    --dot-waist: #f472b6;
   }
 }
 
@@ -215,7 +217,9 @@ body {
 
 .nav-list {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  /* 4–5 flikar beroende på vilka funktioner som är på. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   max-width: 640px;
   margin: 0 auto;
   padding: 0;
@@ -551,7 +555,9 @@ body {
 /* Tidsfilter */
 .segmented {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Lika breda knappar oavsett antal (flikar för avstängda funktioner döljs). */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 4px;
   padding: 4px;
   border-radius: 14px;
@@ -1327,4 +1333,321 @@ a.button {
 
 .form > .card-header {
   margin-bottom: 0;
+}
+
+/* Logga: rutnät med loggtyper */
+.log-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 128px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.log-tile:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.log-tile-icon {
+  color: var(--accent);
+  margin-bottom: auto;
+}
+
+.log-tile-label {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.log-tile-summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Bottom sheet */
+.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 92dvh;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--bg);
+  color: var(--text);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sheet::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+.sheet[open] {
+  animation: sheet-up 0.2s ease-out;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+  }
+}
+
+.sheet-panel {
+  padding: 12px 16px calc(env(safe-area-inset-bottom) + 20px);
+}
+
+.sheet-header {
+  position: sticky;
+  top: -12px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -12px -16px 12px;
+  padding: 12px 16px;
+  background: var(--bg);
+}
+
+.sheet-title {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+/* Toast: ny version */
+.toast {
+  position: fixed;
+  inset: auto 12px calc(var(--nav-height) + env(safe-area-inset-bottom) + 12px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  max-width: 616px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.2);
+}
+
+.toast-text {
+  margin: 0;
+  font-weight: 600;
+}
+
+.toast-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Inställningar → Funktioner */
+.switch-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.switch-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: var(--tap);
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.switch-label {
+  font-weight: 600;
+}
+
+.switch-description {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.switch {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.switch:disabled {
+  cursor: default;
+}
+
+.switch:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app-footer {
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Kalender */
+.calendar {
+  padding: 12px 8px;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.calendar-title {
+  margin: 0;
+  text-transform: capitalize;
+}
+
+.calendar-nav {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.calendar-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.calendar-grid th {
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.calendar-grid td {
+  padding: 1px;
+}
+
+.calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 0 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.calendar-day[aria-current='date'] .calendar-day-number {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.calendar-day[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.calendar-day:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.calendar-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  min-height: 6px;
+}
+
+.calendar-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--chart-point);
+}
+
+.dot-vikt {
+  background: var(--accent);
+}
+
+.dot-midja {
+  background: var(--dot-waist);
+}
+
+.dot-steg {
+  background: var(--macro-fat);
+}
+
+.dot-mat {
+  background: var(--macro-carbs);
+}
+
+.dot-bilder {
+  background: var(--chart-point);
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 12px 8px 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.calendar-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-legend .calendar-dot {
+  width: 10px;
+  height: 10px;
 }

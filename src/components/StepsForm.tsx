@@ -2,50 +2,8 @@ import { useState, type SyntheticEvent } from 'react';
 import { upsertSteps, type StepsEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatDate, formatInt } from '../lib/format.ts';
-import { dailySteps, filterRange, type RangeId } from '../lib/stats.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { parseStepsFields } from '../lib/validation.ts';
-import { EmptyState } from './Page.tsx';
-import { RangeFilter } from './RangeFilter.tsx';
-import { StepsChart } from './StepsChart.tsx';
-
-interface StepsLogProps {
-  steps: StepsEntry[];
-  onChange: () => Promise<AppData>;
-}
-
-/** Logga → Steg: dagens steg och stapelgraf. */
-export function StepsLog({ steps, onChange }: StepsLogProps) {
-  const [range, setRange] = useState<RangeId>('1m');
-  const all = dailySteps(steps);
-  const days = filterRange(all, range, todayIso());
-  const average = days.length > 0 ? days.reduce((s, d) => s + d.steps, 0) / days.length : null;
-
-  return (
-    <>
-      <StepsForm steps={steps} onChange={onChange} />
-      {all.length === 0 ? (
-        <EmptyState>Inga steg loggade ännu.</EmptyState>
-      ) : (
-        <>
-          <RangeFilter value={range} onChange={setRange} />
-          {days.length === 0 ? (
-            <EmptyState>Inga steg i vald period.</EmptyState>
-          ) : (
-            <div className="card chart-card">
-              <StepsChart days={days} />
-              {average != null && (
-                <p className="muted" data-testid="steps-average">
-                  Snitt {formatInt(Math.round(average))} steg per loggad dag.
-                </p>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </>
-  );
-}
 
 function stepsFor(steps: readonly StepsEntry[], date: string): StepsEntry | undefined {
   return steps.find((s) => s.date === date);
@@ -56,8 +14,8 @@ interface StepsFormProps {
   onChange: () => Promise<AppData>;
 }
 
-/** Ett värde per dag: finns dagen redan skrivs värdet över. */
-function StepsForm({ steps, onChange }: StepsFormProps) {
+/** Logga → Steg. Ett värde per dag: finns dagen redan skrivs värdet över. */
+export function StepsForm({ steps, onChange }: StepsFormProps) {
   const [date, setDate] = useState(todayIso);
   const [value, setValue] = useState(() => {
     const existing = stepsFor(steps, todayIso());

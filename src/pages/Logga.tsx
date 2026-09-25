@@ -1,449 +1,130 @@
-import { useState, type SyntheticEvent } from 'react';
+import { useState, type ComponentType } from 'react';
+import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Page } from '../components/Page.tsx';
-import { StepsLog } from '../components/StepsLog.tsx';
-import {
-  deleteWaist,
-  deleteWeight,
-  newId,
-  putWeight,
-  upsertWaist,
-  type Profile,
-  type WaistEntry,
-  type WeightEntry,
-} from '../db/db.ts';
+import { StepsForm } from '../components/StepsForm.tsx';
+import { WaistLog } from '../components/WaistLog.tsx';
+import { WeightLog } from '../components/WeightLog.tsx';
 import { todayIso } from '../lib/dates.ts';
-import { formatCm, formatDate, formatKg, parseDecimal, stepKg } from '../lib/format.ts';
+import type { FeatureGated } from '../lib/features.ts';
+import { useFeatures } from '../lib/features.ts';
+import { formatCm, formatInt, formatKg } from '../lib/format.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
-import { parseWaistFields, parseWeightFields } from '../lib/validation.ts';
 
-type Tab = 'vikt' | 'midja' | 'steg';
+type LogTypeId = 'vikt' | 'midja' | 'steg';
 
-const TABS: readonly { id: Tab; label: string }[] = [
-  { id: 'vikt', label: 'Vikt' },
-  { id: 'midja', label: 'Midja' },
-  { id: 'steg', label: 'Steg' },
-];
-
-/** Antal midjemått som visas i listan under formuläret. */
-const RECENT_WAIST = 5;
-
-function decimalText(value: number, digits: number): string {
-  return value.toFixed(digits).replace('.', ',');
+interface LogFormProps {
+  data: AppData;
+  reload: () => Promise<AppData>;
 }
 
-function kgText(value: number): string {
-  return decimalText(value, 1);
-}
-
-function cmText(value: number): string {
-  return Number.isInteger(value) ? String(value) : decimalText(value, 1);
-}
-
-export function Logga() {
-  const { data, reload } = useAppData();
-  const [tab, setTab] = useState<Tab>('vikt');
-
-  return (
-    <Page title="Logga">
-      <div className="segmented" role="group" aria-label="Vad vill du logga?">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className="segmented-button"
-            aria-pressed={t.id === tab}
-            onClick={() => {
-              setTab(t.id);
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {data && tab === 'vikt' && (
-        <WeightLog weights={data.weights} profile={data.profile} onChange={reload} />
-      )}
-      {data && tab === 'midja' && <WaistLog waist={data.waist} onChange={reload} />}
-      {data && tab === 'steg' && <StepsLog steps={data.steps} onChange={reload} />}
-    </Page>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Vikt
-
-interface WeightForm {
-  editingId: string | null;
-  date: string;
-  weight: string;
-  note: string;
-  showNote: boolean;
+interface LogType extends FeatureGated {
+  id: LogTypeId;
+  label: string;
+  /** Rubrik på panelen. */
+  title: string;
+  /** SVG-path för ikonen (24×24, streck). */
+  icon: string;
+  /** Kort status på rutan, t.ex. senaste värdet. */
+  summary: (data: AppData) => string;
+  Form: ComponentType<LogFormProps>;
 }
 
 /**
- * Tomt formulär för dagens datum, förifyllt med den senast loggade vikten
- * (senaste datum; samma dag den senast registrerade) eller startvikten.
+ * Loggtyperna i rutnätet, i visningsordning. Vatten, träning och doser (GLP-1)
+ * läggs till här när de finns – funktionsbrytarna styr redan vilka som visas.
  */
-function freshWeightForm(weights: readonly WeightEntry[], profile: Profile | null): WeightForm {
-  const latest = weights[weights.length - 1];
-  const weight = latest?.weightKg ?? profile?.startWeightKg;
-  return {
-    editingId: null,
-    date: todayIso(),
-    weight: weight == null ? '' : kgText(weight),
-    note: '',
-    showNote: false,
-  };
-}
+const LOG_TYPES: readonly LogType[] = [
+  {
+    id: 'vikt',
+    label: 'Vikt',
+    title: 'Logga vikt',
+    icon: 'M6 20h12l-2-12H8zM9 8a3 3 0 0 1 6 0',
+    summary: ({ weights }) => {
+      const latest = weights[weights.length - 1];
+      return latest ? `Senast ${formatKg(latest.weightKg)}` : 'Inget loggat';
+    },
+    Form: ({ data, reload }) => (
+      <WeightLog weights={data.weights} profile={data.profile} onChange={reload} />
+    ),
+  },
+  {
+    id: 'midja',
+    label: 'Midja',
+    title: 'Logga midjemått',
+    icon: 'M4 9c4 2 12 2 16 0M4 15c4 2 12 2 16 0M4 9v6M20 9v6',
+    feature: 'midja',
+    summary: ({ waist }) => {
+      const latest = waist[waist.length - 1];
+      return latest ? `Senast ${formatCm(latest.waistCm)}` : 'Inget loggat';
+    },
+    Form: ({ data, reload }) => <WaistLog waist={data.waist} onChange={reload} />,
+  },
+  {
+    id: 'steg',
+    label: 'Steg',
+    title: 'Logga steg',
+    icon: 'M8 4c2 0 3 2 3 5s-1 5-3 5-3-2-3-5 1-5 3-5zM16 10c2 0 3 2 3 5s-1 5-3 5-3-2-3-5 1-5 3-5z',
+    feature: 'steg',
+    summary: ({ steps }) => {
+      const today = steps.find((s) => s.date === todayIso());
+      return today ? `Idag ${formatInt(today.steps)}` : 'Inget idag';
+    },
+    Form: ({ data, reload }) => <StepsForm steps={data.steps} onChange={reload} />,
+  },
+];
 
-function weightFormFor(entry: WeightEntry): WeightForm {
-  return {
-    editingId: entry.id,
-    date: entry.date,
-    weight: kgText(entry.weightKg),
-    note: entry.note ?? '',
-    showNote: entry.note != null,
-  };
-}
-
-interface WeightLogProps {
-  weights: WeightEntry[];
-  profile: Profile | null;
-  onChange: () => Promise<AppData>;
-}
-
-function WeightLog({ weights, profile, onChange }: WeightLogProps) {
-  const [form, setForm] = useState<WeightForm>(() => freshWeightForm(weights, profile));
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const editing = weights.find((w) => w.id === form.editingId) ?? null;
-
-  function update(patch: Partial<WeightForm>) {
-    setForm((prev) => ({ ...prev, ...patch }));
-  }
-
-  function nudge(delta: number) {
-    const current = parseDecimal(form.weight);
-    if (current == null) return;
-    update({ weight: kgText(stepKg(current, delta)) });
-  }
-
-  async function handleSubmit(event: SyntheticEvent) {
-    event.preventDefault();
-    const result = parseWeightFields(form);
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    const now = Date.now();
-    const entry: WeightEntry = editing
-      ? { id: editing.id, createdAt: editing.createdAt, updatedAt: now, ...result.value }
-      : { id: newId(), createdAt: now, ...result.value };
-    await putWeight(entry);
-    const next = await onChange();
-    setForm(freshWeightForm(next.weights, next.profile));
-    setError(null);
-    setStatus(
-      `${editing ? 'Uppdaterade' : 'Sparade'} ${formatKg(entry.weightKg)} för ${formatDate(entry.date)}.`,
-    );
-  }
-
-  async function handleDelete(id: string) {
-    if (confirmDeleteId !== id) {
-      setConfirmDeleteId(id);
-      return;
-    }
-    await deleteWeight(id);
-    const next = await onChange();
-    setConfirmDeleteId(null);
-    if (form.editingId === id) setForm(freshWeightForm(next.weights, next.profile));
-    setStatus('Mätningen är borttagen.');
-  }
-
-  const newestFirst = [...weights].reverse();
+export function Logga() {
+  const { data, reload } = useAppData();
+  const features = useFeatures();
+  const [openId, setOpenId] = useState<LogTypeId | null>(null);
+  const types = features.filter(LOG_TYPES);
+  const open = types.find((t) => t.id === openId);
 
   return (
-    <>
-      <form className="card form" onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <h2 className="card-title">{editing ? 'Redigera vikt' : 'Dagens vikt'}</h2>
-        <label className="field">
-          <span className="field-label">Datum</span>
-          <input
-            className="input"
-            type="date"
-            value={form.date}
-            max={todayIso()}
-            onChange={(e) => {
-              update({ date: e.target.value });
-            }}
-          />
-        </label>
-        <div className="field">
-          <label className="field-label" htmlFor="weight-input">
-            Vikt (kg)
-          </label>
-          <input
-            id="weight-input"
-            className="input big-input"
-            inputMode="decimal"
-            autoComplete="off"
-            value={form.weight}
-            onChange={(e) => {
-              update({ weight: e.target.value });
-            }}
-          />
-          <div className="nudge-row">
+    <Page title="Logga">
+      <ul className="log-grid" aria-label="Vad vill du logga?">
+        {types.map((t) => (
+          <li key={t.id}>
             <button
               type="button"
-              className="button button-secondary"
-              aria-label="Minska vikten med 0,1 kg"
+              className="log-tile"
+              aria-haspopup="dialog"
+              data-testid={`log-tile-${t.id}`}
               onClick={() => {
-                nudge(-0.1);
+                setOpenId(t.id);
               }}
             >
-              −0,1
+              <svg
+                className="log-tile-icon"
+                viewBox="0 0 24 24"
+                width="32"
+                height="32"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d={t.icon} />
+              </svg>
+              <span className="log-tile-label">{t.label}</span>
+              {data && <span className="log-tile-summary">{t.summary(data)}</span>}
             </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              aria-label="Öka vikten med 0,1 kg"
-              onClick={() => {
-                nudge(0.1);
-              }}
-            >
-              +0,1
-            </button>
-          </div>
-        </div>
-        {form.showNote ? (
-          <label className="field">
-            <span className="field-label">Anteckning</span>
-            <textarea
-              className="input textarea"
-              rows={2}
-              value={form.note}
-              onChange={(e) => {
-                update({ note: e.target.value });
-              }}
-            />
-          </label>
-        ) : (
-          <button
-            type="button"
-            className="link-button"
-            onClick={() => {
-              update({ showNote: true });
-            }}
-          >
-            Lägg till anteckning
-          </button>
-        )}
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        <div className="button-row">
-          <button type="submit" className="button">
-            {editing ? 'Spara ändringar' : 'Spara'}
-          </button>
-          {editing && (
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => {
-                setForm(freshWeightForm(weights, profile));
-                setError(null);
-              }}
-            >
-              Avbryt
-            </button>
-          )}
-        </div>
-        <p className="form-ok" role="status">
-          {status}
-        </p>
-      </form>
-
-      <section className="card" aria-labelledby="entries-title">
-        <h2 className="card-title" id="entries-title">
-          Viktmätningar
-        </h2>
-        {newestFirst.length === 0 ? (
-          <p className="muted">Inga mätningar ännu.</p>
-        ) : (
-          <ul className="entry-list">
-            {newestFirst.map((w) => (
-              <li key={w.id} className="entry" data-testid="entry">
-                <div className="entry-main">
-                  <span className="entry-date">{formatDate(w.date)}</span>
-                  <span className="entry-weight">{formatKg(w.weightKg)}</span>
-                </div>
-                {w.note && <p className="entry-extra">{w.note}</p>}
-                <div className="entry-actions">
-                  <button
-                    type="button"
-                    className="button button-secondary button-small"
-                    aria-label={`Redigera ${formatDate(w.date)}`}
-                    onClick={() => {
-                      setForm(weightFormFor(w));
-                      setConfirmDeleteId(null);
-                      setError(null);
-                      window.scrollTo({ top: 0 });
-                    }}
-                  >
-                    Redigera
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    aria-label={
-                      confirmDeleteId === w.id
-                        ? `Bekräfta borttagning av ${formatDate(w.date)}`
-                        : `Ta bort ${formatDate(w.date)}`
-                    }
-                    onClick={() => void handleDelete(w.id)}
-                  >
-                    {confirmDeleteId === w.id ? 'Bekräfta' : 'Ta bort'}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Midja
-
-function latestWaistText(waist: readonly WaistEntry[]): string {
-  const latest = waist[waist.length - 1];
-  return latest ? cmText(latest.waistCm) : '';
-}
-
-interface WaistLogProps {
-  waist: WaistEntry[];
-  onChange: () => Promise<AppData>;
-}
-
-function WaistLog({ waist, onChange }: WaistLogProps) {
-  const [date, setDate] = useState(todayIso);
-  const [value, setValue] = useState(() => latestWaistText(waist));
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [confirmDeleteDate, setConfirmDeleteDate] = useState<string | null>(null);
-  const existing = waist.find((w) => w.date === date);
-
-  async function handleSubmit(event: SyntheticEvent) {
-    event.preventDefault();
-    const result = parseWaistFields({ date, waist: value });
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    await upsertWaist(result.value.date, result.value.waistCm);
-    const next = await onChange();
-    setValue(latestWaistText(next.waist));
-    setError(null);
-    setStatus(
-      `${existing ? 'Uppdaterade' : 'Sparade'} ${formatCm(result.value.waistCm)} för ${formatDate(result.value.date)}.`,
-    );
-  }
-
-  async function handleDelete(entryDate: string) {
-    if (confirmDeleteDate !== entryDate) {
-      setConfirmDeleteDate(entryDate);
-      return;
-    }
-    await deleteWaist(entryDate);
-    await onChange();
-    setConfirmDeleteDate(null);
-    setStatus('Midjemåttet är borttaget.');
-  }
-
-  const recent = waist.slice(-RECENT_WAIST).reverse();
-
-  return (
-    <>
-      <form className="card form" onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <h2 className="card-title">Midjemått</h2>
-        <label className="field">
-          <span className="field-label">Datum</span>
-          <input
-            className="input"
-            type="date"
-            value={date}
-            max={todayIso()}
-            onChange={(e) => {
-              setDate(e.target.value);
-            }}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Midjemått (cm)</span>
-          <input
-            className="input big-input"
-            inputMode="decimal"
-            autoComplete="off"
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-            }}
-          />
-        </label>
-        {existing && (
-          <p className="form-note" data-testid="waist-existing">
-            {formatCm(existing.waistCm)} är redan loggat för dagen och ersätts när du sparar.
-          </p>
-        )}
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="button">
-          Spara
-        </button>
-        <p className="form-ok" role="status">
-          {status}
-        </p>
-      </form>
-
-      <section className="card" aria-labelledby="waist-title">
-        <h2 className="card-title" id="waist-title">
-          Senaste måtten
-        </h2>
-        {recent.length === 0 ? (
-          <p className="muted">Inga midjemått ännu.</p>
-        ) : (
-          <ul className="entry-list">
-            {recent.map((w) => (
-              <li key={w.date} className="entry entry-compact" data-testid="waist-entry">
-                <div className="entry-main">
-                  <span className="entry-date">{formatDate(w.date)}</span>
-                  <span className="entry-weight">{formatCm(w.waistCm)}</span>
-                </div>
-                <button
-                  type="button"
-                  className="button button-danger button-small"
-                  aria-label={
-                    confirmDeleteDate === w.date
-                      ? `Bekräfta borttagning av midjemåttet ${formatDate(w.date)}`
-                      : `Ta bort midjemåttet ${formatDate(w.date)}`
-                  }
-                  onClick={() => void handleDelete(w.date)}
-                >
-                  {confirmDeleteDate === w.date ? 'Bekräfta' : 'Ta bort'}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </>
+          </li>
+        ))}
+      </ul>
+      {data && open && (
+        <BottomSheet
+          title={open.title}
+          onClose={() => {
+            setOpenId(null);
+          }}
+        >
+          <open.Form data={data} reload={reload} />
+        </BottomSheet>
+      )}
+    </Page>
   );
 }

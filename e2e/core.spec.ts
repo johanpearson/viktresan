@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, dump, isoDaysFromToday, seed } from './helpers.ts';
+import { collectErrors, dump, isoDaysFromToday, openLog, seed } from './helpers.ts';
 
 function nav(page: Page) {
   return page.getByRole('navigation', { name: 'Huvudmeny' });
@@ -37,10 +37,9 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
 
   // Logga: Vikt är förvalt och förifyllt med startvikten, sedan med senast loggade värde.
   await nav(page).getByRole('link', { name: 'Logga' }).tap();
-  await expect(page.getByRole('button', { name: 'Vikt', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(page.getByTestId('log-tile-vikt')).toContainText('Inget loggat');
+  await openLog(page, 'vikt');
+  await expect(page.getByRole('dialog', { name: 'Logga vikt' })).toBeVisible();
   await expect(page.getByLabel('Vikt (kg)')).toHaveValue('90,0');
   await expect(page.getByLabel('Anteckning')).toBeHidden();
   await logWeight(page, isoDaysFromToday(-14), '88', 'Första veckan');
@@ -63,6 +62,11 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await expect(page.getByTestId('entry')).toHaveCount(3);
   await expect(page.getByTestId('entry').nth(2)).toContainText('Första veckan');
 
+  // Rutan visar senaste vikten när panelen stängs.
+  await page.getByRole('button', { name: 'Stäng' }).tap();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByTestId('log-tile-vikt')).toContainText('Senast 86,0 kg');
+
   // Översikt
   await nav(page).getByRole('link', { name: 'Översikt' }).tap();
   await expect(page.getByTestId('current-weight')).toHaveText('86,0 kg');
@@ -84,8 +88,14 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await expect(page.getByTestId('forecast')).toContainText(/[−-]1,0 kg\/vecka/);
   await expect(page.getByTestId('forecast')).toContainText('når du målet omkring');
 
-  // Historik: graf med tre punkter, trend och mål + lista.
-  await nav(page).getByRole('link', { name: 'Historik' }).tap();
+  await expect(page.getByTestId('today-vikt')).toContainText('86,0 kg');
+
+  // Framsteg → Historik: graf med tre punkter, trend och mål + lista.
+  await nav(page).getByRole('link', { name: 'Framsteg' }).tap();
+  await expect(page.getByRole('button', { name: 'Historik', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   const chart = page.getByRole('img', { name: /Viktgraf/ });
   await expect(chart.locator('canvas')).toBeVisible();
   await expect(chart).toHaveAttribute('data-points', '3');
@@ -119,6 +129,7 @@ test('viktfältet är förifyllt med senast loggade vikt', async ({ page }) => {
     ],
   });
   await page.goto('./#/logga');
+  await openLog(page, 'vikt');
   await expect(page.getByLabel('Vikt (kg)')).toHaveValue('87,6');
 
   // En efterregistrering av en äldre dag ändrar inte vad som är senast.
@@ -126,13 +137,14 @@ test('viktfältet är förifyllt med senast loggade vikt', async ({ page }) => {
   await expect(page.getByLabel('Vikt (kg)')).toHaveValue('87,6');
 
   // Efter Midja och tillbaka är vikten fortfarande förifylld.
-  await page.getByRole('button', { name: 'Midja', exact: true }).tap();
-  await page.getByRole('button', { name: 'Vikt', exact: true }).tap();
+  await openLog(page, 'midja');
+  await openLog(page, 'vikt');
   await expect(page.getByLabel('Vikt (kg)')).toHaveValue('87,6');
 });
 
 test('redigera och ta bort en vikt', async ({ page }) => {
   await page.goto('./#/logga');
+  await openLog(page, 'vikt');
   await logWeight(page, isoDaysFromToday(-1), '80,5');
   await expect(page.getByTestId('entry')).toHaveCount(1);
 
@@ -153,9 +165,8 @@ test('redigera och ta bort en vikt', async ({ page }) => {
 test('logga midja', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('./#/logga');
-  const waistTab = page.getByRole('button', { name: 'Midja', exact: true });
-  await waistTab.tap();
-  await expect(waistTab).toHaveAttribute('aria-pressed', 'true');
+  await openLog(page, 'midja');
+  await expect(page.getByRole('dialog', { name: 'Logga midjemått' })).toBeVisible();
   await expect(page.getByText('Inga midjemått ännu.')).toBeVisible();
 
   const field = page.getByLabel('Midjemått (cm)');
@@ -201,41 +212,32 @@ test('logga midja', async ({ page }) => {
 test('logga steg och skriv över dagens steg', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('./#/logga');
-  const stepsTab = page.getByRole('button', { name: 'Steg', exact: true });
-  await stepsTab.tap();
-  await expect(stepsTab).toHaveAttribute('aria-pressed', 'true');
+  await openLog(page, 'steg');
   await expect(page.getByRole('heading', { name: 'Dagens steg' })).toBeVisible();
   await expect(page.getByLabel('Datum')).toHaveValue(isoDaysFromToday(0));
   const field = page.getByLabel('Antal steg');
   await expect(field).toHaveAttribute('inputmode', 'numeric');
   await expect(field).toHaveValue('');
   await expect(page.getByTestId('steps-existing')).toHaveText('Inget loggat för dagen ännu.');
-  await expect(page.getByText('Inga steg loggade ännu.')).toBeVisible();
 
   await logSteps(page, '8000');
   await expect(page.getByRole('status')).toContainText('Sparade 8 000 steg');
-  const chart = page.getByRole('img', { name: 'Stapelgraf med steg per dag' });
-  await expect(chart.locator('canvas')).toBeVisible();
-  await expect(chart).toHaveAttribute('data-bars', '1');
 
   // Tillbaka senare samma dag: befintligt värde visas.
   await page.reload();
-  await stepsTab.tap();
+  await expect(page.getByTestId('log-tile-steg')).toContainText('Idag 8 000');
+  await openLog(page, 'steg');
   await expect(field).toHaveValue('8000');
   await expect(page.getByTestId('steps-existing')).toContainText('Loggat för dagen: 8 000 steg');
 
   await logSteps(page, '10 500');
   await expect(page.getByRole('status')).toContainText('Uppdaterade 10 500 steg');
-  await expect(chart).toHaveAttribute('data-bars', '1');
-  await expect(page.getByTestId('steps-average')).toHaveText('Snitt 10 500 steg per loggad dag.');
 
   // En annan dag.
   await page.getByLabel('Datum').fill(isoDaysFromToday(-1));
   await expect(field).toHaveValue('');
   await logSteps(page, '6000');
   await expect(page.getByRole('status')).toContainText('Sparade 6 000 steg');
-  await expect(chart).toHaveAttribute('data-bars', '2');
-  await expect(page.getByTestId('steps-average')).toHaveText('Snitt 8 250 steg per loggad dag.');
 
   const stored = await dump(page);
   expect(stored.steps).toEqual([
@@ -245,5 +247,13 @@ test('logga steg och skriv över dagens steg', async ({ page }) => {
 
   await logSteps(page, '1,5');
   await expect(page.getByRole('alert')).toHaveText('Ange steg som ett heltal (0–200 000).');
+
+  // Stapelgrafen finns under Framsteg → Historik.
+  await page.goto('./#/framsteg');
+  await page.getByRole('button', { name: '1 mån' }).tap();
+  const chart = page.getByRole('img', { name: 'Stapelgraf med steg per dag' });
+  await expect(chart.locator('canvas')).toBeVisible();
+  await expect(chart).toHaveAttribute('data-bars', '2');
+  await expect(page.getByTestId('steps-average')).toHaveText('Snitt 8 250 steg per loggad dag.');
   expect(errors).toEqual([]);
 });
