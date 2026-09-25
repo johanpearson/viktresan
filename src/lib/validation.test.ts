@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseMeasurement, parseProfile } from './validation.ts';
+import { parseMeasurement, parsePhotoFields, parseProfile } from './validation.ts';
 
 const profile = {
   startDate: '2026-01-01',
@@ -68,5 +68,27 @@ describe('parseMeasurement', () => {
     expect(parseMeasurement({ ...base, steps: '-3' })).toMatchObject({ ok: false });
     expect(parseMeasurement({ ...base, waist: '5' })).toMatchObject({ ok: false });
     expect(parseMeasurement({ ...base, date: '2026-02-30' })).toMatchObject({ ok: false });
+  });
+});
+
+describe('parsePhotoFields', () => {
+  it('godtar datum utan vikt', () => {
+    expect(parsePhotoFields({ date: '2026-09-25', weight: ' ' })).toEqual({
+      ok: true,
+      value: { date: '2026-09-25' },
+    });
+  });
+
+  it('tolkar vikt med decimalkomma', () => {
+    expect(parsePhotoFields({ date: '2026-09-25', weight: '84,2' })).toEqual({
+      ok: true,
+      value: { date: '2026-09-25', weightKg: 84.2 },
+    });
+  });
+
+  it('avvisar ogiltigt datum och orimlig vikt', () => {
+    expect(parsePhotoFields({ date: '', weight: '' }).ok).toBe(false);
+    expect(parsePhotoFields({ date: '2026-09-25', weight: '5' }).ok).toBe(false);
+    expect(parsePhotoFields({ date: '2026-09-25', weight: 'abc' }).ok).toBe(false);
   });
 });

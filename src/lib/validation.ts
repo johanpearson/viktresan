@@ -94,3 +94,22 @@ export function parseMeasurement(fields: MeasurementFields): Parsed<MeasurementV
   if (note !== '') value.note = note;
   return { ok: true, value };
 }
+
+export interface PhotoFields {
+  date: string;
+  weight: string;
+}
+
+export interface PhotoValues {
+  date: string;
+  weightKg?: number;
+}
+
+/** Datum och valfri vikt för en progressbild. */
+export function parsePhotoFields(fields: PhotoFields): Parsed<PhotoValues> {
+  if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
+  if (fields.weight.trim() === '') return { ok: true, value: { date: fields.date } };
+  const weightKg = parseDecimal(fields.weight);
+  if (!isWeight(weightKg)) return fail('Ange vikt i kg (20–400) eller lämna fältet tomt.');
+  return { ok: true, value: { date: fields.date, weightKg } };
+}

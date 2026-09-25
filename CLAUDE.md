@@ -34,6 +34,8 @@ src/routes.ts           Route-tabell (id, hash-path, svensk etikett)
 src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
 src/lib/useAppData.ts   Hook: läser mätningar + profil, `reload()` efter ändring
+src/lib/usePhotos.ts    Hook: läser bilder + skapar/frigör object URLs
+src/lib/image.ts        Bildkomprimering (max 1080 px WebP, JPEG-reserv) + borttagning av EXIF/XMP
 src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
 src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos
 src/lib/format.ts       Svensk formatering/tolkning av kg, heltal, datum
@@ -49,7 +51,7 @@ scripts/                Engångsskript (ikongenerering)
   fungerar offline utan serverstöd. Ny sida: lägg till i `ROUTES` + `PAGES` i `App.tsx`.
 - **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB. Object stores:
   `weights` (mätningar: vikt + valfritt midja/steg/anteckning, index `by-date`),
-  `photos` (Blob, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`).
+  `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`).
   Flera mätningar samma dag är tillåtna: vikt slås ihop till dagsmedel, steg tar senaste.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -60,6 +62,8 @@ scripts/                Engångsskript (ikongenerering)
   (`--accent`, `--chart-point`, `--chart-goal`).
 - **PWA**: `vite-plugin-pwa` i `generateSW`-läge, `registerType: 'autoUpdate'`.
   Registrering sker via extern `registerSW.js` (inget inline-skript).
+- **Bilder**: `compressImage()` skalar ner via canvas och kör `stripMetadata()` på resultatet
+  (orientering bakas in via `createImageBitmap`). Kodningen är injicerbar (`ImageCodec`) för tester.
 - **Beständig lagring**: `requestPersistence()` vid start; status + knapp i Inställningar.
 
 ## Säkerhet och integritet

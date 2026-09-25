@@ -27,13 +27,19 @@ export interface Profile {
   goalDate?: string;
 }
 
-/** Ett progressfoto. Bilden lagras som Blob direkt i IndexedDB. */
+/**
+ * Ett progressfoto. Bilden lagras som Blob direkt i IndexedDB, komprimerad och
+ * utan metadata. Vikt och mått är valfria fält (tillagda utan schemaändring).
+ */
 export interface PhotoEntry {
   id: string;
   date: string;
   blob: Blob;
   mimeType: string;
   createdAt: number;
+  weightKg?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface ViktresanDB extends DBSchema {
@@ -134,4 +140,23 @@ export async function getProfile(): Promise<Profile | null> {
 export async function saveProfile(profile: Profile): Promise<void> {
   const db = await getDb();
   await db.put('profile', profile, PROFILE_KEY);
+}
+
+export async function putPhoto(photo: PhotoEntry): Promise<void> {
+  const db = await getDb();
+  await db.put('photos', photo);
+}
+
+export async function deletePhoto(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('photos', id);
+}
+
+/** Alla bilder, äldst först (samma dag: i registreringsordning). */
+export async function listPhotos(): Promise<PhotoEntry[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex('photos', 'by-date');
+  return all.sort((a, b) =>
+    a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1,
+  );
 }

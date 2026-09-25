@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DB_NAME,
   deleteMeasurement,
+  deletePhoto,
   getDb,
   getProfile,
   listMeasurements,
+  listPhotos,
   putMeasurement,
+  putPhoto,
   resetDbForTests,
   saveProfile,
 } from './db.ts';
@@ -98,5 +101,20 @@ describe('db', () => {
     };
     await saveProfile(profile);
     expect(await getProfile()).toEqual(profile);
+  });
+
+  it('sparar, listar i datumordning och tar bort bilder', async () => {
+    const blob = new Blob(['bild'], { type: 'image/webp' });
+    const base = { blob, mimeType: 'image/webp', width: 1080, height: 810 };
+    await putPhoto({ ...base, id: 'b', date: '2026-03-01', createdAt: 2, weightKg: 84.2 });
+    await putPhoto({ ...base, id: 'a', date: '2026-01-01', createdAt: 3 });
+    await putPhoto({ ...base, id: 'c', date: '2026-03-01', createdAt: 1 });
+
+    const photos = await listPhotos();
+    expect(photos.map((p) => p.id)).toEqual(['a', 'c', 'b']);
+    expect(photos[2]).toMatchObject({ weightKg: 84.2, width: 1080, height: 810 });
+
+    await deletePhoto('c');
+    expect((await listPhotos()).map((p) => p.id)).toEqual(['a', 'b']);
   });
 });
