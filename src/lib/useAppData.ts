@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   getProfile,
+  listFoodLog,
   listSteps,
   listWaist,
   listWeights,
+  type FoodLogEntry,
   type Profile,
   type StepsEntry,
   type WaistEntry,
@@ -14,13 +16,14 @@ export interface AppData {
   weights: WeightEntry[];
   waist: WaistEntry[];
   steps: StepsEntry[];
+  foodLog: FoodLogEntry[];
   profile: Profile | null;
 }
 
-const EMPTY: AppData = { weights: [], waist: [], steps: [], profile: null };
+const EMPTY: AppData = { weights: [], waist: [], steps: [], foodLog: [], profile: null };
 
 /**
- * Läser mätningar och profil från IndexedDB. `data` är `null` tills första
+ * Läser mätningar, matlogg och profil från IndexedDB. `data` är `null` tills första
  * läsningen är klar. `reload` hämtar på nytt efter en ändring och returnerar
  * den nya datan.
  */
@@ -29,13 +32,14 @@ export function useAppData(): { data: AppData | null; reload: () => Promise<AppD
 
   const load = useCallback(async (): Promise<AppData> => {
     try {
-      const [weights, waist, steps, profile] = await Promise.all([
+      const [weights, waist, steps, foodLog, profile] = await Promise.all([
         listWeights(),
         listWaist(),
         listSteps(),
+        listFoodLog(),
         getProfile(),
       ]);
-      return { weights, waist, steps, profile };
+      return { weights, waist, steps, foodLog, profile };
     } catch {
       return EMPTY;
     }

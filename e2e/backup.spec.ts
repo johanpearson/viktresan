@@ -9,7 +9,62 @@ const DATA = {
     heightCm: 180,
     goalWeightKg: 80,
     goalDate: isoDaysFromToday(120),
+    sex: 'man',
+    birthYear: 1980,
+    activityLevel: 'mattlig',
+    ratePerWeekKg: 0.75,
   },
+  foods: [
+    {
+      id: 'egen:bulle',
+      name: 'Kanelbulle',
+      source: 'egen',
+      per100: { kcal: 380, proteinG: 7, carbsG: 50, fatG: 16 },
+      portionG: 60,
+      portionName: 'bulle',
+      createdAt: 1_700_000_000_000,
+    },
+  ],
+  meals: [
+    {
+      id: 'meal1',
+      name: 'Fika',
+      items: [
+        {
+          foodId: 'egen:bulle',
+          name: 'Kanelbulle',
+          grams: 60,
+          per100: { kcal: 380, proteinG: 7, carbsG: 50, fatG: 16 },
+        },
+      ],
+      createdAt: 1_700_000_000_000,
+    },
+  ],
+  foodLog: [
+    {
+      id: 'f1',
+      date: isoDaysFromToday(-1),
+      meal: 'mellanmal',
+      foodId: 'maltid:meal1',
+      name: 'Fika',
+      grams: 60,
+      per100: { kcal: 380, proteinG: 7, carbsG: 50, fatG: 16 },
+      portionName: 'portion',
+      portionCount: 1,
+      createdAt: 1_700_000_100_000,
+    },
+    {
+      id: 'f2',
+      date: isoDaysFromToday(-1),
+      meal: 'lunch',
+      foodId: 'lv:1',
+      name: 'Pasta kokt',
+      grams: 250,
+      per100: { kcal: 150, proteinG: 5, carbsG: 30, fatG: 1 },
+      createdAt: 1_700_000_100_000,
+    },
+  ],
+  favorites: [{ foodId: 'egen:bulle', createdAt: 1_700_000_000_000 }],
   weights: [
     { id: 'a', date: isoDaysFromToday(-30), weightKg: 90, createdAt: 1_700_000_000_000 },
     {
@@ -79,6 +134,10 @@ test('export → import ger identisk data', async ({ page }) => {
   expect(before.weights).toHaveLength(2);
   expect(before.waist).toHaveLength(1);
   expect(before.steps).toHaveLength(2);
+  expect(before.foodLog).toHaveLength(2);
+  expect(before.foods).toHaveLength(1);
+  expect(before.meals).toHaveLength(1);
+  expect(before.favorites).toHaveLength(1);
 
   await openSettings(page);
   await expect(page.getByTestId('last-export')).toHaveText('Ingen export gjord ännu.');
@@ -96,12 +155,14 @@ test('export → import ger identisk data', async ({ page }) => {
   await expect(preview.getByTestId('preview-waist')).toHaveText('1');
   await expect(preview.getByTestId('preview-steps')).toHaveText('2');
   await expect(preview.getByTestId('preview-photos')).toHaveText('1 (12 B)');
+  await expect(preview.getByTestId('preview-food-log')).toHaveText('2');
+  await expect(preview.getByTestId('preview-foods')).toHaveText('1 + 1');
   await expect(preview).toContainText('Krypterad');
 
   await preview.getByLabel(/Ersätt all befintlig data/).check();
   await preview.getByRole('button', { name: 'Ersätt och importera' }).tap();
   await expect(page.getByRole('status').filter({ hasText: 'Importen är klar' })).toContainText(
-    '5 mätningar och 1 bilder ersatte',
+    '5 mätningar, 2 matloggposter och 1 bilder ersatte',
   );
 
   const after = await dump(page);

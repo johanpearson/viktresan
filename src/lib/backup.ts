@@ -1,9 +1,10 @@
 /**
- * Säkerhetskopiering: hela databasen (profil, vikt, midja, steg, bilder) som en zip-fil,
+ * Säkerhetskopiering: hela databasen (profil, vikt, midja, steg, bilder, mat) som en zip-fil,
  * valfritt krypterad med lösenord (PBKDF2-SHA-256 → AES-256-GCM via Web Crypto).
  *
  * Okrypterad zip:
- *   backup.json        format, version, exportedAt, profil, weights, waist, steps, bildmetadata
+ *   backup.json        format, version, exportedAt, profil, weights, waist, steps, bildmetadata,
+ *                      foods, meals, foodLog, favorites (sedan version 3)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -14,8 +15,13 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import {
   splitLegacyMeasurements,
+  type Favorite,
+  type FoodLogEntry,
   type LegacyMeasurement,
+  type MealIngredient,
   type PhotoEntry,
+  type SavedMeal,
+  type StoredFood,
   type Profile,
   type Snapshot,
   type StepsEntry,
@@ -23,11 +29,13 @@ import {
   type WeightEntry,
 } from '../db/db.ts';
 import { isIsoDate } from './dates.ts';
+import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
+import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -66,6 +74,11 @@ export interface BackupSummary {
   steps: number;
   photos: number;
   photoBytes: number;
+  /** Poster i matloggen. */
+  foodLog: number;
+  /** Egna livsmedel och sparade måltider. */
+  foods: number;
+  meals: number;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -93,6 +106,10 @@ interface PlainManifest {
   waist: WaistEntry[];
   steps: StepsEntry[];
   photos: PhotoRecord[];
+  foods: StoredFood[];
+  meals: SavedMeal[];
+  foodLog: FoodLogEntry[];
+  favorites: Favorite[];
 }
 
 interface EncryptedManifest {
@@ -139,6 +156,10 @@ export async function createBackup(
     waist: snapshot.waist,
     steps: snapshot.steps,
     photos,
+    foods: snapshot.foods,
+    meals: snapshot.meals,
+    foodLog: snapshot.foodLog,
+    favorites: snapshot.favorites,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -230,7 +251,13 @@ export async function readBackup(file: Blob, password?: string): Promise<BackupC
 
 export function summarizeBackup(contents: BackupContents): BackupSummary {
   const { snapshot } = contents;
-  const dates = [...snapshot.weights, ...snapshot.waist, ...snapshot.steps, ...snapshot.photos]
+  const dates = [
+    ...snapshot.weights,
+    ...snapshot.waist,
+    ...snapshot.steps,
+    ...snapshot.photos,
+    ...snapshot.foodLog,
+  ]
     .map((e) => e.date)
     .sort();
   return {
@@ -242,6 +269,9 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     steps: snapshot.steps.length,
     photos: snapshot.photos.length,
     photoBytes: snapshot.photos.reduce((sum, p) => sum + p.blob.size, 0),
+    foodLog: snapshot.foodLog.length,
+    foods: snapshot.foods.length,
+    meals: snapshot.meals.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -325,6 +355,8 @@ function parsePlain(
       profile: profile == null ? null : parseProfileRecord(profile),
       ...(version === 1 ? parseV1Measurements(manifest) : parseV2Measurements(manifest)),
       photos: parsedPhotos,
+      // Version 1–2 saknar mat.
+      ...(version >= 3 ? parseFoodData(manifest) : emptyFoodData()),
     },
   };
 }
@@ -356,6 +388,35 @@ function parseV2Measurements(manifest: Record<string, unknown>): MeasurementList
   return result;
 }
 
+type FoodData = Pick<Snapshot, 'foods' | 'meals' | 'foodLog' | 'favorites'>;
+
+function emptyFoodData(): FoodData {
+  return { foods: [], meals: [], foodLog: [], favorites: [] };
+}
+
+function parseFoodData(manifest: Record<string, unknown>): FoodData {
+  const { foods, meals, foodLog, favorites } = manifest;
+  if (
+    !Array.isArray(foods) ||
+    !Array.isArray(meals) ||
+    !Array.isArray(foodLog) ||
+    !Array.isArray(favorites)
+  ) {
+    throw invalid('Matdata saknas.');
+  }
+  const result: FoodData = {
+    foods: foods.map((f, i) => parseFoodRecord(f, i)),
+    meals: meals.map((m, i) => parseMealRecord(m, i)),
+    foodLog: foodLog.map((e, i) => parseFoodLogRecord(e, i)),
+    favorites: favorites.map((f, i) => parseFavoriteRecord(f, i)),
+  };
+  assertUniqueKeys(result.foods, (f) => f.id, 'livsmedel');
+  assertUniqueKeys(result.meals, (m) => m.id, 'måltid');
+  assertUniqueKeys(result.foodLog, (e) => e.id, 'matloggpost');
+  assertUniqueKeys(result.favorites, (f) => f.foodId, 'favorit');
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Validering. Posterna byggs upp på nytt så att okända fält aldrig når databasen.
 
@@ -377,6 +438,25 @@ function parseProfileRecord(value: unknown): Profile {
     goalWeightKg: value.goalWeightKg,
   };
   if (value.goalDate !== undefined) profile.goalDate = value.goalDate;
+  const bad = () => invalid('Profilen i säkerhetskopian är ogiltig.');
+  if (value.sex !== undefined) {
+    if (value.sex !== 'man' && value.sex !== 'kvinna') throw bad();
+    profile.sex = value.sex;
+  }
+  if (value.birthYear !== undefined) {
+    if (!isInt(value.birthYear) || value.birthYear < 1900 || value.birthYear > 2100) throw bad();
+    profile.birthYear = value.birthYear;
+  }
+  if (value.activityLevel !== undefined) {
+    const level = ACTIVITY_LEVELS.find((a) => a.id === value.activityLevel);
+    if (!level) throw bad();
+    profile.activityLevel = level.id;
+  }
+  if (value.ratePerWeekKg !== undefined) {
+    if (typeof value.ratePerWeekKg !== 'number' || !RATE_OPTIONS.includes(value.ratePerWeekKg))
+      throw bad();
+    profile.ratePerWeekKg = value.ratePerWeekKg;
+  }
   return profile;
 }
 
@@ -452,6 +532,134 @@ function parseStepsRecord(value: unknown, index: number): StepsEntry {
   return { ...parseDailyTimes(value, bad), steps: value.steps };
 }
 
+function parseTimes(
+  value: Record<string, unknown>,
+  bad: () => BackupError,
+): { createdAt: number; updatedAt?: number } {
+  if (!isTimestamp(value.createdAt)) throw bad();
+  const times: { createdAt: number; updatedAt?: number } = { createdAt: value.createdAt };
+  if (value.updatedAt !== undefined) {
+    if (!isTimestamp(value.updatedAt)) throw bad();
+    times.updatedAt = value.updatedAt;
+  }
+  return times;
+}
+
+function parseNutrients(value: unknown, bad: () => BackupError): Nutrients {
+  if (
+    !isRecord(value) ||
+    !isAmount(value.kcal) ||
+    !isAmount(value.proteinG) ||
+    !isAmount(value.carbsG) ||
+    !isAmount(value.fatG)
+  ) {
+    throw bad();
+  }
+  return { kcal: value.kcal, proteinG: value.proteinG, carbsG: value.carbsG, fatG: value.fatG };
+}
+
+function isName(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '' && value.length <= 200;
+}
+
+function parseFoodRecord(value: unknown, index: number): StoredFood {
+  const bad = () => invalid(`Livsmedel nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isName(value.name) ||
+    (value.source !== 'egen' && value.source !== 'openfoodfacts')
+  ) {
+    throw bad();
+  }
+  const food: StoredFood = {
+    id: value.id,
+    name: value.name,
+    source: value.source,
+    per100: parseNutrients(value.per100, bad),
+    ...parseTimes(value, bad),
+  };
+  if (value.portionG !== undefined) {
+    if (!isPositive(value.portionG)) throw bad();
+    food.portionG = value.portionG;
+  }
+  if (value.portionName !== undefined) {
+    if (!isName(value.portionName)) throw bad();
+    food.portionName = value.portionName;
+  }
+  if (value.ean !== undefined) {
+    if (typeof value.ean !== 'string' || !/^\d{8,14}$/.test(value.ean)) throw bad();
+    food.ean = value.ean;
+  }
+  return food;
+}
+
+function parseIngredient(value: unknown, bad: () => BackupError): MealIngredient {
+  if (!isRecord(value) || !isId(value.foodId) || !isName(value.name) || !isPositive(value.grams)) {
+    throw bad();
+  }
+  return {
+    foodId: value.foodId,
+    name: value.name,
+    grams: value.grams,
+    per100: parseNutrients(value.per100, bad),
+  };
+}
+
+function parseMealRecord(value: unknown, index: number): SavedMeal {
+  const bad = () => invalid(`Måltid nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  if (!isRecord(value) || !isId(value.id) || !isName(value.name) || !Array.isArray(value.items)) {
+    throw bad();
+  }
+  return {
+    id: value.id,
+    name: value.name,
+    items: value.items.map((item) => parseIngredient(item, bad)),
+    ...parseTimes(value, bad),
+  };
+}
+
+function parseFoodLogRecord(value: unknown, index: number): FoodLogEntry {
+  const bad = () => invalid(`Matloggpost nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  const slot = isRecord(value) ? MEAL_SLOTS.find((m) => m.id === value.meal) : undefined;
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isDate(value.date) ||
+    !slot ||
+    !isId(value.foodId) ||
+    !isName(value.name) ||
+    !isPositive(value.grams)
+  ) {
+    throw bad();
+  }
+  const entry: FoodLogEntry = {
+    id: value.id,
+    date: value.date,
+    meal: slot.id,
+    foodId: value.foodId,
+    name: value.name,
+    grams: value.grams,
+    per100: parseNutrients(value.per100, bad),
+    ...parseTimes(value, bad),
+  };
+  if (value.portionName !== undefined) {
+    if (!isName(value.portionName)) throw bad();
+    entry.portionName = value.portionName;
+  }
+  if (value.portionCount !== undefined) {
+    if (!isPositive(value.portionCount)) throw bad();
+    entry.portionCount = value.portionCount;
+  }
+  return entry;
+}
+
+function parseFavoriteRecord(value: unknown, index: number): Favorite {
+  const bad = () => invalid(`Favorit nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  if (!isRecord(value) || !isId(value.foodId) || !isTimestamp(value.createdAt)) throw bad();
+  return { foodId: value.foodId, createdAt: value.createdAt };
+}
+
 function parsePhotoRecord(
   value: unknown,
   index: number,
@@ -520,6 +728,11 @@ function isDate(value: unknown): value is string {
 
 function isPositive(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 && value < 10_000;
+}
+
+/** Näringsvärde: 0 eller mer (per 100 g är 900 kcal fett det högsta rimliga). */
+function isAmount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 10_000;
 }
 
 function isInt(value: unknown): value is number {

@@ -200,7 +200,10 @@ test('logga midja', async ({ page }) => {
 
 test('logga steg och skriv över dagens steg', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('./#/steg');
+  await page.goto('./#/logga');
+  const stepsTab = page.getByRole('button', { name: 'Steg', exact: true });
+  await stepsTab.tap();
+  await expect(stepsTab).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('heading', { name: 'Dagens steg' })).toBeVisible();
   await expect(page.getByLabel('Datum')).toHaveValue(isoDaysFromToday(0));
   const field = page.getByLabel('Antal steg');
@@ -217,6 +220,7 @@ test('logga steg och skriv över dagens steg', async ({ page }) => {
 
   // Tillbaka senare samma dag: befintligt värde visas.
   await page.reload();
+  await stepsTab.tap();
   await expect(field).toHaveValue('8000');
   await expect(page.getByTestId('steps-existing')).toContainText('Loggat för dagen: 8 000 steg');
 

@@ -68,8 +68,8 @@ export function Installningar() {
           Säkerhetskopia
         </h2>
         <p className="form-note">
-          Allt – profil, mätningar och bilder – sparas i en zip-fil som du kan dela till t.ex.
-          molnlagring eller e-post. Datan lämnar bara enheten när du själv väljer det.
+          Allt – profil, mätningar, matlogg och bilder – sparas i en zip-fil som du kan dela till
+          t.ex. molnlagring eller e-post. Datan lämnar bara enheten när du själv väljer det.
         </p>
         <ExportBackup status={backup.status} onExported={backup.markExported} />
         <ImportBackup

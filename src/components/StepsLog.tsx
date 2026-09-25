@@ -1,27 +1,29 @@
 import { useState, type SyntheticEvent } from 'react';
-import { EmptyState, Page } from '../components/Page.tsx';
-import { RangeFilter } from '../components/RangeFilter.tsx';
-import { StepsChart } from '../components/StepsChart.tsx';
 import { upsertSteps, type StepsEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatDate, formatInt } from '../lib/format.ts';
 import { dailySteps, filterRange, type RangeId } from '../lib/stats.ts';
-import { useAppData, type AppData } from '../lib/useAppData.ts';
+import type { AppData } from '../lib/useAppData.ts';
 import { parseStepsFields } from '../lib/validation.ts';
+import { EmptyState } from './Page.tsx';
+import { RangeFilter } from './RangeFilter.tsx';
+import { StepsChart } from './StepsChart.tsx';
 
-export function Steg() {
-  const { data, reload } = useAppData();
+interface StepsLogProps {
+  steps: StepsEntry[];
+  onChange: () => Promise<AppData>;
+}
+
+/** Logga → Steg: dagens steg och stapelgraf. */
+export function StepsLog({ steps, onChange }: StepsLogProps) {
   const [range, setRange] = useState<RangeId>('1m');
-
-  if (data === null) return <Page title="Steg" />;
-
-  const all = dailySteps(data.steps);
+  const all = dailySteps(steps);
   const days = filterRange(all, range, todayIso());
   const average = days.length > 0 ? days.reduce((s, d) => s + d.steps, 0) / days.length : null;
 
   return (
-    <Page title="Steg">
-      <StepsForm steps={data.steps} onChange={reload} />
+    <>
+      <StepsForm steps={steps} onChange={onChange} />
       {all.length === 0 ? (
         <EmptyState>Inga steg loggade ännu.</EmptyState>
       ) : (
@@ -41,7 +43,7 @@ export function Steg() {
           )}
         </>
       )}
-    </Page>
+    </>
   );
 }
 

@@ -2,20 +2,32 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DB_NAME,
   DB_VERSION,
+  deleteFood,
+  deleteFoodLog,
+  deleteMeal,
   deletePhoto,
   deleteWaist,
   deleteWeight,
   getDb,
   getOldestEntryTime,
   getProfile,
+  findFoodByEan,
+  listFavorites,
+  listFoodLog,
+  listFoods,
+  listMeals,
   listPhotos,
   listSteps,
   listWaist,
   listWeights,
+  putFood,
+  putFoodLog,
+  putMeal,
   putPhoto,
   putWeight,
   resetDbForTests,
   saveProfile,
+  setFavorite,
   splitLegacyMeasurements,
   upsertSteps,
   upsertWaist,
@@ -85,10 +97,41 @@ async function createV1Database(): Promise<void> {
   db.close();
 }
 
+/** Skapar en databas med v3-schemat (före matloggningen). */
+async function createV3Database(): Promise<void> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 3);
+    req.onupgradeneeded = () => {
+      const raw = req.result;
+      const weights = raw.createObjectStore('weights', { keyPath: 'id' });
+      weights.createIndex('by-date', 'date');
+      const photos = raw.createObjectStore('photos', { keyPath: 'id' });
+      photos.createIndex('by-date', 'date');
+      raw.createObjectStore('settings');
+      raw.createObjectStore('profile');
+      raw.createObjectStore('waist', { keyPath: 'date' });
+      const steps = raw.createObjectStore('steps', { keyPath: 'date' });
+      weights.put({ id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 });
+      steps.put({ date: '2026-01-01', steps: 5000, createdAt: 1 });
+    };
+    req.onsuccess = () => {
+      resolve(req.result);
+    };
+    req.onerror = () => {
+      reject(req.error ?? new Error('open failed'));
+    };
+  });
+  db.close();
+}
+
 describe('db', () => {
   it('skapar alla object stores', async () => {
     const db = await getDb();
     expect([...db.objectStoreNames].sort()).toEqual([
+      'favorites',
+      'foodLog',
+      'foods',
+      'meals',
       'photos',
       'profile',
       'settings',
@@ -98,7 +141,7 @@ describe('db', () => {
     ]);
   });
 
-  it('migrerar v1 → v3 och behåller befintliga mätningar', async () => {
+  it('migrerar v1 → senaste och behåller befintliga mätningar', async () => {
     await createV1Database();
     const db = await getDb();
     expect(db.version).toBe(DB_VERSION);
@@ -109,6 +152,7 @@ describe('db', () => {
     expect(await listWaist()).toEqual([]);
     expect(await listSteps()).toEqual([]);
     expect(await getProfile()).toBeNull();
+    expect(await listFoodLog()).toEqual([]);
   });
 
   it('migrerar v2 → v3: delar upp midja och steg i egna stores', async () => {
@@ -131,7 +175,7 @@ describe('db', () => {
     ]);
 
     const db = await getDb();
-    expect(db.version).toBe(3);
+    expect(db.version).toBe(DB_VERSION);
     expect(await listWeights()).toEqual([
       { id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 },
       { id: 'b', date: '2026-01-02', weightKg: 89.6, note: 'Morgon', createdAt: 2 },
@@ -208,6 +252,86 @@ describe('db', () => {
     expect(await getOldestEntryTime()).toBe(20);
   });
 
+  it('migrerar v2 → v4 i ett steg: lägger till matstores och behåller data', async () => {
+    await createV2Database([
+      { id: 'a', date: '2026-01-01', weightKg: 90, steps: 5000, createdAt: 1 },
+    ]);
+    const db = await getDb();
+    expect(db.version).toBe(4);
+    expect(await listWeights()).toEqual([
+      { id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 },
+    ]);
+    expect(await listSteps()).toEqual([{ date: '2026-01-01', steps: 5000, createdAt: 1 }]);
+    expect(await listFoods()).toEqual([]);
+    expect(await listMeals()).toEqual([]);
+    expect(await listFavorites()).toEqual([]);
+  });
+
+  it('migrerar v3 → v4: lägger till matstores och behåller data', async () => {
+    await createV3Database();
+    const db = await getDb();
+    expect(db.version).toBe(4);
+    expect([...db.objectStoreNames]).toEqual(
+      expect.arrayContaining(['foods', 'meals', 'foodLog', 'favorites']),
+    );
+    expect(await listWeights()).toHaveLength(1);
+    expect(await listSteps()).toEqual([{ date: '2026-01-01', steps: 5000, createdAt: 1 }]);
+    expect(await listFoodLog()).toEqual([]);
+  });
+
+  it('matlogg: sparas, listas i datumordning och tas bort', async () => {
+    const per100 = { kcal: 100, proteinG: 1, carbsG: 2, fatG: 3 };
+    const base = { foodId: 'lv:1', name: 'Test', grams: 100, per100, meal: 'lunch' as const };
+    await putFoodLog({ ...base, id: 'b', date: '2026-01-02', createdAt: 1 });
+    await putFoodLog({ ...base, id: 'a', date: '2026-01-01', createdAt: 3 });
+    await putFoodLog({ ...base, id: 'c', date: '2026-01-01', createdAt: 2 });
+    expect((await listFoodLog()).map((e) => e.id)).toEqual(['c', 'a', 'b']);
+    await deleteFoodLog('c');
+    expect((await listFoodLog()).map((e) => e.id)).toEqual(['a', 'b']);
+    expect(await getOldestEntryTime()).toBe(1);
+  });
+
+  it('livsmedel: hittas på streckkod, egna går före cachade', async () => {
+    const per100 = { kcal: 100, proteinG: 1, carbsG: 2, fatG: 3 };
+    await putFood({
+      id: 'off:73100',
+      name: 'Cachad',
+      source: 'openfoodfacts',
+      ean: '73100',
+      per100,
+      createdAt: 1,
+    });
+    expect((await findFoodByEan('73100'))?.id).toBe('off:73100');
+    await putFood({
+      id: 'egen:x',
+      name: 'Eget',
+      source: 'egen',
+      ean: '73100',
+      per100,
+      createdAt: 2,
+    });
+    await putFood({ id: 'egen:y', name: 'Utan kod', source: 'egen', per100, createdAt: 3 });
+    expect((await findFoodByEan('73100'))?.id).toBe('egen:x');
+    expect(await findFoodByEan('999')).toBeNull();
+    expect((await listFoods()).map((f) => f.name)).toEqual(['Cachad', 'Eget', 'Utan kod']);
+
+    // Borttagning tar även bort favoritmarkeringen.
+    await setFavorite('egen:x', true, 5);
+    await deleteFood('egen:x');
+    expect(await listFavorites()).toEqual([]);
+  });
+
+  it('måltider och favoriter', async () => {
+    await putMeal({ id: 'm', name: 'Gröt', items: [], createdAt: 1 });
+    await setFavorite('maltid:m', true, 2);
+    await setFavorite('lv:1', true, 3);
+    expect((await listFavorites()).map((f) => f.foodId)).toEqual(['maltid:m', 'lv:1']);
+    await setFavorite('lv:1', false);
+    await deleteMeal('m');
+    expect(await listMeals()).toEqual([]);
+    expect(await listFavorites()).toEqual([]);
+  });
+
   it('sparar och läser profilen', async () => {
     const profile = {
       startDate: '2026-01-01',
@@ -215,6 +339,10 @@ describe('db', () => {
       heightCm: 180,
       goalWeightKg: 80,
       goalDate: '2026-12-31',
+      sex: 'man' as const,
+      birthYear: 1980,
+      activityLevel: 'latt' as const,
+      ratePerWeekKg: 0.5,
     };
     await saveProfile(profile);
     expect(await getProfile()).toEqual(profile);

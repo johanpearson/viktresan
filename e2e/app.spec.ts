@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Steg', 'Bilder'] as const;
+const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Mat', 'Bilder'] as const;
 
 /** Samlar CSP-överträdelser och konsolfel så att varje test kan kräva noll. */
 function collectErrors(page: Page): string[] {
@@ -98,6 +98,8 @@ test('strikt CSP finns i bygget', async ({ page }) => {
   expect(csp).toContain("script-src 'self'");
   expect(csp).not.toContain('unsafe-inline');
   expect(csp).not.toContain('unsafe-eval');
+  // Enda externa origin: Open Food Facts för streckkodsuppslag.
+  expect(csp).toContain("connect-src 'self' https://world.openfoodfacts.org;");
 });
 
 test('inga förfrågningar till andra origins', async ({ page, baseURL }) => {
@@ -108,6 +110,10 @@ test('inga förfrågningar till andra origins', async ({ page, baseURL }) => {
     if (url.protocol.startsWith('http') && url.origin !== origin) external.push(req.url());
   });
   await page.goto('./');
+  await page.waitForLoadState('networkidle');
+  // Mat-vyn och sökningen använder bara den lokala livsmedelsdatabasen.
+  await page.goto('./#/mat');
+  await page.getByLabel('Sök livsmedel').fill('mjölk');
   await page.waitForLoadState('networkidle');
   expect(external).toEqual([]);
 });

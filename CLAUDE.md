@@ -16,6 +16,7 @@ på enheten i IndexedDB. Publiceras på GitHub Pages under `/viktresan/`.
 | `npm test`          | Vitest (jsdom + fake-indexeddb).                                |
 | `npm run test:e2e`  | Playwright, Pixel 7-emulering, mot produktionsbygget.           |
 | `npm run icons`     | Regenererar PNG-ikoner i `public/` från SVG-källorna.           |
+| `npm run livsmedel` | Hämtar Livsmedelsverkets databas → `public/livsmedel.json`.     |
 
 Lighthouse CI lokalt (efter `npm run build`):
 `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npx --yes @lhci/cli@0.13.0 autorun`.
@@ -41,6 +42,18 @@ src/lib/usePhotos.ts    Hook: läser bilder + skapar/frigör object URLs
 src/lib/image.ts        Bildkomprimering (max 1080 px WebP, JPEG-reserv) + borttagning av EXIF/XMP
 src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
 src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos
+src/lib/energy.ts       BMR (Mifflin-St Jeor), TDEE, kalorimål, spärrar, måldatumskontroll
+src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
+src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
+src/lib/planText.ts     Sakliga förklaringar (spärrar, måldatum, TDEE-källa)
+src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-dagarssnitt, måltider
+src/lib/foodSearch.ts   FoodItem + fuzzy-sökning (å/ä/ö-vikning, Damerau-Levenshtein)
+src/lib/foodCatalog.ts  Lagrat → FoodItem, snabbval (senaste, favoriter)
+src/lib/livsmedel.ts    Laddar/tolkar public/livsmedel.json (format i livsmedelFormat.ts)
+src/lib/livsmedelImport.ts  Ren omvandling av Livsmedelsverkets API-svar (används av skriptet)
+src/lib/barcode.ts      EAN-validering + Open Food Facts-uppslag (injicerbar fetch)
+src/lib/barcodeDetector.ts  Typning/fabrik för BarcodeDetector
+src/lib/useFoodData.ts  Hook: egna livsmedel, måltider, favoriter + Livsmedelsverkets data
 src/lib/format.ts       Svensk formatering/tolkning av kg, heltal, datum
 src/lib/validation.ts   Validering av profil- och mätningsformulär
 src/lib/backup.ts       Säkerhetskopia: zip (fflate), valfri kryptering, validering vid import
@@ -51,21 +64,30 @@ src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore
 src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …)
-src/pages/              En komponent per sektion: Översikt, Logga (Vikt | Midja), Historik,
-                        Steg (dagens steg + graf), Bilder, Inställningar
-e2e/                    Playwright-tester (inkl. axe, offline, backup, lås); hjälpare i helpers.ts
+src/pages/              En komponent per sektion: Översikt, Logga (Vikt | Midja | Steg), Historik,
+                        Mat (Dag | Egna | Historik), Bilder, Inställningar
+e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat); hjälpare i helpers.ts.
+                        food.spec.ts blockerar service workern och mockar livsmedel.json,
+                        Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
-scripts/                Engångsskript (ikongenerering)
+scripts/                Engångsskript (ikongenerering, fetch-livsmedel.ts)
+public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), precachad
 ```
 
 - **Routing** är hash-baserad (`#/logga`) – GitHub Pages saknar SPA-fallback och det
   fungerar offline utan serverstöd. Ny sida: lägg till i `ROUTES` + `PAGES` i `App.tsx`.
   Bottennavigeringen visar routes med `inNav: true` (5 st); Inställningar nås via kugghjulet
   i Översikts rubrikrad (`Page`-propen `action`).
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 3`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 4`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
-  `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`).
+  `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
+  `foods` (v4, egna livsmedel `egen:<uuid>` + cachade Open Food Facts-träffar `off:<ean>`, index `by-ean`),
+  `meals` (v4, sparade måltider med ingredienser i gram), `foodLog` (v4, matlogg, index `by-date`),
+  `favorites` (v4, nyckel `foodId`).
+  Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5).
+  Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
+  om livsmedlet ändras. Livsmedels-id:n: `lv:<nummer>`, `egen:…`, `off:<ean>`, `maltid:<id>`.
   Midja och steg sparas med `upsertWaist`/`upsertSteps` (samma dag skrivs över, `createdAt` behålls).
   Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
   den senast registrerade posten.
@@ -77,7 +99,17 @@ scripts/                Engångsskript (ikongenerering)
   en linjär anpassning över de senaste 28 dagarna.
   Schemaändring = höj `DB_VERSION` och lägg till ett nytt `if (oldVersion < N)`-block.
   Ändra aldrig befintliga migreringsblock – användarens data finns bara på enheten.
-- **Grafer**: uPlot (`WeightChart`, `StepsChart`). Färger läses från CSS-variabler
+- **Kalorimål** (`energy.ts`, `adaptiveTdee.ts`, `plan.ts`): mål = TDEE − takt × 7 700 / 7.
+  Spärrar: takt ≤ 1 kg/vecka och ≤ 1 % av trendvikten, mål ≥ 1 500 (man) / 1 200 (kvinna) kcal.
+  Måldatum höjer aldrig underskottet – orimligt datum ger varning + tidigaste rimliga datum.
+  Adaptiv TDEE: fönster ≤ 28 dagar t.o.m. igår, kräver ≥ 14 dagar med både vikt och matlogg och
+  ≥ 80 % loggade dagar; regression på dagsvikterna, vikt = 0,9 × längd × täckning × precision
+  (halveras om skattningen kläms till 0,6–1,6 × formeln).
+- **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Mat-vyn) hämtas med
+  `npm run livsmedel` och checkas in; appen anropar aldrig Livsmedelsverket. Streckkoder:
+  `BarcodeDetector` + kamera, annars manuell EAN. Okända koder slås upp i Open Food Facts
+  (enda externa anropet, bara streckkoden skickas) och cachas i `foods`.
+- **Grafer**: uPlot (`WeightChart`, `StepsChart`, `IntakeChart`). Färger läses från CSS-variabler
   (`--accent`, `--chart-point`, `--chart-goal`).
 - **PWA**: `vite-plugin-pwa` i `generateSW`-läge, `registerType: 'autoUpdate'`.
   Registrering sker via extern `registerSW.js` (inget inline-skript).
@@ -90,11 +122,11 @@ scripts/                Engångsskript (ikongenerering)
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 2`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 3`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
-    bildmetadata med `file`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    bildmetadata med `file`, `foods`, `meals`, `foodLog`, `favorites`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
-    `splitLegacyMeasurements`.
+    `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.
@@ -129,10 +161,12 @@ scripts/                Engångsskript (ikongenerering)
 - Strikt CSP (se `CSP` i `vite.config.ts`): allt `'self'`, inga `unsafe-inline`/`unsafe-eval`.
   Bilder får även vara `blob:`/`data:`. E2E-testerna failar på CSP-överträdelser.
 - **Inga externa CDN:er, typsnitt, analysverktyg eller tredjepartsskript i runtime.**
+  Enda undantaget i `connect-src` är `https://world.openfoodfacts.org` (streckkodsuppslag).
   All kod ska bundlas. E2E-testet "inga förfrågningar till andra origins" vaktar detta.
 - Inga `style="…"`-attribut i HTML och inga inline `<script>`. React-`style`-props och
   DOM-manipulation via JS är OK (CSSOM omfattas inte av `style-src`).
-- Data lämnar aldrig enheten. Framtida export/import sker via filer som användaren väljer.
+- Data lämnar aldrig enheten, utom streckkoden vid uppslag i Open Food Facts. Export/import sker
+  via filer som användaren väljer.
 
 ## Konventioner
 

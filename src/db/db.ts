@@ -5,9 +5,11 @@ import {
   type IDBPTransaction,
   type StoreNames,
 } from 'idb';
+import type { ActivityLevel, Sex } from '../lib/energy.ts';
+import type { MealSlot, Nutrients } from '../lib/nutrition.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -54,6 +56,68 @@ export interface Profile {
   heightCm: number;
   goalWeightKg: number;
   goalDate?: string;
+  /** Sedan v4 (utan schemaändring): underlag för kalorimålet. Valfria för äldre profiler. */
+  sex?: Sex;
+  birthYear?: number;
+  activityLevel?: ActivityLevel;
+  /** Önskad takt i kg per vecka (0,25–1,0). Saknas → 0,5. */
+  ratePerWeekKg?: number;
+}
+
+/** Eget livsmedel eller cachad träff från Open Food Facts. Värden per 100 g. */
+export interface StoredFood {
+  /** `egen:<uuid>` eller `off:<ean>`. */
+  id: string;
+  name: string;
+  source: 'egen' | 'openfoodfacts';
+  per100: Nutrients;
+  portionG?: number;
+  portionName?: string;
+  ean?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** En ingrediens i en sparad måltid. Namn och näringsvärden kopieras in. */
+export interface MealIngredient {
+  foodId: string;
+  name: string;
+  grams: number;
+  per100: Nutrients;
+}
+
+/** Sparad måltid med flera ingredienser. */
+export interface SavedMeal {
+  id: string;
+  name: string;
+  items: MealIngredient[];
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * En post i matloggen. Namn och näringsvärden per 100 g kopieras in så att
+ * loggen inte ändras om livsmedlet ändras eller tas bort.
+ */
+export interface FoodLogEntry {
+  id: string;
+  date: string;
+  meal: MealSlot;
+  foodId: string;
+  name: string;
+  grams: number;
+  per100: Nutrients;
+  /** Satt när posten loggades i portioner: gram = antal × portionens vikt. */
+  portionName?: string;
+  portionCount?: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** Ett favoritmarkerat livsmedel (eller en måltid, `maltid:<id>`). */
+export interface Favorite {
+  foodId: string;
+  createdAt: number;
 }
 
 /**
@@ -101,6 +165,28 @@ export interface ViktresanDB extends DBSchema {
   profile: {
     key: string;
     value: Profile;
+  };
+  /** Sedan v4. Egna livsmedel och cachade Open Food Facts-produkter. */
+  foods: {
+    key: string;
+    value: StoredFood;
+    indexes: { 'by-ean': string };
+  };
+  /** Sedan v4. */
+  meals: {
+    key: string;
+    value: SavedMeal;
+  };
+  /** Sedan v4. */
+  foodLog: {
+    key: string;
+    value: FoodLogEntry;
+    indexes: { 'by-date': string };
+  };
+  /** Sedan v4. Nyckel = `foodId`. */
+  favorites: {
+    key: string;
+    value: Favorite;
   };
 }
 
@@ -196,6 +282,15 @@ export function getDb(): Promise<Database> {
         db.createObjectStore('waist', { keyPath: 'date' });
         db.createObjectStore('steps', { keyPath: 'date' });
         if (oldVersion >= 1) void migrateToV3(transaction);
+      }
+      if (oldVersion < 4) {
+        // v4: matloggning. Nya stores – befintlig data berörs inte.
+        const foods = db.createObjectStore('foods', { keyPath: 'id' });
+        foods.createIndex('by-ean', 'ean');
+        db.createObjectStore('meals', { keyPath: 'id' });
+        const foodLog = db.createObjectStore('foodLog', { keyPath: 'id' });
+        foodLog.createIndex('by-date', 'date');
+        db.createObjectStore('favorites', { keyPath: 'foodId' });
       }
     },
     blocking() {
@@ -297,6 +392,82 @@ export async function saveProfile(profile: Profile): Promise<void> {
   await db.put('profile', profile, PROFILE_KEY);
 }
 
+export async function putFood(food: StoredFood): Promise<void> {
+  const db = await getDb();
+  await db.put('foods', food);
+}
+
+export async function deleteFood(id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(['foods', 'favorites'], 'readwrite');
+  await Promise.all([tx.objectStore('foods').delete(id), tx.objectStore('favorites').delete(id)]);
+  await tx.done;
+}
+
+/** Egna livsmedel och cachade produkter, sorterade på namn. */
+export async function listFoods(): Promise<StoredFood[]> {
+  const db = await getDb();
+  const all = await db.getAll('foods');
+  return all.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+}
+
+/** Ett eget livsmedel eller en cachad produkt med streckkoden (egna går före). */
+export async function findFoodByEan(ean: string): Promise<StoredFood | null> {
+  const db = await getDb();
+  const hits = await db.getAllFromIndex('foods', 'by-ean', ean);
+  return hits.find((f) => f.source === 'egen') ?? hits[0] ?? null;
+}
+
+export async function putMeal(meal: SavedMeal): Promise<void> {
+  const db = await getDb();
+  await db.put('meals', meal);
+}
+
+export async function deleteMeal(id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(['meals', 'favorites'], 'readwrite');
+  await Promise.all([
+    tx.objectStore('meals').delete(id),
+    tx.objectStore('favorites').delete(`maltid:${id}`),
+  ]);
+  await tx.done;
+}
+
+export async function listMeals(): Promise<SavedMeal[]> {
+  const db = await getDb();
+  const all = await db.getAll('meals');
+  return all.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+}
+
+export async function putFoodLog(entry: FoodLogEntry): Promise<void> {
+  const db = await getDb();
+  await db.put('foodLog', entry);
+}
+
+export async function deleteFoodLog(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('foodLog', id);
+}
+
+/** Hela matloggen, äldst först (samma dag: i registreringsordning). */
+export async function listFoodLog(): Promise<FoodLogEntry[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex('foodLog', 'by-date');
+  return all.sort(byDateThenCreated);
+}
+
+export async function listFavorites(): Promise<Favorite[]> {
+  const db = await getDb();
+  const all = await db.getAll('favorites');
+  return all.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function setFavorite(foodId: string, favorite: boolean, now = Date.now()) {
+  const db = await getDb();
+  if (favorite) await db.put('favorites', { foodId, createdAt: now });
+  else await db.delete('favorites', foodId);
+}
+
 export async function putPhoto(photo: PhotoEntry): Promise<void> {
   const db = await getDb();
   await db.put('photos', photo);
@@ -340,32 +511,61 @@ export interface Snapshot {
   waist: WaistEntry[];
   steps: StepsEntry[];
   photos: PhotoEntry[];
+  foods: StoredFood[];
+  meals: SavedMeal[];
+  foodLog: FoodLogEntry[];
+  favorites: Favorite[];
 }
 
 export function emptySnapshot(): Snapshot {
-  return { profile: null, weights: [], waist: [], steps: [], photos: [] };
+  return {
+    profile: null,
+    weights: [],
+    waist: [],
+    steps: [],
+    photos: [],
+    foods: [],
+    meals: [],
+    foodLog: [],
+    favorites: [],
+  };
 }
 
 export async function readSnapshot(): Promise<Snapshot> {
-  const [profile, weights, waist, steps, photos] = await Promise.all([
-    getProfile(),
-    listWeights(),
-    listWaist(),
-    listSteps(),
-    listPhotos(),
-  ]);
-  return { profile, weights, waist, steps, photos };
+  const [profile, weights, waist, steps, photos, foods, meals, foodLog, favorites] =
+    await Promise.all([
+      getProfile(),
+      listWeights(),
+      listWaist(),
+      listSteps(),
+      listPhotos(),
+      listFoods(),
+      listMeals(),
+      listFoodLog(),
+      listFavorites(),
+    ]);
+  return { profile, weights, waist, steps, photos, foods, meals, foodLog, favorites };
 }
 
 /**
- * `replace`: all befintlig data (profil, vikt, midja, steg, bilder) ersätts.
- * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg datumet) vinner
- * den senast ändrade (`updatedAt ?? createdAt`, lika → befintlig behålls).
- * Befintlig profil behålls.
+ * `replace`: all befintlig data (profil, vikt, midja, steg, bilder, mat) ersätts.
+ * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg datumet, för
+ * favoriter `foodId`) vinner den senast ändrade (`updatedAt ?? createdAt`, lika →
+ * befintlig behålls). Befintlig profil behålls.
  */
 export type ImportMode = 'replace' | 'merge';
 
-const DATA_STORES = ['weights', 'waist', 'steps', 'photos', 'profile'] as const;
+const DATA_STORES = [
+  'weights',
+  'waist',
+  'steps',
+  'photos',
+  'profile',
+  'foods',
+  'meals',
+  'foodLog',
+  'favorites',
+] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
 export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promise<void> {
@@ -376,6 +576,10 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const steps = tx.objectStore('steps');
   const photos = tx.objectStore('photos');
   const profile = tx.objectStore('profile');
+  const foods = tx.objectStore('foods');
+  const meals = tx.objectStore('meals');
+  const foodLog = tx.objectStore('foodLog');
+  const favorites = tx.objectStore('favorites');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -384,6 +588,10 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.waist.map((w) => waist.put(w)),
       ...snapshot.steps.map((s) => steps.put(s)),
       ...snapshot.photos.map((p) => photos.put(p)),
+      ...snapshot.foods.map((f) => foods.put(f)),
+      ...snapshot.meals.map((m) => meals.put(m)),
+      ...snapshot.foodLog.map((e) => foodLog.put(e)),
+      ...snapshot.favorites.map((f) => favorites.put(f)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -403,6 +611,21 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       const existing = await photos.get(p.id);
       if (!existing || p.createdAt > existing.createdAt) await photos.put(p);
     }
+    for (const f of snapshot.foods) {
+      const existing = await foods.get(f.id);
+      if (!existing || changedAt(f) > changedAt(existing)) await foods.put(f);
+    }
+    for (const m of snapshot.meals) {
+      const existing = await meals.get(m.id);
+      if (!existing || changedAt(m) > changedAt(existing)) await meals.put(m);
+    }
+    for (const e of snapshot.foodLog) {
+      const existing = await foodLog.get(e.id);
+      if (!existing || changedAt(e) > changedAt(existing)) await foodLog.put(e);
+    }
+    for (const f of snapshot.favorites) {
+      if (!(await favorites.get(f.foodId))) await favorites.put(f);
+    }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);
     }
@@ -410,7 +633,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   await tx.done;
 }
 
-/** När den äldsta posten (vikt, midja, steg eller bild) skapades (ms), eller null om inga finns. */
+/** När den äldsta posten (vikt, midja, steg, bild eller matlogg) skapades (ms), eller null. */
 export async function getOldestEntryTime(): Promise<number | null> {
   const db = await getDb();
   const all = await Promise.all([
@@ -418,6 +641,7 @@ export async function getOldestEntryTime(): Promise<number | null> {
     db.getAll('waist'),
     db.getAll('steps'),
     db.getAll('photos'),
+    db.getAll('foodLog'),
   ]);
   let oldest: number | null = null;
   for (const { createdAt } of all.flat()) {

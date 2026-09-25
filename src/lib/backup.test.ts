@@ -9,8 +9,12 @@ import {
   readSnapshot,
   resetDbForTests,
   saveProfile,
+  type Favorite,
+  type FoodLogEntry,
   type PhotoEntry,
   type Profile,
+  type SavedMeal,
+  type StoredFood,
   type Snapshot,
   type StepsEntry,
   type WaistEntry,
@@ -49,7 +53,81 @@ const profile: Profile = {
   heightCm: 181,
   goalWeightKg: 80,
   goalDate: '2026-12-31',
+  sex: 'kvinna',
+  birthYear: 1985,
+  activityLevel: 'mattlig',
+  ratePerWeekKg: 0.75,
 };
+
+const oats = { kcal: 370, proteinG: 13, carbsG: 59, fatG: 7 };
+
+const foods: StoredFood[] = [
+  {
+    id: 'egen:gröt',
+    name: 'Mormors gröt',
+    source: 'egen',
+    per100: { kcal: 90, proteinG: 3, carbsG: 15, fatG: 2 },
+    portionG: 250,
+    portionName: 'tallrik',
+    createdAt: 4,
+  },
+  {
+    id: 'off:7310865004703',
+    name: 'Havregryn (Kungsörnen)',
+    source: 'openfoodfacts',
+    per100: oats,
+    ean: '7310865004703',
+    createdAt: 5,
+    updatedAt: 6,
+  },
+];
+
+const meals: SavedMeal[] = [
+  {
+    id: 'meal1',
+    name: 'Frukostgröt',
+    items: [
+      { foodId: 'off:7310865004703', name: 'Havregryn', grams: 60, per100: oats },
+      {
+        foodId: 'lv:1',
+        name: 'Mjölk',
+        grams: 200,
+        per100: { kcal: 60, proteinG: 3.5, carbsG: 4.8, fatG: 3 },
+      },
+    ],
+    createdAt: 7,
+  },
+];
+
+const foodLog: FoodLogEntry[] = [
+  {
+    id: 'f1',
+    date: '2026-01-08',
+    meal: 'frukost',
+    foodId: 'maltid:meal1',
+    name: 'Frukostgröt',
+    grams: 260,
+    per100: { kcal: 131.5, proteinG: 5.7, carbsG: 17.3, fatG: 3.9 },
+    portionName: 'portion',
+    portionCount: 1,
+    createdAt: 8,
+  },
+  {
+    id: 'f2',
+    date: '2026-01-09',
+    meal: 'mellanmal',
+    foodId: 'lv:2',
+    name: 'Banan',
+    grams: 120,
+    per100: { kcal: 95, proteinG: 1.1, carbsG: 21, fatG: 0.3 },
+    createdAt: 9,
+    updatedAt: 10,
+  },
+];
+
+const favorites: Favorite[] = [{ foodId: 'lv:2', createdAt: 11 }];
+
+const foodData = { foods, meals, foodLog, favorites };
 
 const weights: WeightEntry[] = [
   { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
@@ -96,7 +174,7 @@ const photos: PhotoEntry[] = [
 ];
 
 async function seed(): Promise<void> {
-  await applySnapshot({ profile, weights, waist, steps, photos }, 'replace');
+  await applySnapshot({ profile, weights, waist, steps, photos, ...foodData }, 'replace');
 }
 
 /** Gör om bilderna till byte-arrayer så att snapshots kan jämföras med toEqual. */
@@ -181,7 +259,9 @@ describe('backup round-trip', () => {
     });
     const text = new TextDecoder('latin1').decode(await file.arrayBuffer());
     expect(text).not.toContain('Bra vecka');
-    expect(text).not.toContain('m2');
+    // Med citattecken: två slumpbytes i chiffertexten kan råka bli "m2".
+    expect(text).not.toContain('"m2"');
+    expect(text).not.toContain('Mormors');
     expect(text).not.toContain('photos/');
   });
 
@@ -224,6 +304,10 @@ describe('backup validering', () => {
     waist: [{ date: '2026-01-01', waistCm: 90, createdAt: 1 }],
     steps: [{ date: '2026-01-01', steps: 8000, createdAt: 1 }],
     photos: [],
+    foods: [],
+    meals: [],
+    foodLog: [],
+    favorites: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -265,6 +349,19 @@ describe('backup validering', () => {
         measurements: [{ id: 'a', date: '2026-01-01', weightKg: 80, createdAt: 1, steps: 1.5 }],
       },
       { ...valid, exportedAt: 'igår' },
+      // Version 3 kräver matdata.
+      { ...valid, foods: undefined },
+      { ...valid, foodLog: [{ ...foodLog[0], meal: 'brunch' }] },
+      { ...valid, foodLog: [{ ...foodLog[0], grams: 0 }] },
+      { ...valid, foodLog: [{ ...foodLog[0], per100: { kcal: 10 } }] },
+      { ...valid, foodLog: [foodLog[0], foodLog[0]] },
+      { ...valid, foods: [{ ...foods[0], source: 'livsmedelsverket' }] },
+      { ...valid, foods: [{ ...foods[0], ean: '<script>' }] },
+      { ...valid, meals: [{ ...meals[0], items: [{ foodId: 'x', name: 'x', grams: -1 }] }] },
+      { ...valid, favorites: [{ foodId: 'x' }] },
+      { ...valid, profile: { ...profile, sex: 'annat' } },
+      { ...valid, profile: { ...profile, ratePerWeekKg: 2 } },
+      { ...valid, profile: { ...profile, activityLevel: 'extrem' } },
       {
         ...valid,
         photos: [
@@ -288,11 +385,13 @@ describe('backup validering', () => {
         ...valid,
         weights: [{ ...valid.weights[0], evil: '<script>' }],
         steps: [{ ...valid.steps[0], evil: '<script>' }],
+        foodLog: [{ ...foodLog[1], evil: '<script>', per100: { ...foodLog[1]?.per100, x: 1 } }],
       }),
     });
     const contents = await readBackup(file);
     expect(contents.snapshot.weights).toEqual(valid.weights);
     expect(contents.snapshot.steps).toEqual(valid.steps);
+    expect(contents.snapshot.foodLog).toEqual([foodLog[1]]);
   });
 
   it('avvisar manipulerade krypteringsparametrar', async () => {
@@ -346,6 +445,10 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   };
 
   const expected: Omit<Snapshot, 'photos'> = {
+    foods: [],
+    meals: [],
+    foodLog: [],
+    favorites: [],
     profile,
     weights: [
       { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
@@ -429,6 +532,36 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   });
 });
 
+describe('import av version 2 (utan mat)', () => {
+  it('läser in vikt, midja och steg och ger tom matdata', async () => {
+    const v2 = {
+      format: BACKUP_FORMAT,
+      version: 2,
+      exportedAt: NOW.toISOString(),
+      profile: {
+        startDate: '2026-01-01',
+        startWeightKg: 92.5,
+        heightCm: 181,
+        goalWeightKg: 80,
+      },
+      weights,
+      waist,
+      steps,
+      photos: [],
+    };
+    const contents = await readBackup(zipOf({ 'backup.json': JSON.stringify(v2) }));
+    expect(contents.snapshot).toEqual({
+      ...emptySnapshot(),
+      profile: v2.profile,
+      weights,
+      waist,
+      steps,
+    });
+    await applySnapshot(contents.snapshot, 'replace');
+    expect((await readSnapshot()).weights).toEqual(weights);
+  });
+});
+
 describe('import slå ihop', () => {
   it('lägger till nya poster, senast ändrade vinner och befintlig profil behålls', async () => {
     await seed();
@@ -456,6 +589,16 @@ describe('import slå ihop', () => {
         { date: '2026-01-07', steps: 1, createdAt: 2 },
       ],
       photos: [photo('p3', '2026-03-01', [1, 2, 3])],
+      foods: [
+        // Nyare version av den cachade produkten → ersätter.
+        { ...(foods[1] as StoredFood), name: 'Havregryn 1 kg', updatedAt: 20 },
+      ],
+      meals: [{ ...(meals[0] as SavedMeal), name: 'Gammal gröt', updatedAt: 1 }],
+      foodLog: [{ ...(foodLog[1] as FoodLogEntry), id: 'f3', date: '2026-01-10' }],
+      favorites: [
+        { foodId: 'lv:2', createdAt: 99 },
+        { foodId: 'lv:3', createdAt: 12 },
+      ],
     };
     await applySnapshot(imported, 'merge');
 
@@ -476,6 +619,13 @@ describe('import slå ihop', () => {
       ['2026-01-08', 5000],
     ]);
     expect(after.photos.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+    expect(after.foods.map((f) => f.name)).toEqual(['Havregryn 1 kg', 'Mormors gröt']);
+    expect(after.meals.map((m) => m.name)).toEqual(['Frukostgröt']);
+    expect(after.foodLog.map((e) => e.id)).toEqual(['f1', 'f2', 'f3']);
+    expect(after.favorites).toEqual([
+      { foodId: 'lv:2', createdAt: 11 },
+      { foodId: 'lv:3', createdAt: 12 },
+    ]);
   });
 
   it('tar profilen från säkerhetskopian om det inte finns någon', async () => {
@@ -487,9 +637,12 @@ describe('import slå ihop', () => {
 describe('summarizeBackup', () => {
   it('sammanfattar innehållet', async () => {
     const contents = await readBackup(
-      await createBackup({ profile, weights, waist, steps, photos }, { now: NOW }),
+      await createBackup({ profile, weights, waist, steps, photos, ...foodData }, { now: NOW }),
     );
     expect(summarizeBackup(contents)).toEqual({
+      foodLog: 2,
+      foods: 2,
+      meals: 1,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,

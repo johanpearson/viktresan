@@ -14,6 +14,9 @@
   --chart-point: #64748b;
   --chart-goal: #b45309;
   --track: #e2e8f0;
+  --macro-protein: #0f766e;
+  --macro-carbs: #b45309;
+  --macro-fat: #7c3aed;
 
   --radius: 16px;
   --tap: 56px;
@@ -46,6 +49,9 @@
     --chart-point: #94a3b8;
     --chart-goal: #fbbf24;
     --track: #334155;
+    --macro-protein: #2dd4bf;
+    --macro-carbs: #fbbf24;
+    --macro-fat: #c4b5fd;
   }
 }
 
@@ -996,4 +1002,329 @@ body {
 
 a.button {
   text-decoration: none;
+}
+
+/* Mat */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+.card + .form-ok:not(:empty),
+.segmented + .form-ok:not(:empty),
+.form-ok + .card,
+.segmented + .card,
+.card + .chart-card {
+  margin-top: 16px;
+}
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fieldset > legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 1rem;
+}
+
+.choice-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice-group > legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.choice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.choice:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.choice input {
+  width: 22px;
+  height: 22px;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.choice-label {
+  display: block;
+  font-weight: 600;
+}
+
+.choice-description {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.hero-unit {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.macros {
+  margin-top: 16px;
+}
+
+.macro-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--track);
+}
+
+.macro-segment {
+  display: block;
+  height: 100%;
+}
+
+.macro-protein {
+  background: var(--macro-protein);
+}
+
+.macro-carbs {
+  background: var(--macro-carbs);
+}
+
+.macro-fat {
+  background: var(--macro-fat);
+}
+
+.macro-legend {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
+.macro-item dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.macro-item dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.macro-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 4px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick-list li:first-child .pick {
+  border-top: 0;
+}
+
+.pick:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: 8px;
+}
+
+.pick-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pick-detail {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.quick-list {
+  margin-top: 12px;
+}
+
+.food-search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--chart-goal);
+  font-size: 1.6rem;
+  cursor: pointer;
+}
+
+.icon-button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.meal-group + .meal-group {
+  margin-top: 16px;
+}
+
+.meal-title {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.meal-total {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ingredient-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ingredient {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.ingredient:first-child {
+  border-top: 0;
+}
+
+.ingredient-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ingredient-grams {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ingredient-grams .input {
+  width: 5.5rem;
+  text-align: right;
+}
+
+.scanner-video {
+  width: 100%;
+  max-height: 50vh;
+  border-radius: 12px;
+  background: #000;
+  object-fit: cover;
+}
+
+.scan-manual {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.scan-manual .button {
+  width: auto;
+}
+
+.plan-notes {
+  margin: 16px 0 0;
+  padding-left: 20px;
+}
+
+.plan-notes li + li {
+  margin-top: 8px;
+}
+
+.plan-details {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.plan-details summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plan-details summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.form > .card-header {
+  margin-bottom: 0;
 }
