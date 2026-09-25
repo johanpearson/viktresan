@@ -33,9 +33,14 @@ src/App.tsx             Layout: header, aktiv sida, bottennavigering
 src/routes.ts           Route-tabell (id, hash-path, svensk etikett)
 src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
+src/lib/useAppData.ts   Hook: läser mätningar + profil, `reload()` efter ändring
+src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
+src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos
+src/lib/format.ts       Svensk formatering/tolkning av kg, heltal, datum
+src/lib/validation.ts   Validering av profil- och mätningsformulär
 src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst
-src/components/         Delade komponenter (NavBar, Page, WeightChart …)
-src/pages/              En komponent per sektion: Översikt, Logga, Bilder, Historik, Inställningar
+src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart …)
+src/pages/              En komponent per sektion: Översikt, Logga, Historik, Steg, Bilder, Inställningar
 e2e/                    Playwright-tester
 scripts/                Engångsskript (ikongenerering)
 ```
@@ -43,10 +48,16 @@ scripts/                Engångsskript (ikongenerering)
 - **Routing** är hash-baserad (`#/logga`) – GitHub Pages saknar SPA-fallback och det
   fungerar offline utan serverstöd. Ny sida: lägg till i `ROUTES` + `PAGES` i `App.tsx`.
 - **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB. Object stores:
-  `weights` (index `by-date`), `photos` (Blob, index `by-date`), `settings` (key/value).
+  `weights` (mätningar: vikt + valfritt midja/steg/anteckning, index `by-date`),
+  `photos` (Blob, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`).
+  Flera mätningar samma dag är tillåtna: vikt slås ihop till dagsmedel, steg tar senaste.
+- **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
+  I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
+  en linjär anpassning över de senaste 28 dagarna.
   Schemaändring = höj `DB_VERSION` och lägg till ett nytt `if (oldVersion < N)`-block.
   Ändra aldrig befintliga migreringsblock – användarens data finns bara på enheten.
-- **Grafer**: uPlot (`src/components/WeightChart.tsx`). Färger läses från CSS-variabler.
+- **Grafer**: uPlot (`WeightChart`, `StepsChart`). Färger läses från CSS-variabler
+  (`--accent`, `--chart-point`, `--chart-goal`).
 - **PWA**: `vite-plugin-pwa` i `generateSW`-läge, `registerType: 'autoUpdate'`.
   Registrering sker via extern `registerSW.js` (inget inline-skript).
 - **Beständig lagring**: `requestPersistence()` vid start; status + knapp i Inställningar.

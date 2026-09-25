@@ -9,6 +9,11 @@
   --accent: #0f766e;
   --accent-contrast: #ffffff;
   --nav-bg: rgb(255 255 255 / 0.92);
+  --danger: #b91c1c;
+  --ok: #047857;
+  --chart-point: #64748b;
+  --chart-goal: #b45309;
+  --track: #e2e8f0;
 
   --radius: 16px;
   --tap: 56px;
@@ -36,6 +41,11 @@
     --accent: #2dd4bf;
     --accent-contrast: #042f2e;
     --nav-bg: rgb(15 23 42 / 0.92);
+    --danger: #f87171;
+    --ok: #34d399;
+    --chart-point: #94a3b8;
+    --chart-goal: #fbbf24;
+    --track: #334155;
   }
 }
 
@@ -107,6 +117,12 @@ body {
   padding: 20px;
 }
 
+.card + .card,
+.segmented + .card,
+.segmented + .empty-state {
+  margin-top: 16px;
+}
+
 .card-title {
   font-size: 1.125rem;
   margin: 0 0 12px;
@@ -164,7 +180,7 @@ body {
 
 .nav-list {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   max-width: 640px;
   margin: 0 auto;
   padding: 0;
@@ -191,7 +207,8 @@ body {
 }
 
 .nav-link:focus-visible,
-.button:focus-visible {
+.button:focus-visible,
+.segmented-button:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
   border-radius: 12px;
@@ -213,4 +230,303 @@ body {
 
 .chart {
   width: 100%;
+}
+
+.chart-card {
+  padding: 12px;
+}
+
+/* uPlots legend = hovervärden. Text i textfärg; serien identifieras av markören. */
+.chart .u-legend {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.chart .u-legend .u-marker {
+  border-radius: 50%;
+}
+
+/* Formulär */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form .card-title {
+  margin: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.input {
+  min-height: var(--tap);
+  width: 100%;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.05rem;
+}
+
+.textarea {
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+}
+
+.stepper-input {
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper-button {
+  width: auto;
+  min-width: 72px;
+}
+
+.more summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.more[open] summary {
+  margin-bottom: 8px;
+}
+
+.more .field + .field,
+.more .field-row + .field {
+  margin-top: 12px;
+}
+
+.button-row {
+  display: flex;
+  gap: 12px;
+}
+
+.button-secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.button-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 2px solid var(--danger);
+}
+
+.button-small {
+  width: auto;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+}
+
+.form-error {
+  color: var(--danger);
+  font-weight: 600;
+  margin: 0;
+}
+
+.form-ok {
+  color: var(--ok);
+  margin: 0;
+}
+
+.form-ok:empty {
+  display: none;
+}
+
+/* Lista över mätningar */
+.entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.entry {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.entry:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.entry-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.entry-weight {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-extra {
+  color: var(--muted);
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Översikt */
+.hero-label {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.hero-value {
+  margin: 4px 0;
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-meta {
+  margin: 0;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 0 0 20px;
+}
+
+.stat dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.stat dd {
+  margin: 2px 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  min-width: 0;
+}
+
+.progress-caption {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 8px 0 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 10px 4px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+
+.table thead th {
+  border-top: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.muted-inline {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Tidsfilter */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--track);
+}
+
+.segmented-button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segmented-button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
 }
