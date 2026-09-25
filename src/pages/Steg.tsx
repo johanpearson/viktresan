@@ -1,45 +1,137 @@
-import { useState } from 'react';
+import { useState, type SyntheticEvent } from 'react';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { RangeFilter } from '../components/RangeFilter.tsx';
 import { StepsChart } from '../components/StepsChart.tsx';
+import { upsertSteps, type StepsEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
-import { formatInt } from '../lib/format.ts';
+import { formatDate, formatInt } from '../lib/format.ts';
 import { dailySteps, filterRange, type RangeId } from '../lib/stats.ts';
-import { useAppData } from '../lib/useAppData.ts';
+import { useAppData, type AppData } from '../lib/useAppData.ts';
+import { parseStepsFields } from '../lib/validation.ts';
 
 export function Steg() {
-  const { data } = useAppData();
+  const { data, reload } = useAppData();
   const [range, setRange] = useState<RangeId>('1m');
 
   if (data === null) return <Page title="Steg" />;
 
-  const all = dailySteps(data.measurements);
-  if (all.length === 0) {
-    return (
-      <Page title="Steg">
-        <EmptyState>Inga steg loggade ännu. Lägg till steg när du loggar din vikt.</EmptyState>
-      </Page>
-    );
-  }
-
+  const all = dailySteps(data.steps);
   const days = filterRange(all, range, todayIso());
   const average = days.length > 0 ? days.reduce((s, d) => s + d.steps, 0) / days.length : null;
 
   return (
     <Page title="Steg">
-      <RangeFilter value={range} onChange={setRange} />
-      {days.length === 0 ? (
-        <EmptyState>Inga steg i vald period.</EmptyState>
+      <StepsForm steps={data.steps} onChange={reload} />
+      {all.length === 0 ? (
+        <EmptyState>Inga steg loggade ännu.</EmptyState>
       ) : (
-        <div className="card chart-card">
-          <StepsChart days={days} />
-          {average != null && (
-            <p className="muted" data-testid="steps-average">
-              Snitt {formatInt(Math.round(average))} steg per loggad dag.
-            </p>
+        <>
+          <RangeFilter value={range} onChange={setRange} />
+          {days.length === 0 ? (
+            <EmptyState>Inga steg i vald period.</EmptyState>
+          ) : (
+            <div className="card chart-card">
+              <StepsChart days={days} />
+              {average != null && (
+                <p className="muted" data-testid="steps-average">
+                  Snitt {formatInt(Math.round(average))} steg per loggad dag.
+                </p>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </Page>
+  );
+}
+
+function stepsFor(steps: readonly StepsEntry[], date: string): StepsEntry | undefined {
+  return steps.find((s) => s.date === date);
+}
+
+interface StepsFormProps {
+  steps: StepsEntry[];
+  onChange: () => Promise<AppData>;
+}
+
+/** Ett värde per dag: finns dagen redan skrivs värdet över. */
+function StepsForm({ steps, onChange }: StepsFormProps) {
+  const [date, setDate] = useState(todayIso);
+  const [value, setValue] = useState(() => {
+    const existing = stepsFor(steps, todayIso());
+    return existing ? String(existing.steps) : '';
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const existing = stepsFor(steps, date);
+
+  function changeDate(next: string) {
+    setDate(next);
+    const entry = stepsFor(steps, next);
+    setValue(entry ? String(entry.steps) : '');
+    setStatus(null);
+  }
+
+  async function handleSubmit(event: SyntheticEvent) {
+    event.preventDefault();
+    const result = parseStepsFields({ date, steps: value });
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    await upsertSteps(result.value.date, result.value.steps);
+    await onChange();
+    setValue(String(result.value.steps));
+    setError(null);
+    setStatus(
+      `${existing ? 'Uppdaterade' : 'Sparade'} ${formatInt(result.value.steps)} steg för ${formatDate(result.value.date)}.`,
+    );
+  }
+
+  return (
+    <form className="card form steps-form" onSubmit={(e) => void handleSubmit(e)} noValidate>
+      <h2 className="card-title">{date === todayIso() ? 'Dagens steg' : 'Steg'}</h2>
+      <label className="field">
+        <span className="field-label">Datum</span>
+        <input
+          className="input"
+          type="date"
+          value={date}
+          max={todayIso()}
+          onChange={(e) => {
+            changeDate(e.target.value);
+          }}
+        />
+      </label>
+      <label className="field">
+        <span className="field-label">Antal steg</span>
+        <input
+          className="input big-input"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+          }}
+        />
+      </label>
+      <p className="form-note" data-testid="steps-existing">
+        {existing
+          ? `Loggat för dagen: ${formatInt(existing.steps)} steg. Sparar du ersätts värdet.`
+          : 'Inget loggat för dagen ännu.'}
+      </p>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button type="submit" className="button">
+        Spara
+      </button>
+      <p className="form-ok" role="status">
+        {status}
+      </p>
+    </form>
   );
 }

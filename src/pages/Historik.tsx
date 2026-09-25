@@ -13,7 +13,7 @@ export function Historik() {
 
   if (data === null) return <Page title="Historik" />;
 
-  const allDaily = dailyWeights(data.measurements);
+  const allDaily = dailyWeights(data.weights);
   if (allDaily.length === 0) {
     return (
       <Page title="Historik">

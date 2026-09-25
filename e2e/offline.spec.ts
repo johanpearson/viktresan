@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { collectErrors, isoDaysFromToday } from './helpers.ts';
 
-const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Steg', 'Bilder', 'Inställningar'] as const;
+const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Steg', 'Bilder'] as const;
 
 test('appen fungerar i flygplansläge efter första laddningen', async ({ page, context }) => {
   const errors = collectErrors(page);
@@ -27,7 +27,9 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
   }
 
   // Det går att spara data offline.
-  await page.goto('./#/installningar');
+  await nav.getByRole('link', { name: 'Översikt' }).tap();
+  await page.getByLabel('Inställningar').tap();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inställningar');
   await page.getByLabel('Startdatum').fill(isoDaysFromToday(-7));
   await page.getByLabel('Startvikt (kg)').fill('90');
   await page.getByLabel('Längd (cm)').fill('180');
@@ -38,6 +40,10 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
   await page.getByLabel('Vikt (kg)').fill('88,5');
   await page.getByRole('button', { name: 'Spara', exact: true }).tap();
   await expect(page.getByRole('status')).toContainText('Sparade 88,5 kg');
+  await page.goto('./#/steg');
+  await page.getByLabel('Antal steg').fill('4321');
+  await page.getByRole('button', { name: 'Spara', exact: true }).tap();
+  await expect(page.getByRole('status')).toContainText('Sparade 4 321 steg');
 
   // En ny flik (kallstart) med djuplänk fungerar också offline.
   const second = await context.newPage();

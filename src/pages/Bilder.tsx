@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { PhotoCompare } from '../components/PhotoCompare.tsx';
 import { PhotoViewer } from '../components/PhotoViewer.tsx';
-import { deletePhoto, newId, putPhoto, type Measurement } from '../db/db.ts';
+import { deletePhoto, newId, putPhoto, type WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatDate, formatPhotoLabel } from '../lib/format.ts';
 import { compressImage } from '../lib/image.ts';
@@ -13,8 +13,8 @@ import { usePhotos, type PhotoItem } from '../lib/usePhotos.ts';
 import { parsePhotoFields } from '../lib/validation.ts';
 
 /** Dagens medelvikt som förifyllt värde, eller tomt om dagen saknar mätning. */
-function weightTextFor(date: string, measurements: readonly Measurement[]): string {
-  const day = dailyWeights(measurements).find((d) => d.date === date);
+function weightTextFor(date: string, weights: readonly WeightEntry[]): string {
+  const day = dailyWeights(weights).find((d) => d.date === date);
   return day ? day.weightKg.toFixed(1).replace('.', ',') : '';
 }
 
@@ -62,7 +62,7 @@ export function Bilder() {
 
   return (
     <Page title="Bilder">
-      {data && <AddPhoto measurements={data.measurements} onAdded={reload} />}
+      {data && <AddPhoto weights={data.weights} onAdded={reload} />}
 
       {compared && (
         <PhotoCompare before={compared.before} after={compared.after} onClose={stopComparing} />
@@ -145,13 +145,13 @@ export function Bilder() {
 }
 
 interface AddPhotoProps {
-  measurements: readonly Measurement[];
+  weights: readonly WeightEntry[];
   onAdded: () => Promise<void>;
 }
 
-function AddPhoto({ measurements, onAdded }: AddPhotoProps) {
+function AddPhoto({ weights, onAdded }: AddPhotoProps) {
   const [date, setDate] = useState(todayIso);
-  const [weight, setWeight] = useState(() => weightTextFor(todayIso(), measurements));
+  const [weight, setWeight] = useState(() => weightTextFor(todayIso(), weights));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -203,7 +203,7 @@ function AddPhoto({ measurements, onAdded }: AddPhotoProps) {
             max={todayIso()}
             onChange={(e) => {
               setDate(e.target.value);
-              setWeight(weightTextFor(e.target.value, measurements));
+              setWeight(weightTextFor(e.target.value, weights));
             }}
           />
         </label>

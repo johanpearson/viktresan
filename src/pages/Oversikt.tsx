@@ -1,7 +1,8 @@
 import { BackupReminder } from '../components/BackupReminder.tsx';
+import { NavIcon } from '../components/NavIcon.tsx';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
-import type { Measurement, Profile } from '../db/db.ts';
+import type { Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatBmi, formatDate, formatKg, formatShortDate } from '../lib/format.ts';
 import {
@@ -19,23 +20,30 @@ import { useAppData } from '../lib/useAppData.ts';
 export function Oversikt() {
   const { data } = useAppData();
   return (
-    <Page title="Översikt">
+    <Page
+      title="Översikt"
+      action={
+        <a className="icon-link" href="#/installningar" aria-label="Inställningar">
+          <NavIcon id="installningar" />
+        </a>
+      }
+    >
       <BackupReminder />
       {data === null ? null : data.profile === null ? (
         <EmptyState>
-          Börja med att fylla i din profil under <a href="#/installningar">Inställningar</a> –
-          startvikt, längd och mål.
+          Börja med att fylla i din profil under <a href="#/installningar">Inställningar</a>{' '}
+          (kugghjulet) – startvikt, längd och mål.
         </EmptyState>
       ) : (
-        <Summary profile={data.profile} measurements={data.measurements} />
+        <Summary profile={data.profile} weights={data.weights} />
       )}
     </Page>
   );
 }
 
-function Summary({ profile, measurements }: { profile: Profile; measurements: Measurement[] }) {
+function Summary({ profile, weights }: { profile: Profile; weights: WeightEntry[] }) {
   const today = todayIso();
-  const daily = dailyWeights(measurements);
+  const daily = dailyWeights(weights);
   const latest = daily[daily.length - 1];
   const currentKg = latest?.weightKg ?? profile.startWeightKg;
   const trend = emaTrend(daily);

@@ -32,22 +32,15 @@ async function seedData(page: Page) {
       heightCm: 180,
       goalWeightKg: 80,
     },
-    measurements: [
-      {
-        id: 'a',
-        date: isoDaysFromToday(-20),
-        weightKg: 89,
-        steps: 8000,
-        createdAt: Date.now() - 20 * 864e5,
-      },
-      {
-        id: 'b',
-        date: isoDaysFromToday(-10),
-        weightKg: 88,
-        steps: 9000,
-        createdAt: Date.now() - 10 * 864e5,
-      },
-      { id: 'c', date: isoDaysFromToday(0), weightKg: 87, waistCm: 94, createdAt: Date.now() },
+    weights: [
+      { id: 'a', date: isoDaysFromToday(-20), weightKg: 89, createdAt: Date.now() - 20 * 864e5 },
+      { id: 'b', date: isoDaysFromToday(-10), weightKg: 88, createdAt: Date.now() - 10 * 864e5 },
+      { id: 'c', date: isoDaysFromToday(0), weightKg: 87, note: 'Bra dag', createdAt: Date.now() },
+    ],
+    waist: [{ date: isoDaysFromToday(0), waistCm: 94, createdAt: Date.now() }],
+    steps: [
+      { date: isoDaysFromToday(-20), steps: 8000, createdAt: Date.now() - 20 * 864e5 },
+      { date: isoDaysFromToday(0), steps: 9000, createdAt: Date.now() },
     ],
   });
 }
@@ -72,6 +65,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await page.waitForLoadState('networkidle');
         await expectNoViolations(page, label);
       }
+      // Logga → Midja med data och anteckningsfältet.
+      await page.goto('./#/logga');
+      await page.getByRole('button', { name: 'Lägg till anteckning' }).tap();
+      await expectNoViolations(page, 'Logga vikt med anteckning');
+      await page.getByRole('button', { name: 'Midja', exact: true }).tap();
+      await expect(page.getByTestId('waist-entry')).toHaveCount(1);
+      await expectNoViolations(page, 'Logga midja');
       // Påminnelsen om säkerhetskopia.
       await page.goto('./');
       await expect(page.getByTestId('backup-reminder')).toBeVisible();

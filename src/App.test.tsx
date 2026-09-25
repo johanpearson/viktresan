@@ -1,15 +1,22 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from './App.tsx';
-import { ROUTES } from './routes.ts';
+import { NAV_ROUTES } from './routes.ts';
 
 describe('App', () => {
-  it('visar navigering med alla sektioner', () => {
+  it('visar navigering med fem sektioner, utan Inställningar', () => {
     render(<App />);
     const nav = screen.getByRole('navigation', { name: 'Huvudmeny' });
-    for (const route of ROUTES) {
+    expect(NAV_ROUTES).toHaveLength(5);
+    for (const route of NAV_ROUTES) {
       expect(nav).toHaveTextContent(route.label);
     }
+    expect(nav).not.toHaveTextContent('Inställningar');
+  });
+
+  it('kugghjulet på Översikt leder till Inställningar', () => {
+    render(<App />);
+    expect(screen.getByLabelText('Inställningar')).toHaveAttribute('href', '#/installningar');
   });
 
   it('startar på Översikt', () => {

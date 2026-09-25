@@ -1,21 +1,50 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import {
+  openDB,
+  type DBSchema,
+  type IDBPDatabase,
+  type IDBPTransaction,
+  type StoreNames,
+} from 'idb';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 /**
- * En mätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
+ * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
  * Flera mätningar samma dag är tillåtna; beräkningarna slår ihop dem.
  */
-export interface Measurement {
+export interface WeightEntry {
   id: string;
   date: string;
   weightKg: number;
-  waistCm?: number;
-  steps?: number;
   note?: string;
   createdAt: number;
   updatedAt?: number;
+}
+
+/** Midjemått. Ett per dag – datumet är nyckeln (sedan v3). */
+export interface WaistEntry {
+  date: string;
+  waistCm: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** Steg. Ett värde per dag – datumet är nyckeln (sedan v3). */
+export interface StepsEntry {
+  date: string;
+  steps: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * Mätning i den kombinerade modellen från v1–v2 (och säkerhetskopior version 1):
+ * vikt med valfritt midjemått, steg och anteckning i samma post.
+ */
+export interface LegacyMeasurement extends WeightEntry {
+  waistCm?: number;
+  steps?: number;
 }
 
 /** Användarens profil. Det finns bara en, lagrad under nyckeln `PROFILE_KEY`. */
@@ -43,11 +72,21 @@ export interface PhotoEntry {
 }
 
 export interface ViktresanDB extends DBSchema {
-  /** Mätningar. Namnet är kvar från v1 då storen bara innehöll vikt. */
+  /** Viktmätningar. I v1–v2 innehöll storen även midja och steg (`LegacyMeasurement`). */
   weights: {
     key: string;
-    value: Measurement;
+    value: WeightEntry;
     indexes: { 'by-date': string };
+  };
+  /** Sedan v3. Nyckel = datum. */
+  waist: {
+    key: string;
+    value: WaistEntry;
+  };
+  /** Sedan v3. Nyckel = datum. */
+  steps: {
+    key: string;
+    value: StepsEntry;
   };
   photos: {
     key: string;
@@ -67,7 +106,69 @@ export interface ViktresanDB extends DBSchema {
 
 export type Database = IDBPDatabase<ViktresanDB>;
 
+function changedAt(entry: { createdAt: number; updatedAt?: number }): number {
+  return entry.updatedAt ?? entry.createdAt;
+}
+
+/**
+ * Delar upp mätningar i den gamla kombinerade modellen i vikt, midja och steg.
+ * Midja och steg blir ett värde per dag: den senast registrerade posten vinner
+ * (stegräknare visar en löpande dagssumma). Används av migreringen till v3 och
+ * vid import av säkerhetskopior version 1.
+ */
+export function splitLegacyMeasurements(legacy: readonly LegacyMeasurement[]): {
+  weights: WeightEntry[];
+  waist: WaistEntry[];
+  steps: StepsEntry[];
+} {
+  const weights: WeightEntry[] = [];
+  const waist = new Map<string, WaistEntry>();
+  const steps = new Map<string, StepsEntry>();
+  for (const m of legacy) {
+    const weight: WeightEntry = {
+      id: m.id,
+      date: m.date,
+      weightKg: m.weightKg,
+      createdAt: m.createdAt,
+    };
+    if (m.note !== undefined) weight.note = m.note;
+    if (m.updatedAt !== undefined) weight.updatedAt = m.updatedAt;
+    weights.push(weight);
+  }
+  const ordered = [...legacy].sort((a, b) => a.createdAt - b.createdAt);
+  for (const m of ordered) {
+    const { waistCm, steps: stepCount } = m;
+    const times: { createdAt: number; updatedAt?: number } = { createdAt: m.createdAt };
+    if (m.updatedAt !== undefined) times.updatedAt = m.updatedAt;
+    if (waistCm !== undefined) waist.set(m.date, { date: m.date, waistCm, ...times });
+    if (stepCount !== undefined) steps.set(m.date, { date: m.date, steps: stepCount, ...times });
+  }
+  const byDate = (a: { date: string }, b: { date: string }) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+  return {
+    weights,
+    waist: [...waist.values()].sort(byDate),
+    steps: [...steps.values()].sort(byDate),
+  };
+}
+
 export const PROFILE_KEY = 'current';
+
+type UpgradeTransaction = IDBPTransaction<ViktresanDB, StoreNames<ViktresanDB>[], 'versionchange'>;
+
+/** v2 → v3: skriver om `weights` utan midja/steg och fyller `waist` och `steps`. */
+async function migrateToV3(tx: UpgradeTransaction): Promise<void> {
+  const weights = tx.objectStore('weights');
+  const legacy: LegacyMeasurement[] = await weights.getAll();
+  const split = splitLegacyMeasurements(legacy);
+  const waist = tx.objectStore('waist');
+  const steps = tx.objectStore('steps');
+  await Promise.all([
+    ...split.weights.map((w) => weights.put(w)),
+    ...split.waist.map((w) => waist.put(w)),
+    ...split.steps.map((s) => steps.put(s)),
+  ]);
+}
 
 let dbPromise: Promise<Database> | null = null;
 
@@ -77,7 +178,7 @@ let dbPromise: Promise<Database> | null = null;
  */
 export function getDb(): Promise<Database> {
   dbPromise ??= openDB<ViktresanDB>(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
+    upgrade(db, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
         const weights = db.createObjectStore('weights', { keyPath: 'id' });
         weights.createIndex('by-date', 'date');
@@ -89,6 +190,12 @@ export function getDb(): Promise<Database> {
         // v2: profil i egen store. Mätningar fick valfria fält (midja, steg),
         // vilket inte kräver någon datamigrering – befintliga poster är giltiga.
         db.createObjectStore('profile');
+      }
+      if (oldVersion < 3) {
+        // v3: midja och steg flyttas ut ur `weights` till egna stores, ett värde per dag.
+        db.createObjectStore('waist', { keyPath: 'date' });
+        db.createObjectStore('steps', { keyPath: 'date' });
+        if (oldVersion >= 1) void migrateToV3(transaction);
       }
     },
     blocking() {
@@ -112,24 +219,72 @@ export function newId(): string {
   return crypto.randomUUID();
 }
 
-/** Lägger till eller ersätter en mätning (samma `id`). */
-export async function putMeasurement(entry: Measurement): Promise<void> {
+function byDateThenCreated<T extends { date: string; createdAt: number }>(a: T, b: T): number {
+  return a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1;
+}
+
+/** Lägger till eller ersätter en viktmätning (samma `id`). */
+export async function putWeight(entry: WeightEntry): Promise<void> {
   const db = await getDb();
   await db.put('weights', entry);
 }
 
-export async function deleteMeasurement(id: string): Promise<void> {
+export async function deleteWeight(id: string): Promise<void> {
   const db = await getDb();
   await db.delete('weights', id);
 }
 
-/** Alla mätningar, äldst först (samma dag: i registreringsordning). */
-export async function listMeasurements(): Promise<Measurement[]> {
+/** Alla viktmätningar, äldst först (samma dag: i registreringsordning). */
+export async function listWeights(): Promise<WeightEntry[]> {
   const db = await getDb();
   const all = await db.getAllFromIndex('weights', 'by-date');
-  return all.sort((a, b) =>
-    a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1,
+  return all.sort(byDateThenCreated);
+}
+
+/**
+ * Sparar dagens midjemått. Finns redan ett värde för datumet skrivs det över
+ * (`createdAt` behålls, `updatedAt` sätts).
+ */
+export async function upsertWaist(date: string, waistCm: number, now = Date.now()): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('waist', 'readwrite');
+  const existing = await tx.store.get(date);
+  await tx.store.put(
+    existing
+      ? { date, waistCm, createdAt: existing.createdAt, updatedAt: now }
+      : { date, waistCm, createdAt: now },
   );
+  await tx.done;
+}
+
+export async function deleteWaist(date: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('waist', date);
+}
+
+/** Alla midjemått, äldst först. */
+export async function listWaist(): Promise<WaistEntry[]> {
+  const db = await getDb();
+  return db.getAll('waist');
+}
+
+/** Sparar antal steg för en dag. Finns redan ett värde för datumet skrivs det över. */
+export async function upsertSteps(date: string, steps: number, now = Date.now()): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('steps', 'readwrite');
+  const existing = await tx.store.get(date);
+  await tx.store.put(
+    existing
+      ? { date, steps, createdAt: existing.createdAt, updatedAt: now }
+      : { date, steps, createdAt: now },
+  );
+  await tx.done;
+}
+
+/** Alla steg, äldst först. */
+export async function listSteps(): Promise<StepsEntry[]> {
+  const db = await getDb();
+  return db.getAll('steps');
 }
 
 export async function getProfile(): Promise<Profile | null> {
@@ -156,9 +311,7 @@ export async function deletePhoto(id: string): Promise<void> {
 export async function listPhotos(): Promise<PhotoEntry[]> {
   const db = await getDb();
   const all = await db.getAllFromIndex('photos', 'by-date');
-  return all.sort((a, b) =>
-    a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1,
-  );
+  return all.sort(byDateThenCreated);
 }
 
 /** Nycklar i `settings`-storen. */
@@ -183,49 +336,68 @@ export async function deleteSetting(key: string): Promise<void> {
 /** All användardata – det som ingår i en säkerhetskopia. Inställningar ingår inte. */
 export interface Snapshot {
   profile: Profile | null;
-  measurements: Measurement[];
+  weights: WeightEntry[];
+  waist: WaistEntry[];
+  steps: StepsEntry[];
   photos: PhotoEntry[];
 }
 
+export function emptySnapshot(): Snapshot {
+  return { profile: null, weights: [], waist: [], steps: [], photos: [] };
+}
+
 export async function readSnapshot(): Promise<Snapshot> {
-  const [profile, measurements, photos] = await Promise.all([
+  const [profile, weights, waist, steps, photos] = await Promise.all([
     getProfile(),
-    listMeasurements(),
+    listWeights(),
+    listWaist(),
+    listSteps(),
     listPhotos(),
   ]);
-  return { profile, measurements, photos };
+  return { profile, weights, waist, steps, photos };
 }
 
 /**
- * `replace`: all befintlig data (profil, mätningar, bilder) ersätts.
- * `merge`: poster läggs till; vid samma `id` vinner den senast ändrade
- * (`updatedAt ?? createdAt`, lika → befintlig behålls). Befintlig profil behålls.
+ * `replace`: all befintlig data (profil, vikt, midja, steg, bilder) ersätts.
+ * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg datumet) vinner
+ * den senast ändrade (`updatedAt ?? createdAt`, lika → befintlig behålls).
+ * Befintlig profil behålls.
  */
 export type ImportMode = 'replace' | 'merge';
 
-function changedAt(entry: { createdAt: number; updatedAt?: number }): number {
-  return entry.updatedAt ?? entry.createdAt;
-}
+const DATA_STORES = ['weights', 'waist', 'steps', 'photos', 'profile'] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
 export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(['weights', 'photos', 'profile'], 'readwrite');
+  const tx = db.transaction([...DATA_STORES], 'readwrite');
   const weights = tx.objectStore('weights');
+  const waist = tx.objectStore('waist');
+  const steps = tx.objectStore('steps');
   const photos = tx.objectStore('photos');
   const profile = tx.objectStore('profile');
 
   if (mode === 'replace') {
-    await Promise.all([weights.clear(), photos.clear(), profile.clear()]);
+    await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
     await Promise.all([
-      ...snapshot.measurements.map((m) => weights.put(m)),
+      ...snapshot.weights.map((w) => weights.put(w)),
+      ...snapshot.waist.map((w) => waist.put(w)),
+      ...snapshot.steps.map((s) => steps.put(s)),
       ...snapshot.photos.map((p) => photos.put(p)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
-    for (const m of snapshot.measurements) {
-      const existing = await weights.get(m.id);
-      if (!existing || changedAt(m) > changedAt(existing)) await weights.put(m);
+    for (const w of snapshot.weights) {
+      const existing = await weights.get(w.id);
+      if (!existing || changedAt(w) > changedAt(existing)) await weights.put(w);
+    }
+    for (const w of snapshot.waist) {
+      const existing = await waist.get(w.date);
+      if (!existing || changedAt(w) > changedAt(existing)) await waist.put(w);
+    }
+    for (const s of snapshot.steps) {
+      const existing = await steps.get(s.date);
+      if (!existing || changedAt(s) > changedAt(existing)) await steps.put(s);
     }
     for (const p of snapshot.photos) {
       const existing = await photos.get(p.id);
@@ -238,12 +410,17 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   await tx.done;
 }
 
-/** När den äldsta mätningen eller bilden skapades (ms), eller null om inga finns. */
+/** När den äldsta posten (vikt, midja, steg eller bild) skapades (ms), eller null om inga finns. */
 export async function getOldestEntryTime(): Promise<number | null> {
   const db = await getDb();
-  const [weights, photos] = await Promise.all([db.getAll('weights'), db.getAll('photos')]);
+  const all = await Promise.all([
+    db.getAll('weights'),
+    db.getAll('waist'),
+    db.getAll('steps'),
+    db.getAll('photos'),
+  ]);
   let oldest: number | null = null;
-  for (const { createdAt } of [...weights, ...photos]) {
+  for (const { createdAt } of all.flat()) {
     if (oldest === null || createdAt < oldest) oldest = createdAt;
   }
   return oldest;

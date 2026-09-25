@@ -5,15 +5,16 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DB_NAME,
   applySnapshot,
-  putMeasurement,
-  putPhoto,
+  emptySnapshot,
   readSnapshot,
   resetDbForTests,
   saveProfile,
-  type Measurement,
   type PhotoEntry,
   type Profile,
   type Snapshot,
+  type StepsEntry,
+  type WaistEntry,
+  type WeightEntry,
 } from '../db/db.ts';
 import {
   BACKUP_FORMAT,
@@ -50,19 +51,24 @@ const profile: Profile = {
   goalDate: '2026-12-31',
 };
 
-const measurements: Measurement[] = [
+const weights: WeightEntry[] = [
   { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
   {
     id: 'm2',
     date: '2026-01-08',
     weightKg: 91.2,
-    waistCm: 101,
-    steps: 12034,
     note: 'Bra vecka – "å, ä, ö"',
     createdAt: 2,
     updatedAt: 5,
   },
-  { id: 'm3', date: '2026-01-08', weightKg: 91.0, steps: 0, createdAt: 3 },
+  { id: 'm3', date: '2026-01-08', weightKg: 91.0, createdAt: 3 },
+];
+
+const waist: WaistEntry[] = [{ date: '2026-01-08', waistCm: 101, createdAt: 2, updatedAt: 5 }];
+
+const steps: StepsEntry[] = [
+  { date: '2026-01-07', steps: 12034, createdAt: 2 },
+  { date: '2026-01-08', steps: 0, createdAt: 3 },
 ];
 
 function photo(id: string, date: string, bytes: number[], extra: Partial<PhotoEntry> = {}) {
@@ -90,9 +96,7 @@ const photos: PhotoEntry[] = [
 ];
 
 async function seed(): Promise<void> {
-  await saveProfile(profile);
-  for (const m of measurements) await putMeasurement(m);
-  for (const p of photos) await putPhoto(p);
+  await applySnapshot({ profile, weights, waist, steps, photos }, 'replace');
 }
 
 /** Gör om bilderna till byte-arrayer så att snapshots kan jämföras med toEqual. */
@@ -110,8 +114,8 @@ async function comparable(snapshot: Snapshot) {
 }
 
 async function wipe(): Promise<void> {
-  await applySnapshot({ profile: null, measurements: [], photos: [] }, 'replace');
-  expect(await readSnapshot()).toEqual({ profile: null, measurements: [], photos: [] });
+  await applySnapshot(emptySnapshot(), 'replace');
+  expect(await readSnapshot()).toEqual(emptySnapshot());
 }
 
 async function errorOf(promise: Promise<unknown>): Promise<BackupError> {
@@ -184,7 +188,7 @@ describe('backup round-trip', () => {
   it('tom databas går också att exportera och importera', async () => {
     const file = await createBackup(await readSnapshot(), { now: NOW });
     const contents = await readBackup(file);
-    expect(contents.snapshot).toEqual({ profile: null, measurements: [], photos: [] });
+    expect(contents.snapshot).toEqual(emptySnapshot());
   });
 });
 
@@ -216,7 +220,9 @@ describe('backup validering', () => {
     ...header,
     exportedAt: NOW.toISOString(),
     profile: null,
-    measurements: [{ id: 'a', date: '2026-01-01', weightKg: 80, createdAt: 1 }],
+    weights: [{ id: 'a', date: '2026-01-01', weightKg: 80, createdAt: 1 }],
+    waist: [{ date: '2026-01-01', waistCm: 90, createdAt: 1 }],
+    steps: [{ date: '2026-01-01', steps: 8000, createdAt: 1 }],
     photos: [],
   };
 
@@ -238,16 +244,26 @@ describe('backup validering', () => {
 
   it('avvisar ogiltiga poster', async () => {
     const cases: unknown[] = [
-      { ...valid, measurements: [{ id: 'a', date: '2026-13-01', weightKg: 80, createdAt: 1 }] },
-      { ...valid, measurements: [{ id: 'a', date: '2026-01-01', weightKg: '80', createdAt: 1 }] },
-      { ...valid, measurements: [{ id: 'a', date: '2026-01-01', weightKg: 80 }] },
+      { ...valid, weights: [{ id: 'a', date: '2026-13-01', weightKg: 80, createdAt: 1 }] },
+      { ...valid, weights: [{ id: 'a', date: '2026-01-01', weightKg: '80', createdAt: 1 }] },
+      { ...valid, weights: [{ id: 'a', date: '2026-01-01', weightKg: 80 }] },
+      { ...valid, weights: [valid.weights[0], valid.weights[0]] },
+      { ...valid, steps: [{ date: '2026-01-01', steps: 1.5, createdAt: 1 }] },
+      { ...valid, steps: [{ date: '2026-01-01', steps: -1, createdAt: 1 }] },
+      { ...valid, steps: [valid.steps[0], valid.steps[0]] },
+      { ...valid, waist: [{ date: '2026-01-01', waistCm: 0, createdAt: 1 }] },
+      { ...valid, waist: [{ date: '2026-01-01', waistCm: 90 }] },
+      { ...valid, waist: [valid.waist[0], valid.waist[0]] },
+      { ...valid, profile: { startDate: '2026-01-01' } },
+      { ...valid, weights: 'nej' },
+      { ...valid, steps: undefined },
+      // Version 1 kräver `measurements`.
+      { ...valid, version: 1 },
       {
         ...valid,
+        version: 1,
         measurements: [{ id: 'a', date: '2026-01-01', weightKg: 80, createdAt: 1, steps: 1.5 }],
       },
-      { ...valid, measurements: [valid.measurements[0], valid.measurements[0]] },
-      { ...valid, profile: { startDate: '2026-01-01' } },
-      { ...valid, measurements: 'nej' },
       { ...valid, exportedAt: 'igår' },
       {
         ...valid,
@@ -270,11 +286,13 @@ describe('backup validering', () => {
     const file = zipOf({
       'backup.json': JSON.stringify({
         ...valid,
-        measurements: [{ ...valid.measurements[0], evil: '<script>' }],
+        weights: [{ ...valid.weights[0], evil: '<script>' }],
+        steps: [{ ...valid.steps[0], evil: '<script>' }],
       }),
     });
     const contents = await readBackup(file);
-    expect(contents.snapshot.measurements).toEqual(valid.measurements);
+    expect(contents.snapshot.weights).toEqual(valid.weights);
+    expect(contents.snapshot.steps).toEqual(valid.steps);
   });
 
   it('avvisar manipulerade krypteringsparametrar', async () => {
@@ -296,6 +314,121 @@ describe('backup validering', () => {
   });
 });
 
+describe('import av version 1 (kombinerade mätningar)', () => {
+  const v1 = {
+    format: BACKUP_FORMAT,
+    version: 1,
+    exportedAt: NOW.toISOString(),
+    profile,
+    measurements: [
+      { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
+      {
+        id: 'm2',
+        date: '2026-01-08',
+        weightKg: 91.2,
+        waistCm: 101,
+        steps: 4000,
+        note: 'Bra vecka',
+        createdAt: 2,
+        updatedAt: 5,
+      },
+      { id: 'm3', date: '2026-01-08', weightKg: 91.0, steps: 9000, createdAt: 3 },
+    ],
+    photos: [
+      {
+        id: 'p1',
+        date: '2026-01-01',
+        mimeType: 'image/webp',
+        createdAt: 10,
+        file: 'photos/p1.webp',
+      },
+    ],
+  };
+
+  const expected: Omit<Snapshot, 'photos'> = {
+    profile,
+    weights: [
+      { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
+      {
+        id: 'm2',
+        date: '2026-01-08',
+        weightKg: 91.2,
+        note: 'Bra vecka',
+        createdAt: 2,
+        updatedAt: 5,
+      },
+      { id: 'm3', date: '2026-01-08', weightKg: 91.0, createdAt: 3 },
+    ],
+    waist: [{ date: '2026-01-08', waistCm: 101, createdAt: 2, updatedAt: 5 }],
+    steps: [{ date: '2026-01-08', steps: 9000, createdAt: 3 }],
+  };
+
+  function v1Zip(): Uint8Array<ArrayBuffer> {
+    return new Uint8Array(
+      zipSync({
+        'backup.json': strToU8(JSON.stringify(v1)),
+        'photos/p1.webp': new Uint8Array([1, 2, 3]),
+      }),
+    );
+  }
+
+  it('okrypterad: delar upp mätningarna och går att återställa', async () => {
+    const contents = await readBackup(new Blob([v1Zip()]));
+    const { photos: importedPhotos, ...rest } = contents.snapshot;
+    expect(rest).toEqual(expected);
+    expect(importedPhotos.map((p) => p.id)).toEqual(['p1']);
+    expect(summarizeBackup(contents)).toMatchObject({ weights: 3, waist: 1, steps: 1, photos: 1 });
+
+    await applySnapshot(contents.snapshot, 'replace');
+    expect({ ...(await readSnapshot()), photos: [] }).toEqual({ ...expected, photos: [] });
+  });
+
+  it('krypterad: dekrypteras med version 1 som AAD', async () => {
+    const password = 'gammalt lösenord';
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const base = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(password),
+      'PBKDF2',
+      false,
+      ['deriveKey'],
+    );
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: ITERATIONS },
+      base,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt'],
+    );
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(`${BACKUP_FORMAT}:1`) },
+      key,
+      v1Zip(),
+    );
+    const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+    const file = zipOf({
+      'backup.json': JSON.stringify({
+        format: BACKUP_FORMAT,
+        version: 1,
+        encryption: {
+          kdf: 'PBKDF2',
+          hash: 'SHA-256',
+          iterations: ITERATIONS,
+          salt: b64(salt),
+          cipher: 'AES-GCM',
+          iv: b64(iv),
+        },
+      }),
+      'backup.enc': new Uint8Array(ciphertext),
+    });
+
+    const contents = await readBackup(file, password);
+    expect(contents.encrypted).toBe(true);
+    expect({ ...contents.snapshot, photos: [] }).toEqual({ ...expected, photos: [] });
+  });
+});
+
 describe('import slå ihop', () => {
   it('lägger till nya poster, senast ändrade vinner och befintlig profil behålls', async () => {
     await seed();
@@ -304,12 +437,23 @@ describe('import slå ihop', () => {
 
     const imported: Snapshot = {
       profile,
-      measurements: [
+      weights: [
         // Äldre version av m2 → ignoreras.
         { id: 'm2', date: '2026-01-08', weightKg: 99, createdAt: 2, updatedAt: 3 },
         // Nyare version av m3 → ersätter.
         { id: 'm3', date: '2026-01-08', weightKg: 90.5, createdAt: 3, updatedAt: 7 },
         { id: 'm4', date: '2026-01-15', weightKg: 90.1, createdAt: 8 },
+      ],
+      waist: [
+        // Äldre ändring samma dag → ignoreras.
+        { date: '2026-01-08', waistCm: 120, createdAt: 2, updatedAt: 4 },
+        { date: '2026-01-15', waistCm: 100, createdAt: 8 },
+      ],
+      steps: [
+        // Nyare värde samma dag → ersätter.
+        { date: '2026-01-08', steps: 5000, createdAt: 3, updatedAt: 9 },
+        // Lika gammalt → befintligt behålls.
+        { date: '2026-01-07', steps: 1, createdAt: 2 },
       ],
       photos: [photo('p3', '2026-03-01', [1, 2, 3])],
     };
@@ -317,17 +461,25 @@ describe('import slå ihop', () => {
 
     const after = await readSnapshot();
     expect(after.profile).toEqual(local);
-    expect(after.measurements.map((m) => [m.id, m.weightKg])).toEqual([
+    expect(after.weights.map((m) => [m.id, m.weightKg])).toEqual([
       ['m1', 92.5],
       ['m2', 91.2],
       ['m3', 90.5],
       ['m4', 90.1],
     ]);
+    expect(after.waist.map((w) => [w.date, w.waistCm])).toEqual([
+      ['2026-01-08', 101],
+      ['2026-01-15', 100],
+    ]);
+    expect(after.steps.map((s) => [s.date, s.steps])).toEqual([
+      ['2026-01-07', 12034],
+      ['2026-01-08', 5000],
+    ]);
     expect(after.photos.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
   });
 
   it('tar profilen från säkerhetskopian om det inte finns någon', async () => {
-    await applySnapshot({ profile, measurements: [], photos: [] }, 'merge');
+    await applySnapshot({ ...emptySnapshot(), profile }, 'merge');
     expect((await readSnapshot()).profile).toEqual(profile);
   });
 });
@@ -335,13 +487,15 @@ describe('import slå ihop', () => {
 describe('summarizeBackup', () => {
   it('sammanfattar innehållet', async () => {
     const contents = await readBackup(
-      await createBackup({ profile, measurements, photos }, { now: NOW }),
+      await createBackup({ profile, weights, waist, steps, photos }, { now: NOW }),
     );
     expect(summarizeBackup(contents)).toEqual({
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,
-      measurements: 3,
+      weights: 3,
+      waist: 1,
+      steps: 2,
       photos: 2,
       photoBytes: 13,
       firstDate: '2026-01-01',

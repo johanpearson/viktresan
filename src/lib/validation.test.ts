@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseMeasurement, parsePhotoFields, parseProfile } from './validation.ts';
+import {
+  parsePhotoFields,
+  parseProfile,
+  parseStepsFields,
+  parseWaistFields,
+  parseWeightFields,
+} from './validation.ts';
 
 const profile = {
   startDate: '2026-01-01',
@@ -37,37 +43,58 @@ describe('parseProfile', () => {
   });
 });
 
-describe('parseMeasurement', () => {
-  const base = { date: '2026-01-01', weight: '81,5', waist: '', steps: '', note: '' };
+describe('parseWeightFields', () => {
+  const base = { date: '2026-01-01', weight: '81,5', note: '' };
 
-  it('godkänner bara vikt', () => {
-    expect(parseMeasurement(base)).toEqual({
+  it('godkänner vikt utan anteckning', () => {
+    expect(parseWeightFields(base)).toEqual({
       ok: true,
       value: { date: '2026-01-01', weightKg: 81.5 },
     });
   });
 
-  it('tar med valfria fält', () => {
-    expect(
-      parseMeasurement({ ...base, waist: '92,5', steps: '10 500', note: '  Efter semester ' }),
-    ).toEqual({
+  it('tar med anteckningen', () => {
+    expect(parseWeightFields({ ...base, note: '  Efter semester ' })).toEqual({
       ok: true,
-      value: {
-        date: '2026-01-01',
-        weightKg: 81.5,
-        waistCm: 92.5,
-        steps: 10500,
-        note: 'Efter semester',
-      },
+      value: { date: '2026-01-01', weightKg: 81.5, note: 'Efter semester' },
     });
   });
 
   it('underkänner ogiltiga värden', () => {
-    expect(parseMeasurement({ ...base, weight: '' })).toMatchObject({ ok: false });
-    expect(parseMeasurement({ ...base, steps: '1,5' })).toMatchObject({ ok: false });
-    expect(parseMeasurement({ ...base, steps: '-3' })).toMatchObject({ ok: false });
-    expect(parseMeasurement({ ...base, waist: '5' })).toMatchObject({ ok: false });
-    expect(parseMeasurement({ ...base, date: '2026-02-30' })).toMatchObject({ ok: false });
+    expect(parseWeightFields({ ...base, weight: '' })).toMatchObject({ ok: false });
+    expect(parseWeightFields({ ...base, weight: '5' })).toMatchObject({ ok: false });
+    expect(parseWeightFields({ ...base, date: '2026-02-30' })).toMatchObject({ ok: false });
+  });
+});
+
+describe('parseWaistFields', () => {
+  it('godkänner decimaler med komma', () => {
+    expect(parseWaistFields({ date: '2026-01-01', waist: '92,5' })).toEqual({
+      ok: true,
+      value: { date: '2026-01-01', waistCm: 92.5 },
+    });
+  });
+
+  it('underkänner ogiltiga värden', () => {
+    expect(parseWaistFields({ date: '2026-01-01', waist: '' })).toMatchObject({ ok: false });
+    expect(parseWaistFields({ date: '2026-01-01', waist: '5' })).toMatchObject({ ok: false });
+    expect(parseWaistFields({ date: 'igår', waist: '90' })).toMatchObject({ ok: false });
+  });
+});
+
+describe('parseStepsFields', () => {
+  it('godkänner heltal med mellanslag och noll', () => {
+    expect(parseStepsFields({ date: '2026-01-01', steps: '10 500' })).toEqual({
+      ok: true,
+      value: { date: '2026-01-01', steps: 10500 },
+    });
+    expect(parseStepsFields({ date: '2026-01-01', steps: '0' })).toMatchObject({ ok: true });
+  });
+
+  it('underkänner ogiltiga värden', () => {
+    for (const steps of ['', ' ', '1,5', '-3', '300000', 'många']) {
+      expect(parseStepsFields({ date: '2026-01-01', steps }), steps).toMatchObject({ ok: false });
+    }
   });
 });
 

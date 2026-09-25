@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Steg', 'Bilder', 'Inställningar'] as const;
+const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Steg', 'Bilder'] as const;
 
 /** Samlar CSP-överträdelser och konsolfel så att varje test kan kräva noll. */
 function collectErrors(page: Page): string[] {
@@ -22,7 +22,49 @@ test('startsidan visar Översikt och navigeringen', async ({ page }) => {
   for (const label of SECTIONS) {
     await expect(nav.getByRole('link', { name: label })).toBeVisible();
   }
+  await expect(nav.getByRole('link')).toHaveCount(5);
+  await expect(nav.getByRole('link', { name: 'Inställningar' })).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('kugghjulet på Översikt öppnar Inställningar', async ({ page }) => {
+  await page.goto('./');
+  const gear = page.getByLabel('Inställningar');
+  const box = await gear.boundingBox();
+  expect(box?.height).toBeGreaterThanOrEqual(48);
+  expect(box?.width).toBeGreaterThanOrEqual(48);
+  await gear.tap();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inställningar');
+  await expect(page).toHaveURL(/#\/installningar$/);
+});
+
+test('bottennavigeringen är solid och döljer inget innehåll', async ({ page }) => {
+  await page.goto('./#/logga');
+  await expect(page.getByRole('button', { name: 'Spara', exact: true })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Huvudmeny' });
+
+  // Helt ogenomskinlig bakgrund.
+  const background = await nav.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(background).toMatch(/^rgb\(/);
+
+  // Längst ner på sidan slutar innehållet ovanför navigeringen.
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  const { contentBottom, navTop, paddingBottom, navHeight } = await page.evaluate(() => {
+    const main = document.querySelector('.app-main');
+    const navEl = document.querySelector('.nav');
+    const last = main?.querySelector('.page')?.lastElementChild;
+    if (!main || !navEl || !last) throw new Error('saknar element');
+    return {
+      contentBottom: last.getBoundingClientRect().bottom,
+      navTop: navEl.getBoundingClientRect().top,
+      paddingBottom: parseFloat(getComputedStyle(main).paddingBottom),
+      navHeight: navEl.getBoundingClientRect().height,
+    };
+  });
+  expect(contentBottom).toBeLessThanOrEqual(navTop);
+  expect(paddingBottom).toBeGreaterThanOrEqual(navHeight);
 });
 
 test('navigering mellan alla sektioner', async ({ page }) => {
