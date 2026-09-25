@@ -106,7 +106,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   ≥ 80 % loggade dagar; regression på dagsvikterna, vikt = 0,9 × längd × täckning × precision
   (halveras om skattningen kläms till 0,6–1,6 × formeln).
 - **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Mat-vyn) hämtas med
-  `npm run livsmedel` och checkas in; appen anropar aldrig Livsmedelsverket. Streckkoder:
+  `npm run livsmedel` och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
+  ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
   `BarcodeDetector` + kamera, annars manuell EAN. Okända koder slås upp i Open Food Facts
   (enda externa anropet, bara streckkoden skickas) och cachas i `foods`.
 - **Grafer**: uPlot (`WeightChart`, `StepsChart`, `IntakeChart`). Färger läses från CSS-variabler

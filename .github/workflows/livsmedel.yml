@@ -1,0 +1,66 @@
+# Hämtar Livsmedelsverkets livsmedelsdatabas (CC BY 4.0) och checkar in
+# public/livsmedel.json på samma gren. Körs när skriptet ändras och manuellt
+# (Actions → Livsmedelsdata → Run workflow). Checkar bara in om själva
+# livsmedlen ändrats – ett nytt hämtningsdatum räcker inte.
+name: Livsmedelsdata
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/livsmedel.yml
+      - scripts/fetch-livsmedel.ts
+      - src/lib/livsmedelImport.ts
+      - src/lib/livsmedelFormat.ts
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: livsmedel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run livsmedel
+      - name: Kontrollera filen
+        run: |
+          node -e '
+            const f = JSON.parse(require("fs").readFileSync("public/livsmedel.json", "utf8"));
+            console.log(`${f.foods.length} livsmedel, hämtade ${f.retrieved}`);
+            if (f.foods.length < 1000) throw new Error("Orimligt få livsmedel – checkar inte in.");
+          '
+      - name: Checka in om livsmedlen ändrats
+        id: commit
+        run: |
+          if git diff --quiet -I '"retrieved"' -- public/livsmedel.json; then
+            echo "Livsmedlen är oförändrade."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/livsmedel.json
+          git commit -m 'Update Livsmedelsverket food data'
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      # Pushar med GITHUB_TOKEN startar inga workflows – starta CI resp. publiceringen själv.
+      - name: Kör CI på den nya committen
+        if: steps.commit.outputs.changed == 'true' && github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref "$GITHUB_REF_NAME"
+      - name: Publicera
+        if: steps.commit.outputs.changed == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref main
