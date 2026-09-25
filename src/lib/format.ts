@@ -5,6 +5,7 @@ const kgFormat = new Intl.NumberFormat('sv-SE', {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
+const cmFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 });
 const intFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 });
 const dateFormat = new Intl.DateTimeFormat('sv-SE', {
   day: 'numeric',
@@ -30,6 +31,11 @@ export function formatKg(value: number, { signed = false } = {}): string {
   const safe = Object.is(rounded, -0) || rounded === 0 ? 0 : rounded;
   const text = normalizeSpaces(kgFormat.format(safe));
   return `${signed && safe > 0 ? '+' : ''}${text} kg`;
+}
+
+/** 92.5 → "92,5 cm", 90 → "90 cm". */
+export function formatCm(value: number): string {
+  return `${normalizeSpaces(cmFormat.format(value))} cm`;
 }
 
 export function formatInt(value: number): string {

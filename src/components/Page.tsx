@@ -2,10 +2,12 @@ import { useEffect, useRef, type ReactNode } from 'react';
 
 interface PageProps {
   title: string;
+  /** Valfri åtgärd till höger om rubriken, t.ex. en ikonlänk. */
+  action?: ReactNode;
   children?: ReactNode;
 }
 
-export function Page({ title, children }: PageProps) {
+export function Page({ title, action, children }: PageProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   // Flytta fokus till rubriken vid sidbyte så att skärmläsare annonserar sidan.
@@ -16,9 +18,12 @@ export function Page({ title, children }: PageProps) {
 
   return (
     <section className="page" aria-labelledby="page-title">
-      <h1 id="page-title" className="page-title" tabIndex={-1} ref={headingRef}>
-        {title}
-      </h1>
+      <div className="page-header">
+        <h1 id="page-title" className="page-title" tabIndex={-1} ref={headingRef}>
+          {title}
+        </h1>
+        {action}
+      </div>
       {children}
     </section>
   );

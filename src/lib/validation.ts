@@ -56,43 +56,49 @@ export function parseProfile(fields: ProfileFields): Parsed<ProfileValues> {
   };
 }
 
-export interface MeasurementFields {
+export interface WeightFields {
   date: string;
   weight: string;
-  waist: string;
-  steps: string;
   note: string;
 }
 
-export interface MeasurementValues {
+export interface WeightValues {
   date: string;
   weightKg: number;
-  waistCm?: number;
-  steps?: number;
   note?: string;
 }
 
-export function parseMeasurement(fields: MeasurementFields): Parsed<MeasurementValues> {
+export function parseWeightFields(fields: WeightFields): Parsed<WeightValues> {
   if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
   const weightKg = parseDecimal(fields.weight);
   if (!isWeight(weightKg)) return fail('Ange vikt i kg (20–400).');
-
-  const value: MeasurementValues = { date: fields.date, weightKg };
-  if (fields.waist.trim() !== '') {
-    const waistCm = parseDecimal(fields.waist);
-    if (waistCm == null || waistCm < 30 || waistCm > 300)
-      return fail('Ange midjemått i cm (30–300).');
-    value.waistCm = waistCm;
-  }
-  if (fields.steps.trim() !== '') {
-    const steps = Number(fields.steps.trim().replace(/\s/g, ''));
-    if (!Number.isInteger(steps) || steps < 0 || steps > 200_000)
-      return fail('Ange steg som ett heltal (0–200 000).');
-    value.steps = steps;
-  }
+  const value: WeightValues = { date: fields.date, weightKg };
   const note = fields.note.trim();
   if (note !== '') value.note = note;
   return { ok: true, value };
+}
+
+export function parseWaistFields(fields: { date: string; waist: string }): Parsed<{
+  date: string;
+  waistCm: number;
+}> {
+  if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
+  const waistCm = parseDecimal(fields.waist);
+  if (waistCm == null || waistCm < 30 || waistCm > 300)
+    return fail('Ange midjemått i cm (30–300).');
+  return { ok: true, value: { date: fields.date, waistCm } };
+}
+
+export function parseStepsFields(fields: { date: string; steps: string }): Parsed<{
+  date: string;
+  steps: number;
+}> {
+  if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
+  const text = fields.steps.trim().replace(/\s/g, '');
+  const steps = Number(text);
+  if (text === '' || !Number.isInteger(steps) || steps < 0 || steps > 200_000)
+    return fail('Ange steg som ett heltal (0–200 000).');
+  return { ok: true, value: { date: fields.date, steps } };
 }
 
 export interface PhotoFields {

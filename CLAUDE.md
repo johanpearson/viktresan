@@ -36,7 +36,7 @@ src/App.tsx             Layout: header, aktiv sida, bottennavigering
 src/routes.ts           Route-tabell (id, hash-path, svensk etikett)
 src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
-src/lib/useAppData.ts   Hook: läser mätningar + profil, `reload()` efter ändring
+src/lib/useAppData.ts   Hook: läser vikt, midja, steg + profil; `reload()` returnerar ny data
 src/lib/usePhotos.ts    Hook: läser bilder + skapar/frigör object URLs
 src/lib/image.ts        Bildkomprimering (max 1080 px WebP, JPEG-reserv) + borttagning av EXIF/XMP
 src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
@@ -51,7 +51,8 @@ src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore
 src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …)
-src/pages/              En komponent per sektion: Översikt, Logga, Historik, Steg, Bilder, Inställningar
+src/pages/              En komponent per sektion: Översikt, Logga (Vikt | Midja), Historik,
+                        Steg (dagens steg + graf), Bilder, Inställningar
 e2e/                    Playwright-tester (inkl. axe, offline, backup, lås); hjälpare i helpers.ts
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
 scripts/                Engångsskript (ikongenerering)
@@ -59,12 +60,18 @@ scripts/                Engångsskript (ikongenerering)
 
 - **Routing** är hash-baserad (`#/logga`) – GitHub Pages saknar SPA-fallback och det
   fungerar offline utan serverstöd. Ny sida: lägg till i `ROUTES` + `PAGES` i `App.tsx`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB. Object stores:
-  `weights` (mätningar: vikt + valfritt midja/steg/anteckning, index `by-date`),
+  Bottennavigeringen visar routes med `inNav: true` (5 st); Inställningar nås via kugghjulet
+  i Översikts rubrikrad (`Page`-propen `action`).
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 3`). Object stores:
+  `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
+  `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`).
+  Midja och steg sparas med `upsertWaist`/`upsertSteps` (samma dag skrivs över, `createdAt` behålls).
+  Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
+  den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
-  Flera mätningar samma dag är tillåtna: vikt slås ihop till dagsmedel, steg tar senaste.
+  Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
   en linjär anpassning över de senaste 28 dagarna.
@@ -83,12 +90,14 @@ scripts/                Engångsskript (ikongenerering)
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 1`):
-  - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, mätningar, bildmetadata med
-    `file`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 2`):
+  - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
+    bildmetadata med `file`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+  - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
+    `splitLegacyMeasurements`.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
-    okrypterade zip:en krypterad. AAD = `viktresan-backup:1`. Lösenord minst 8 tecken.
+    okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.
   - Ändras formatet: höj `BACKUP_VERSION` och låt `readBackup` fortsätta läsa gamla versioner.
 - **Import**: `readBackup(file, password?)` validerar allt och bygger nya objekt (okända fält
   släpps). Fel kastas som `BackupError` med `code`: `not-a-backup`, `unsupported-version`,
@@ -96,7 +105,7 @@ scripts/                Engångsskript (ikongenerering)
   (`summarizeBackup`) och låter användaren välja läge. `applySnapshot()` skriver i **en**
   transaktion:
   - `replace`: profil, mätningar och bilder töms och ersätts.
-  - `merge`: nya id:n läggs till; samma id → senast ändrad (`updatedAt ?? createdAt`) vinner,
+  - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg datum) → senast ändrad (`updatedAt ?? createdAt`) vinner,
     lika → befintlig behålls. Befintlig profil behålls; saknas den tas den från filen.
 - **Påminnelse** (`BackupReminder` på Översikt): visas när det finns data och ingen export gjorts
   på 7 dagar. Utan tidigare export räknas från äldsta postens `createdAt`.

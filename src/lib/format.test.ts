@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatCm,
   formatDate,
   formatPhotoLabel,
   formatInt,
@@ -19,6 +20,11 @@ describe('format', () => {
     expect(formatKg(1.25, { signed: true })).toBe('+1,3 kg');
     expect(formatKg(-2.4, { signed: true })).toMatch(/^[−-]2,4 kg$/);
     expect(formatKg(-0.01, { signed: true })).toBe('0,0 kg');
+  });
+
+  it('formaterar cm med högst en decimal', () => {
+    expect(formatCm(92.5)).toBe('92,5 cm');
+    expect(formatCm(90)).toBe('90 cm');
   });
 
   it('formaterar heltal med mellanslag som tusentalsavgränsare', () => {

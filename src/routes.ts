@@ -4,17 +4,21 @@ export interface Route {
   id: RouteId;
   path: string;
   label: string;
+  /** Visas i bottennavigeringen. Inställningar nås via kugghjulet på Översikt. */
+  inNav: boolean;
 }
 
 /** Ordningen här styr ordningen i navigeringen. */
 export const ROUTES: readonly Route[] = [
-  { id: 'oversikt', path: '/', label: 'Översikt' },
-  { id: 'logga', path: '/logga', label: 'Logga' },
-  { id: 'historik', path: '/historik', label: 'Historik' },
-  { id: 'steg', path: '/steg', label: 'Steg' },
-  { id: 'bilder', path: '/bilder', label: 'Bilder' },
-  { id: 'installningar', path: '/installningar', label: 'Inställningar' },
+  { id: 'oversikt', path: '/', label: 'Översikt', inNav: true },
+  { id: 'logga', path: '/logga', label: 'Logga', inNav: true },
+  { id: 'historik', path: '/historik', label: 'Historik', inNav: true },
+  { id: 'steg', path: '/steg', label: 'Steg', inNav: true },
+  { id: 'bilder', path: '/bilder', label: 'Bilder', inNav: true },
+  { id: 'installningar', path: '/installningar', label: 'Inställningar', inNav: false },
 ];
+
+export const NAV_ROUTES: readonly Route[] = ROUTES.filter((r) => r.inNav);
 
 export const DEFAULT_ROUTE: Route = ROUTES[0] as Route;
 

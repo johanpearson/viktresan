@@ -10,15 +10,23 @@ const DATA = {
     goalWeightKg: 80,
     goalDate: isoDaysFromToday(120),
   },
-  measurements: [
+  weights: [
     { id: 'a', date: isoDaysFromToday(-30), weightKg: 90, createdAt: 1_700_000_000_000 },
     {
       id: 'b',
       date: isoDaysFromToday(-1),
       weightKg: 87.4,
-      waistCm: 95,
-      steps: 11234,
       note: 'Promenad – "å ä ö"',
+      createdAt: 1_700_000_100_000,
+      updatedAt: 1_700_000_200_000,
+    },
+  ],
+  waist: [{ date: isoDaysFromToday(-1), waistCm: 95, createdAt: 1_700_000_100_000 }],
+  steps: [
+    { date: isoDaysFromToday(-2), steps: 9000, createdAt: 1_700_000_090_000 },
+    {
+      date: isoDaysFromToday(-1),
+      steps: 11234,
       createdAt: 1_700_000_100_000,
       updatedAt: 1_700_000_200_000,
     },
@@ -68,7 +76,9 @@ test('export → import ger identisk data', async ({ page }) => {
   await openSettings(page);
   await seed(page, DATA);
   const before = await dump(page);
-  expect(before.measurements).toHaveLength(2);
+  expect(before.weights).toHaveLength(2);
+  expect(before.waist).toHaveLength(1);
+  expect(before.steps).toHaveLength(2);
 
   await openSettings(page);
   await expect(page.getByTestId('last-export')).toHaveText('Ingen export gjord ännu.');
@@ -82,14 +92,16 @@ test('export → import ger identisk data', async ({ page }) => {
   await chooseBackup(page, zip);
   const preview = page.getByTestId('import-preview');
   await expect(preview).toBeVisible();
-  await expect(preview.getByTestId('preview-measurements')).toHaveText('2');
+  await expect(preview.getByTestId('preview-weights')).toHaveText('2');
+  await expect(preview.getByTestId('preview-waist')).toHaveText('1');
+  await expect(preview.getByTestId('preview-steps')).toHaveText('2');
   await expect(preview.getByTestId('preview-photos')).toHaveText('1 (12 B)');
   await expect(preview).toContainText('Krypterad');
 
   await preview.getByLabel(/Ersätt all befintlig data/).check();
   await preview.getByRole('button', { name: 'Ersätt och importera' }).tap();
   await expect(page.getByRole('status').filter({ hasText: 'Importen är klar' })).toContainText(
-    '2 mätningar och 1 bilder ersatte',
+    '5 mätningar och 1 bilder ersatte',
   );
 
   const after = await dump(page);
@@ -134,7 +146,7 @@ test('krypterad export: fel lösenord ger tydligt fel, rätt lösenord återstä
   await password.fill('korrekt häst batteri');
   await page.getByRole('button', { name: 'Öppna' }).tap();
   const preview = page.getByTestId('import-preview');
-  await expect(preview.getByTestId('preview-measurements')).toHaveText('2');
+  await expect(preview.getByTestId('preview-weights')).toHaveText('2');
   await preview.getByRole('button', { name: 'Importera', exact: true }).tap();
   await expect(page.getByRole('status').filter({ hasText: 'Importen är klar' })).toBeVisible();
 
@@ -151,14 +163,20 @@ test('import slår ihop med befintlig data', async ({ page }) => {
 
   await wipe(page);
   await seed(page, {
-    measurements: [{ id: 'lokal', date: isoDaysFromToday(0), weightKg: 87, createdAt: Date.now() }],
+    weights: [{ id: 'lokal', date: isoDaysFromToday(0), weightKg: 87, createdAt: Date.now() }],
+    steps: [{ date: isoDaysFromToday(0), steps: 500, createdAt: Date.now() }],
   });
   await openSettings(page);
   await chooseBackup(page, zip);
   await page.getByTestId('import-preview').getByRole('button', { name: 'Importera' }).tap();
   await expect(page.getByRole('status').filter({ hasText: 'slogs ihop' })).toBeVisible();
   const after = await dump(page);
-  expect(after.measurements.map((m) => (m as { id: string }).id)).toEqual(['a', 'b', 'lokal']);
+  expect(after.weights.map((m) => (m as { id: string }).id)).toEqual(['a', 'b', 'lokal']);
+  expect(after.steps.map((s) => (s as { date: string }).date)).toEqual([
+    isoDaysFromToday(-2),
+    isoDaysFromToday(-1),
+    isoDaysFromToday(0),
+  ]);
 });
 
 test('ogiltig fil ger tydligt fel', async ({ page }) => {
@@ -198,7 +216,7 @@ test('påminner om säkerhetskopia efter 7 dagar utan export', async ({ page }) 
   await page.goto('./');
   await seed(page, {
     profile: DATA.profile,
-    measurements: [
+    weights: [
       { id: 'x', date: isoDaysFromToday(-8), weightKg: 88, createdAt: Date.now() - 8 * DAY_MS },
     ],
   });
@@ -225,7 +243,7 @@ test('ingen påminnelse för ny användare', async ({ page }) => {
   await page.goto('./');
   await seed(page, {
     profile: DATA.profile,
-    measurements: [{ id: 'x', date: isoDaysFromToday(0), weightKg: 88, createdAt: Date.now() }],
+    weights: [{ id: 'x', date: isoDaysFromToday(0), weightKg: 88, createdAt: Date.now() }],
   });
   await page.reload();
   await expect(page.getByTestId('current-weight')).toBeVisible();

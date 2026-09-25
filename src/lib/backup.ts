@@ -1,9 +1,10 @@
 /**
- * Säkerhetskopiering: hela databasen (profil, mätningar, bilder) som en zip-fil,
+ * Säkerhetskopiering: hela databasen (profil, vikt, midja, steg, bilder) som en zip-fil,
  * valfritt krypterad med lösenord (PBKDF2-SHA-256 → AES-256-GCM via Web Crypto).
  *
  * Okrypterad zip:
- *   backup.json        format, version, exportedAt, profil, mätningar, bildmetadata
+ *   backup.json        format, version, exportedAt, profil, weights, waist, steps, bildmetadata
+ *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
  * Krypterad zip:
@@ -11,11 +12,22 @@
  *   backup.enc         den okrypterade zip-filen ovan, krypterad med AES-GCM
  */
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
-import type { Measurement, PhotoEntry, Profile, Snapshot } from '../db/db.ts';
+import {
+  splitLegacyMeasurements,
+  type LegacyMeasurement,
+  type PhotoEntry,
+  type Profile,
+  type Snapshot,
+  type StepsEntry,
+  type WaistEntry,
+  type WeightEntry,
+} from '../db/db.ts';
 import { isIsoDate } from './dates.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
+/** Versioner som fortfarande går att importera. */
+const READABLE_VERSIONS: readonly number[] = [1, 2];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -49,10 +61,12 @@ export interface BackupSummary {
   exportedAt: string;
   encrypted: boolean;
   hasProfile: boolean;
-  measurements: number;
+  weights: number;
+  waist: number;
+  steps: number;
   photos: number;
   photoBytes: number;
-  /** Första och sista datum bland mätningar och bilder, eller null om inga finns. */
+  /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
 }
@@ -75,13 +89,15 @@ interface PlainManifest {
   version: typeof BACKUP_VERSION;
   exportedAt: string;
   profile: Profile | null;
-  measurements: Measurement[];
+  weights: WeightEntry[];
+  waist: WaistEntry[];
+  steps: StepsEntry[];
   photos: PhotoRecord[];
 }
 
 interface EncryptedManifest {
   format: typeof BACKUP_FORMAT;
-  version: typeof BACKUP_VERSION;
+  version: number;
   encryption: {
     kdf: 'PBKDF2';
     hash: 'SHA-256';
@@ -119,7 +135,9 @@ export async function createBackup(
     version: BACKUP_VERSION,
     exportedAt: now.toISOString(),
     profile: snapshot.profile,
-    measurements: snapshot.measurements,
+    weights: snapshot.weights,
+    waist: snapshot.waist,
+    steps: snapshot.steps,
     photos,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
@@ -131,7 +149,11 @@ export async function createBackup(
   const iv = randomBytes(12);
   const key = await deriveKey(password, salt, iterations);
   const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad() }, key, plain),
+    await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: aad(BACKUP_VERSION) },
+      key,
+      plain,
+    ),
   );
   const header: EncryptedManifest = {
     format: BACKUP_FORMAT,
@@ -170,10 +192,10 @@ export function backupFileName(now: Date = new Date()): string {
 export async function readBackup(file: Blob, password?: string): Promise<BackupContents> {
   const entries = unzip(new Uint8Array(await file.arrayBuffer()));
   const manifest = parseJson(entries[MANIFEST]);
-  checkFormat(manifest);
+  const version = checkFormat(manifest);
 
   if (!('encryption' in manifest)) {
-    return { ...parsePlain(manifest, entries), encrypted: false };
+    return { ...parsePlain(manifest, version, entries), encrypted: false };
   }
 
   const params = parseEncryption(manifest.encryption);
@@ -187,7 +209,7 @@ export async function readBackup(file: Blob, password?: string): Promise<BackupC
   try {
     plain = new Uint8Array(
       await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: params.iv, additionalData: aad() },
+        { name: 'AES-GCM', iv: params.iv, additionalData: aad(version) },
         key,
         ciphertext,
       ),
@@ -200,22 +222,24 @@ export async function readBackup(file: Blob, password?: string): Promise<BackupC
   }
   const inner = unzip(plain);
   const innerManifest = parseJson(inner[MANIFEST]);
-  checkFormat(innerManifest);
-  if ('encryption' in innerManifest) throw invalid('Ogiltig krypterad säkerhetskopia.');
-  return { ...parsePlain(innerManifest, inner), encrypted: true };
+  if (checkFormat(innerManifest) !== version || 'encryption' in innerManifest) {
+    throw invalid('Ogiltig krypterad säkerhetskopia.');
+  }
+  return { ...parsePlain(innerManifest, version, inner), encrypted: true };
 }
 
 export function summarizeBackup(contents: BackupContents): BackupSummary {
   const { snapshot } = contents;
-  const dates = [
-    ...snapshot.measurements.map((m) => m.date),
-    ...snapshot.photos.map((p) => p.date),
-  ].sort();
+  const dates = [...snapshot.weights, ...snapshot.waist, ...snapshot.steps, ...snapshot.photos]
+    .map((e) => e.date)
+    .sort();
   return {
     exportedAt: contents.exportedAt,
     encrypted: contents.encrypted,
     hasProfile: snapshot.profile !== null,
-    measurements: snapshot.measurements.length,
+    weights: snapshot.weights.length,
+    waist: snapshot.waist.length,
+    steps: snapshot.steps.length,
     photos: snapshot.photos.length,
     photoBytes: snapshot.photos.reduce((sum, p) => sum + p.blob.size, 0),
     firstDate: dates[0] ?? null,
@@ -246,16 +270,19 @@ function parseJson(bytes: Bytes | undefined): Record<string, unknown> {
   throw invalid('Säkerhetskopians innehållsförteckning är skadad.');
 }
 
-function checkFormat(manifest: Record<string, unknown>): void {
+/** Kontrollerar format och version och returnerar versionen. */
+function checkFormat(manifest: Record<string, unknown>): number {
   if (manifest.format !== BACKUP_FORMAT) {
     throw new BackupError('not-a-backup', 'Filen är ingen säkerhetskopia från Viktresan.');
   }
-  if (manifest.version !== BACKUP_VERSION) {
+  const { version } = manifest;
+  if (typeof version !== 'number' || !READABLE_VERSIONS.includes(version)) {
     throw new BackupError(
       'unsupported-version',
       'Säkerhetskopian är gjord med en nyare version av Viktresan. Uppdatera appen och försök igen.',
     );
   }
+  return version;
 }
 
 function parseEncryption(value: unknown): { salt: Bytes; iv: Bytes; iterations: number } {
@@ -282,27 +309,51 @@ function parseEncryption(value: unknown): { salt: Bytes; iv: Bytes; iterations: 
 
 function parsePlain(
   manifest: Record<string, unknown>,
+  version: number,
   entries: Record<string, Bytes | undefined>,
 ): Omit<BackupContents, 'encrypted'> {
-  const { exportedAt, profile, measurements, photos } = manifest;
+  const { exportedAt, profile, photos } = manifest;
   if (typeof exportedAt !== 'string' || Number.isNaN(Date.parse(exportedAt))) {
     throw invalid('Exportdatum saknas.');
   }
-  if (!Array.isArray(measurements) || !Array.isArray(photos)) {
-    throw invalid('Mätningar eller bilder saknas.');
-  }
-  const parsedMeasurements = measurements.map((m, i) => parseMeasurementRecord(m, i));
+  if (!Array.isArray(photos)) throw invalid('Bilder saknas.');
   const parsedPhotos = photos.map((p, i) => parsePhotoRecord(p, i, entries));
-  assertUniqueIds(parsedMeasurements, 'mätning');
-  assertUniqueIds(parsedPhotos, 'bild');
+  assertUniqueKeys(parsedPhotos, (p) => p.id, 'bild');
   return {
     exportedAt,
     snapshot: {
       profile: profile == null ? null : parseProfileRecord(profile),
-      measurements: parsedMeasurements,
+      ...(version === 1 ? parseV1Measurements(manifest) : parseV2Measurements(manifest)),
       photos: parsedPhotos,
     },
   };
+}
+
+type MeasurementLists = Pick<Snapshot, 'weights' | 'waist' | 'steps'>;
+
+/** Version 1: vikt, midja och steg i samma post – delas upp som i databasmigreringen. */
+function parseV1Measurements(manifest: Record<string, unknown>): MeasurementLists {
+  const { measurements } = manifest;
+  if (!Array.isArray(measurements)) throw invalid('Mätningar saknas.');
+  const parsed = measurements.map((m, i) => parseLegacyRecord(m, i));
+  assertUniqueKeys(parsed, (m) => m.id, 'mätning');
+  return splitLegacyMeasurements(parsed);
+}
+
+function parseV2Measurements(manifest: Record<string, unknown>): MeasurementLists {
+  const { weights, waist, steps } = manifest;
+  if (!Array.isArray(weights) || !Array.isArray(waist) || !Array.isArray(steps)) {
+    throw invalid('Mätningar saknas.');
+  }
+  const result: MeasurementLists = {
+    weights: weights.map((w, i) => parseWeightRecord(w, i)),
+    waist: waist.map((w, i) => parseWaistRecord(w, i)),
+    steps: steps.map((s, i) => parseStepsRecord(s, i)),
+  };
+  assertUniqueKeys(result.weights, (w) => w.id, 'viktmätning');
+  assertUniqueKeys(result.waist, (w) => w.date, 'dag med midjemått');
+  assertUniqueKeys(result.steps, (s) => s.date, 'dag med steg');
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -329,8 +380,8 @@ function parseProfileRecord(value: unknown): Profile {
   return profile;
 }
 
-function parseMeasurementRecord(value: unknown, index: number): Measurement {
-  const bad = () => invalid(`Mätning nr ${index + 1} i säkerhetskopian är ogiltig.`);
+function parseWeightRecord(value: unknown, index: number, what = 'Viktmätning'): WeightEntry {
+  const bad = () => invalid(`${what} nr ${index + 1} i säkerhetskopian är ogiltig.`);
   if (
     !isRecord(value) ||
     !isId(value.id) ||
@@ -340,29 +391,65 @@ function parseMeasurementRecord(value: unknown, index: number): Measurement {
   ) {
     throw bad();
   }
-  const m: Measurement = {
+  const w: WeightEntry = {
     id: value.id,
     date: value.date,
     weightKg: value.weightKg,
     createdAt: value.createdAt,
   };
+  if (value.note !== undefined) {
+    if (typeof value.note !== 'string') throw bad();
+    w.note = value.note;
+  }
+  if (value.updatedAt !== undefined) {
+    if (!isTimestamp(value.updatedAt)) throw bad();
+    w.updatedAt = value.updatedAt;
+  }
+  return w;
+}
+
+function parseLegacyRecord(value: unknown, index: number): LegacyMeasurement {
+  const bad = () => invalid(`Mätning nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  const m: LegacyMeasurement = parseWeightRecord(value, index, 'Mätning');
+  if (!isRecord(value)) throw bad();
   if (value.waistCm !== undefined) {
     if (!isPositive(value.waistCm)) throw bad();
     m.waistCm = value.waistCm;
   }
   if (value.steps !== undefined) {
-    if (!isInt(value.steps) || value.steps < 0) throw bad();
+    if (!isSteps(value.steps)) throw bad();
     m.steps = value.steps;
   }
-  if (value.note !== undefined) {
-    if (typeof value.note !== 'string') throw bad();
-    m.note = value.note;
-  }
+  return m;
+}
+
+/** Gemensamt för poster med datum som nyckel (midja, steg). */
+function parseDailyTimes(
+  value: Record<string, unknown>,
+  bad: () => BackupError,
+): { date: string; createdAt: number; updatedAt?: number } {
+  if (!isDate(value.date) || !isTimestamp(value.createdAt)) throw bad();
+  const times: { date: string; createdAt: number; updatedAt?: number } = {
+    date: value.date,
+    createdAt: value.createdAt,
+  };
   if (value.updatedAt !== undefined) {
     if (!isTimestamp(value.updatedAt)) throw bad();
-    m.updatedAt = value.updatedAt;
+    times.updatedAt = value.updatedAt;
   }
-  return m;
+  return times;
+}
+
+function parseWaistRecord(value: unknown, index: number): WaistEntry {
+  const bad = () => invalid(`Midjemått nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  if (!isRecord(value) || !isPositive(value.waistCm)) throw bad();
+  return { ...parseDailyTimes(value, bad), waistCm: value.waistCm };
+}
+
+function parseStepsRecord(value: unknown, index: number): StepsEntry {
+  const bad = () => invalid(`Steg nr ${index + 1} i säkerhetskopian är ogiltiga.`);
+  if (!isRecord(value) || !isSteps(value.steps)) throw bad();
+  return { ...parseDailyTimes(value, bad), steps: value.steps };
 }
 
 function parsePhotoRecord(
@@ -406,11 +493,12 @@ function parsePhotoRecord(
   return photo;
 }
 
-function assertUniqueIds(entries: readonly { id: string }[], what: string): void {
+function assertUniqueKeys<T>(entries: readonly T[], keyOf: (entry: T) => string, what: string) {
   const seen = new Set<string>();
-  for (const { id } of entries) {
-    if (seen.has(id)) throw invalid(`Samma ${what} förekommer flera gånger i säkerhetskopian.`);
-    seen.add(id);
+  for (const entry of entries) {
+    const key = keyOf(entry);
+    if (seen.has(key)) throw invalid(`Samma ${what} förekommer flera gånger i säkerhetskopian.`);
+    seen.add(key);
   }
 }
 
@@ -438,6 +526,10 @@ function isInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
+function isSteps(value: unknown): value is number {
+  return isInt(value) && value >= 0;
+}
+
 function isTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
@@ -463,8 +555,8 @@ async function deriveKey(password: string, salt: Bytes, iterations: number): Pro
 }
 
 /** Binder chiffertexten till formatet och versionen. */
-function aad(): Bytes {
-  return new TextEncoder().encode(`${BACKUP_FORMAT}:${String(BACKUP_VERSION)}`);
+function aad(version: number): Bytes {
+  return new TextEncoder().encode(`${BACKUP_FORMAT}:${String(version)}`);
 }
 
 function randomBytes(length: number): Bytes {

@@ -74,9 +74,10 @@ export function ImportBackup({ onImported }: ImportBackupProps) {
     setError(null);
     try {
       await applySnapshot(state.contents.snapshot, mode);
-      const { measurements, photos } = state.contents.snapshot;
+      const { weights, waist, steps, photos } = state.contents.snapshot;
+      const count = weights.length + waist.length + steps.length;
       setDone(
-        `Importen är klar: ${String(measurements.length)} mätningar och ${String(photos.length)} bilder ${
+        `Importen är klar: ${String(count)} mätningar och ${String(photos.length)} bilder ${
           mode === 'replace' ? 'ersatte den tidigare datan' : 'slogs ihop med befintlig data'
         }.`,
       );
@@ -177,8 +178,12 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
         <dd>{summary.encrypted ? 'Ja' : 'Nej'}</dd>
         <dt>Profil</dt>
         <dd>{summary.hasProfile ? 'Ja' : 'Nej'}</dd>
-        <dt>Mätningar</dt>
-        <dd data-testid="preview-measurements">{summary.measurements}</dd>
+        <dt>Vikt</dt>
+        <dd data-testid="preview-weights">{summary.weights}</dd>
+        <dt>Midjemått</dt>
+        <dd data-testid="preview-waist">{summary.waist}</dd>
+        <dt>Dagar med steg</dt>
+        <dd data-testid="preview-steps">{summary.steps}</dd>
         <dt>Bilder</dt>
         <dd data-testid="preview-photos">
           {summary.photos} ({formatBytes(summary.photoBytes)})
