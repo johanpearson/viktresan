@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { ExportBackup } from '../components/ExportBackup.tsx';
+import { ImportBackup } from '../components/ImportBackup.tsx';
+import { LockSettings } from '../components/LockSettings.tsx';
 import { Page } from '../components/Page.tsx';
 import { ProfileForm } from '../components/ProfileForm.tsx';
 import {
@@ -9,6 +12,7 @@ import {
   type StorageStatus,
 } from '../lib/storage.ts';
 import { useAppData } from '../lib/useAppData.ts';
+import { useBackupStatus } from '../lib/useBackupStatus.ts';
 
 const PERSISTENCE_TEXT: Record<PersistenceState, string> = {
   persisted: 'Beständig – webbläsaren rensar inte din data automatiskt.',
@@ -21,6 +25,8 @@ export function Installningar() {
   const [status, setStatus] = useState<StorageStatus | null>(null);
   const [requesting, setRequesting] = useState(false);
   const { data, reload } = useAppData();
+  const backup = useBackupStatus();
+  const [imports, setImports] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -48,6 +54,8 @@ export function Installningar() {
         <h2 className="card-title">Profil</h2>
         {data && (
           <ProfileForm
+            // Ny nyckel efter import så att formuläret fylls i med den importerade profilen.
+            key={imports}
             profile={data.profile}
             onSaved={() => {
               void reload();
@@ -55,6 +63,24 @@ export function Installningar() {
           />
         )}
       </div>
+      <section className="card" aria-labelledby="backup-title">
+        <h2 className="card-title" id="backup-title">
+          Säkerhetskopia
+        </h2>
+        <p className="form-note">
+          Allt – profil, mätningar och bilder – sparas i en zip-fil som du kan dela till t.ex.
+          molnlagring eller e-post. Datan lämnar bara enheten när du själv väljer det.
+        </p>
+        <ExportBackup status={backup.status} onExported={backup.markExported} />
+        <ImportBackup
+          onImported={async () => {
+            await Promise.all([reload(), backup.reload()]);
+            setImports((n) => n + 1);
+            setStatus(await getStorageStatus());
+          }}
+        />
+      </section>
+      <LockSettings />
       <div className="card">
         <h2 className="card-title">Lagring</h2>
         <dl className="kv">

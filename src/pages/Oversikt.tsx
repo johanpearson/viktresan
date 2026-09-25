@@ -1,3 +1,4 @@
+import { BackupReminder } from '../components/BackupReminder.tsx';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
 import type { Measurement, Profile } from '../db/db.ts';
@@ -19,6 +20,7 @@ export function Oversikt() {
   const { data } = useAppData();
   return (
     <Page title="Översikt">
+      <BackupReminder />
       {data === null ? null : data.profile === null ? (
         <EmptyState>
           Börja med att fylla i din profil under <a href="#/installningar">Inställningar</a> –

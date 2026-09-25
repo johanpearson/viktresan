@@ -27,6 +27,27 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  lighthouse:
+    name: Lighthouse CI (PWA, tillgänglighet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # 0.13.x kör Lighthouse 11 – den sista versionen med PWA-kategorin och
+      # installable-manifest. Krav: installerbar PWA och tillgänglighet ≥ 90 (lighthouserc.json).
+      - run: npx --yes @lhci/cli@0.13.0 autorun
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: lhci-report
+          retention-days: 7
+
   e2e:
     name: Playwright (Pixel 7)
     runs-on: ubuntu-latest

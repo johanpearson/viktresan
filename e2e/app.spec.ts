@@ -99,6 +99,17 @@ test('manifestet beskriver en installerbar PWA', async ({ page, request }) => {
   }
 });
 
+test('Chrome bedömer appen som installerbar', async ({ page }) => {
+  await page.goto('./');
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  const client = await page.context().newCDPSession(page);
+  const { installabilityErrors } = await client.send('Page.getInstallabilityErrors');
+  // Playwrights kontexter är inkognito, vilket i sig blockerar installation – bortse från det.
+  expect(installabilityErrors.filter((e) => e.errorId !== 'in-incognito')).toEqual([]);
+});
+
 test('service workern registreras och appen fungerar offline', async ({ page, context }) => {
   await page.goto('./');
   await page.evaluate(async () => {

@@ -82,6 +82,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         navigateFallback: `${BASE}index.html`,
         cleanupOutdatedCaches: true,
+        // Ta kontroll över sidan direkt vid första besöket, så att den fungerar
+        // offline utan att först behöva laddas om.
+        clientsClaim: true,
       },
     }),
   ],

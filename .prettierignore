@@ -5,3 +5,5 @@ test-results
 playwright-report
 package-lock.json
 public/*.svg
+lhci-report
+.lighthouseci

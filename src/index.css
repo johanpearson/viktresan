@@ -837,3 +837,125 @@ body {
 .compare-close {
   margin-top: 16px;
 }
+
+/* Säkerhetskopia */
+.subheading {
+  font-size: 1rem;
+  margin: 8px 0 0;
+}
+
+.form + .form {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.kv-compact {
+  margin: 0;
+}
+
+.kv-compact dd {
+  margin-bottom: 8px;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+
+.check input {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.check-hint {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.choices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.choices legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.preview-title {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border: 2px solid var(--chart-goal);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.banner-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.banner-text {
+  margin: 0;
+}
+
+/* Låsskärm */
+.lock-screen {
+  min-height: 100dvh;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.lock-screen .muted {
+  margin: 0 0 12px;
+}
+
+.lock-icon {
+  width: 64px;
+  height: 64px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+a.button {
+  text-decoration: none;
+}
