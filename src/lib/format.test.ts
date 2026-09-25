@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatDate,
+  formatPhotoLabel,
   formatInt,
   formatShortDate,
   formatKg,
@@ -42,5 +43,17 @@ describe('format', () => {
     expect(stepKg(80.1, 0.1)).toBe(80.2);
     expect(stepKg(80.3, -0.1)).toBe(80.2);
     expect(stepKg(0.2, 0.1)).toBe(0.3);
+  });
+});
+
+describe('formatPhotoLabel', () => {
+  it('visar datum och vikt när vikten finns', () => {
+    expect(formatPhotoLabel({ date: '2026-09-25', weightKg: 84.24 })).toMatch(
+      /^25 sep.* 2026 · 84,2 kg$/,
+    );
+  });
+
+  it('visar bara datum utan vikt', () => {
+    expect(formatPhotoLabel({ date: '2026-09-25' })).toMatch(/^25 sep.* 2026$/);
   });
 });

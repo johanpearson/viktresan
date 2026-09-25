@@ -64,3 +64,9 @@ export function parseDecimal(input: string): number | null {
 export function stepKg(value: number, delta: number): number {
   return Math.round((value + delta + Number.EPSILON) * 10) / 10;
 }
+
+/** Bildtext för en progressbild: "25 sep. 2026 · 84,2 kg" (vikten är valfri). */
+export function formatPhotoLabel(photo: { date: string; weightKg?: number }): string {
+  const date = formatDate(photo.date);
+  return photo.weightKg == null ? date : `${date} · ${formatKg(photo.weightKg)}`;
+}
