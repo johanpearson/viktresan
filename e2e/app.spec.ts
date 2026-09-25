@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const SECTIONS = ['Översikt', 'Logga', 'Bilder', 'Historik', 'Inställningar'] as const;
+const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Steg', 'Bilder', 'Inställningar'] as const;
 
 /** Samlar CSP-överträdelser och konsolfel så att varje test kan kräva noll. */
 function collectErrors(page: Page): string[] {
@@ -117,7 +117,7 @@ test('Inställningar visar lagringsstatus', async ({ page }) => {
   await expect(status).toHaveText(/beständig/i);
 });
 
-test('viktkurvan ritas utan CSP-fel', async ({ page }) => {
+test('viktgrafen ritas utan CSP-fel', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('./');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Översikt');
@@ -149,7 +149,8 @@ test('viktkurvan ritas utan CSP-fel', async ({ page }) => {
     db.close();
   });
 
-  await page.reload();
-  await expect(page.getByRole('img', { name: 'Viktkurva' }).locator('canvas')).toBeVisible();
+  await page.goto('./#/historik');
+  await page.getByRole('button', { name: 'Allt' }).tap();
+  await expect(page.getByRole('img', { name: /Viktgraf/ }).locator('canvas')).toBeVisible();
   expect(errors).toEqual([]);
 });

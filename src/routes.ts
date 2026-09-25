@@ -1,4 +1,4 @@
-export type RouteId = 'oversikt' | 'logga' | 'bilder' | 'historik' | 'installningar';
+export type RouteId = 'oversikt' | 'logga' | 'historik' | 'steg' | 'bilder' | 'installningar';
 
 export interface Route {
   id: RouteId;
@@ -10,8 +10,9 @@ export interface Route {
 export const ROUTES: readonly Route[] = [
   { id: 'oversikt', path: '/', label: 'Översikt' },
   { id: 'logga', path: '/logga', label: 'Logga' },
-  { id: 'bilder', path: '/bilder', label: 'Bilder' },
   { id: 'historik', path: '/historik', label: 'Historik' },
+  { id: 'steg', path: '/steg', label: 'Steg' },
+  { id: 'bilder', path: '/bilder', label: 'Bilder' },
   { id: 'installningar', path: '/installningar', label: 'Inställningar' },
 ];
 

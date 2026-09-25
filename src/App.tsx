@@ -6,13 +6,15 @@ import { Historik } from './pages/Historik.tsx';
 import { Installningar } from './pages/Installningar.tsx';
 import { Logga } from './pages/Logga.tsx';
 import { Oversikt } from './pages/Oversikt.tsx';
+import { Steg } from './pages/Steg.tsx';
 import type { RouteId } from './routes.ts';
 
 const PAGES: Record<RouteId, ComponentType> = {
   oversikt: Oversikt,
   logga: Logga,
-  bilder: Bilder,
   historik: Historik,
+  steg: Steg,
+  bilder: Bilder,
   installningar: Installningar,
 };
 

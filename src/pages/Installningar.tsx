@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Page } from '../components/Page.tsx';
+import { ProfileForm } from '../components/ProfileForm.tsx';
 import {
   formatBytes,
   getStorageStatus,
@@ -7,6 +8,7 @@ import {
   type PersistenceState,
   type StorageStatus,
 } from '../lib/storage.ts';
+import { useAppData } from '../lib/useAppData.ts';
 
 const PERSISTENCE_TEXT: Record<PersistenceState, string> = {
   persisted: 'Beständig – webbläsaren rensar inte din data automatiskt.',
@@ -18,6 +20,7 @@ const PERSISTENCE_TEXT: Record<PersistenceState, string> = {
 export function Installningar() {
   const [status, setStatus] = useState<StorageStatus | null>(null);
   const [requesting, setRequesting] = useState(false);
+  const { data, reload } = useAppData();
 
   useEffect(() => {
     let active = true;
@@ -41,6 +44,17 @@ export function Installningar() {
 
   return (
     <Page title="Inställningar">
+      <div className="card">
+        <h2 className="card-title">Profil</h2>
+        {data && (
+          <ProfileForm
+            profile={data.profile}
+            onSaved={() => {
+              void reload();
+            }}
+          />
+        )}
+      </div>
       <div className="card">
         <h2 className="card-title">Lagring</h2>
         <dl className="kv">
