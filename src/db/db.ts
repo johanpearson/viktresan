@@ -160,3 +160,91 @@ export async function listPhotos(): Promise<PhotoEntry[]> {
     a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1,
   );
 }
+
+/** Nycklar i `settings`-storen. */
+export const SETTING_LAST_EXPORT = 'lastExportAt';
+export const SETTING_LOCK = 'lock';
+
+export async function getSetting(key: string): Promise<unknown> {
+  const db = await getDb();
+  return db.get('settings', key);
+}
+
+export async function setSetting(key: string, value: unknown): Promise<void> {
+  const db = await getDb();
+  await db.put('settings', value, key);
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('settings', key);
+}
+
+/** All användardata – det som ingår i en säkerhetskopia. Inställningar ingår inte. */
+export interface Snapshot {
+  profile: Profile | null;
+  measurements: Measurement[];
+  photos: PhotoEntry[];
+}
+
+export async function readSnapshot(): Promise<Snapshot> {
+  const [profile, measurements, photos] = await Promise.all([
+    getProfile(),
+    listMeasurements(),
+    listPhotos(),
+  ]);
+  return { profile, measurements, photos };
+}
+
+/**
+ * `replace`: all befintlig data (profil, mätningar, bilder) ersätts.
+ * `merge`: poster läggs till; vid samma `id` vinner den senast ändrade
+ * (`updatedAt ?? createdAt`, lika → befintlig behålls). Befintlig profil behålls.
+ */
+export type ImportMode = 'replace' | 'merge';
+
+function changedAt(entry: { createdAt: number; updatedAt?: number }): number {
+  return entry.updatedAt ?? entry.createdAt;
+}
+
+/** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
+export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(['weights', 'photos', 'profile'], 'readwrite');
+  const weights = tx.objectStore('weights');
+  const photos = tx.objectStore('photos');
+  const profile = tx.objectStore('profile');
+
+  if (mode === 'replace') {
+    await Promise.all([weights.clear(), photos.clear(), profile.clear()]);
+    await Promise.all([
+      ...snapshot.measurements.map((m) => weights.put(m)),
+      ...snapshot.photos.map((p) => photos.put(p)),
+      ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
+    ]);
+  } else {
+    for (const m of snapshot.measurements) {
+      const existing = await weights.get(m.id);
+      if (!existing || changedAt(m) > changedAt(existing)) await weights.put(m);
+    }
+    for (const p of snapshot.photos) {
+      const existing = await photos.get(p.id);
+      if (!existing || p.createdAt > existing.createdAt) await photos.put(p);
+    }
+    if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
+      await profile.put(snapshot.profile, PROFILE_KEY);
+    }
+  }
+  await tx.done;
+}
+
+/** När den äldsta mätningen eller bilden skapades (ms), eller null om inga finns. */
+export async function getOldestEntryTime(): Promise<number | null> {
+  const db = await getDb();
+  const [weights, photos] = await Promise.all([db.getAll('weights'), db.getAll('photos')]);
+  let oldest: number | null = null;
+  for (const { createdAt } of [...weights, ...photos]) {
+    if (oldest === null || createdAt < oldest) oldest = createdAt;
+  }
+  return oldest;
+}

@@ -1,0 +1,44 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "npm run preview",
+      "startServerReadyPattern": "localhost:4173",
+      "url": ["http://localhost:4173/viktresan/"],
+      "numberOfRuns": 1,
+      "settings": {
+        "chromeFlags": "--no-sandbox --headless=new"
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:accessibility": [
+          "error",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "categories:pwa": [
+          "error",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "installable-manifest": "error",
+        "splash-screen": "error",
+        "themed-omnibox": "error",
+        "maskable-icon": "error",
+        "viewport": "error",
+        "categories:best-practices": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": "./lhci-report"
+    }
+  }
+}

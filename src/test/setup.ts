@@ -4,7 +4,7 @@ import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 // jsdom saknar matchMedia; uPlot anropar den redan vid import.
-if (typeof window.matchMedia !== 'function') {
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({
@@ -21,6 +21,7 @@ if (typeof window.matchMedia !== 'function') {
 }
 
 afterEach(() => {
+  if (typeof window === 'undefined') return;
   cleanup();
   window.location.hash = '';
 });
