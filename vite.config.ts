@@ -8,15 +8,18 @@ const BASE = '/viktresan/';
 /**
  * Strikt Content Security Policy. Allt laddas från den egna origin:en –
  * inga CDN:er, inga inline-skript. Bilder kan komma från blob:/data: (lokala foton).
+ * Enda undantaget är streckkodsuppslag mot Open Food Facts (bara streckkoden skickas).
  * Obs: frame-ancestors stöds inte i meta-taggar och är därför utelämnad.
  */
+export const OPEN_FOOD_FACTS = 'https://world.openfoodfacts.org';
+
 export const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "font-src 'self'",
-  "connect-src 'self'",
+  `connect-src 'self' ${OPEN_FOOD_FACTS}`,
   "worker-src 'self'",
   "manifest-src 'self'",
   "media-src 'self' blob:",
@@ -79,7 +82,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        // livsmedel.json = Livsmedelsverkets databas (se scripts/fetch-livsmedel.mjs).
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,json}'],
         navigateFallback: `${BASE}index.html`,
         cleanupOutdatedCaches: true,
         // Ta kontroll över sidan direkt vid första besöket, så att den fungerar

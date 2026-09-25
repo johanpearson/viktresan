@@ -6,7 +6,7 @@ const ROUTES = [
   ['Översikt', './'],
   ['Logga', './#/logga'],
   ['Historik', './#/historik'],
-  ['Steg', './#/steg'],
+  ['Mat', './#/mat'],
   ['Bilder', './#/bilder'],
   ['Inställningar', './#/installningar'],
 ] as const;
@@ -31,7 +31,33 @@ async function seedData(page: Page) {
       startWeightKg: 90,
       heightCm: 180,
       goalWeightKg: 80,
+      goalDate: isoDaysFromToday(20),
+      sex: 'kvinna',
+      birthYear: 1985,
+      activityLevel: 'latt',
+      ratePerWeekKg: 0.5,
     },
+    foodLog: [
+      {
+        id: 'f1',
+        date: isoDaysFromToday(0),
+        meal: 'frukost',
+        foodId: 'egen:gröt',
+        name: 'Gröt',
+        grams: 250,
+        per100: { kcal: 90, proteinG: 3, carbsG: 15, fatG: 2 },
+        createdAt: Date.now(),
+      },
+    ],
+    foods: [
+      {
+        id: 'egen:gröt',
+        name: 'Gröt',
+        source: 'egen',
+        per100: { kcal: 90, proteinG: 3, carbsG: 15, fatG: 2 },
+        createdAt: 1,
+      },
+    ],
     weights: [
       { id: 'a', date: isoDaysFromToday(-20), weightKg: 89, createdAt: Date.now() - 20 * 864e5 },
       { id: 'b', date: isoDaysFromToday(-10), weightKg: 88, createdAt: Date.now() - 10 * 864e5 },
@@ -72,6 +98,30 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Midja', exact: true }).tap();
       await expect(page.getByTestId('waist-entry')).toHaveCount(1);
       await expectNoViolations(page, 'Logga midja');
+      await page.getByRole('button', { name: 'Steg', exact: true }).tap();
+      await expect(page.getByRole('img', { name: 'Stapelgraf med steg per dag' })).toBeVisible();
+      await expectNoViolations(page, 'Logga steg');
+      // Mat: loggformulär, egna livsmedel, måltid och historik.
+      await page.goto('./#/mat');
+      await page.getByTestId('quick-pick').first().tap();
+      await expect(page.getByTestId('food-log-form')).toBeVisible();
+      await expectNoViolations(page, 'Mat loggformulär');
+      await page.getByRole('button', { name: 'Avbryt' }).tap();
+      await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
+      await expectNoViolations(page, 'Mat skanna');
+      await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+      await expectNoViolations(page, 'Mat egna');
+      await page.getByRole('button', { name: 'Ny måltid' }).tap();
+      await expectNoViolations(page, 'Mat ny måltid');
+      await page.getByRole('button', { name: 'Avbryt' }).tap();
+      await page.getByRole('button', { name: 'Nytt livsmedel' }).tap();
+      await expectNoViolations(page, 'Mat nytt livsmedel');
+      await page.getByRole('button', { name: 'Historik', exact: true }).tap();
+      await expect(page.getByTestId('intake-table')).toBeVisible();
+      await expectNoViolations(page, 'Mat historik');
+      // Inställningar med profilens nya fält ifyllda.
+      await page.goto('./#/installningar');
+      await expectNoViolations(page, 'Inställningar profil');
       // Påminnelsen om säkerhetskopia.
       await page.goto('./');
       await expect(page.getByTestId('backup-reminder')).toBeVisible();

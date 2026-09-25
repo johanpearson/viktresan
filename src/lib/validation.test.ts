@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseFoodFields,
+  parseLogAmount,
   parsePhotoFields,
   parseProfile,
   parseStepsFields,
@@ -19,7 +21,37 @@ describe('parseProfile', () => {
   it('godkänner en giltig profil utan måldatum', () => {
     expect(parseProfile(profile)).toEqual({
       ok: true,
-      value: { startDate: '2026-01-01', startWeightKg: 90.5, heightCm: 180, goalWeightKg: 80 },
+      value: {
+        startDate: '2026-01-01',
+        startWeightKg: 90.5,
+        heightCm: 180,
+        goalWeightKg: 80,
+        ratePerWeekKg: 0.5,
+      },
+    });
+  });
+
+  it('tar med kön, födelseår, aktivitetsnivå och takt', () => {
+    const result = parseProfile({
+      ...profile,
+      sex: 'kvinna',
+      birthYear: ' 1985 ',
+      activityLevel: 'mattlig',
+      rate: '0.75',
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { sex: 'kvinna', birthYear: 1985, activityLevel: 'mattlig', ratePerWeekKg: 0.75 },
+    });
+  });
+
+  it('underkänner orimligt födelseår och okänd takt', () => {
+    expect(parseProfile({ ...profile, birthYear: '85' })).toMatchObject({ ok: false });
+    expect(parseProfile({ ...profile, birthYear: '2020' })).toMatchObject({ ok: false });
+    expect(parseProfile({ ...profile, birthYear: '1900' })).toMatchObject({ ok: false });
+    expect(parseProfile({ ...profile, rate: '2' })).toEqual({
+      ok: false,
+      error: 'Välj en takt mellan 0,25 och 1 kg/vecka.',
     });
   });
 
@@ -117,5 +149,66 @@ describe('parsePhotoFields', () => {
     expect(parsePhotoFields({ date: '', weight: '' }).ok).toBe(false);
     expect(parsePhotoFields({ date: '2026-09-25', weight: '5' }).ok).toBe(false);
     expect(parsePhotoFields({ date: '2026-09-25', weight: 'abc' }).ok).toBe(false);
+  });
+});
+
+describe('parseFoodFields', () => {
+  const food = {
+    name: ' Mormors gröt ',
+    kcal: '90',
+    protein: '3',
+    carbs: '15,5',
+    fat: '',
+    portionName: '',
+    portionG: '',
+    ean: '',
+  };
+
+  it('godkänner ett livsmedel; tomma makron blir 0', () => {
+    expect(parseFoodFields(food)).toEqual({
+      ok: true,
+      value: { name: 'Mormors gröt', per100: { kcal: 90, proteinG: 3, carbsG: 15.5, fatG: 0 } },
+    });
+  });
+
+  it('tar med portion och streckkod', () => {
+    expect(
+      parseFoodFields({ ...food, portionG: '250', portionName: 'tallrik', ean: '4006381333931' }),
+    ).toMatchObject({
+      ok: true,
+      value: { portionG: 250, portionName: 'tallrik', ean: '4006381333931' },
+    });
+    expect(parseFoodFields({ ...food, portionG: '250' })).toMatchObject({
+      value: { portionName: 'portion' },
+    });
+  });
+
+  it('underkänner orimliga värden', () => {
+    expect(parseFoodFields({ ...food, name: ' ' })).toMatchObject({ ok: false });
+    expect(parseFoodFields({ ...food, kcal: '' })).toMatchObject({ ok: false });
+    expect(parseFoodFields({ ...food, kcal: '1000' })).toMatchObject({ ok: false });
+    expect(parseFoodFields({ ...food, protein: '-1' })).toMatchObject({ ok: false });
+    expect(parseFoodFields({ ...food, protein: '50', carbs: '40', fat: '20' })).toMatchObject({
+      ok: false,
+    });
+    expect(parseFoodFields({ ...food, portionG: '0' })).toMatchObject({ ok: false });
+    expect(parseFoodFields({ ...food, ean: '123' })).toMatchObject({ ok: false });
+  });
+});
+
+describe('parseLogAmount', () => {
+  it('gram', () => {
+    expect(parseLogAmount('60', 'g')).toEqual({ ok: true, value: { grams: 60 } });
+    expect(parseLogAmount('0', 'g')).toMatchObject({ ok: false });
+    expect(parseLogAmount('abc', 'g')).toMatchObject({ ok: false });
+  });
+
+  it('portioner räknas om till gram', () => {
+    expect(parseLogAmount('1,5', 'portion', 40)).toEqual({
+      ok: true,
+      value: { grams: 60, portionCount: 1.5 },
+    });
+    expect(parseLogAmount('1', 'portion')).toMatchObject({ ok: false });
+    expect(parseLogAmount('0', 'portion', 40)).toMatchObject({ ok: false });
   });
 });

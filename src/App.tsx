@@ -5,15 +5,15 @@ import { Bilder } from './pages/Bilder.tsx';
 import { Historik } from './pages/Historik.tsx';
 import { Installningar } from './pages/Installningar.tsx';
 import { Logga } from './pages/Logga.tsx';
+import { Mat } from './pages/Mat.tsx';
 import { Oversikt } from './pages/Oversikt.tsx';
-import { Steg } from './pages/Steg.tsx';
 import type { RouteId } from './routes.ts';
 
 const PAGES: Record<RouteId, ComponentType> = {
   oversikt: Oversikt,
   logga: Logga,
   historik: Historik,
-  steg: Steg,
+  mat: Mat,
   bilder: Bilder,
   installningar: Installningar,
 };

@@ -7,3 +7,4 @@ package-lock.json
 public/*.svg
 lhci-report
 .lighthouseci
+public/livsmedel.json

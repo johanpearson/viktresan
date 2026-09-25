@@ -1,5 +1,6 @@
 import { useState, type SyntheticEvent } from 'react';
 import { Page } from '../components/Page.tsx';
+import { StepsLog } from '../components/StepsLog.tsx';
 import {
   deleteWaist,
   deleteWeight,
@@ -15,11 +16,12 @@ import { formatCm, formatDate, formatKg, parseDecimal, stepKg } from '../lib/for
 import { useAppData, type AppData } from '../lib/useAppData.ts';
 import { parseWaistFields, parseWeightFields } from '../lib/validation.ts';
 
-type Tab = 'vikt' | 'midja';
+type Tab = 'vikt' | 'midja' | 'steg';
 
 const TABS: readonly { id: Tab; label: string }[] = [
   { id: 'vikt', label: 'Vikt' },
   { id: 'midja', label: 'Midja' },
+  { id: 'steg', label: 'Steg' },
 ];
 
 /** Antal midjemått som visas i listan under formuläret. */
@@ -43,7 +45,7 @@ export function Logga() {
 
   return (
     <Page title="Logga">
-      <div className="segmented segmented-2" role="group" aria-label="Vad vill du logga?">
+      <div className="segmented" role="group" aria-label="Vad vill du logga?">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -58,12 +60,11 @@ export function Logga() {
           </button>
         ))}
       </div>
-      {data &&
-        (tab === 'vikt' ? (
-          <WeightLog weights={data.weights} profile={data.profile} onChange={reload} />
-        ) : (
-          <WaistLog waist={data.waist} onChange={reload} />
-        ))}
+      {data && tab === 'vikt' && (
+        <WeightLog weights={data.weights} profile={data.profile} onChange={reload} />
+      )}
+      {data && tab === 'midja' && <WaistLog waist={data.waist} onChange={reload} />}
+      {data && tab === 'steg' && <StepsLog steps={data.steps} onChange={reload} />}
     </Page>
   );
 }

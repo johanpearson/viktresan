@@ -5,6 +5,11 @@ describe('routeFromHash', () => {
   it('tolkar kända hashar', () => {
     expect(routeFromHash('#/logga').id).toBe('logga');
     expect(routeFromHash('#/installningar').id).toBe('installningar');
+    expect(routeFromHash('#/mat').id).toBe('mat');
+  });
+
+  it('skickar den gamla Steg-adressen till Logga', () => {
+    expect(routeFromHash('#/steg').id).toBe('logga');
   });
 
   it('faller tillbaka på Översikt för tom eller okänd hash', () => {

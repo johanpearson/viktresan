@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  decimalInput,
   formatCm,
+  formatGrams,
+  formatKcal,
+  formatRate,
   formatDate,
   formatPhotoLabel,
   formatInt,
@@ -61,5 +65,19 @@ describe('formatPhotoLabel', () => {
 
   it('visar bara datum utan vikt', () => {
     expect(formatPhotoLabel({ date: '2026-09-25' })).toMatch(/^25 sep.* 2026$/);
+  });
+});
+
+describe('mat', () => {
+  it('formaterar kcal, gram och takt', () => {
+    expect(formatKcal(1234.4)).toBe('1 234 kcal');
+    expect(formatKcal(-0.4)).toBe('0 kcal');
+    expect(formatGrams(7.84)).toBe('7,8 g');
+    expect(formatGrams(60)).toBe('60 g');
+    expect(formatRate(0.25)).toBe('0,25 kg/vecka');
+    expect(formatRate(0.7)).toBe('0,7 kg/vecka');
+    expect(formatRate(0.20618)).toBe('0,21 kg/vecka');
+    expect(decimalInput(1.5)).toBe('1,5');
+    expect(decimalInput(60)).toBe('60');
   });
 });

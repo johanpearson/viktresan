@@ -74,10 +74,10 @@ export function ImportBackup({ onImported }: ImportBackupProps) {
     setError(null);
     try {
       await applySnapshot(state.contents.snapshot, mode);
-      const { weights, waist, steps, photos } = state.contents.snapshot;
+      const { weights, waist, steps, photos, foodLog } = state.contents.snapshot;
       const count = weights.length + waist.length + steps.length;
       setDone(
-        `Importen är klar: ${String(count)} mätningar och ${String(photos.length)} bilder ${
+        `Importen är klar: ${String(count)} mätningar, ${String(foodLog.length)} matloggposter och ${String(photos.length)} bilder ${
           mode === 'replace' ? 'ersatte den tidigare datan' : 'slogs ihop med befintlig data'
         }.`,
       );
@@ -184,6 +184,12 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
         <dd data-testid="preview-waist">{summary.waist}</dd>
         <dt>Dagar med steg</dt>
         <dd data-testid="preview-steps">{summary.steps}</dd>
+        <dt>Matloggposter</dt>
+        <dd data-testid="preview-food-log">{summary.foodLog}</dd>
+        <dt>Egna livsmedel och måltider</dt>
+        <dd data-testid="preview-foods">
+          {summary.foods} + {summary.meals}
+        </dd>
         <dt>Bilder</dt>
         <dd data-testid="preview-photos">
           {summary.photos} ({formatBytes(summary.photoBytes)})
@@ -230,7 +236,7 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
           <span>
             Ersätt all befintlig data
             <span className="check-hint">
-              Profil, mätningar och bilder på den här enheten raderas och ersätts.
+              Profil, mätningar, matlogg och bilder på den här enheten raderas och ersätts.
             </span>
           </span>
         </label>

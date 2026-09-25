@@ -76,3 +76,29 @@ export function formatPhotoLabel(photo: { date: string; weightKg?: number }): st
   const date = formatDate(photo.date);
   return photo.weightKg == null ? date : `${date} · ${formatKg(photo.weightKg)}`;
 }
+
+/** 1234.4 → "1 234 kcal". */
+export function formatKcal(value: number): string {
+  const rounded = Math.round(value);
+  return `${formatInt(rounded === 0 ? 0 : rounded)} kcal`;
+}
+
+const gramFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 });
+
+/** 7.84 → "7,8 g", 60 → "60 g". */
+export function formatGrams(value: number): string {
+  return `${normalizeSpaces(gramFormat.format(value))} g`;
+}
+
+/** 0.5 → "0,5 kg/vecka". Två decimaler vid behov (0,25). */
+export function formatRate(kgPerWeek: number): string {
+  const text = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 }).format(
+    Math.round(kgPerWeek * 100) / 100,
+  );
+  return `${normalizeSpaces(text)} kg/vecka`;
+}
+
+/** "0,5" → "0,5"; tal till text med decimalkomma för formulärfält. */
+export function decimalInput(value: number): string {
+  return String(Math.round(value * 10) / 10).replace('.', ',');
+}

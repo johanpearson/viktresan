@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { collectErrors, isoDaysFromToday } from './helpers.ts';
 
-const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Steg', 'Bilder'] as const;
+const SECTIONS = ['Översikt', 'Logga', 'Historik', 'Mat', 'Bilder'] as const;
 
 test('appen fungerar i flygplansläge efter första laddningen', async ({ page, context }) => {
   const errors = collectErrors(page);
@@ -40,10 +40,20 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
   await page.getByLabel('Vikt (kg)').fill('88,5');
   await page.getByRole('button', { name: 'Spara', exact: true }).tap();
   await expect(page.getByRole('status')).toContainText('Sparade 88,5 kg');
-  await page.goto('./#/steg');
+  await page.getByRole('button', { name: 'Steg', exact: true }).tap();
   await page.getByLabel('Antal steg').fill('4321');
   await page.getByRole('button', { name: 'Spara', exact: true }).tap();
   await expect(page.getByRole('status')).toContainText('Sparade 4 321 steg');
+
+  // Mat: livsmedelsdatabasen och egna livsmedel fungerar offline.
+  await page.goto('./#/mat');
+  await expect(page.getByTestId('livsmedel-source')).not.toContainText('Laddar');
+  await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+  await page.getByRole('button', { name: 'Nytt livsmedel' }).tap();
+  await page.getByLabel('Namn').fill('Offlinebulle');
+  await page.getByLabel('Energi (kcal)').fill('350');
+  await page.getByRole('button', { name: 'Spara livsmedel' }).tap();
+  await expect(page.getByTestId('own-food')).toHaveCount(1);
 
   // En ny flik (kallstart) med djuplänk fungerar också offline.
   const second = await context.newPage();

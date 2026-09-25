@@ -1,8 +1,9 @@
 import { BackupReminder } from '../components/BackupReminder.tsx';
+import { CaloriePlanCard } from '../components/CaloriePlanCard.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
-import type { Profile, WeightEntry } from '../db/db.ts';
+import type { FoodLogEntry, Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatBmi, formatDate, formatKg, formatShortDate } from '../lib/format.ts';
 import {
@@ -15,6 +16,7 @@ import {
   weeklyAverages,
   type GoalForecast,
 } from '../lib/stats.ts';
+import { buildPlan } from '../lib/plan.ts';
 import { useAppData } from '../lib/useAppData.ts';
 
 export function Oversikt() {
@@ -35,13 +37,19 @@ export function Oversikt() {
           (kugghjulet) – startvikt, längd och mål.
         </EmptyState>
       ) : (
-        <Summary profile={data.profile} weights={data.weights} />
+        <Summary profile={data.profile} weights={data.weights} foodLog={data.foodLog} />
       )}
     </Page>
   );
 }
 
-function Summary({ profile, weights }: { profile: Profile; weights: WeightEntry[] }) {
+interface SummaryProps {
+  profile: Profile;
+  weights: WeightEntry[];
+  foodLog: FoodLogEntry[];
+}
+
+function Summary({ profile, weights, foodLog }: SummaryProps) {
   const today = todayIso();
   const daily = dailyWeights(weights);
   const latest = daily[daily.length - 1];
@@ -57,6 +65,7 @@ function Summary({ profile, weights }: { profile: Profile; weights: WeightEntry[
     today,
     goalDate: profile.goalDate,
   });
+  const plan = buildPlan(profile, weights, foodLog, today);
 
   return (
     <>
@@ -103,6 +112,8 @@ function Summary({ profile, weights }: { profile: Profile; weights: WeightEntry[
           till {formatKg(profile.goalWeightKg)}
         </p>
       </div>
+
+      <CaloriePlanCard profile={profile} result={plan} />
 
       <section className="card" aria-labelledby="weeks-title">
         <h2 className="card-title" id="weeks-title">
