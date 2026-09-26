@@ -37,7 +37,7 @@ src/App.tsx             Layout: header, aktiv sida, uppdateringstoast, bottennav
 src/routes.ts           Route-tabell (id, hash-path, svensk etikett, ev. funktion), gamla adresser
 src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore → { route, sub }
 src/lib/features.ts     Funktionsbrytare: FEATURES, useFeatures() (filter/isEnabled), lagras i settings
-src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt veckokort), usePreferences()
+src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt veckokort, profilsida, spökbild), usePreferences()
 src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
 src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
 src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (≥ 15 g/100 kcal)
@@ -54,7 +54,9 @@ src/lib/dayMarkers.ts   Loggtyper per dag (Kalender, Översikt → Idag), med fu
 src/lib/glp1.ts         GLP-1: schema, dostrappa, planerade/loggade doser, nästa dos, rotation, dosbyten
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
 src/lib/useAppData.ts   Hook: läser vikt, midja, steg + profil; `reload()` returnerar ny data
-src/lib/usePhotos.ts    Hook: läser bilder + skapar/frigör object URLs
+src/lib/usePhotos.ts    Hook: läser fototillfällen och bilder + skapar/frigör object URLs
+src/lib/photoSessions.ts  Fototillfällen/vinklar: gruppering, vinkelfilter, spökbild (pickGhost), trendvikt, jämförelse
+src/lib/camera.ts       Kameravyn: getUserMedia-stöd, felmeddelanden, bildruta ur video (grabFrame)
 src/lib/image.ts        Bildkomprimering (max 1080 px WebP, JPEG-reserv) + borttagning av EXIF/XMP
 src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
 src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos
@@ -86,7 +88,8 @@ src/pages/              En komponent per sektion: Översikt, Logga (rutnät → 
                         (Dag | Egna | Historik; `#/mat/logga` = panelen Logga mat), Kalender (Månad | Vecka),
                         Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
 e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
-                        veckokort, milstolpar); hjälpare i helpers.ts. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
+                        veckokort, milstolpar, bilder); hjälpare i helpers.ts. photos.spec.ts mockar getUserMedia
+                        (nekad resp. canvas-ström) och skapar en v8-databas för migreringen. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
@@ -107,10 +110,12 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`, `FLAGS_VERSION = 3`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 8`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 9`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
-  `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
+  `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
+  `by-session` (v9); `date` = kopia av tillfällets datum), `photoSessions` (v9, fototillfällen `{ id, date, weightKg?, note? }`,
+  index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
   `foods` (v4, egna livsmedel `egen:<uuid>` + cachade Open Food Facts-träffar `off:<ean>`, index `by-ean`),
   `meals` (v4, sparade måltider med ingredienser i gram), `foodLog` (v4, matlogg, index `by-date`),
   `favorites` (v4, nyckel `foodId`), `water` (v5, en post per tillfälle, index `by-date`),
@@ -119,6 +124,9 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   index `by-date`), `symptoms` (v6, aptit/biverkningar, nyckel = `date`, ett per dag, `upsertSymptoms`),
   `foodUnits` (v7, användarens egna enheter per livsmedel, nyckel = `foodId`, alla källor, `saveCustomUnits`),
   `milestones` (v8, uppnådda milstolpar `{ id, date, createdAt }`, nyckel = milstolpens id, `addMilestones` skriver aldrig över).
+  Migreringen v8 → v9 (`groupLegacyPhotos`, även för säkerhetskopior version 1–7) grupperar befintliga bilder i ett
+  tillfälle per datum (id `migrerad:<datum>`, samma på alla enheter), vinkel `okand`; bildens vikt flyttas till tillfället
+  (senast registrerade vinner). `putPhotoSession` flyttar bildernas `date` med tillfället; `deletePhoto` tar bort ett tomt tillfälle.
   Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5)
   (0 = håll vikten/viktstabilisering: kalorimål = TDEE, spärren `maintenance`)
   och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål) samt `proteinFactor`
@@ -132,7 +140,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
-  när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
+  `ghostEnabled`, `ghostOpacity`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -221,6 +230,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `define`. Deploy-workflowen sätter `APP_COMMIT`/`APP_BUILD_TIME`; lokalt läses git.
 - **Bilder**: `compressImage()` skalar ner via canvas och kör `stripMetadata()` på resultatet
   (orientering bakas in via `createImageBitmap`). Kodningen är injicerbar (`ImageCodec`) för tester.
+  Fototillfällen (`PhotoSessionFlow` i en panel): datum, vikt (förifylld med trendvikten, högst 7 dagar gammal) och
+  anteckning → framifrån → profil; varje steg kan hoppas över, tillfället sparas vid första bilden. `CameraCapture`
+  (getUserMedia, modal `<dialog>`): bakre/främre kamera (främre speglas i förhandsvisningen men sparas oförändrad),
+  självutlösare 3/10 s, spökbild = senaste bilden i samma vinkel från ett annat tillfälle (profil: samma sida först),
+  opacitet/av sparas i `preferences`. Saknas getUserMedia eller nekas den → filväljare med `capture`; "Välj från
+  galleriet" finns alltid. Bildrutan går genom `compressImage` som en vald fil. Galleri: Tillfällen (en rad per
+  tillfälle, framifrån + profil, tom plats = "Lägg till") eller en vinkel i rutnät. "Ange vinkel" listar bilder med
+  `okand` med snabbval på bilden. Jämförelse (`SessionCompare`): två tillfällen, vinkel eller båda, sida vid sida/
+  reglage, dagar och viktskillnad; "Första mot senaste" (förval, även `#/framsteg/bilder/jamfor`). Profilsida:
+  Inställningar → Bilder.
 - **Beständig lagring**: `requestPersistence()` vid start; status + knapp i Inställningar.
 
 ### Säkerhetskopiering och återställning
@@ -228,15 +247,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 7`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 8`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
-    bildmetadata med `file`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
+    `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
     `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
     har portioner i stället för enheter och uppgraderas med `upgradeFoodData`; version 1–6 saknar milstolpar
-    (tom lista – efter importen markeras passerade milstolpar utan firande).
+    (tom lista – efter importen markeras passerade milstolpar utan firande); version 1–7 saknar fototillfällen och
+    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"). En bild vars `sessionId` saknas bland tillfällena avvisas.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.

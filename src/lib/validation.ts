@@ -154,20 +154,29 @@ export function parseStepsFields(fields: { date: string; steps: string }): Parse
 export interface PhotoFields {
   date: string;
   weight: string;
+  note?: string;
 }
 
 export interface PhotoValues {
   date: string;
   weightKg?: number;
+  note?: string;
 }
 
-/** Datum och valfri vikt för en progressbild. */
+export const PHOTO_NOTE_MAX = 500;
+
+/** Datum, valfri vikt och valfri anteckning för ett fototillfälle. */
 export function parsePhotoFields(fields: PhotoFields): Parsed<PhotoValues> {
   if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
-  if (fields.weight.trim() === '') return { ok: true, value: { date: fields.date } };
+  const note = (fields.note ?? '').trim();
+  if (note.length > PHOTO_NOTE_MAX)
+    return fail(`Anteckningen får vara högst ${PHOTO_NOTE_MAX} tecken.`);
+  const value: PhotoValues = { date: fields.date };
+  if (note !== '') value.note = note;
+  if (fields.weight.trim() === '') return { ok: true, value };
   const weightKg = parseDecimal(fields.weight);
   if (!isWeight(weightKg)) return fail('Ange vikt i kg (20–400) eller lämna fältet tomt.');
-  return { ok: true, value: { date: fields.date, weightKg } };
+  return { ok: true, value: { ...value, weightKg } };
 }
 
 export interface FoodFields {

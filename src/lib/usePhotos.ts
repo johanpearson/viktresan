@@ -1,35 +1,47 @@
 import { useCallback, useEffect, useState } from 'react';
-import { listPhotos, type PhotoEntry } from '../db/db.ts';
+import { listPhotoSessions, listPhotos, type PhotoEntry, type PhotoSession } from '../db/db.ts';
 
 /** En sparad bild med en object URL att visa den med. */
 export interface PhotoItem extends PhotoEntry {
   url: string;
 }
 
-function revokeAll(photos: readonly PhotoItem[] | null): void {
-  for (const photo of photos ?? []) URL.revokeObjectURL(photo.url);
+export interface PhotoLibrary {
+  sessions: PhotoSession[];
+  photos: PhotoItem[];
+}
+
+function revokeAll(library: PhotoLibrary | null): void {
+  for (const photo of library?.photos ?? []) URL.revokeObjectURL(photo.url);
 }
 
 /**
- * Läser bilderna ur IndexedDB (äldst först) och skapar object URLs för dem.
- * URL:erna frigörs när listan ersätts eller komponenten avmonteras.
+ * Läser fototillfällena och bilderna ur IndexedDB (äldst först) och skapar object URLs
+ * för bilderna. URL:erna frigörs när listan ersätts eller komponenten avmonteras.
  */
-export function usePhotos(): { photos: PhotoItem[] | null; reload: () => Promise<void> } {
-  const [photos, setPhotos] = useState<PhotoItem[] | null>(null);
+export function usePhotos(): {
+  sessions: PhotoSession[] | null;
+  photos: PhotoItem[] | null;
+  reload: () => Promise<void>;
+} {
+  const [library, setLibrary] = useState<PhotoLibrary | null>(null);
 
-  const load = useCallback(async (): Promise<PhotoItem[]> => {
+  const load = useCallback(async (): Promise<PhotoLibrary> => {
     try {
-      const entries = await listPhotos();
-      return entries.map((entry) => ({ ...entry, url: URL.createObjectURL(entry.blob) }));
+      const [sessions, entries] = await Promise.all([listPhotoSessions(), listPhotos()]);
+      return {
+        sessions,
+        photos: entries.map((entry) => ({ ...entry, url: URL.createObjectURL(entry.blob) })),
+      };
     } catch {
-      return [];
+      return { sessions: [], photos: [] };
     }
   }, []);
 
   useEffect(() => {
     let active = true;
     void load().then((result) => {
-      if (active) setPhotos(result);
+      if (active) setLibrary(result);
       else revokeAll(result);
     });
     return () => {
@@ -39,14 +51,14 @@ export function usePhotos(): { photos: PhotoItem[] | null; reload: () => Promise
 
   useEffect(
     () => () => {
-      revokeAll(photos);
+      revokeAll(library);
     },
-    [photos],
+    [library],
   );
 
   const reload = useCallback(async () => {
-    setPhotos(await load());
+    setLibrary(await load());
   }, [load]);
 
-  return { photos, reload };
+  return { sessions: library?.sessions ?? null, photos: library?.photos ?? null, reload };
 }

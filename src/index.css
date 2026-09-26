@@ -902,6 +902,351 @@ body {
   margin-top: 16px;
 }
 
+/* Fototillfällen */
+.session-new {
+  margin-top: 12px;
+}
+
+.gallery-views {
+  margin-bottom: 12px;
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-row + .session-row {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.session-head {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.session-date {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.session-weight {
+  flex: 1;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-note {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.session-photos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.photo-slot span {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.photo-slot:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Ange vinkel på migrerade bilder */
+.angle-queue {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.angle-item {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--track);
+}
+
+.angle-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.angle-item .photo-date {
+  inset: 0 0 auto;
+  padding: 4px 6px 16px;
+  background: linear-gradient(rgb(0 0 0 / 0.65), transparent);
+}
+
+.angle-picks {
+  position: absolute;
+  inset: auto 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.angle-pick {
+  min-height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.92);
+  color: #0f172a;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.angle-pick:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Guiden */
+.flow-count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.flow-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.flow-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flow-preview {
+  display: block;
+  width: 50%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--track);
+}
+
+.flow-summary {
+  margin: 0;
+  font-weight: 600;
+}
+
+.flow-thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-thumbs img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.flow-thumbs span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Kameravy */
+.camera {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px calc(env(safe-area-inset-bottom) + 12px);
+  border: 0;
+  background: #000;
+  color: #fff;
+  overflow-y: auto;
+}
+
+.camera[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.camera::backdrop {
+  background: #000;
+}
+
+.camera-title {
+  margin: 0;
+  font-weight: 700;
+  text-align: center;
+}
+
+.camera-hint,
+.camera-note {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.camera-stage {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #111;
+}
+
+.camera-video,
+.camera-ghost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.camera-ghost {
+  pointer-events: none;
+}
+
+/* Främre kameran speglas som en spegel – spökbilden med, så att de ligger kant i kant. */
+.camera-mirrored .camera-video,
+.camera-mirrored .camera-ghost {
+  transform: scaleX(-1);
+}
+
+.camera-countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 6rem;
+  font-weight: 800;
+  text-shadow: 0 2px 12px rgb(0 0 0 / 0.7);
+}
+
+.camera-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.camera-ghost-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.camera-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.camera-opacity {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  accent-color: #fff;
+}
+
+.camera-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.camera .button-secondary {
+  color: #fff;
+  border-color: #fff;
+}
+
+/* Jämförelse av tillfällen */
+.compare-angles {
+  margin-top: 12px;
+}
+
+.compare-sessions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 16px 0 4px;
+}
+
+.compare-sessions dt {
+  font-weight: 700;
+}
+
+.compare-sessions dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.compare-angle-title {
+  margin: 20px 0 0;
+  font-size: 1rem;
+}
+
+.compare-missing {
+  margin-top: 12px;
+}
+
+.viewer-angles {
+  flex: none;
+}
+
 /* Säkerhetskopia */
 .subheading {
   font-size: 1rem;

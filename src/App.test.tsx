@@ -12,6 +12,7 @@ import {
   upsertWaist,
   putFoodLog,
   putPhoto,
+  putPhotoSession,
   putWeight,
 } from './db/db.ts';
 import { todayIso } from './lib/dates.ts';
@@ -95,8 +96,11 @@ async function seedToday() {
     per100: { kcal: 100, proteinG: 3, carbsG: 15, fatG: 2 },
     createdAt: 1,
   });
+  await putPhotoSession({ id: 's1', date: today, createdAt: 1 });
   await putPhoto({
     id: 'p1',
+    sessionId: 's1',
+    angle: 'fram',
     date: today,
     createdAt: 1,
     blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }),
@@ -136,7 +140,7 @@ describe('App', () => {
     );
     goTo('#/bilder');
     expect(screen.getByRole('button', { name: 'Bilder' })).toHaveAttribute('aria-pressed', 'true');
-    expect(await screen.findByRole('heading', { name: 'Ny bild' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Fototillfällen' })).toBeInTheDocument();
   });
 
   it('Logga öppnar formuläret i en panel', async () => {
@@ -193,7 +197,7 @@ describe('funktionsbrytare', () => {
     goTo('#/framsteg/bilder');
     // Bilder läser sin data asynkront; vänta in Historik eller Bilder.
     await screen.findAllByRole('heading', { level: 2 });
-    const bilderTab = screen.queryByRole('heading', { name: 'Ny bild' }) !== null;
+    const bilderTab = screen.queryByRole('heading', { name: 'Fototillfällen' }) !== null;
 
     return {
       today,

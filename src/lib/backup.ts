@@ -11,7 +11,9 @@
  *                      foodUnits + mängd/enhet i matlogg och måltider (sedan version 6;
  *                      äldre portioner räknas om med samma funktioner som databasmigreringen),
  *                      milestones (sedan version 7; äldre filer ger en tom lista och
- *                      passerade milstolpar markeras efter importen utan firande)
+ *                      passerade milstolpar markeras efter importen utan firande),
+ *                      photoSessions + tillfälle/vinkel på bilderna (sedan version 8; äldre
+ *                      bilder grupperas per datum med vinkel "ej angiven", som i migreringen)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -21,6 +23,7 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import {
+  groupLegacyPhotos,
   splitLegacyMeasurements,
   upgradeFoodData,
   type CustomUnits,
@@ -33,9 +36,11 @@ import {
   type FoodLogEntry,
   type Injection,
   type LegacyMeasurement,
+  type LegacyPhotoEntry,
   type Medication,
   type MilestoneRecord,
   type PhotoEntry,
+  type PhotoSession,
   type SavedMeal,
   type StoredFood,
   type Profile,
@@ -49,6 +54,7 @@ import {
   type WorkoutPlan,
 } from '../db/db.ts';
 import { isIsoDate } from './dates.ts';
+import { isPhotoAngle, isProfileSide } from './photoSessions.ts';
 import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
 import { APPETITE_MAX, APPETITE_MIN, DOSE_FREQUENCIES, isInjectionSite } from './glp1.ts';
 import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
@@ -59,9 +65,9 @@ import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './wate
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 7;
+export const BACKUP_VERSION = 8;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -100,6 +106,8 @@ export interface BackupSummary {
   steps: number;
   photos: number;
   photoBytes: number;
+  /** Fototillfällen. */
+  photoSessions: number;
   /** Poster i matloggen. */
   foodLog: number;
   /** Egna livsmedel och sparade måltider. */
@@ -141,6 +149,7 @@ interface PlainManifest {
   weights: WeightEntry[];
   waist: WaistEntry[];
   steps: StepsEntry[];
+  photoSessions: PhotoSession[];
   photos: PhotoRecord[];
   foods: StoredFood[];
   meals: SavedMeal[];
@@ -199,6 +208,7 @@ export async function createBackup(
     weights: snapshot.weights,
     waist: snapshot.waist,
     steps: snapshot.steps,
+    photoSessions: snapshot.photoSessions,
     photos,
     foods: snapshot.foods,
     meals: snapshot.meals,
@@ -325,6 +335,7 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     steps: snapshot.steps.length,
     photos: snapshot.photos.length,
     photoBytes: snapshot.photos.reduce((sum, p) => sum + p.blob.size, 0),
+    photoSessions: snapshot.photoSessions.length,
     foodLog: snapshot.foodLog.length,
     foods: snapshot.foods.length,
     meals: snapshot.meals.length,
@@ -410,14 +421,15 @@ function parsePlain(
     throw invalid('Exportdatum saknas.');
   }
   if (!Array.isArray(photos)) throw invalid('Bilder saknas.');
-  const parsedPhotos = photos.map((p, i) => parsePhotoRecord(p, i, entries));
-  assertUniqueKeys(parsedPhotos, (p) => p.id, 'bild');
   return {
     exportedAt,
     snapshot: {
       profile: profile == null ? null : parseProfileRecord(profile),
       ...(version === 1 ? parseV1Measurements(manifest) : parseV2Measurements(manifest)),
-      photos: parsedPhotos,
+      // Version 1–7 saknar fototillfällen: bilderna grupperas per datum.
+      ...(version >= 8
+        ? parsePhotoData(manifest, photos, entries)
+        : parseLegacyPhotos(photos, entries)),
       // Version 1–2 saknar mat.
       ...(version >= 3 ? parseFoodData(manifest, version) : emptyFoodData()),
       // Version 1–3 saknar vatten och träning.
@@ -428,6 +440,39 @@ function parsePlain(
       milestones: version >= 7 ? parseMilestones(manifest) : [],
     },
   };
+}
+
+type PhotoData = Pick<Snapshot, 'photoSessions' | 'photos'>;
+
+function parseLegacyPhotos(
+  photos: unknown[],
+  entries: Record<string, Bytes | undefined>,
+): PhotoData {
+  const legacy = photos.map((p, i) => parseLegacyPhotoRecord(p, i, entries));
+  assertUniqueKeys(legacy, (p) => p.id, 'bild');
+  const { sessions, photos: grouped } = groupLegacyPhotos(legacy);
+  return { photoSessions: sessions, photos: grouped };
+}
+
+function parsePhotoData(
+  manifest: Record<string, unknown>,
+  photos: unknown[],
+  entries: Record<string, Bytes | undefined>,
+): PhotoData {
+  const { photoSessions } = manifest;
+  if (!Array.isArray(photoSessions)) throw invalid('Fototillfällen saknas.');
+  const sessions = photoSessions.map((s, i) => parsePhotoSessionRecord(s, i));
+  assertUniqueKeys(sessions, (s) => s.id, 'fototillfälle');
+  const parsed = photos.map((p, i) => parsePhotoRecord(p, i, entries));
+  assertUniqueKeys(parsed, (p) => p.id, 'bild');
+  const dates = new Map(sessions.map((s) => [s.id, s.date]));
+  for (const [i, photo] of parsed.entries()) {
+    const date = dates.get(photo.sessionId);
+    if (date === undefined) throw invalid(`Bild nr ${i + 1} hör till ett okänt fototillfälle.`);
+    // Bildens datum följer alltid tillfällets.
+    photo.date = date;
+  }
+  return { photoSessions: sessions, photos: parsed };
 }
 
 type MeasurementLists = Pick<Snapshot, 'weights' | 'waist' | 'steps'>;
@@ -1069,12 +1114,34 @@ function parseMilestoneRecord(value: unknown, index: number): MilestoneRecord {
   return { id: value.id, date: value.date, createdAt: value.createdAt };
 }
 
-function parsePhotoRecord(
+function parsePhotoSessionRecord(value: unknown, index: number): PhotoSession {
+  const bad = () => invalid(`Fototillfälle nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isDate(value.date) ||
+    !isTimestamp(value.createdAt) ||
+    (value.updatedAt !== undefined && !isTimestamp(value.updatedAt))
+  ) {
+    throw bad();
+  }
+  const session: PhotoSession = { id: value.id, date: value.date, createdAt: value.createdAt };
+  if (value.weightKg !== undefined) {
+    if (!isPositive(value.weightKg)) throw bad();
+    session.weightKg = value.weightKg;
+  }
+  const note = parseOptionalNote(value.note, bad);
+  if (note !== undefined) session.note = note;
+  if (value.updatedAt !== undefined) session.updatedAt = value.updatedAt;
+  return session;
+}
+
+/** Bildfälten som är gemensamma för alla versioner. */
+function parsePhotoBase(
   value: unknown,
-  index: number,
+  bad: (why?: string) => BackupError,
   entries: Record<string, Bytes | undefined>,
-): PhotoEntry {
-  const bad = (why = 'är ogiltig') => invalid(`Bild nr ${index + 1} i säkerhetskopian ${why}.`);
+): Omit<LegacyPhotoEntry, 'weightKg'> & { raw: Record<string, unknown> } {
   if (
     !isRecord(value) ||
     !isId(value.id) ||
@@ -1088,17 +1155,14 @@ function parsePhotoRecord(
   }
   const bytes = entries[value.file];
   if (!value.file.startsWith(PHOTO_DIR) || !bytes) throw bad('saknar bildfil');
-  const photo: PhotoEntry = {
+  const photo: Omit<LegacyPhotoEntry, 'weightKg'> & { raw: Record<string, unknown> } = {
+    raw: value,
     id: value.id,
     date: value.date,
     blob: new Blob([bytes], { type: value.mimeType }),
     mimeType: value.mimeType,
     createdAt: value.createdAt,
   };
-  if (value.weightKg !== undefined) {
-    if (!isPositive(value.weightKg)) throw bad();
-    photo.weightKg = value.weightKg;
-  }
   if (value.width !== undefined) {
     if (!isInt(value.width) || value.width <= 0) throw bad();
     photo.width = value.width;
@@ -1106,6 +1170,46 @@ function parsePhotoRecord(
   if (value.height !== undefined) {
     if (!isInt(value.height) || value.height <= 0) throw bad();
     photo.height = value.height;
+  }
+  return photo;
+}
+
+function photoBad(index: number) {
+  return (why = 'är ogiltig') => invalid(`Bild nr ${index + 1} i säkerhetskopian ${why}.`);
+}
+
+/** Version 1–7: vikten låg på bilden och tillfälle/vinkel saknas. */
+function parseLegacyPhotoRecord(
+  value: unknown,
+  index: number,
+  entries: Record<string, Bytes | undefined>,
+): LegacyPhotoEntry {
+  const bad = photoBad(index);
+  const { raw, ...photo } = parsePhotoBase(value, bad, entries);
+  const legacy: LegacyPhotoEntry = photo;
+  if (raw.weightKg !== undefined) {
+    if (!isPositive(raw.weightKg)) throw bad();
+    legacy.weightKg = raw.weightKg;
+  }
+  return legacy;
+}
+
+function parsePhotoRecord(
+  value: unknown,
+  index: number,
+  entries: Record<string, Bytes | undefined>,
+): PhotoEntry {
+  const bad = photoBad(index);
+  const { raw, ...base } = parsePhotoBase(value, bad, entries);
+  if (!isId(raw.sessionId) || !isPhotoAngle(raw.angle)) throw bad();
+  const photo: PhotoEntry = { ...base, sessionId: raw.sessionId, angle: raw.angle };
+  if (raw.side !== undefined) {
+    if (raw.angle !== 'profil' || !isProfileSide(raw.side)) throw bad();
+    photo.side = raw.side;
+  }
+  if (raw.updatedAt !== undefined) {
+    if (!isTimestamp(raw.updatedAt)) throw bad();
+    photo.updatedAt = raw.updatedAt;
   }
   return photo;
 }

@@ -8,11 +8,18 @@ import {
 import type { ActivityLevel, Sex } from '../lib/energy.ts';
 import type { DoseFrequency, InjectionSite } from '../lib/glp1.ts';
 import type { MealSlot, Nutrients } from '../lib/nutrition.ts';
+import {
+  ensureSessions,
+  isPhotoAngle,
+  legacySessionId,
+  type PhotoAngle,
+  type ProfileSide,
+} from '../lib/photoSessions.ts';
 import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 8;
+export const DB_VERSION = 9;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -273,18 +280,41 @@ export interface MilestoneRecord {
 }
 
 /**
+ * Ett fototillfälle (sedan v9): datum, valfri vikt (förifylld från trendvikten) och
+ * anteckning. Bilderna pekar på tillfället med `sessionId`.
+ */
+export interface PhotoSession {
+  id: string;
+  date: string;
+  weightKg?: number;
+  note?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
  * Ett progressfoto. Bilden lagras som Blob direkt i IndexedDB, komprimerad och
- * utan metadata. Vikt och mått är valfria fält (tillagda utan schemaändring).
+ * utan metadata. Sedan v9 hör varje bild till ett tillfälle och har en vinkel;
+ * `date` är en kopia av tillfällets datum (kalendern och milstolparna läser den).
  */
 export interface PhotoEntry {
   id: string;
+  sessionId: string;
   date: string;
+  angle: PhotoAngle;
+  /** Vilken sida som var vänd mot kameran (bara profilbilder). */
+  side?: ProfileSide;
   blob: Blob;
   mimeType: string;
   createdAt: number;
-  weightKg?: number;
+  updatedAt?: number;
   width?: number;
   height?: number;
+}
+
+/** En bild från före v9 (och säkerhetskopior version 1–7): vikten låg på bilden. */
+export interface LegacyPhotoEntry extends Omit<PhotoEntry, 'sessionId' | 'angle' | 'side'> {
+  weightKg?: number;
 }
 
 export interface ViktresanDB extends DBSchema {
@@ -304,9 +334,16 @@ export interface ViktresanDB extends DBSchema {
     key: string;
     value: StepsEntry;
   };
+  /** Sedan v9 även index på tillfälle. */
   photos: {
     key: string;
     value: PhotoEntry;
+    indexes: { 'by-date': string; 'by-session': string };
+  };
+  /** Sedan v9. Fototillfällen. */
+  photoSessions: {
+    key: string;
+    value: PhotoSession;
     indexes: { 'by-date': string };
   };
   settings: {
@@ -532,6 +569,45 @@ export function upgradeFoodData(data: {
   };
 }
 
+/**
+ * Grupperar bilder från före fototillfällena: ett tillfälle per datum (id
+ * `migrerad:<datum>`, samma på alla enheter så att sammanslagning av säkerhetskopior
+ * inte dubblerar), vinkel "ej angiven". Tillfällets vikt = den senast registrerade
+ * bildens vikt den dagen. Används av migreringen till v9 och vid import av
+ * säkerhetskopior version 1–7.
+ */
+export function groupLegacyPhotos(legacy: readonly LegacyPhotoEntry[]): {
+  sessions: PhotoSession[];
+  photos: PhotoEntry[];
+} {
+  const sessions = new Map<string, PhotoSession>();
+  // I registreringsordning: den senast registrerade vikten vinner.
+  for (const photo of [...legacy].sort((a, b) => a.createdAt - b.createdAt)) {
+    const id = legacySessionId(photo.date);
+    const session = sessions.get(id) ?? { id, date: photo.date, createdAt: photo.createdAt };
+    if (photo.weightKg !== undefined) session.weightKg = photo.weightKg;
+    sessions.set(id, session);
+  }
+  return {
+    sessions: [...sessions.values()].sort(byDateThenCreated),
+    photos: legacy.map((l) => {
+      const photo: PhotoEntry = {
+        id: l.id,
+        sessionId: legacySessionId(l.date),
+        date: l.date,
+        angle: 'okand',
+        blob: l.blob,
+        mimeType: l.mimeType,
+        createdAt: l.createdAt,
+      };
+      if (l.updatedAt !== undefined) photo.updatedAt = l.updatedAt;
+      if (l.width !== undefined) photo.width = l.width;
+      if (l.height !== undefined) photo.height = l.height;
+      return photo;
+    }),
+  };
+}
+
 export const PROFILE_KEY = 'current';
 
 type UpgradeTransaction = IDBPTransaction<ViktresanDB, StoreNames<ViktresanDB>[], 'versionchange'>;
@@ -571,6 +647,18 @@ async function migrateToV7(tx: UpgradeTransaction): Promise<void> {
     ...upgraded.meals.map((m) => meals.put(m)),
     ...upgraded.foodLog.map((e) => foodLog.put(e)),
     ...upgraded.foodUnits.map((u) => foodUnits.put(u)),
+  ]);
+}
+
+/** v8 → v9: befintliga bilder grupperas i tillfällen per datum och får vinkel "ej angiven". */
+async function migrateToV9(tx: UpgradeTransaction): Promise<void> {
+  const photos = tx.objectStore('photos');
+  const sessions = tx.objectStore('photoSessions');
+  const legacy = (await photos.getAll()) as unknown as LegacyPhotoEntry[];
+  const grouped = groupLegacyPhotos(legacy);
+  await Promise.all([
+    ...grouped.sessions.map((s) => sessions.put(s)),
+    ...grouped.photos.map((p) => photos.put(p)),
   ]);
 }
 
@@ -635,6 +723,14 @@ export function getDb(): Promise<Database> {
         // v8: milstolpar. Ny store – redan passerade milstolpar markeras (utan firande)
         // vid nästa start av appen, eftersom de räknas fram ur befintlig data.
         db.createObjectStore('milestones', { keyPath: 'id' });
+      }
+      if (oldVersion < 9) {
+        // v9: fototillfällen och vinklar. Befintliga bilder grupperas per datum och
+        // får vinkel "ej angiven" – Bilder ber användaren ange den.
+        const sessions = db.createObjectStore('photoSessions', { keyPath: 'id' });
+        sessions.createIndex('by-date', 'date');
+        transaction.objectStore('photos').createIndex('by-session', 'sessionId');
+        if (oldVersion >= 1) void migrateToV9(transaction);
       }
     },
     blocking() {
@@ -998,22 +1094,92 @@ export async function listSymptoms(): Promise<SymptomEntry[]> {
   return db.getAll('symptoms');
 }
 
+/** Lägger till eller ersätter en bild. Tillfället måste redan finnas (se `putPhotoSession`). */
 export async function putPhoto(photo: PhotoEntry): Promise<void> {
   const db = await getDb();
   await db.put('photos', photo);
   notifyChange();
 }
 
+/** Sätter vinkeln på en bild (t.ex. en migrerad bild). Profilbilder får även sidan. */
+export async function setPhotoAngle(
+  id: string,
+  angle: PhotoAngle,
+  side?: ProfileSide,
+): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('photos', 'readwrite');
+  const photo = await tx.store.get(id);
+  if (photo) {
+    const next: PhotoEntry = { ...photo, angle, updatedAt: Date.now() };
+    if (angle === 'profil' && side) next.side = side;
+    else delete next.side;
+    await tx.store.put(next);
+  }
+  await tx.done;
+}
+
+/** Tar bort en bild. Var den tillfällets sista bild tas tillfället också bort. */
 export async function deletePhoto(id: string): Promise<void> {
   const db = await getDb();
-  await db.delete('photos', id);
+  const tx = db.transaction(['photos', 'photoSessions'], 'readwrite');
+  const photos = tx.objectStore('photos');
+  const photo = await photos.get(id);
+  await photos.delete(id);
+  if (photo && (await photos.index('by-session').count(photo.sessionId)) === 0) {
+    await tx.objectStore('photoSessions').delete(photo.sessionId);
+  }
+  await tx.done;
 }
 
 /** Alla bilder, äldst först (samma dag: i registreringsordning). */
 export async function listPhotos(): Promise<PhotoEntry[]> {
   const db = await getDb();
   const all = await db.getAllFromIndex('photos', 'by-date');
+  return all
+    .map((p) =>
+      // Skyddar mot bilder som skrivits utan vinkel/tillfälle (inte via appen).
+      isPhotoAngle(p.angle) && typeof p.sessionId === 'string'
+        ? p
+        : {
+            ...p,
+            angle: isPhotoAngle(p.angle) ? p.angle : 'okand',
+            sessionId: typeof p.sessionId === 'string' ? p.sessionId : legacySessionId(p.date),
+          },
+    )
+    .sort(byDateThenCreated);
+}
+
+/** Alla fototillfällen, äldst först. */
+export async function listPhotoSessions(): Promise<PhotoSession[]> {
+  const db = await getDb();
+  const all = await db.getAll('photoSessions');
   return all.sort(byDateThenCreated);
+}
+
+/**
+ * Sparar ett tillfälle. Ändras datumet följer bildernas datum med, i samma transaktion.
+ */
+export async function putPhotoSession(session: PhotoSession): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(['photos', 'photoSessions'], 'readwrite');
+  await tx.objectStore('photoSessions').put(session);
+  const photos = tx.objectStore('photos');
+  for (const photo of await photos.index('by-session').getAll(session.id)) {
+    if (photo.date !== session.date) await photos.put({ ...photo, date: session.date });
+  }
+  await tx.done;
+  notifyChange();
+}
+
+/** Tar bort ett tillfälle med alla dess bilder. */
+export async function deletePhotoSession(id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(['photos', 'photoSessions'], 'readwrite');
+  const photos = tx.objectStore('photos');
+  for (const key of await photos.index('by-session').getAllKeys(id)) await photos.delete(key);
+  await tx.objectStore('photoSessions').delete(id);
+  await tx.done;
 }
 
 /** Datum för alla bilder (en post per bild), utan att läsa in bilddatan. */
@@ -1075,6 +1241,7 @@ export interface Snapshot {
   weights: WeightEntry[];
   waist: WaistEntry[];
   steps: StepsEntry[];
+  photoSessions: PhotoSession[];
   photos: PhotoEntry[];
   foods: StoredFood[];
   meals: SavedMeal[];
@@ -1096,6 +1263,7 @@ export function emptySnapshot(): Snapshot {
     weights: [],
     waist: [],
     steps: [],
+    photoSessions: [],
     photos: [],
     foods: [],
     meals: [],
@@ -1118,6 +1286,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     weights,
     waist,
     steps,
+    sessions,
     photos,
     foods,
     meals,
@@ -1136,6 +1305,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listWeights(),
     listWaist(),
     listSteps(),
+    listPhotoSessions(),
     listPhotos(),
     listFoods(),
     listMeals(),
@@ -1155,6 +1325,8 @@ export async function readSnapshot(): Promise<Snapshot> {
     weights,
     waist,
     steps,
+    // Varje bild ska ha ett tillfälle i kopian, även om det saknas i databasen.
+    photoSessions: ensureSessions(sessions, photos).sort(byDateThenCreated),
     photos,
     foods,
     meals,
@@ -1183,6 +1355,7 @@ const DATA_STORES = [
   'weights',
   'waist',
   'steps',
+  'photoSessions',
   'photos',
   'profile',
   'foods',
@@ -1206,6 +1379,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const weights = tx.objectStore('weights');
   const waist = tx.objectStore('waist');
   const steps = tx.objectStore('steps');
+  const photoSessions = tx.objectStore('photoSessions');
   const photos = tx.objectStore('photos');
   const profile = tx.objectStore('profile');
   const foods = tx.objectStore('foods');
@@ -1227,6 +1401,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.weights.map((w) => weights.put(w)),
       ...snapshot.waist.map((w) => waist.put(w)),
       ...snapshot.steps.map((s) => steps.put(s)),
+      ...snapshot.photoSessions.map((p) => photoSessions.put(p)),
       ...snapshot.photos.map((p) => photos.put(p)),
       ...snapshot.foods.map((f) => foods.put(f)),
       ...snapshot.meals.map((m) => meals.put(m)),
@@ -1255,9 +1430,13 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       const existing = await steps.get(s.date);
       if (!existing || changedAt(s) > changedAt(existing)) await steps.put(s);
     }
+    for (const p of snapshot.photoSessions) {
+      const existing = await photoSessions.get(p.id);
+      if (!existing || changedAt(p) > changedAt(existing)) await photoSessions.put(p);
+    }
     for (const p of snapshot.photos) {
       const existing = await photos.get(p.id);
-      if (!existing || p.createdAt > existing.createdAt) await photos.put(p);
+      if (!existing || changedAt(p) > changedAt(existing)) await photos.put(p);
     }
     for (const f of snapshot.foods) {
       const existing = await foods.get(f.id);

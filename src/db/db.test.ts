@@ -8,6 +8,7 @@ import {
   deleteFoodLog,
   deleteMeal,
   deletePhoto,
+  deletePhotoSession,
   deleteWaist,
   deleteWeight,
   getDb,
@@ -22,6 +23,7 @@ import {
   listMilestones,
   onDataChange,
   listPhotos,
+  listPhotoSessions,
   listSteps,
   listWaist,
   listWater,
@@ -32,6 +34,9 @@ import {
   putFoodLog,
   putMeal,
   putPhoto,
+  putPhotoSession,
+  setPhotoAngle,
+  groupLegacyPhotos,
   putWeight,
   putWorkout,
   putWorkoutPlan,
@@ -206,6 +211,7 @@ describe('db', () => {
       'meals',
       'medications',
       'milestones',
+      'photoSessions',
       'photos',
       'profile',
       'settings',
@@ -784,16 +790,171 @@ describe('db', () => {
   it('sparar, listar i datumordning och tar bort bilder', async () => {
     const blob = new Blob(['bild'], { type: 'image/webp' });
     const base = { blob, mimeType: 'image/webp', width: 1080, height: 810 };
-    await putPhoto({ ...base, id: 'b', date: '2026-03-01', createdAt: 2, weightKg: 84.2 });
-    await putPhoto({ ...base, id: 'a', date: '2026-01-01', createdAt: 3 });
-    await putPhoto({ ...base, id: 'c', date: '2026-03-01', createdAt: 1 });
+    await putPhotoSession({ id: 's1', date: '2026-01-01', createdAt: 1 });
+    await putPhotoSession({ id: 's2', date: '2026-03-01', weightKg: 84.2, createdAt: 2 });
+    await putPhoto({
+      ...base,
+      id: 'b',
+      sessionId: 's2',
+      angle: 'profil',
+      side: 'vanster',
+      date: '2026-03-01',
+      createdAt: 2,
+    });
+    await putPhoto({
+      ...base,
+      id: 'a',
+      sessionId: 's1',
+      angle: 'fram',
+      date: '2026-01-01',
+      createdAt: 3,
+    });
+    await putPhoto({
+      ...base,
+      id: 'c',
+      sessionId: 's2',
+      angle: 'fram',
+      date: '2026-03-01',
+      createdAt: 1,
+    });
 
     const photos = await listPhotos();
     expect(photos.map((p) => p.id)).toEqual(['a', 'c', 'b']);
-    expect(photos[2]).toMatchObject({ weightKg: 84.2, width: 1080, height: 810 });
+    expect(photos[2]).toMatchObject({ angle: 'profil', side: 'vanster', width: 1080, height: 810 });
 
     await deletePhoto('c');
     expect((await listPhotos()).map((p) => p.id)).toEqual(['a', 'b']);
+    expect((await listPhotoSessions()).map((s) => s.id)).toEqual(['s1', 's2']);
+    // Tillfällets sista bild: tillfället tas bort med den.
+    await deletePhoto('b');
+    expect((await listPhotoSessions()).map((s) => s.id)).toEqual(['s1']);
+  });
+
+  it('fototillfälle: nytt datum följer med till bilderna, borttagning tar bilderna', async () => {
+    const blob = new Blob(['bild'], { type: 'image/webp' });
+    await putPhotoSession({ id: 's1', date: '2026-01-01', createdAt: 1 });
+    await putPhoto({
+      id: 'a',
+      sessionId: 's1',
+      angle: 'fram',
+      date: '2026-01-01',
+      blob,
+      mimeType: 'image/webp',
+      createdAt: 1,
+    });
+    await putPhoto({
+      id: 'b',
+      sessionId: 's1',
+      angle: 'okand',
+      date: '2026-01-01',
+      blob,
+      mimeType: 'image/webp',
+      createdAt: 2,
+    });
+
+    await putPhotoSession({
+      id: 's1',
+      date: '2026-01-05',
+      note: 'Morgon',
+      createdAt: 1,
+      updatedAt: 5,
+    });
+    expect((await listPhotos()).map((p) => p.date)).toEqual(['2026-01-05', '2026-01-05']);
+
+    await setPhotoAngle('b', 'profil', 'hoger');
+    expect((await listPhotos()).find((p) => p.id === 'b')).toMatchObject({
+      angle: 'profil',
+      side: 'hoger',
+    });
+    await setPhotoAngle('b', 'fram', 'hoger');
+    const b = (await listPhotos()).find((p) => p.id === 'b');
+    expect(b).toMatchObject({ angle: 'fram' });
+    expect(b?.side).toBeUndefined();
+    expect(b?.updatedAt).toBeGreaterThan(0);
+
+    await deletePhotoSession('s1');
+    expect(await listPhotos()).toEqual([]);
+    expect(await listPhotoSessions()).toEqual([]);
+  });
+
+  it('migrerar v8 → v9: bilder grupperas per datum med vinkel "ej angiven"', async () => {
+    await createV6Database({ foods: [], meals: [], foodLog: [] });
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' });
+    const raw = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 8);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore('foodUnits', { keyPath: 'foodId' });
+        req.result.createObjectStore('milestones', { keyPath: 'id' });
+        const photos = req.transaction?.objectStore('photos');
+        const base = { blob, mimeType: 'image/webp', width: 3, height: 4 };
+        photos?.put({ ...base, id: 'p1', date: '2026-01-01', createdAt: 1, weightKg: 90 });
+        photos?.put({ ...base, id: 'p2', date: '2026-01-01', createdAt: 2, weightKg: 89.6 });
+        photos?.put({ ...base, id: 'p3', date: '2026-02-01', createdAt: 3 });
+      };
+      req.onsuccess = () => {
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        reject(req.error ?? new Error('open failed'));
+      };
+    });
+    raw.close();
+    const db = await getDb();
+    expect(db.version).toBe(DB_VERSION);
+    expect(await listPhotoSessions()).toEqual([
+      { id: 'migrerad:2026-01-01', date: '2026-01-01', weightKg: 89.6, createdAt: 1 },
+      { id: 'migrerad:2026-02-01', date: '2026-02-01', createdAt: 3 },
+    ]);
+    const photos = await listPhotos();
+    expect(photos.map((p) => [p.id, p.sessionId, p.angle])).toEqual([
+      ['p1', 'migrerad:2026-01-01', 'okand'],
+      ['p2', 'migrerad:2026-01-01', 'okand'],
+      ['p3', 'migrerad:2026-02-01', 'okand'],
+    ]);
+    // Vikten ligger på tillfället, inte på bilden; bilden är oförändrad.
+    expect(photos[0]).not.toHaveProperty('weightKg');
+    expect(photos[0]).toMatchObject({ width: 3, height: 4, mimeType: 'image/webp' });
+  });
+});
+
+describe('groupLegacyPhotos', () => {
+  const blob = new Blob(['x']);
+  const legacy = (id: string, date: string, createdAt: number, weightKg?: number) => ({
+    id,
+    date,
+    blob,
+    mimeType: 'image/webp',
+    createdAt,
+    ...(weightKg === undefined ? {} : { weightKg }),
+  });
+
+  it('ett tillfälle per datum; senast registrerade vikten vinner', () => {
+    const result = groupLegacyPhotos([
+      legacy('b', '2026-03-01', 5, 80),
+      legacy('a', '2026-03-01', 2, 81),
+      legacy('c', '2026-01-01', 9),
+    ]);
+    expect(result.sessions).toEqual([
+      { id: 'migrerad:2026-01-01', date: '2026-01-01', createdAt: 9 },
+      { id: 'migrerad:2026-03-01', date: '2026-03-01', weightKg: 80, createdAt: 2 },
+    ]);
+    // Bilderna behåller ordningen och får tillfälle och vinkel "ej angiven".
+    expect(result.photos.map((p) => [p.id, p.sessionId, p.angle])).toEqual([
+      ['b', 'migrerad:2026-03-01', 'okand'],
+      ['a', 'migrerad:2026-03-01', 'okand'],
+      ['c', 'migrerad:2026-01-01', 'okand'],
+    ]);
+    expect(result.photos.some((p) => 'weightKg' in p)).toBe(false);
+  });
+
+  it('samma datum ger samma tillfälles-id oavsett enhet', () => {
+    expect(groupLegacyPhotos([legacy('x', '2026-05-05', 1)]).sessions[0]?.id).toBe(
+      groupLegacyPhotos([legacy('y', '2026-05-05', 7)]).sessions[0]?.id,
+    );
+  });
+
+  it('inga bilder ger inga tillfällen', () => {
+    expect(groupLegacyPhotos([])).toEqual({ sessions: [], photos: [] });
   });
 });
 
