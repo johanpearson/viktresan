@@ -128,6 +128,8 @@ test('viktfältet är förifyllt med senast loggade vikt', async ({ page }) => {
       { id: 'd', date: isoDaysFromToday(-10), weightKg: 90.1, createdAt: 4 },
     ],
   });
+  // Omladdning: den seedade historikens milstolpar markeras vid start i stället för att firas.
+  await page.reload();
   await page.goto('./#/logga');
   await openLog(page, 'vikt');
   await expect(page.getByLabel('Vikt (kg)')).toHaveValue('87,6');

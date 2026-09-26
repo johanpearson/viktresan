@@ -10,6 +10,7 @@ const ROUTES = [
   ['Framsteg', './#/framsteg'],
   ['Framsteg', './#/framsteg/veckor'],
   ['Framsteg', './#/framsteg/bilder'],
+  ['Framsteg', './#/framsteg/milstolpar'],
   ['Inställningar', './#/installningar'],
 ] as const;
 

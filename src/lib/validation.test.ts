@@ -53,7 +53,7 @@ describe('parseProfile', () => {
     expect(parseProfile({ ...profile, birthYear: '1900' })).toMatchObject({ ok: false });
     expect(parseProfile({ ...profile, rate: '2' })).toEqual({
       ok: false,
-      error: 'Välj en takt mellan 0,25 och 1 kg/vecka.',
+      error: 'Välj en takt mellan 0 (håll vikten) och 1 kg/vecka.',
     });
   });
 

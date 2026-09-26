@@ -9,6 +9,7 @@ import { compressImage } from '../lib/image.ts';
 import { dailyWeights } from '../lib/stats.ts';
 import { formatBytes, getStorageStatus, type StorageStatus } from '../lib/storage.ts';
 import { useAppData } from '../lib/useAppData.ts';
+import { useHashRoute } from '../lib/useHashRoute.ts';
 import { usePhotos, type PhotoItem } from '../lib/usePhotos.ts';
 import { parsePhotoFields } from '../lib/validation.ts';
 
@@ -25,15 +26,23 @@ export function Bilder() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  // "#/framsteg/bilder/jamfor" (från milstolpen) jämför första och senaste bilden direkt.
+  const { sub } = useHashRoute();
+  const [autoCompare, setAutoCompare] = useState(sub === 'bilder/jamfor');
 
   const newestFirst = useMemo(() => [...(photos ?? [])].reverse(), [photos]);
   const compared = useMemo(() => {
+    if (autoCompare && selected.length === 0 && photos && photos.length >= 2) {
+      const before = photos[0];
+      const after = photos[photos.length - 1];
+      return before && after ? { before, after } : null;
+    }
     if (selected.length !== 2) return null;
     // `photos` är sorterad äldst först, så den som kommer först är "före".
     const pair = (photos ?? []).filter((p) => selected.includes(p.id));
     const [before, after] = pair;
     return before && after ? { before, after } : null;
-  }, [photos, selected]);
+  }, [photos, selected, autoCompare]);
 
   function handleThumbnail(photo: PhotoItem) {
     if (!comparing) {
@@ -57,6 +66,7 @@ export function Bilder() {
   }
 
   function stopComparing() {
+    setAutoCompare(false);
     setComparing(false);
     setSelected([]);
   }

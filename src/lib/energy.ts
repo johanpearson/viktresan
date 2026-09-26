@@ -45,8 +45,8 @@ export const ACTIVITY_LEVELS: readonly {
   },
 ];
 
-/** Tillåtna val för önskad takt (kg per vecka). */
-export const RATE_OPTIONS: readonly number[] = [0.25, 0.5, 0.75, 1.0];
+/** Tillåtna val för önskad takt (kg per vecka). 0 = håll vikten (viktstabilisering). */
+export const RATE_OPTIONS: readonly number[] = [0, 0.25, 0.5, 0.75, 1.0];
 export const DEFAULT_RATE_KG = 0.5;
 
 /** Energiinnehåll i ett kilo kroppsvikt (kcal), tumregel. */
@@ -109,7 +109,9 @@ export type PlanLimit =
   /** Kalorimålet skulle hamna under golvet – det höjdes och takten sänktes. */
   | 'calorie-floor'
   /** Trendvikten ligger på eller under målvikten – målet är underhåll. */
-  | 'goal-reached';
+  | 'goal-reached'
+  /** Vald takt är 0 (viktstabilisering) – kalorimålet är förbrukningen. */
+  | 'maintenance';
 
 export type GoalDateCheck =
   | { kind: 'none' }
@@ -187,7 +189,13 @@ export function caloriePlan({
   let deficitKcal: number;
   let target: number;
 
-  if (Math.round(remainingKg * 10) === 0) {
+  if (chosenRateKg === 0 && Math.round(remainingKg * 10) !== 0) {
+    // Viktstabilisering: ingen nedgång, målet är förbrukningen (men aldrig under golvet).
+    limits.push('maintenance');
+    rateKg = 0;
+    deficitKcal = 0;
+    target = Math.max(tdee, floorKcal);
+  } else if (Math.round(remainingKg * 10) === 0) {
     // Målet är nått: underhåll (men aldrig under golvet).
     limits.push('goal-reached');
     rateKg = 0;
@@ -206,7 +214,7 @@ export function caloriePlan({
     }
   }
 
-  const reached = limits.includes('goal-reached');
+  const reached = limits.includes('goal-reached') || limits.includes('maintenance');
   const forecastDate =
     !reached && rateKg > EPSILON ? dateAfterWeeks(today, weeksToLose(remainingKg, rateKg)) : null;
 

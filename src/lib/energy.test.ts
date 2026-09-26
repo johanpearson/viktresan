@@ -171,6 +171,20 @@ describe('caloriePlan', () => {
     expect(plan.forecastDate).toBeNull();
   });
 
+  it('takt 0 (håll vikten): kalorimålet är TDEE, ingen prognos och ingen måldatumskontroll', () => {
+    const plan = caloriePlan({
+      profile: { ...man, ratePerWeekKg: 0, goalDate: '2026-12-01' },
+      trendKg: 90,
+      today: TODAY,
+    });
+    expect(plan.limits).toEqual(['maintenance']);
+    expect(plan.targetKcal).toBe(Math.round(plan.tdee));
+    expect(plan.rateKg).toBe(0);
+    expect(plan.deficitKcal).toBe(0);
+    expect(plan.forecastDate).toBeNull();
+    expect(plan.goalDateCheck).toEqual({ kind: 'none' });
+  });
+
   it('under målvikten: också underhåll', () => {
     expect(caloriePlan({ profile: man, trendKg: 75, today: TODAY }).limits).toEqual([
       'goal-reached',

@@ -14,6 +14,8 @@ export function limitText(limit: PlanLimit, plan: CaloriePlan): string {
         : `Din beräknade förbrukning ligger under lägsta rekommenderade intag (${formatKcal(plan.floorKcal)} per dag). Kalorimålet är satt till den nivån, vilket ungefär motsvarar att hålla vikten.`;
     case 'goal-reached':
       return 'Trendvikten har nått målvikten. Kalorimålet är satt för att hålla vikten.';
+    case 'maintenance':
+      return 'Du har valt att hålla vikten. Kalorimålet motsvarar din beräknade förbrukning.';
   }
 }
 

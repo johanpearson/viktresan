@@ -193,7 +193,9 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
           >
             {RATE_OPTIONS.map((r) => (
               <option key={r} value={String(r)}>
-                {String(r).replace('.', ',')} kg per vecka
+                {r === 0
+                  ? 'Håll vikten (0 kg per vecka)'
+                  : `${String(r).replace('.', ',')} kg per vecka`}
               </option>
             ))}
           </select>

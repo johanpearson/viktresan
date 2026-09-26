@@ -41,6 +41,9 @@ src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt vec
 src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
 src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
 src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (≥ 15 g/100 kcal)
+src/lib/milestones.ts   Milstolpar: regler (trendvikt), evaluateMilestones, kommande, diffMilestones, texter
+src/lib/milestoneSync.ts  Milstolpar mot databasen: syncMilestones('silent' | 'live'), köade körningar
+src/lib/celebration.ts  Kö med firanden (useCelebration); confetti.ts = canvas-confetti utan worker
 src/lib/weekSummary.ts  Veckosummering mån–sön: trend, intag, protein, vatten, pass, steg + pilar och texter
 src/lib/pwaUpdate.ts    Registrerar sw.js, söker uppdateringar, toast-tillstånd, SKIP_WAITING
 src/lib/version.ts      Version, commit och byggtid (Vite define)
@@ -76,14 +79,14 @@ src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
 src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
-src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst
+src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …)
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik; `#/mat/logga` = panelen Logga mat), Kalender (Månad | Vecka),
-                        Framsteg (Historik | Veckor | Bilder), Inställningar
+                        Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
 e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
-                        veckokort); hjälpare i helpers.ts. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
+                        veckokort, milstolpar); hjälpare i helpers.ts. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
@@ -104,7 +107,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`, `FLAGS_VERSION = 3`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 7`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 8`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
@@ -114,8 +117,10 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `workouts` (v5, pass, index `by-date`), `workoutPlans` (v5, återkommande scheman),
   `medications` (v6, GLP-1-läkemedel med schema och dostrappa), `injections` (v6, loggade doser,
   index `by-date`), `symptoms` (v6, aptit/biverkningar, nyckel = `date`, ett per dag, `upsertSymptoms`),
-  `foodUnits` (v7, användarens egna enheter per livsmedel, nyckel = `foodId`, alla källor, `saveCustomUnits`).
+  `foodUnits` (v7, användarens egna enheter per livsmedel, nyckel = `foodId`, alla källor, `saveCustomUnits`),
+  `milestones` (v8, uppnådda milstolpar `{ id, date, createdAt }`, nyckel = milstolpens id, `addMilestones` skriver aldrig över).
   Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5)
+  (0 = håll vikten/viktstabilisering: kalorimål = TDEE, spärren `maintenance`)
   och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål) samt `proteinFactor`
   (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
@@ -182,6 +187,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   veckor med data under Framsteg → Veckor (`pastWeeks`). Trend = EMA vid veckans slut − dagen före veckan
   (kräver vägning i veckan); snitt räknas över loggade dagar. Rader har `feature` och filtreras. Texter är
   sakliga och uppmuntrande, aldrig skuldbeläggande; uppgång (bort från målet) beskrivs neutralt.
+- **Milstolpar** (`milestones.ts`, id:n `kg-1`, `kg-5`/`kg-10`/…, `procent-5|10`, `bmi-overvikt|normalvikt`,
+  `halvvags-<mål>`, `mal-<mål>`, `dagar-7|30|100`, `pass-1|10|50`, `vatten-7`, `protein-7`, `bild-1`, `bild-30`):
+  viktmilstolparna mäts på EMA-trendvikten (en dipp i dagsvikten triggar inte). Varje milstolpe sparas en gång
+  med dagen den nåddes. `db.ts` meddelar `onDataChange` efter sparningar (vikt, midja, steg, profil, mat, vatten,
+  pass, bilder); `MilestoneCenter` (i `App`) kör då `syncMilestones({ mode: 'live' })` och firar det viktigaste
+  nyss nådda (inom 7 dagar, påslagen funktion). Vid start och efter import körs `silent`: passerade milstolpar
+  sparas utan firande. Stora (5-kg-steg, 10 %, halvvägs, mål) = `CelebrationOverlay` (modal `<dialog>`, konfetti);
+  små = `MilestoneToast` (popover högst upp, läggs i öppen panel så den går att trycka bort). prefers-reduced-motion
+  → ingen animation/konfetti. "Mål nått" erbjuder nytt mål eller takt 0. `bild-30` länkar till
+  `#/framsteg/bilder/jamfor` (första och senaste bilden jämförs). Framsteg → Milstolpar: uppnådda + tre närmaste.
 - **Enheter** (`units.ts`): gram finns alltid. Övriga enheter = livsmedlets egna (`FoodItem.units`:
   OFF-`serving_size`/`serving_quantity` tolkat till gram → "portion", måltid → "portion") +
   standardtabellen (`src/data/units.ts`, bara `lv:`, matchning på nummer eller normaliserat namnmönster,
@@ -213,14 +228,15 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 6`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 7`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     bildmetadata med `file`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
-    har portioner i stället för enheter och uppgraderas med `upgradeFoodData`.
+    har portioner i stället för enheter och uppgraderas med `upgradeFoodData`; version 1–6 saknar milstolpar
+    (tom lista – efter importen markeras passerade milstolpar utan firande).
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.
@@ -231,7 +247,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (`summarizeBackup`) och låter användaren välja läge. `applySnapshot()` skriver i **en**
   transaktion:
   - `replace`: profil, mätningar och bilder töms och ersätts.
-  - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg/mående datum, för egna enheter `foodId`) → senast ändrad (`updatedAt ?? createdAt`) vinner,
+  - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg/mående datum, för egna enheter `foodId`) → senast ändrad (milstolpar: befintlig behålls) (`updatedAt ?? createdAt`) vinner,
     lika → befintlig behålls. Befintlig profil behålls; saknas den tas den från filen.
 - **Påminnelse** (`BackupReminder` på Översikt): visas när det finns data och ingen export gjorts
   på 7 dagar. Utan tidigare export räknas från äldsta postens `createdAt`.
