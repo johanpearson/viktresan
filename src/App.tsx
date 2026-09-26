@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import { MilestoneCenter } from './components/MilestoneCenter.tsx';
 import { NavBar } from './components/NavBar.tsx';
 import { ShortcutToast } from './components/ShortcutToast.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
@@ -47,6 +48,7 @@ export function App() {
       </main>
       <UpdateToast />
       <ShortcutToast state={shortcut} />
+      <MilestoneCenter features={features} />
       <NavBar routes={features.filter(NAV_ROUTES)} current={current} />
     </div>
   );

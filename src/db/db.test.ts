@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  addMilestones,
   addWater,
   DB_NAME,
   DB_VERSION,
@@ -18,6 +19,8 @@ import {
   listFoodLog,
   listFoods,
   listMeals,
+  listMilestones,
+  onDataChange,
   listPhotos,
   listSteps,
   listWaist,
@@ -202,6 +205,7 @@ describe('db', () => {
       'injections',
       'meals',
       'medications',
+      'milestones',
       'photos',
       'profile',
       'settings',
@@ -526,6 +530,56 @@ describe('db', () => {
     expect((await listMeals())[0]?.items).toEqual([
       { foodId: 'egen:bulle', name: 'Bulle', amount: 60, unit: 'g', grams: 60, per100 },
     ]);
+  });
+
+  it('migrerar v7 → v8: lägger till milstolpar och behåller data', async () => {
+    await createV6Database({ foods: [], meals: [], foodLog: [] });
+    const raw = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 7);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore('foodUnits', { keyPath: 'foodId' });
+        req.transaction
+          ?.objectStore('weights')
+          .put({ id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 });
+      };
+      req.onsuccess = () => {
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        reject(req.error ?? new Error('open failed'));
+      };
+    });
+    raw.close();
+    const db = await getDb();
+    expect(db.version).toBe(DB_VERSION);
+    expect(await listWeights()).toHaveLength(1);
+    expect(await listMilestones()).toEqual([]);
+  });
+
+  it('milstolpar sparas en gång – en sparad skrivs aldrig över', async () => {
+    await addMilestones([{ id: 'kg-1', date: '2026-01-05', createdAt: 1 }]);
+    await addMilestones([
+      { id: 'kg-1', date: '2026-02-01', createdAt: 2 },
+      { id: 'dagar-7', date: '2026-01-03', createdAt: 2 },
+    ]);
+    expect(await listMilestones()).toEqual([
+      { id: 'dagar-7', date: '2026-01-03', createdAt: 2 },
+      { id: 'kg-1', date: '2026-01-05', createdAt: 1 },
+    ]);
+  });
+
+  it('meddelar ändringar efter sparningar som kan ge milstolpar', async () => {
+    let calls = 0;
+    const off = onDataChange(() => {
+      calls += 1;
+    });
+    await putWeight({ id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 });
+    await addWater('2026-01-01', 250);
+    await upsertSteps('2026-01-01', 5000);
+    expect(calls).toBe(3);
+    off();
+    await putWeight({ id: 'b', date: '2026-01-02', weightKg: 89, createdAt: 2 });
+    expect(calls).toBe(3);
   });
 
   it('egna enheter: sparas per livsmedel, tas bort med livsmedlet och påverkar inte loggen', async () => {

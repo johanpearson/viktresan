@@ -20,6 +20,7 @@
     "livsmedel": "node scripts/fetch-livsmedel.ts"
   },
   "dependencies": {
+    "canvas-confetti": "^1.9.4",
     "fflate": "^0.8.3",
     "idb": "^8.0.3",
     "react": "^19.3.0",
@@ -33,6 +34,7 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

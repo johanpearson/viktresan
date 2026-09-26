@@ -30,6 +30,7 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
     goalDateText(plan, profile.goalDate),
   ].filter((n): n is string => n !== null);
   const reached = plan.limits.includes('goal-reached');
+  const maintaining = reached || plan.limits.includes('maintenance');
 
   return (
     <section className="card" aria-labelledby="plan-title">
@@ -43,7 +44,7 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
         </div>
         <div className="stat">
           <dt>Takt</dt>
-          <dd data-testid="plan-rate">{reached ? 'Håll vikten' : formatRate(plan.rateKg)}</dd>
+          <dd data-testid="plan-rate">{maintaining ? 'Håll vikten' : formatRate(plan.rateKg)}</dd>
         </div>
         <div className="stat">
           <dt>Når målvikten</dt>

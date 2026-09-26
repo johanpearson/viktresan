@@ -162,6 +162,18 @@ async function exportBackup(page: Page, password?: string): Promise<Buffer> {
   return readFile(await download.path());
 }
 
+/**
+ * Seedar och laddar om: vid start markeras redan passerade milstolpar (utan firande),
+ * så att "före" innehåller dem precis som efter en återställning.
+ */
+async function seedAndSettle(page: Page) {
+  await seed(page, DATA);
+  await page.reload();
+  await expect
+    .poll(async () => (await dump(page)).milestones.map((m) => (m as { id: string }).id))
+    .toEqual(expect.arrayContaining(['bild-1', 'pass-1']));
+}
+
 async function chooseBackup(page: Page, buffer: Buffer) {
   await page
     .getByLabel('Välj säkerhetskopia')
@@ -171,7 +183,7 @@ async function chooseBackup(page: Page, buffer: Buffer) {
 test('export → import ger identisk data', async ({ page }) => {
   const errors = collectErrors(page);
   await openSettings(page);
-  await seed(page, DATA);
+  await seedAndSettle(page);
   const before = await dump(page);
   expect(before.weights).toHaveLength(2);
   expect(before.waist).toHaveLength(1);
@@ -225,7 +237,7 @@ test('krypterad export: fel lösenord ger tydligt fel, rätt lösenord återstä
 }) => {
   const errors = collectErrors(page);
   await openSettings(page);
-  await seed(page, DATA);
+  await seedAndSettle(page);
   const before = await dump(page);
 
   await openSettings(page);

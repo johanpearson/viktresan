@@ -165,6 +165,9 @@ test('ladda upp, visa, jämföra och ta bort progressbilder', async ({ page }) =
   await expect(page.getByRole('status').filter({ hasText: 'Bilden är sparad' })).toBeVisible();
   await expect(page.getByTestId('photo')).toHaveCount(1);
   await expect(page.getByTestId('photo-storage')).toHaveText(/^1 st · \d/);
+  // Bilden är daterad för 30 dagar sedan: "Första progressbilden" sparas men firas inte.
+  const toast = page.getByTestId('milestone-toast');
+  await expect(toast).toBeHidden();
 
   const [stored] = await readStoredPhotos(page);
   expect(stored).toEqual({
@@ -184,6 +187,14 @@ test('ladda upp, visa, jämföra och ta bort progressbilder', async ({ page }) =
   await page.getByLabel('Vikt (kg, valfri)').fill('');
   await gallery.setInputFiles({ name: 'efter.jpg', mimeType: 'image/jpeg', buffer: second });
   await expect(page.getByTestId('photo')).toHaveCount(2);
+  // 30 dagar efter den första: milstolpen föreslår jämförelsevyn (första mot senaste bilden).
+  await expect(toast).toHaveAttribute('data-milestone', 'bild-30');
+  await toast.getByRole('link', { name: 'Öppna jämförelsen' }).tap();
+  await expect(toast).toBeHidden();
+  await expect(page).toHaveURL(/#\/framsteg\/bilder\/jamfor$/);
+  await expect(page.getByTestId('photo-compare')).toContainText('30 dagar mellan bilderna');
+  await page.getByRole('button', { name: 'Avsluta jämförelse' }).tap();
+  await expect(page.getByTestId('photo-compare')).toBeHidden();
   const photos = await readStoredPhotos(page);
   expect(photos.map((p) => [p.width, p.height, p.hasSecret])).toEqual(
     expect.arrayContaining([

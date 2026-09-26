@@ -13,6 +13,7 @@ import {
   type FoodLogEntry,
   type Injection,
   type Medication,
+  type MilestoneRecord,
   type PhotoEntry,
   type Profile,
   type SavedMeal,
@@ -283,6 +284,12 @@ const symptoms: SymptomEntry[] = [
 
 const glp1Data = { medications, injections, symptoms };
 
+const milestones: MilestoneRecord[] = [
+  { id: 'kg-1', date: '2026-01-08', createdAt: 60 },
+  { id: 'dagar-7', date: '2026-01-15', createdAt: 61 },
+];
+const milestoneData = { milestones };
+
 const weights: WeightEntry[] = [
   { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
   {
@@ -329,7 +336,17 @@ const photos: PhotoEntry[] = [
 
 async function seed(): Promise<void> {
   await applySnapshot(
-    { profile, weights, waist, steps, photos, ...foodData, ...trainingData, ...glp1Data },
+    {
+      profile,
+      weights,
+      waist,
+      steps,
+      photos,
+      ...foodData,
+      ...trainingData,
+      ...glp1Data,
+      ...milestoneData,
+    },
     'replace',
   );
 }
@@ -471,6 +488,7 @@ describe('backup validering', () => {
     medications: [],
     injections: [],
     symptoms: [],
+    milestones: [],
     foodUnits: [],
   };
 
@@ -517,6 +535,11 @@ describe('backup validering', () => {
       { ...valid, foodLog: [{ ...foodLog[1], amount: undefined }] },
       { ...valid, foodLog: [{ ...foodLog[1], amount: -1 }] },
       { ...valid, foodLog: [{ ...foodLog[1], grams: undefined }] },
+      // Version 7 kräver milstolpar, med giltiga id:n och datum.
+      { ...valid, milestones: undefined },
+      { ...valid, milestones: [{ id: 'kg-1', date: 'igår', createdAt: 1 }] },
+      { ...valid, milestones: [{ id: '<script>', date: '2026-01-01', createdAt: 1 }] },
+      { ...valid, milestones: [milestones[0], milestones[0]] },
       // Version 1 kräver `measurements`.
       { ...valid, version: 1 },
       {
@@ -590,9 +613,11 @@ describe('backup validering', () => {
         ],
         injections: [{ ...injections[0], evil: '<script>' }],
         symptoms: [{ ...symptoms[0], evil: '<script>' }],
+        milestones: [{ ...milestones[0], evil: '<script>' }],
       }),
     });
     const contents = await readBackup(file);
+    expect(contents.snapshot.milestones).toEqual([milestones[0]]);
     expect(contents.snapshot.medications).toEqual([medications[0]]);
     expect(contents.snapshot.injections).toEqual([injections[0]]);
     expect(contents.snapshot.symptoms).toEqual([symptoms[0]]);
@@ -654,6 +679,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   };
 
   const expected: Omit<Snapshot, 'photos'> = {
+    milestones: [],
     foods: [],
     meals: [],
     foodLog: [],
@@ -832,6 +858,36 @@ describe('import av version 4 (utan GLP-1)', () => {
   });
 });
 
+describe('import av version 6 (utan milstolpar)', () => {
+  it('läser in allt och ger en tom lista med milstolpar', async () => {
+    const v6 = {
+      format: BACKUP_FORMAT,
+      version: 6,
+      exportedAt: NOW.toISOString(),
+      profile,
+      weights,
+      waist,
+      steps,
+      photos: [],
+      ...foodData,
+      ...trainingData,
+      ...glp1Data,
+    };
+    const contents = await readBackup(zipOf({ 'backup.json': JSON.stringify(v6) }));
+    expect(contents.snapshot).toEqual({
+      ...emptySnapshot(),
+      profile,
+      weights,
+      waist,
+      steps,
+      ...foodData,
+      ...trainingData,
+      ...glp1Data,
+    });
+    expect(contents.snapshot.milestones).toEqual([]);
+  });
+});
+
 describe('validering av GLP-1', () => {
   async function manifestWith(patch: Record<string, unknown>) {
     const base = {
@@ -848,6 +904,7 @@ describe('validering av GLP-1', () => {
       foodLog: [],
       favorites: [],
       foodUnits: [],
+      milestones: [],
       ...trainingData,
       ...glp1Data,
       ...patch,
@@ -903,6 +960,7 @@ describe('validering av vatten och träning', () => {
       foodLog: [],
       favorites: [],
       foodUnits: [],
+      milestones: [],
       ...trainingData,
       ...glp1Data,
       ...patch,
@@ -1018,6 +1076,11 @@ describe('import slå ihop', () => {
         },
         { foodId: 'lv:2', units: [{ name: 'st', grams: 110, source: 'egen' }], createdAt: 51 },
       ],
+      milestones: [
+        // Redan nådd → befintligt datum behålls; ny milstolpe läggs till.
+        { id: 'kg-1', date: '2026-01-20', createdAt: 70 },
+        { id: 'pass-1', date: '2026-01-07', createdAt: 71 },
+      ],
     };
     await applySnapshot(imported, 'merge');
 
@@ -1072,6 +1135,11 @@ describe('import slå ihop', () => {
       ['egen:gröt', 300],
       ['lv:2', 110],
     ]);
+    expect(after.milestones.map((m) => [m.id, m.date])).toEqual([
+      ['pass-1', '2026-01-07'],
+      ['kg-1', '2026-01-08'],
+      ['dagar-7', '2026-01-15'],
+    ]);
     // Loggposterna har kvar sina gram.
     expect(after.foodLog.find((e) => e.id === 'f1')?.grams).toBe(260);
   });
@@ -1086,7 +1154,17 @@ describe('summarizeBackup', () => {
   it('sammanfattar innehållet', async () => {
     const contents = await readBackup(
       await createBackup(
-        { profile, weights, waist, steps, photos, ...foodData, ...trainingData, ...glp1Data },
+        {
+          profile,
+          weights,
+          waist,
+          steps,
+          photos,
+          ...foodData,
+          ...trainingData,
+          ...glp1Data,
+          ...milestoneData,
+        },
         { now: NOW },
       ),
     );
@@ -1100,6 +1178,7 @@ describe('summarizeBackup', () => {
       medications: 2,
       injections: 2,
       symptoms: 2,
+      milestones: 2,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,

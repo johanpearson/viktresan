@@ -2,6 +2,7 @@ import { useState, type ChangeEvent, type SyntheticEvent } from 'react';
 import { applySnapshot, type ImportMode } from '../db/db.ts';
 import { BackupError, readBackup, summarizeBackup, type BackupContents } from '../lib/backup.ts';
 import { formatDate } from '../lib/format.ts';
+import { syncMilestones } from '../lib/milestoneSync.ts';
 import { formatBytes } from '../lib/storage.ts';
 
 interface ImportBackupProps {
@@ -74,6 +75,8 @@ export function ImportBackup({ onImported }: ImportBackupProps) {
     setError(null);
     try {
       await applySnapshot(state.contents.snapshot, mode);
+      // Historisk data: redan passerade milstolpar markeras som nådda utan att firas.
+      await syncMilestones({ mode: 'silent' });
       const { weights, waist, steps, photos, foodLog } = state.contents.snapshot;
       const count = weights.length + waist.length + steps.length;
       setDone(

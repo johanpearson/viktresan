@@ -12,7 +12,7 @@ import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 7;
+export const DB_VERSION = 8;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -263,6 +263,16 @@ export interface SymptomEntry {
 }
 
 /**
+ * En uppnådd milstolpe (sedan v8). Nyckel = milstolpens id (t.ex. `kg-5`, `dagar-30`),
+ * så varje milstolpe sparas en gång. `date` är dagen den nåddes.
+ */
+export interface MilestoneRecord {
+  id: string;
+  date: string;
+  createdAt: number;
+}
+
+/**
  * Ett progressfoto. Bilden lagras som Blob direkt i IndexedDB, komprimerad och
  * utan metadata. Vikt och mått är valfria fält (tillagda utan schemaändring).
  */
@@ -367,6 +377,11 @@ export interface ViktresanDB extends DBSchema {
   foodUnits: {
     key: string;
     value: CustomUnits;
+  };
+  /** Sedan v8. Uppnådda milstolpar, nyckel = milstolpens id. */
+  milestones: {
+    key: string;
+    value: MilestoneRecord;
   };
 }
 
@@ -616,6 +631,11 @@ export function getDb(): Promise<Database> {
         db.createObjectStore('foodUnits', { keyPath: 'foodId' });
         if (oldVersion >= 4) void migrateToV7(transaction);
       }
+      if (oldVersion < 8) {
+        // v8: milstolpar. Ny store – redan passerade milstolpar markeras (utan firande)
+        // vid nästa start av appen, eftersom de räknas fram ur befintlig data.
+        db.createObjectStore('milestones', { keyPath: 'id' });
+      }
     },
     blocking() {
       // En nyare version av appen (annan flik) vill uppgradera: släpp anslutningen.
@@ -634,6 +654,23 @@ export async function resetDbForTests(): Promise<void> {
   dbPromise = null;
 }
 
+/**
+ * Meddelas efter sparningar som kan ge en milstolpe (vikt, midja, steg, profil, mat,
+ * vatten, pass, bilder). Import meddelar inte – den markerar milstolpar utan firande.
+ */
+const changeListeners = new Set<() => void>();
+
+export function onDataChange(listener: () => void): () => void {
+  changeListeners.add(listener);
+  return () => {
+    changeListeners.delete(listener);
+  };
+}
+
+function notifyChange(): void {
+  for (const listener of changeListeners) listener();
+}
+
 export function newId(): string {
   return crypto.randomUUID();
 }
@@ -646,6 +683,7 @@ function byDateThenCreated<T extends { date: string; createdAt: number }>(a: T, 
 export async function putWeight(entry: WeightEntry): Promise<void> {
   const db = await getDb();
   await db.put('weights', entry);
+  notifyChange();
 }
 
 export async function deleteWeight(id: string): Promise<void> {
@@ -674,6 +712,7 @@ export async function upsertWaist(date: string, waistCm: number, now = Date.now(
       : { date, waistCm, createdAt: now },
   );
   await tx.done;
+  notifyChange();
 }
 
 export async function deleteWaist(date: string): Promise<void> {
@@ -698,6 +737,7 @@ export async function upsertSteps(date: string, steps: number, now = Date.now())
       : { date, steps, createdAt: now },
   );
   await tx.done;
+  notifyChange();
 }
 
 /** Alla steg, äldst först. */
@@ -714,6 +754,7 @@ export async function getProfile(): Promise<Profile | null> {
 export async function saveProfile(profile: Profile): Promise<void> {
   const db = await getDb();
   await db.put('profile', profile, PROFILE_KEY);
+  notifyChange();
 }
 
 export async function putFood(food: StoredFood): Promise<void> {
@@ -799,6 +840,7 @@ export async function listMeals(): Promise<SavedMeal[]> {
 export async function putFoodLog(entry: FoodLogEntry): Promise<void> {
   const db = await getDb();
   await db.put('foodLog', entry);
+  notifyChange();
 }
 
 export async function deleteFoodLog(id: string): Promise<void> {
@@ -836,6 +878,7 @@ export async function addWater(date: string, ml: number, now = Date.now()): Prom
   const latest = Math.max(-1, ...entries.map((e) => e.createdAt));
   await tx.store.put({ id: newId(), date, ml, createdAt: Math.max(now, latest + 1) });
   await tx.done;
+  notifyChange();
 }
 
 /** Ångrar dagens senast registrerade vattenpost. Returnerar den borttagna posten. */
@@ -859,6 +902,7 @@ export async function listWater(): Promise<WaterEntry[]> {
 export async function putWorkout(workout: Workout): Promise<void> {
   const db = await getDb();
   await db.put('workouts', workout);
+  notifyChange();
 }
 
 export async function deleteWorkout(id: string): Promise<void> {
@@ -957,6 +1001,7 @@ export async function listSymptoms(): Promise<SymptomEntry[]> {
 export async function putPhoto(photo: PhotoEntry): Promise<void> {
   const db = await getDb();
   await db.put('photos', photo);
+  notifyChange();
 }
 
 export async function deletePhoto(id: string): Promise<void> {
@@ -981,6 +1026,26 @@ export async function listPhotoDates(): Promise<string[]> {
     cursor = await cursor.continue();
   }
   return dates;
+}
+
+/** Uppnådda milstolpar, äldst först. */
+export async function listMilestones(): Promise<MilestoneRecord[]> {
+  const db = await getDb();
+  const all = await db.getAll('milestones');
+  return all.sort((a, b) =>
+    a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1,
+  );
+}
+
+/** Sparar nya milstolpar. En redan sparad milstolpe skrivs aldrig över (den nås en gång). */
+export async function addMilestones(records: readonly MilestoneRecord[]): Promise<void> {
+  if (records.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('milestones', 'readwrite');
+  for (const record of records) {
+    if (!(await tx.store.get(record.id))) await tx.store.put(record);
+  }
+  await tx.done;
 }
 
 /** Nycklar i `settings`-storen. */
@@ -1022,6 +1087,7 @@ export interface Snapshot {
   injections: Injection[];
   symptoms: SymptomEntry[];
   foodUnits: CustomUnits[];
+  milestones: MilestoneRecord[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -1042,6 +1108,7 @@ export function emptySnapshot(): Snapshot {
     injections: [],
     symptoms: [],
     foodUnits: [],
+    milestones: [],
   };
 }
 
@@ -1063,6 +1130,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     injections,
     symptoms,
     foodUnits,
+    milestones,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -1080,6 +1148,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listInjections(),
     listSymptoms(),
     listCustomUnits(),
+    listMilestones(),
   ]);
   return {
     profile,
@@ -1098,6 +1167,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     injections,
     symptoms,
     foodUnits,
+    milestones,
   };
 }
 
@@ -1105,7 +1175,7 @@ export async function readSnapshot(): Promise<Snapshot> {
  * `replace`: all befintlig data (profil, vikt, midja, steg, bilder, mat, vatten, träning, GLP-1) ersätts.
  * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg/mående datumet, för
  * favoriter och egna enheter `foodId`) vinner den senast ändrade (`updatedAt ?? createdAt`, lika →
- * befintlig behålls). Befintlig profil behålls.
+ * befintlig behålls). Befintlig profil behålls. En milstolpe som redan finns behålls (den nås en gång).
  */
 export type ImportMode = 'replace' | 'merge';
 
@@ -1126,6 +1196,7 @@ const DATA_STORES = [
   'injections',
   'symptoms',
   'foodUnits',
+  'milestones',
 ] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
@@ -1148,6 +1219,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const injections = tx.objectStore('injections');
   const symptoms = tx.objectStore('symptoms');
   const foodUnits = tx.objectStore('foodUnits');
+  const milestones = tx.objectStore('milestones');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -1167,6 +1239,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.injections.map((i) => injections.put(i)),
       ...snapshot.symptoms.map((s) => symptoms.put(s)),
       ...snapshot.foodUnits.map((u) => foodUnits.put(u)),
+      ...snapshot.milestones.map((m) => milestones.put(m)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -1228,6 +1301,9 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     for (const u of snapshot.foodUnits) {
       const existing = await foodUnits.get(u.foodId);
       if (!existing || changedAt(u) > changedAt(existing)) await foodUnits.put(u);
+    }
+    for (const m of snapshot.milestones) {
+      if (!(await milestones.get(m.id))) await milestones.put(m);
     }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);

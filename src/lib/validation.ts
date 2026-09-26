@@ -86,7 +86,7 @@ export function parseProfile(fields: ProfileFields): Parsed<ProfileValues> {
   const rateText = (fields.rate ?? '').trim();
   const ratePerWeekKg = rateText === '' ? DEFAULT_RATE_KG : Number(rateText);
   if (!RATE_OPTIONS.includes(ratePerWeekKg))
-    return fail('Välj en takt mellan 0,25 och 1 kg/vecka.');
+    return fail('Välj en takt mellan 0 (håll vikten) och 1 kg/vecka.');
   const activity = ACTIVITY_LEVELS.find((a) => a.id === fields.activityLevel)?.id;
   const sex = fields.sex === 'man' || fields.sex === 'kvinna' ? fields.sex : undefined;
 

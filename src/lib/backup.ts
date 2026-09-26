@@ -9,7 +9,9 @@
  *                      water, workouts, workoutPlans (sedan version 4),
  *                      medications, injections, symptoms (sedan version 5),
  *                      foodUnits + mängd/enhet i matlogg och måltider (sedan version 6;
- *                      äldre portioner räknas om med samma funktioner som databasmigreringen)
+ *                      äldre portioner räknas om med samma funktioner som databasmigreringen),
+ *                      milestones (sedan version 7; äldre filer ger en tom lista och
+ *                      passerade milstolpar markeras efter importen utan firande)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -32,6 +34,7 @@ import {
   type Injection,
   type LegacyMeasurement,
   type Medication,
+  type MilestoneRecord,
   type PhotoEntry,
   type SavedMeal,
   type StoredFood,
@@ -56,9 +59,9 @@ import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './wate
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 6;
+export const BACKUP_VERSION = 7;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -110,6 +113,8 @@ export interface BackupSummary {
   medications: number;
   injections: number;
   symptoms: number;
+  /** Uppnådda milstolpar. */
+  milestones: number;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -148,6 +153,7 @@ interface PlainManifest {
   injections: Injection[];
   symptoms: SymptomEntry[];
   foodUnits: CustomUnits[];
+  milestones: MilestoneRecord[];
 }
 
 interface EncryptedManifest {
@@ -205,6 +211,7 @@ export async function createBackup(
     injections: snapshot.injections,
     symptoms: snapshot.symptoms,
     foodUnits: snapshot.foodUnits,
+    milestones: snapshot.milestones,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -327,6 +334,7 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     medications: snapshot.medications.length,
     injections: snapshot.injections.length,
     symptoms: snapshot.symptoms.length,
+    milestones: snapshot.milestones.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -416,6 +424,8 @@ function parsePlain(
       ...(version >= 4 ? parseTrainingData(manifest) : emptyTrainingData()),
       // Version 1–4 saknar GLP-1.
       ...(version >= 5 ? parseGlp1Data(manifest) : emptyGlp1Data()),
+      // Version 1–6 saknar milstolpar.
+      milestones: version >= 7 ? parseMilestones(manifest) : [],
     },
   };
 }
@@ -534,6 +544,14 @@ function parseGlp1Data(manifest: Record<string, unknown>): Glp1Data {
   assertUniqueKeys(result.medications, (m) => m.id, 'läkemedel');
   assertUniqueKeys(result.injections, (e) => e.id, 'injektion');
   assertUniqueKeys(result.symptoms, (s) => s.date, 'dag med mående');
+  return result;
+}
+
+function parseMilestones(manifest: Record<string, unknown>): MilestoneRecord[] {
+  const { milestones } = manifest;
+  if (!Array.isArray(milestones)) throw invalid('Milstolpar saknas.');
+  const result = milestones.map((m, i) => parseMilestoneRecord(m, i));
+  assertUniqueKeys(result, (m) => m.id, 'milstolpe');
   return result;
 }
 
@@ -1035,6 +1053,20 @@ function parseSymptomRecord(value: unknown, index: number): SymptomEntry {
     entry.appetite = value.appetite;
   }
   return entry;
+}
+
+function parseMilestoneRecord(value: unknown, index: number): MilestoneRecord {
+  const bad = () => invalid(`Milstolpe nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !/^[a-z0-9.-]+$/.test(value.id) ||
+    !isDate(value.date) ||
+    !isTimestamp(value.createdAt)
+  ) {
+    throw bad();
+  }
+  return { id: value.id, date: value.date, createdAt: value.createdAt };
 }
 
 function parsePhotoRecord(
