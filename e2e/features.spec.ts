@@ -100,13 +100,13 @@ test('allt på som standard', async ({ page }) => {
   const errors = collectErrors(page);
   const v = await observe(page);
   expect(v.navLabels).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-  expect(v.todayLabels).toEqual(['Vatten', 'Steg', 'Träning']);
+  expect(v.todayLabels).toEqual(['Dryck', 'Steg', 'Träning']);
   expect(v.calorieCard).toBe(1);
   expect(v.rings).toBe(2);
-  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg', 'Vatten', 'Träning']);
+  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg', 'Dryck', 'Träning']);
   expect(v.tabs).toEqual(['Historik', 'Veckor', 'Bilder', 'Milstolpar']);
   expect(v.sections).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
-  expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Vatten', 'Träning', 'Bilder']);
+  expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Dryck', 'Träning', 'Bilder']);
   await expect(page.getByTestId('calendar-value-bilder')).toHaveText(/1 bild/);
   expect(errors).toEqual([]);
 });
@@ -114,7 +114,7 @@ test('allt på som standard', async ({ page }) => {
 test('steg av döljer steg i Logga, Översikt, Kalender och grafer', async ({ page }) => {
   await setFeature(page, /^Steg/, false);
   const v = await observe(page);
-  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Vatten', 'Träning']);
+  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Dryck', 'Träning']);
   expect(v.todayLabels).not.toContain('Steg');
   expect(v.sections).not.toContain('Steg');
   await page.goto('./#/framsteg');
@@ -129,7 +129,7 @@ test('steg av döljer steg i Logga, Översikt, Kalender och grafer', async ({ pa
 test('midjemått av döljer midja i Logga, Översikt, Kalender och historik', async ({ page }) => {
   await setFeature(page, /^Midjemått/, false);
   const v = await observe(page);
-  expect(v.tiles).toEqual(['Vikt', 'Steg', 'Vatten', 'Träning']);
+  expect(v.tiles).toEqual(['Vikt', 'Steg', 'Dryck', 'Träning']);
   expect(v.todayLabels).not.toContain('Midja');
   expect(v.sections).not.toContain('Midjemått');
   expect(v.legend).not.toContain('Midja');

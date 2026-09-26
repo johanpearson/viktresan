@@ -8,7 +8,7 @@ interface WaterRingProps {
 const RADIUS = 52;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-/** Ring som fylls mot dagens vattenmål. */
+/** Ring som fylls mot dagens dryckesmål. */
 export function WaterRing({ ml, goalMl }: WaterRingProps) {
   const fraction = goalMl ? Math.min(1, ml / goalMl) : 0;
   const text = goalMl ? `${formatMl(ml)} av ${formatMl(goalMl)}` : formatMl(ml);
@@ -16,7 +16,7 @@ export function WaterRing({ ml, goalMl }: WaterRingProps) {
     <div
       className="water-ring"
       role="progressbar"
-      aria-label="Vatten idag"
+      aria-label="Dryck idag"
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(fraction * 100)}

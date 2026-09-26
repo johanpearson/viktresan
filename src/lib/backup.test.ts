@@ -1164,17 +1164,18 @@ describe('validering av vatten och träning', () => {
       { workoutPlans: [{ ...workoutPlans[0], weekdays: [1, 1] }] },
       { workouts: [workouts[0], workouts[0]] },
       { profile: { ...profile, waterGoalMl: 99_999 } },
+      { profile: { ...profile, waterTrainingBonus: 'ja' } },
       { profile: { ...profile, proteinFactor: 2.5 } },
       { profile: { ...profile, proteinFactor: '1.6' } },
     ];
     for (const patch of cases) {
       expect((await manifestWith(patch)).code, JSON.stringify(patch)).toBe('invalid-data');
     }
-    expect((await manifestWith({ water: undefined })).message).toMatch(/Vatten/);
+    expect((await manifestWith({ water: undefined })).message).toMatch(/Dryck/);
   });
 
-  it('behåller eget vattenmål i profilen', async () => {
-    const withGoal = { ...profile, waterGoalMl: 2500 };
+  it('behåller eget dryckesmål och träningstillägget i profilen', async () => {
+    const withGoal = { ...profile, waterGoalMl: 2500, waterTrainingBonus: true };
     const contents = await readBackup(
       await createBackup({ ...emptySnapshot(), profile: withGoal }, { now: NOW }),
     );

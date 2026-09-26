@@ -10,11 +10,18 @@ import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { buildPlan, type PlanProfile } from './plan.ts';
 import { proteinGoalFor } from './protein.ts';
 import { dailySteps, dailyWeights, emaTrend, type DatedSteps, type DatedWeight } from './stats.ts';
-import { dailyWater, waterGoal, type DatedWater } from './water.ts';
+import {
+  dailyWater,
+  drinkEntries,
+  waterGoal,
+  type DatedWater,
+  type DrinkFoodEntry,
+} from './water.ts';
 
 export interface WeekInput {
   weights: readonly DatedWeight[];
-  foodLog: readonly DatedPortion[];
+  /** Matloggen; drycker i den räknas in i dryckessnittet. */
+  foodLog: readonly (DatedPortion & DrinkFoodEntry)[];
   water: readonly DatedWater[];
   workouts: readonly { date: string; status: string }[];
   steps: readonly DatedSteps[];
@@ -37,7 +44,7 @@ export interface WeekSummary {
   /** Kalorimålet som det såg ut vid veckans slut. */
   targetKcal: number | null;
   proteinGoalG: number | null;
-  /** Snitt per dag med vattenlogg. */
+  /** Snitt per dag med dryck (loggad eller ur matloggen). */
   waterMl: number | null;
   waterDays: number;
   waterGoalMl: number | null;
@@ -85,7 +92,7 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
   const trendChangeKg = end && start ? end.trendKg - start.trendKg : null;
 
   const intake = inWeek(dailyIntake(input.foodLog), from, to);
-  const water = inWeek(dailyWater(input.water), from, to);
+  const water = inWeek(dailyWater(drinkEntries(input.water, input.foodLog)), from, to);
   const steps = inWeek(dailySteps(input.steps), from, to);
   const done = inWeek(input.workouts, from, to).filter((w) => w.status === 'genomford');
 
@@ -94,7 +101,6 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
     const plan = buildPlan(profile, input.weights, input.foodLog, addDays(to, 1));
     if (plan.kind === 'plan') targetKcal = plan.plan.targetKcal;
   }
-  const weightsSoFar = input.weights.filter((w) => w.date <= to);
 
   const logged = new Set([
     ...weekTrend.map((d) => d.date),
@@ -116,7 +122,8 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
     proteinGoalG: proteinGoalFor(profile),
     waterMl: mean(water.map((d) => d.ml)),
     waterDays: water.length,
-    waterGoalMl: waterGoal({ weights: weightsSoFar, profile })?.ml ?? null,
+    // Målet utan träningstillägg – snittet jämförs med ett vanligt dagsmål.
+    waterGoalMl: profile ? waterGoal({ profile }).baseMl : null,
     workoutsDone: done.length,
     steps: mean(steps.map((d) => d.steps)),
     stepsDays: steps.length,
@@ -241,7 +248,7 @@ export const WEEK_ROWS: readonly WeekRow[] = [
   },
   {
     id: 'vatten',
-    label: 'Vatten',
+    label: 'Dryck',
     feature: 'vatten',
     value: (s) => s.waterMl,
     tolerance: 50,

@@ -54,8 +54,8 @@ export const FEATURES: readonly FeatureInfo[] = [
   },
   {
     id: 'vatten',
-    label: 'Vatten',
-    description: 'Logga hur mycket du dricker mot ett dagligt mål.',
+    label: 'Dryck',
+    description: 'Logga hur mycket du dricker mot ett dagligt mål. Drycker i Mat räknas in.',
     defaultOn: true,
     available: true,
     availableSince: 2,

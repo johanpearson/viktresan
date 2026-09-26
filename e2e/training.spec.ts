@@ -233,7 +233,7 @@ test('kalender: obesvarade pass markeras, dagsvyn bockar av och veckovyn fungera
   await page.goto('./#/kalender');
   await expect(page.getByRole('heading', { name: 'september 2026' })).toBeVisible();
   const legend = page.getByRole('list', { name: 'Förklaring' });
-  await expect(legend).toContainText('Vatten');
+  await expect(legend).toContainText('Dryck');
   await expect(legend).toContainText('Träning');
   await expect(page.getByRole('list', { name: 'Träningsstatus' }).locator('li')).toHaveText([
     'Genomförd',
@@ -242,11 +242,11 @@ test('kalender: obesvarade pass markeras, dagsvyn bockar av och veckovyn fungera
     'Planerad',
   ]);
 
-  // Den 10:e: vikt, vatten och ett obesvarat pass.
+  // Den 10:e: vikt, dryck och ett obesvarat pass.
   const tenth = day(page, '2026-09-10');
   await expect(tenth.locator('[data-marker]')).toHaveCount(3);
   await expect(tenth.locator('.dot-traning')).toHaveClass(/status-obesvarad/);
-  await expect(tenth).toHaveAttribute('aria-label', /Vikt, Vatten, Träning/);
+  await expect(tenth).toHaveAttribute('aria-label', /Vikt, Dryck, Träning/);
   await tenth.tap();
   const dayView = page.getByTestId('calendar-day');
   await expect(dayView.getByTestId('calendar-value-vikt')).toContainText('81,2 kg');
@@ -279,7 +279,7 @@ test('kalender: obesvarade pass markeras, dagsvyn bockar av och veckovyn fungera
   await page.getByRole('button', { name: 'Föregående vecka' }).tap();
   await page.getByRole('button', { name: 'Föregående vecka' }).tap();
   await expect(week.locator('[data-date]').first()).toHaveAttribute('data-date', '2026-09-07');
-  await expect(day(page, '2026-09-10')).toContainText('Vatten: 1 250 ml');
+  await expect(day(page, '2026-09-10')).toContainText('Dryck: 1 250 ml');
   await expect(day(page, '2026-09-10')).toContainText('Träning: 1 genomfört');
   await day(page, '2026-09-10').tap();
   await expect(dayView.getByTestId('calendar-value-vikt')).toBeVisible();
@@ -291,35 +291,55 @@ test('kalender: obesvarade pass markeras, dagsvyn bockar av och veckovyn fungera
   expect(errors).toEqual([]);
 });
 
-test('vatten: logga, ångra, ring på Översikt, historik och eget mål', async ({ page }) => {
+test('dryck: logga, ångra, ring på Översikt, historik, eget mål och träningsdagar', async ({
+  page,
+}) => {
   const errors = collectErrors(page);
   await start(page, '10:00', {
+    profile: { ...PROFILE, sex: 'kvinna' },
     weights: [{ id: 'a', date: WEDNESDAY, weightKg: 80, createdAt: 1 }],
+    workouts: [
+      {
+        id: 'w1',
+        date: WEDNESDAY,
+        time: '07:00',
+        type: 'Löpning',
+        durationMin: 30,
+        status: 'genomford',
+        createdAt: 2,
+      },
+    ],
   });
 
-  // Mål: 33 ml × 80 kg = 2 640 → 2 600 ml.
-  const ring = page.getByRole('progressbar', { name: 'Vatten idag' });
-  await expect(ring).toHaveAttribute('aria-valuetext', '0 ml av 2 600 ml');
-  await page.getByRole('button', { name: 'Lägg till 250 ml vatten' }).tap();
-  await expect(ring).toHaveAttribute('aria-valuetext', '250 ml av 2 600 ml');
+  // Standardmål för kvinnor: 1 600 ml – vikten spelar ingen roll.
+  const ring = page.getByRole('progressbar', { name: 'Dryck idag' });
+  await expect(ring).toHaveAttribute('aria-valuetext', '0 ml av 1 600 ml');
+  await page.getByRole('button', { name: '+250 ml Glas', exact: true }).tap();
+  await expect(ring).toHaveAttribute('aria-valuetext', '250 ml av 1 600 ml');
   await expect(page.getByTestId('today-vatten')).toHaveText(/250 ml/);
+  await expect(page.getByTestId('today-vatten')).toContainText('Dryck');
 
-  // Logga → Vatten: snabbknappar, valfri mängd och ångra.
-  await page.goto('./#/logga');
-  await expect(page.getByTestId('log-tile-vatten')).toContainText('Idag 250 ml av 2 600 ml');
+  // "Valfri mängd" öppnar Logga → Dryck.
+  await page.getByRole('link', { name: 'Valfri mängd' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Logga dryck' });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Stäng' }).tap();
+  await expect(page.getByTestId('log-tile-vatten')).toContainText('Idag 250 ml av 1 600 ml');
+
+  // Logga → Dryck: snabbknappar (glas, flaska, kaffe/te), valfri mängd och ångra.
   await openLog(page, 'vatten');
-  const sheet = page.getByRole('dialog', { name: 'Logga vatten' });
-  await sheet.getByRole('button', { name: 'Lägg till 500 ml vatten' }).tap();
+  await sheet.getByRole('button', { name: '+500 ml Flaska', exact: true }).tap();
+  await sheet.getByRole('button', { name: '+150 ml Kaffe/te', exact: true }).tap();
   await sheet.getByLabel('Valfri mängd (ml)').fill('330');
   await sheet.getByRole('button', { name: 'Lägg till', exact: true }).tap();
-  await expect(sheet.getByTestId('water-entry')).toHaveCount(3);
+  await expect(sheet.getByTestId('water-entry')).toHaveCount(4);
   await expect(sheet.getByRole('progressbar')).toHaveAttribute(
     'aria-valuetext',
-    '1 080 ml av 2 600 ml',
+    '1 230 ml av 1 600 ml',
   );
   await sheet.getByRole('button', { name: 'Ångra senaste' }).tap();
   await expect(sheet.getByRole('status')).toHaveText('Ångrade 330 ml.');
-  await expect(sheet.getByTestId('water-entry')).toHaveCount(2);
+  await expect(sheet.getByTestId('water-entry')).toHaveCount(3);
   await sheet.getByLabel('Valfri mängd (ml)').fill('abc');
   await sheet.getByRole('button', { name: 'Lägg till', exact: true }).tap();
   await expect(sheet.getByRole('alert')).toHaveText('Ange mängd i ml (1–3 000).');
@@ -328,26 +348,33 @@ test('vatten: logga, ångra, ring på Översikt, historik och eget mål', async 
   // Framsteg → Historik.
   await page.goto('./#/framsteg');
   const history = page.getByTestId('water-history');
+  await expect(history.getByRole('heading', { name: 'Dryck' })).toBeVisible();
   await expect(history.getByTestId('water-day')).toHaveCount(1);
-  await expect(history.getByTestId('water-day')).toContainText('750 ml');
+  await expect(history.getByTestId('water-day')).toContainText('900 ml');
 
-  // Eget mål i Inställningar.
+  // Inställningar: standardmålet förklaras, eget mål och +500 ml på träningsdagar.
   await page.goto('./#/installningar');
-  await expect(page.getByTestId('water-goal-standard')).toContainText('≈ 2 600 ml');
+  await expect(page.getByTestId('water-goal-standard')).toHaveText(
+    'Standard för kvinnor: 1 600 ml per dag.',
+  );
+  await expect(page.getByText(/EFSA:s referensvärden/)).toBeVisible();
   await page.getByLabel('Eget mål (ml, valfritt)').fill('2000');
-  await page.getByRole('button', { name: 'Spara vattenmål' }).tap();
-  await expect(page.getByText('Vattenmålet är 2 000 ml per dag.')).toBeVisible();
-  // Profilen kan sparas utan att målet försvinner.
+  await page.getByRole('switch', { name: /på träningsdagar/ }).setChecked(true);
+  await page.getByRole('button', { name: 'Spara dryckesmål' }).tap();
+  await expect(page.getByText('Dryckesmålet är 2 000 ml per dag.')).toBeVisible();
+  // Profilen kan sparas utan att målet eller tillägget försvinner.
   await page.getByRole('button', { name: 'Spara profil' }).tap();
   await expect(page.getByText('Profilen är sparad.')).toBeVisible();
 
+  // Dagens pass är genomfört: 2 000 + 500 ml.
   await page.goto('./');
-  await expect(ring).toHaveAttribute('aria-valuetext', '750 ml av 2 000 ml');
-  expect((await dump(page)).profile).toMatchObject({ waterGoalMl: 2000 });
+  await expect(ring).toHaveAttribute('aria-valuetext', '900 ml av 2 500 ml');
+  await expect(page.getByTestId('drink-note')).toHaveText('Målet +500 ml för dagens pass.');
+  expect((await dump(page)).profile).toMatchObject({ waterGoalMl: 2000, waterTrainingBonus: true });
   expect(errors).toEqual([]);
 });
 
-test('vatten och träning av: dolda överallt, datan ligger kvar', async ({ page }) => {
+test('dryck och träning av: dolda överallt, datan ligger kvar', async ({ page }) => {
   await start(page, '10:00', {
     water: [{ id: 'v1', date: WEDNESDAY, ml: 500, createdAt: 1 }],
     workouts: [
@@ -363,9 +390,9 @@ test('vatten och träning av: dolda överallt, datan ligger kvar', async ({ page
   });
   await expect(page.getByTestId('missed-workouts')).toBeVisible();
   await page.goto('./#/installningar');
-  await page.getByRole('switch', { name: /^Vatten/ }).setChecked(false);
+  await page.getByRole('switch', { name: /^Dryck/ }).setChecked(false);
   await page.getByRole('switch', { name: /^Träning/ }).setChecked(false);
-  await expect(page.getByRole('heading', { name: 'Vattenmål' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Dryckesmål' })).toHaveCount(0);
 
   await page.goto('./');
   await expect(page.getByTestId('today-card')).toBeVisible();
@@ -377,7 +404,7 @@ test('vatten och träning av: dolda överallt, datan ligger kvar', async ({ page
   await expect(page.getByTestId('log-tile-vatten')).toHaveCount(0);
   await expect(page.getByTestId('log-tile-traning')).toHaveCount(0);
   await page.goto('./#/kalender');
-  await expect(page.getByRole('list', { name: 'Förklaring' })).not.toContainText('Vatten');
+  await expect(page.getByRole('list', { name: 'Förklaring' })).not.toContainText('Dryck');
   await expect(page.getByRole('list', { name: 'Träningsstatus' })).toHaveCount(0);
   await expect(day(page, WEDNESDAY).locator('[data-marker]')).toHaveCount(0);
 

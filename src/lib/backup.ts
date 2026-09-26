@@ -557,7 +557,7 @@ function emptyTrainingData(): TrainingData {
 function parseTrainingData(manifest: Record<string, unknown>): TrainingData {
   const { water, workouts, workoutPlans } = manifest;
   if (!Array.isArray(water) || !Array.isArray(workouts) || !Array.isArray(workoutPlans)) {
-    throw invalid('Vatten- eller träningsdata saknas.');
+    throw invalid('Dryckes- eller träningsdata saknas.');
   }
   const result: TrainingData = {
     water: water.map((w, i) => parseWaterRecord(w, i)),
@@ -648,6 +648,10 @@ function parseProfileRecord(value: unknown): Profile {
     )
       throw bad();
     profile.waterGoalMl = value.waterGoalMl;
+  }
+  if (value.waterTrainingBonus !== undefined) {
+    if (typeof value.waterTrainingBonus !== 'boolean') throw bad();
+    profile.waterTrainingBonus = value.waterTrainingBonus;
   }
   if (value.proteinFactor !== undefined) {
     if (!isValidProteinFactor(value.proteinFactor)) throw bad();
@@ -904,7 +908,7 @@ function parseFavoriteRecord(value: unknown, index: number): Favorite {
 }
 
 function parseWaterRecord(value: unknown, index: number): WaterEntry {
-  const bad = () => invalid(`Vattenpost nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  const bad = () => invalid(`Dryckespost nr ${index + 1} i säkerhetskopian är ogiltig.`);
   if (
     !isRecord(value) ||
     !isId(value.id) ||

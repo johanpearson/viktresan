@@ -1,25 +1,28 @@
 import { useState, type SyntheticEvent } from 'react';
 import { saveProfile } from '../db/db.ts';
-import { formatKg, formatMl } from '../lib/format.ts';
+import { formatMl } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { parseWaterGoal } from '../lib/validation.ts';
-import { waterGoal, WATER_ML_PER_KG } from '../lib/water.ts';
+import { defaultWaterGoalMl, DRINK_GOAL_ML, TRAINING_BONUS_ML, waterGoal } from '../lib/water.ts';
+import { Feature } from './Feature.tsx';
 
 interface WaterGoalSettingsProps {
   data: AppData;
   onChange: () => Promise<AppData>;
 }
 
-/** Inställningar → Vatten: eget dagsmål, annars 33 ml × trendvikten. */
+/**
+ * Inställningar → Dryckesmål: standardmål efter kön (EFSA), valfritt eget mål och
+ * valfritt tillägg på träningsdagar.
+ */
 export function WaterGoalSettings({ data, onChange }: WaterGoalSettingsProps) {
   const { profile } = data;
   const [value, setValue] = useState(profile?.waterGoalMl ? String(profile.waterGoalMl) : '');
+  const [bonus, setBonus] = useState(profile?.waterTrainingBonus === true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const standard = waterGoal({
-    weights: data.weights,
-    profile: profile ? { startWeightKg: profile.startWeightKg } : null,
-  });
+  const sex = profile?.sex;
+  const standardMl = defaultWaterGoalMl(sex);
 
   async function handleSubmit(event: SyntheticEvent) {
     event.preventDefault();
@@ -32,13 +35,16 @@ export function WaterGoalSettings({ data, onChange }: WaterGoalSettingsProps) {
     const next = { ...profile };
     if (parsed.value == null) delete next.waterGoalMl;
     else next.waterGoalMl = parsed.value;
+    if (bonus) next.waterTrainingBonus = true;
+    else delete next.waterTrainingBonus;
     await saveProfile(next);
     await onChange();
     setError(null);
+    const goal = waterGoal({ profile: next });
     setStatus(
-      parsed.value == null
-        ? 'Vattenmålet följer din trendvikt.'
-        : `Vattenmålet är ${formatMl(parsed.value)} per dag.`,
+      goal.source === 'standard'
+        ? `Dryckesmålet är standardmålet, ${formatMl(goal.ml)} per dag.`
+        : `Dryckesmålet är ${formatMl(goal.ml)} per dag.`,
     );
   }
 
@@ -50,16 +56,24 @@ export function WaterGoalSettings({ data, onChange }: WaterGoalSettingsProps) {
       noValidate
     >
       <h2 className="card-title" id="water-goal-title">
-        Vattenmål
+        Dryckesmål
       </h2>
-      {!profile || !standard ? (
-        <p className="form-note">Fyll i profilen först – målet räknas från din vikt.</p>
+      {!profile ? (
+        <p className="form-note">Fyll i profilen först – målet sparas i profilen.</p>
       ) : (
         <>
           <p className="form-note" data-testid="water-goal-standard">
-            Standard: {WATER_ML_PER_KG} ml × {formatKg(standard.basisKg ?? 0)}
-            {standard.source === 'trend' ? ' (trendvikt)' : ' (startvikt)'} ≈{' '}
-            {formatMl(standard.ml)} per dag.
+            {sex === 'man'
+              ? `Standard för män: ${formatMl(standardMl)} per dag.`
+              : sex === 'kvinna'
+                ? `Standard för kvinnor: ${formatMl(standardMl)} per dag.`
+                : `Standard: ${formatMl(standardMl)} per dag. Ange kön i profilen för ${formatMl(DRINK_GOAL_ML.man)} (män) eller ${formatMl(DRINK_GOAL_ML.kvinna)} (kvinnor).`}
+          </p>
+          <p className="form-note">
+            Värdet kommer från EFSA:s referensvärden för vätskeintag – 2,5 liter per dag för män och
+            2,0 liter för kvinnor – där ungefär 80 % kommer från dryck och resten från maten. Det
+            beror inte på kroppsvikten. Drycker du loggar i Mat (mjölk, fil, juice, kaffe … men inte
+            alkohol) räknas in automatiskt.
           </p>
           <label className="field">
             <span className="field-label">Eget mål (ml, valfritt)</span>
@@ -68,20 +82,43 @@ export function WaterGoalSettings({ data, onChange }: WaterGoalSettingsProps) {
               inputMode="numeric"
               pattern="[0-9]*"
               autoComplete="off"
-              placeholder={String(standard.ml)}
+              placeholder={String(standardMl)}
               value={value}
               onChange={(e) => {
                 setValue(e.target.value);
               }}
             />
           </label>
+          <Feature id="traning">
+            <label className="switch-row">
+              <span className="switch-text">
+                <span className="switch-label">
+                  +{formatMl(TRAINING_BONUS_ML)} på träningsdagar
+                </span>
+                <span className="switch-description" id="water-bonus-desc">
+                  Höjer dagens mål när ett pass är markerat som genomfört.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="switch"
+                checked={bonus}
+                aria-describedby="water-bonus-desc"
+                data-testid="water-training-bonus"
+                onChange={(e) => {
+                  setBonus(e.target.checked);
+                }}
+              />
+            </label>
+          </Feature>
           {error && (
             <p className="form-error" role="alert">
               {error}
             </p>
           )}
           <button type="submit" className="button">
-            Spara vattenmål
+            Spara dryckesmål
           </button>
           <p className="form-ok" role="status">
             {status}

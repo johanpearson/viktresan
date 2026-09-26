@@ -267,14 +267,40 @@ describe('vanemilstolpar', () => {
     expect(dateOf(data, 'vatten-7')).toBe(addDays(START, 12));
   });
 
-  it('vattenmålet utan eget mål följer trendvikten den dagen', () => {
-    // 100 kg → 3 300 ml.
-    const water = Array.from({ length: 7 }, (_, i) => ({ date: addDays(START, i), ml: 3200 }));
-    const data = input({ weights: [{ date: START, weightKg: 100 }], water });
-    expect(dateOf(data, 'vatten-7')).toBeNull();
-    expect(dateOf({ ...data, weights: [{ date: START, weightKg: 96 }] }, 'vatten-7')).toBe(
+  it('dryckesmålet följer kön (inte vikten), med träningstillägg och drycker ur Mat', () => {
+    const woman = { ...profile, sex: 'kvinna' as const };
+    const week = (ml: number) =>
+      Array.from({ length: 7 }, (_, i) => ({ date: addDays(START, i), ml }));
+    // Kvinna: 1 600 ml – oavsett 130 kg (förut 33 ml × 130 = 4 300 ml).
+    const heavy = [{ date: START, weightKg: 130 }];
+    expect(dateOf(input({ profile: woman, weights: heavy, water: week(1600) }), 'vatten-7')).toBe(
       addDays(START, 6),
     );
+    expect(dateOf(input({ profile: woman, water: week(1500) }), 'vatten-7')).toBeNull();
+
+    // Träningstillägget höjer målet dagen med ett genomfört pass.
+    const workouts = [{ date: addDays(START, 3), status: 'genomford' }];
+    const bonus = { ...woman, waterTrainingBonus: true };
+    expect(dateOf(input({ profile: bonus, workouts, water: week(1600) }), 'vatten-7')).toBeNull();
+
+    // 1 400 ml loggat + 2 dl mjölk i Mat når målet; 2 dl vin gör det inte.
+    const drink = (name: string, grams: number) =>
+      Array.from({ length: 7 }, (_, i) => ({
+        id: `${name}-${String(i)}`,
+        date: addDays(START, i),
+        foodId: 'lv:1',
+        name,
+        grams,
+        per100: { kcal: 50, proteinG: 3, carbsG: 5, fatG: 1.5 },
+      }));
+    const milk = drink('Mellanmjölk fett 1,5% berikad', 206);
+    const wine = drink('Vin rött vol. % 14', 200);
+    expect(dateOf(input({ profile: woman, water: week(1400), foodLog: milk }), 'vatten-7')).toBe(
+      addDays(START, 6),
+    );
+    expect(
+      dateOf(input({ profile: woman, water: week(1400), foodLog: wine }), 'vatten-7'),
+    ).toBeNull();
   });
 
   it('proteinmålet nått 7 dagar totalt (1,6 g × målvikt)', () => {

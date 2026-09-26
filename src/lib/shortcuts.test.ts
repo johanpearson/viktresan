@@ -19,7 +19,7 @@ function byId(id: string): Shortcut {
 
 describe('genvägar', () => {
   it('tre genvägar med egna ikoner och adresser under basen', () => {
-    expect(SHORTCUTS.map((s) => s.name)).toEqual(['Logga vikt', '+250 ml vatten', 'Logga mat']);
+    expect(SHORTCUTS.map((s) => s.name)).toEqual(['Logga vikt', '+250 ml (glas)', 'Logga mat']);
     expect(new Set(SHORTCUTS.map((s) => s.icon)).size).toBe(3);
     expect(shortcutUrl('/viktresan/', 'log-weight')).toBe('/viktresan/?action=log-weight');
   });

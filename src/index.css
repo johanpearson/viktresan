@@ -2261,11 +2261,6 @@ a.button {
   min-width: 0;
 }
 
-.today-water .button-row {
-  flex-direction: column;
-  gap: 8px;
-}
-
 .water-ring {
   position: relative;
   flex: none;
@@ -2311,6 +2306,37 @@ a.button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.water-quick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.water-quick-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.water-quick .button {
+  flex-direction: column;
+  gap: 0;
+  padding: 6px 8px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.water-quick-amount {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.water-quick-label {
+  font-size: 0.8rem;
+}
+
+.drink-note {
+  margin: 0 0 12px;
 }
 
 .water-custom {

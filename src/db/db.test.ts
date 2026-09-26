@@ -60,6 +60,7 @@ import {
   upsertSteps,
   upsertWaist,
 } from './db.ts';
+import { waterGoal } from '../lib/water.ts';
 
 afterEach(async () => {
   await resetDbForTests();
@@ -157,6 +158,8 @@ async function createV6Database(data: {
   foods: Record<string, unknown>[];
   meals: Record<string, unknown>[];
   foodLog: Record<string, unknown>[];
+  profile?: Record<string, unknown>;
+  weights?: Record<string, unknown>[];
 }): Promise<void> {
   const raw = await new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 6);
@@ -188,6 +191,8 @@ async function createV6Database(data: {
       for (const f of data.foods) foods.put(f);
       for (const m of data.meals) meals.put(m);
       for (const e of data.foodLog) foodLog.put(e);
+      if (data.profile) req.transaction?.objectStore('profile').put(data.profile, 'current');
+      for (const w of data.weights ?? []) weights.put(w);
     };
     req.onsuccess = () => {
       resolve(req.result);
@@ -536,6 +541,40 @@ describe('db', () => {
     expect((await listMeals())[0]?.items).toEqual([
       { foodId: 'egen:bulle', name: 'Bulle', amount: 60, unit: 'g', grams: 60, per100 },
     ]);
+  });
+
+  it('dryckesmålet efter uppgradering: uträknat mål blir nytt standardmål, eget mål behålls', async () => {
+    const base = { startDate: '2026-01-01', startWeightKg: 110, heightCm: 180, goalWeightKg: 90 };
+    const weights = [{ id: 'w', date: '2026-09-01', weightKg: 110, createdAt: 1 }];
+    // Gamla appen: 33 ml × 110 kg ≈ 3 600 ml, uträknat och aldrig sparat i profilen.
+    await createV6Database({
+      foods: [],
+      meals: [],
+      foodLog: [],
+      weights,
+      profile: { ...base, sex: 'man' },
+    });
+    const auto = await getProfile();
+    expect(auto).not.toHaveProperty('waterGoalMl');
+    expect(waterGoal({ profile: auto }).ml).toBe(2000);
+
+    await resetDbForTests();
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.deleteDatabase(DB_NAME);
+      req.onsuccess = () => {
+        resolve();
+      };
+    });
+    await createV6Database({
+      foods: [],
+      meals: [],
+      foodLog: [],
+      weights,
+      profile: { ...base, sex: 'kvinna', waterGoalMl: 3600 },
+    });
+    const manual = await getProfile();
+    expect(manual?.waterGoalMl).toBe(3600);
+    expect(waterGoal({ profile: manual })).toMatchObject({ ml: 3600, source: 'egen' });
   });
 
   it('migrerar v7 → v8: lägger till milstolpar och behåller data', async () => {

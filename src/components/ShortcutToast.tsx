@@ -11,9 +11,7 @@ export function ShortcutToast({ state }: { state: ShortcutState }) {
     return (
       <section className="toast toast-shortcut" aria-label="Genväg" data-testid="shortcut-toast">
         <p className="toast-text" role="status">
-          {toast.undone
-            ? `Ångrade ${formatMl(toast.ml)}.`
-            : `La till ${formatMl(toast.ml)} vatten.`}
+          {toast.undone ? `Ångrade ${formatMl(toast.ml)}.` : `La till ${formatMl(toast.ml)} dryck.`}
         </p>
         <div className="toast-actions">
           {!toast.undone && (
