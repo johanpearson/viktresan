@@ -72,8 +72,14 @@ export interface Profile {
   activityLevel?: ActivityLevel;
   /** Önskad takt i kg per vecka (0,25–1,0). Saknas → 0,5. */
   ratePerWeekKg?: number;
-  /** Sedan v5 (utan schemaändring): eget vattenmål i ml. Saknas → 33 ml × trendvikten. */
+  /**
+   * Sedan v5 (utan schemaändring): eget dryckesmål i ml. Saknas → standardmålet för
+   * könet (2 000 / 1 600 ml). Tidigare var standardmålet 33 ml × trendvikten, men
+   * det sparades aldrig här, så profiler utan eget mål får det nya standardmålet.
+   */
   waterGoalMl?: number;
+  /** +500 ml på dryckesmålet dagar med ett genomfört pass. Utan schemaändring. */
+  waterTrainingBonus?: boolean;
   /** Proteinmål = faktor × målvikt (1,2–2,0 g/kg). Saknas → 1,6. Utan schemaändring. */
   proteinFactor?: number;
 }

@@ -657,3 +657,45 @@ test('profilen: nya fält för kalorimålet', async ({ page }) => {
   await page.goto('./');
   await expect(page.getByTestId('plan-rate')).toHaveText('0,75 kg/vecka');
 });
+
+test('dryck: ett glas vatten och 2 dl mjölk i Mat räknas i dagens dryckessumma', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await openFood(page);
+
+  // Ett glas vatten på Översikt. Mannens standardmål: 2 000 ml.
+  await page.goto('./');
+  const ring = page.getByRole('progressbar', { name: 'Dryck idag' });
+  await expect(ring).toHaveAttribute('aria-valuetext', '0 ml av 2 000 ml');
+  await page.getByRole('button', { name: '+250 ml Glas', exact: true }).tap();
+  await expect(ring).toHaveAttribute('aria-valuetext', '250 ml av 2 000 ml');
+
+  // 2 dl mjölk i Mat (≈ 206 g) räknas in som 200 ml utan att loggas en gång till.
+  await page.goto('./#/mat');
+  await searchAndPick(page, 'mjolk', 'Mjölk fett 3 %');
+  await logAmount(page, '2', 'Frukost', 'dl');
+
+  await page.goto('./');
+  await expect(ring).toHaveAttribute('aria-valuetext', '450 ml av 2 000 ml');
+  await expect(page.getByTestId('drink-note')).toHaveText('Varav 200 ml från Mat.');
+  await expect(page.getByTestId('today-vatten')).toContainText('450 ml');
+
+  // Logga → Dryck visar vad som kommer från Mat.
+  await page.goto('./#/logga/vatten');
+  const sheet = page.getByRole('dialog', { name: 'Logga dryck' });
+  await expect(sheet.getByTestId('water-entry')).toHaveCount(1);
+  await expect(sheet.getByTestId('drink-food-entry')).toHaveCount(1);
+  await expect(sheet.getByTestId('drink-food-entry')).toContainText('Mjölk fett 3 %');
+  await expect(sheet.getByTestId('drink-food-entry')).toContainText('200 ml');
+  await expect(sheet.getByRole('progressbar')).toHaveAttribute(
+    'aria-valuetext',
+    '450 ml av 2 000 ml',
+  );
+
+  // Bara vattnet ligger i dryckesloggen; mjölken bara i matloggen.
+  const data = await dump(page);
+  expect(data.water).toHaveLength(1);
+  expect(data.foodLog).toHaveLength(1);
+  expect(errors).toEqual([]);
+});

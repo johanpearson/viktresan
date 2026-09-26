@@ -18,7 +18,7 @@ export interface Shortcut {
   feature?: 'vatten' | 'mat';
 }
 
-/** Mängden som "+250 ml vatten" loggar. */
+/** Mängden som "+250 ml (glas)" loggar. */
 export const SHORTCUT_WATER_ML = 250;
 
 export const SHORTCUTS: readonly Shortcut[] = [
@@ -31,9 +31,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   {
     id: 'add-water',
-    name: '+250 ml vatten',
+    name: '+250 ml (glas)',
     shortName: '+250 ml',
-    description: 'Logga 250 ml vatten direkt',
+    description: 'Logga ett glas (250 ml) dryck direkt',
     icon: 'shortcut-water-96x96.png',
     feature: 'vatten',
   },

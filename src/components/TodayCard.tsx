@@ -6,8 +6,9 @@ import { buildPlan } from '../lib/plan.ts';
 import { proteinGoalFor } from '../lib/protein.ts';
 import { useFeatures } from '../lib/features.ts';
 import type { AppData } from '../lib/useAppData.ts';
-import { waterGoal, waterOn } from '../lib/water.ts';
+import { drinkOn, waterGoal } from '../lib/water.ts';
 import { todaysWorkouts, workoutsBetween } from '../lib/workouts.ts';
+import { DrinkGoalNote } from './DrinkGoalNote.tsx';
 import { Feature } from './Feature.tsx';
 import { NutritionRings } from './NutritionRings.tsx';
 import { WaterControls } from './WaterControls.tsx';
@@ -23,7 +24,7 @@ interface TodayCardProps {
   onChange: () => Promise<unknown>;
 }
 
-/** Översikt → Idag: vatten (ring), kalorier och protein (ringar), steg och dagens pass. */
+/** Översikt → Idag: dryck (ring), kalorier och protein (ringar), steg och dagens pass. */
 export function TodayCard({ data, now, onChange }: TodayCardProps) {
   const features = useFeatures();
   const today = todayIso(now);
@@ -39,6 +40,8 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
   const workouts = todaysWorkouts(data.workouts, data.workoutPlans, now);
   const totals = totalOf(data.foodLog.filter((e) => e.date === today));
   const plan = data.profile ? buildPlan(data.profile, data.weights, data.foodLog, today) : null;
+  const drinkGoal = waterGoal({ profile: data.profile, workouts: data.workouts, date: today });
+  const drink = drinkOn(data.water, data.foodLog, today);
 
   return (
     <section className="card" aria-labelledby="today-title" data-testid="today-card">
@@ -47,9 +50,10 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
       </h2>
       <Feature id="vatten">
         <div className="today-water">
-          <WaterRing ml={waterOn(data.water, today)} goalMl={waterGoal(data)?.ml ?? null} />
+          <WaterRing ml={drink.ml} goalMl={drinkGoal.ml} />
           <WaterControls date={today} water={data.water} onChange={onChange} />
         </div>
+        <DrinkGoalNote goal={drinkGoal} foodMl={drink.foodMl} />
       </Feature>
       <Feature id="mat">
         <NutritionRings

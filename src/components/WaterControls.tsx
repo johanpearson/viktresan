@@ -8,11 +8,11 @@ interface WaterControlsProps {
   date: string;
   water: readonly WaterEntry[];
   onChange: () => Promise<unknown>;
-  /** Visa fältet för valfri mängd. */
+  /** Visa fältet för valfri mängd (annars en länk till Logga → Dryck). */
   custom?: boolean;
 }
 
-/** +250 ml, +500 ml, valfri mängd och Ångra senaste för en dag. */
+/** Glas, flaska, kopp kaffe/te, valfri mängd och Ångra senaste för en dag. */
 export function WaterControls({ date, water, onChange, custom = false }: WaterControlsProps) {
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -45,18 +45,18 @@ export function WaterControls({ date, water, onChange, custom = false }: WaterCo
 
   return (
     <div className="water-controls">
-      <div className="button-row">
-        {WATER_QUICK_ADD.map((ml) => (
-          <button
-            key={ml}
-            type="button"
-            className="button"
-            aria-label={`Lägg till ${formatMl(ml)} vatten`}
-            onClick={() => void add(ml)}
-          >
-            +{formatMl(ml)}
+      <div className={custom ? 'water-quick water-quick-3' : 'water-quick'}>
+        {WATER_QUICK_ADD.map(({ ml, label }) => (
+          <button key={ml} type="button" className="button" onClick={() => void add(ml)}>
+            <span className="water-quick-amount">+{formatMl(ml)}</span>{' '}
+            <span className="water-quick-label">{label}</span>
           </button>
         ))}
+        {!custom && (
+          <a className="button button-secondary" href="#/logga/vatten">
+            Valfri mängd
+          </a>
+        )}
       </div>
       {custom && (
         <form className="water-custom" onSubmit={(e) => void handleCustom(e)} noValidate>

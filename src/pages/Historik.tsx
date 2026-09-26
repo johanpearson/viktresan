@@ -13,10 +13,10 @@ import { formatDate, formatKg, formatMg } from '../lib/format.ts';
 import { doseChanges } from '../lib/glp1.ts';
 import { dailyWeights, emaTrend, filterRange, type RangeId } from '../lib/stats.ts';
 import { useAppData } from '../lib/useAppData.ts';
-import { waterGoal } from '../lib/water.ts';
+import { drinkEntries, waterGoalFor } from '../lib/water.ts';
 
 /**
- * Framsteg → Historik: viktgraf och -tabell, plus steg, midja och vatten när de är påslagna.
+ * Framsteg → Historik: viktgraf och -tabell, plus steg, midja och dryck när de är påslagna.
  * Med GLP-1 på markeras dosbyten i viktgrafen.
  */
 export function Historik() {
@@ -63,8 +63,8 @@ export function Historik() {
       </Feature>
       <Feature id="vatten">
         <WaterHistory
-          water={data.water}
-          goalMl={waterGoal(data)?.ml ?? null}
+          drinks={drinkEntries(data.water, data.foodLog)}
+          goalOn={waterGoalFor({ profile: data.profile, workouts: data.workouts })}
           range={range}
           today={today}
         />

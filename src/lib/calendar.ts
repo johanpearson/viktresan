@@ -3,7 +3,7 @@ import { addDays, toDayNumber } from './dates.ts';
 import type { DoseItem } from './glp1.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { dailySteps, dailyWeights, type DatedSteps } from './stats.ts';
-import { dailyWater, type DatedWater } from './water.ts';
+import { dailyWater, drinkEntries, type DatedWater, type DrinkFoodEntry } from './water.ts';
 import { displayStatus, type DisplayStatus, type WorkoutItem } from './workouts.ts';
 
 /** Månad som "YYYY-MM". */
@@ -88,7 +88,8 @@ export interface DayIndexInput {
   weights: readonly { date: string; weightKg: number }[];
   waist: readonly { date: string; waistCm: number }[];
   steps: readonly DatedSteps[];
-  foodLog: readonly DatedPortion[];
+  /** Matloggen; drycker i den räknas in i `waterMl`. */
+  foodLog: readonly (DatedPortion & DrinkFoodEntry)[];
   photoDates: readonly string[];
   water?: readonly DatedWater[];
   /** Sparade och genererade pass (se `workoutsBetween`) för de dagar som visas. */
@@ -118,7 +119,9 @@ export function buildDayIndex(input: DayIndexInput): Map<string, DayLog> {
     const entry = day(date);
     entry.photos = (entry.photos ?? 0) + 1;
   }
-  for (const w of dailyWater(input.water ?? [])) day(w.date).waterMl = w.ml;
+  for (const w of dailyWater(drinkEntries(input.water ?? [], input.foodLog))) {
+    day(w.date).waterMl = w.ml;
+  }
   const now = input.now ?? new Date();
   for (const item of input.workouts ?? []) {
     const entry = day(item.date);

@@ -19,7 +19,13 @@ import {
   type DatedWeight,
   type TrendPoint,
 } from './stats.ts';
-import { dailyWater, defaultWaterGoalMl, type DatedWater } from './water.ts';
+import {
+  dailyWater,
+  drinkEntries,
+  waterGoalFor,
+  type DatedWater,
+  type DrinkFoodEntry,
+} from './water.ts';
 
 export type MilestoneGroup = 'vikt' | 'vanor' | 'bilder';
 
@@ -47,12 +53,15 @@ export interface MilestoneInput {
     heightCm: number;
     goalWeightKg: number;
     proteinFactor?: number;
+    sex?: 'man' | 'kvinna' | undefined;
     waterGoalMl?: number;
+    waterTrainingBonus?: boolean;
   } | null;
   weights: readonly DatedWeight[];
   waist: readonly { date: string }[];
   steps: readonly { date: string }[];
-  foodLog: readonly DatedPortion[];
+  /** Matloggen; drycker i den räknas in i dryckesmålet. */
+  foodLog: readonly (DatedPortion & DrinkFoodEntry)[];
   water: readonly DatedWater[];
   workouts: readonly { date: string; status: string }[];
   /** Datum för varje progressbild. */
@@ -194,7 +203,7 @@ export function describeMilestone(id: string): Milestone | null {
         group: 'vanor',
         size: 'liten',
         badge: '💧',
-        title: `Vattenmålet nått ${String(n)} dagar`,
+        title: `Dryckesmålet nått ${String(n)} dagar`,
         rank: 15,
         feature: 'vatten',
       };
@@ -382,13 +391,9 @@ export function evaluateMilestones(input: MilestoneInput, today: string): Milest
   }
 
   if (profile) {
-    // Vattenmålet som det såg ut den dagen: eget mål, annars 33 ml × trendvikten då.
-    const goalOn = (date: string): number => {
-      if (profile.waterGoalMl != null) return profile.waterGoalMl;
-      const point = trend.filter((p) => p.date <= date).at(-1);
-      return defaultWaterGoalMl(point?.trendKg ?? profile.startWeightKg);
-    };
-    const waterDays = dailyWater(upToToday(input.water))
+    // Dryckesmålet den dagen (med ev. träningstillägg); drycker ur matloggen räknas in.
+    const goalOn = waterGoalFor({ profile, workouts: input.workouts });
+    const waterDays = dailyWater(upToToday(drinkEntries(input.water, input.foodLog)))
       .filter((d) => d.ml >= goalOn(d.date))
       .map((d) => d.date);
     result.push(countCandidate(`vatten-${String(GOAL_DAYS)}`, waterDays, GOAL_DAYS));
@@ -582,8 +587,8 @@ export function milestoneMessages(milestone: Milestone): string[] {
             ];
     case 'vatten':
       return [
-        'Vattenmålet nått sju dagar. Kroppen gillar det här.',
-        'Sju dagar med nått vattenmål – enkel vana, stor skillnad.',
+        'Dryckesmålet nått sju dagar. Kroppen gillar det här.',
+        'Sju dagar med nått dryckesmål – enkel vana, stor skillnad.',
       ];
     case 'protein':
       return [

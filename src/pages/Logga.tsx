@@ -21,7 +21,7 @@ import {
 import { nextDose } from '../lib/glp1.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
-import { waterGoal, waterOn } from '../lib/water.ts';
+import { drinkOn, waterGoal } from '../lib/water.ts';
 import { upcomingWorkouts, workoutsBetween } from '../lib/workouts.ts';
 
 type LogTypeId = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning' | 'glp1';
@@ -84,14 +84,15 @@ const LOG_TYPES: readonly LogType[] = [
   },
   {
     id: 'vatten',
-    label: 'Vatten',
-    title: 'Logga vatten',
+    label: 'Dryck',
+    title: 'Logga dryck',
     icon: 'M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z',
     feature: 'vatten',
     summary: (data) => {
-      const goal = waterGoal(data);
-      const ml = formatMl(waterOn(data.water, todayIso()));
-      return goal ? `Idag ${ml} av ${formatMl(goal.ml)}` : `Idag ${ml}`;
+      const today = todayIso();
+      const goal = waterGoal({ profile: data.profile, workouts: data.workouts, date: today });
+      const ml = formatMl(drinkOn(data.water, data.foodLog, today).ml);
+      return `Idag ${ml} av ${formatMl(goal.ml)}`;
     },
     Form: ({ data, reload }) => <WaterLog data={data} onChange={reload} />,
   },

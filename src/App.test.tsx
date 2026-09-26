@@ -217,7 +217,7 @@ describe('funktionsbrytare', () => {
   it('allt påslaget: alla vyer visar steg, midja, mat och bilder', async () => {
     const v = await observe([]);
     expect(v.nav).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Steg', 'Träning']);
     expect(v.calorieCard).toBe(true);
     expect(v.rings).toBe(true);
     expect(v.tiles).toEqual([
@@ -229,7 +229,7 @@ describe('funktionsbrytare', () => {
     ]);
     expect(v.tabs).toEqual(['Historik', 'Bilder']);
     expect(v.history).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
-    expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Vatten', 'Träning', 'Bilder']);
+    expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Dryck', 'Träning', 'Bilder']);
     expect(v.day).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
     expect(v.matPage).toBe('Mat');
     expect(v.bilderTab).toBe(true);
@@ -243,7 +243,7 @@ describe('funktionsbrytare', () => {
       'log-tile-vatten',
       'log-tile-traning',
     ]);
-    expect(v.today).toEqual(['Vatten', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Träning']);
     expect(v.history).not.toContain('Steg');
     expect(v.history).toContain('Midjemått');
     expect(v.legend).not.toContain('Steg');
@@ -259,7 +259,7 @@ describe('funktionsbrytare', () => {
       'log-tile-vatten',
       'log-tile-traning',
     ]);
-    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Steg', 'Träning']);
     expect(v.history).not.toContain('Midjemått');
     expect(v.history).toContain('Steg');
     expect(v.legend).not.toContain('Midja');
@@ -271,7 +271,7 @@ describe('funktionsbrytare', () => {
     expect(v.nav).toEqual(['Översikt', 'Logga', 'Kalender', 'Framsteg']);
     expect(v.calorieCard).toBe(false);
     expect(v.rings).toBe(false);
-    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Steg', 'Träning']);
     expect(v.legend).not.toContain('Mat');
     expect(v.day).not.toContain('Mat');
     expect(v.matPage).toBe('Översikt');
@@ -284,7 +284,7 @@ describe('funktionsbrytare', () => {
     expect(v.bilderTab).toBe(false);
     expect(v.legend).not.toContain('Bilder');
     expect(v.day).not.toContain('Bilder');
-    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Steg', 'Träning']);
   });
 
   it('vatten och träning av: döljs i Logga, Översikt, Kalender och historik', async () => {
@@ -293,7 +293,7 @@ describe('funktionsbrytare', () => {
     expect(v.today).toEqual(['Steg']);
     expect(v.rings).toBe(true);
     expect(screen.queryByTestId('water-ring')).not.toBeInTheDocument();
-    expect(v.history).not.toContain('Vatten');
+    expect(v.history).not.toContain('Dryck');
     expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
     expect(screen.queryByRole('list', { name: 'Träningsstatus' })).not.toBeInTheDocument();
   });
@@ -363,7 +363,7 @@ describe('genvägar på appikonen', () => {
     const user = userEvent.setup();
     await launch('add-water');
     const toast = await screen.findByTestId('shortcut-toast');
-    expect(toast).toHaveTextContent('La till 250 ml vatten.');
+    expect(toast).toHaveTextContent('La till 250 ml dryck.');
     expect((await listWater()).map((w) => w.ml)).toEqual([250]);
     await user.click(within(toast).getByRole('button', { name: 'Ångra' }));
     expect(await within(toast).findByText('Ångrade 250 ml.')).toBeInTheDocument();
@@ -375,10 +375,10 @@ describe('genvägar på appikonen', () => {
     const user = userEvent.setup();
     await launch('add-water', ['vatten']);
     const toast = await screen.findByTestId('shortcut-toast');
-    expect(toast).toHaveTextContent('Vatten är avstängt');
+    expect(toast).toHaveTextContent('Dryck är avstängt');
     expect(await listWater()).toEqual([]);
-    await user.click(within(toast).getByRole('button', { name: 'Slå på Vatten' }));
-    expect(await screen.findByText('La till 250 ml vatten.')).toBeInTheDocument();
+    await user.click(within(toast).getByRole('button', { name: 'Slå på Dryck' }));
+    expect(await screen.findByText('La till 250 ml dryck.')).toBeInTheDocument();
     expect((await listWater()).map((w) => w.ml)).toEqual([250]);
     expect(await getSetting(SETTING_FEATURES)).toMatchObject({ vatten: true });
   });

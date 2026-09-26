@@ -43,7 +43,7 @@ test('manifestet har tre genvägar med egna ikoner', async ({ page, request }) =
   };
   expect(manifest.shortcuts.map((s) => [s.name, s.url])).toEqual([
     ['Logga vikt', '/viktresan/?action=log-weight'],
-    ['+250 ml vatten', '/viktresan/?action=add-water'],
+    ['+250 ml (glas)', '/viktresan/?action=add-water'],
     ['Logga mat', '/viktresan/?action=log-food'],
   ]);
   for (const s of manifest.shortcuts) {
@@ -67,11 +67,11 @@ test('genvägen Logga vikt öppnar viktpanelen', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('genvägen +250 ml vatten loggar direkt och kan ångras', async ({ page }) => {
+test('genvägen +250 ml (glas) loggar direkt och kan ångras', async ({ page }) => {
   const errors = collectErrors(page);
   await launch(page, 'add-water');
-  await expect(toast(page)).toContainText('La till 250 ml vatten.');
-  const ring = page.getByRole('progressbar', { name: 'Vatten idag' });
+  await expect(toast(page)).toContainText('La till 250 ml dryck.');
+  const ring = page.getByRole('progressbar', { name: 'Dryck idag' });
   await expect(ring).toHaveAttribute('aria-valuetext', /^250 ml av /);
   // Adressen är städad: en omladdning loggar inte en gång till.
   await expect(page).toHaveURL(/\/viktresan\/#\/$/);
@@ -136,11 +136,11 @@ test('avstängd funktion: genvägen erbjuder att slå på den', async ({ page })
   await launch(page, 'add-water', {
     settings: { features: { vatten: false, version: 3 } },
   });
-  await expect(toast(page)).toContainText('Vatten är avstängt');
+  await expect(toast(page)).toContainText('Dryck är avstängt');
   expect((await dump(page)).water).toHaveLength(0);
-  await toast(page).getByRole('button', { name: 'Slå på Vatten' }).tap();
-  await expect(toast(page)).toContainText('La till 250 ml vatten.');
-  await expect(page.getByRole('progressbar', { name: 'Vatten idag' })).toBeVisible();
+  await toast(page).getByRole('button', { name: 'Slå på Dryck' }).tap();
+  await expect(toast(page)).toContainText('La till 250 ml dryck.');
+  await expect(page.getByRole('progressbar', { name: 'Dryck idag' })).toBeVisible();
   expect((await dump(page)).water).toHaveLength(1);
 
   // Mat avstängd: "Inte nu" lämnar den avstängd.

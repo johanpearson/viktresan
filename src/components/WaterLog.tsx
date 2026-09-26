@@ -1,7 +1,8 @@
 import { todayIso } from '../lib/dates.ts';
 import { formatMl } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
-import { waterGoal, waterOn } from '../lib/water.ts';
+import { drinkOn, waterGoal } from '../lib/water.ts';
+import { DrinkGoalNote } from './DrinkGoalNote.tsx';
 import { WaterControls } from './WaterControls.tsx';
 import { WaterRing } from './WaterRing.tsx';
 
@@ -12,18 +13,23 @@ interface WaterLogProps {
   onChange: () => Promise<AppData>;
 }
 
-/** Logga → Vatten: dagens ring, snabbknappar, valfri mängd och dagens poster. */
+/**
+ * Logga → Dryck: dagens ring, snabbknappar, valfri mängd, dagens poster och
+ * drycker ur matloggen (räknas in automatiskt).
+ */
 export function WaterLog({ data, onChange }: WaterLogProps) {
   const today = todayIso();
-  const goal = waterGoal(data);
+  const goal = waterGoal({ profile: data.profile, workouts: data.workouts, date: today });
+  const drink = drinkOn(data.water, data.foodLog, today);
   const entries = data.water.filter((w) => w.date === today).reverse();
   return (
     <div className="card form">
-      <h2 className="card-title">Vatten idag</h2>
-      <WaterRing ml={waterOn(data.water, today)} goalMl={goal?.ml ?? null} />
+      <h2 className="card-title">Dryck idag</h2>
+      <WaterRing ml={drink.ml} goalMl={goal.ml} />
+      <DrinkGoalNote goal={goal} foodMl={drink.foodMl} />
       <WaterControls date={today} water={data.water} onChange={onChange} custom />
       {entries.length > 0 && (
-        <ul className="entry-list" aria-label="Dagens vatten">
+        <ul className="entry-list" aria-label="Dagens dryck">
           {entries.map((e) => (
             <li key={e.id} className="entry entry-compact" data-testid="water-entry">
               <span className="entry-main">
@@ -33,6 +39,22 @@ export function WaterLog({ data, onChange }: WaterLogProps) {
             </li>
           ))}
         </ul>
+      )}
+      {drink.food.length > 0 && (
+        <>
+          <h3 className="subheading">Från Mat</h3>
+          <ul className="entry-list" aria-label="Dryck från Mat">
+            {drink.food.map((d) => (
+              <li key={d.id} className="entry entry-compact" data-testid="drink-food-entry">
+                <span className="entry-main">
+                  <span>{d.name}</span>
+                  <span className="entry-weight">{formatMl(d.ml)}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="form-note">Ändra eller ta bort dem under Mat.</p>
+        </>
       )}
     </div>
   );

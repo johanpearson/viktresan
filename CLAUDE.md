@@ -48,7 +48,7 @@ src/lib/weekSummary.ts  Veckosummering mån–sön: trend, intag, protein, vatte
 src/lib/pwaUpdate.ts    Registrerar sw.js, söker uppdateringar, toast-tillstånd, SKIP_WAITING
 src/lib/version.ts      Version, commit och byggtid (Vite define)
 src/lib/calendar.ts     Månads-/veckorutnät + vad som loggats/planerats per dag (buildDayIndex)
-src/lib/water.ts        Vattenmål (33 ml × trendvikt, 100 ml) och summor per dag
+src/lib/water.ts        Dryckesmål (kön, EFSA; +500 ml träningsdagar), drycker ur matloggen (ej alkohol), summor per dag
 src/lib/workouts.ts     Träning: scheman → pass, status, obesvarade/dagens/kommande pass
 src/lib/dayMarkers.ts   Loggtyper per dag (Kalender, Översikt → Idag), med funktion
 src/lib/glp1.ts         GLP-1: schema, dostrappa, planerade/loggade doser, nästa dos, rotation, dosbyten
@@ -130,7 +130,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (senast registrerade vinner). `putPhotoSession` flyttar bildernas `date` med tillfället; `deletePhoto` tar bort ett tomt tillfälle.
   Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5)
   (0 = håll vikten/viktstabilisering: kalorimål = TDEE, spärren `maintenance`)
-  och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål) samt `proteinFactor`
+  och (v5) `waterGoalMl` (eget dryckesmål, sparas från Inställningar → Dryckesmål), `waterTrainingBonus`
+  (+500 ml på träningsdagar, utan schemaändring) samt `proteinFactor`
   (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
@@ -155,10 +156,18 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Adaptiv TDEE: fönster ≤ 28 dagar t.o.m. igår, kräver ≥ 14 dagar med både vikt och matlogg och
   ≥ 80 % loggade dagar; regression på dagsvikterna, vikt = 0,9 × längd × täckning × precision
   (halveras om skattningen kläms till 0,6–1,6 × formeln).
-- **Vatten**: mål = eget `waterGoalMl`, annars 33 ml × senaste EMA-trendvikten avrundat till 100 ml
-  (utan mätningar: startvikten). `addWater` håller `createdAt` strikt växande per dag så att
-  `undoLastWater` ("Ångra senaste") alltid tar dagens senaste post. Ring + snabbknappar i Översikt → Idag,
-  valfri mängd i Logga → Vatten, historik i Framsteg → Historik.
+- **Dryck** (i UI:t "Dryck"; internt heter det fortfarande `water`/`vatten` – store, funktion, route
+  `#/logga/vatten`): mål = eget `waterGoalMl`, annars standardmål efter kön: 2 000 ml (man) / 1 600 ml
+  (kvinna), 1 800 ml utan kön – dryckesdelen (~80 %) av EFSA:s totala vätskeintag. Ingen koppling till
+  vikten. Det gamla standardmålet (33 ml × trendvikt) sparades aldrig, så profiler utan eget mål får det nya
+  automatiskt; eget mål lämnas orört (ingen DB-migrering). `waterTrainingBonus` → +500 ml dagar med ett
+  genomfört pass (`waterGoal({ profile, workouts, date })`). Drycker i matloggen räknas in (`foodDrinkMl`:
+  kategori `dryck`/`mjolk`/`fil` via `foodProfile`, ml = gram ÷ densitet; inte kvarg/keso/koncentrat och
+  aldrig alkohol – `isAlcoholic`, bl.a. "vol. %"). `drinkEntries`/`drinkOn` används av Idag, Logga, historik,
+  kalender, veckosummering och milstolpen `vatten-7`. `addWater` håller `createdAt` strikt växande per dag så att
+  `undoLastWater` ("Ångra senaste") alltid tar dagens senaste post. Ring + snabbknappar (glas 250, flaska 500,
+  kaffe/te 150 ml, "Valfri mängd" → Logga → Dryck) i Översikt → Idag med "Varav … från Mat"; Logga → Dryck listar
+  även dryck från Mat; historik i Framsteg → Historik.
 - **Träning**: pass (`Workout`) har datum, valfri tid (`HH:MM`, lokal), typ (förval + egna ur tidigare
   pass), längd, valfri intensitet/anteckning och status `planerad`/`genomford`/`hoppad`. Scheman
   (`WorkoutPlan`: veckodagar 0 = mån, tid, start/slut) genereras till pass vid visning
@@ -182,7 +191,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   viktgrafen (`WeightChart` `markers`, färg `--chart-dose`) och listas i Framsteg → Historik.
   Kalendern: romb-prick, fylld = loggad, kontur = planerad; `maende`-markören visar aptit/biverkningar.
 - **Genvägar** (`shortcuts.ts`, manifestets `shortcuts` byggs från samma lista i vite.config.ts):
-  "Logga vikt" (`?action=log-weight` → `#/logga/vikt`), "+250 ml vatten" (`add-water`: loggas direkt,
+  "Logga vikt" (`?action=log-weight` → `#/logga/vikt`), "+250 ml (glas)" (`add-water`: loggas direkt,
   Översikt + toast med Ångra) och "Logga mat" (`log-food` → `#/mat/logga`). `useShortcut` i `App` läser
   `?action=` en gång när brytarna är lästa och tar bort den ur adressen (omladdning kör inte om). Avstängd
   funktion → toast med "Slå på …" som slår på den och kör genvägen. Ikoner: `public/shortcut-*-96x96.png`.

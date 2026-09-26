@@ -76,7 +76,7 @@ export const DAY_MARKERS: readonly DayMarker[] = [
   },
   {
     id: 'vatten',
-    label: 'Vatten',
+    label: 'Dryck',
     feature: 'vatten',
     value: (d) => (d.waterMl == null ? null : formatMl(d.waterMl)),
   },
