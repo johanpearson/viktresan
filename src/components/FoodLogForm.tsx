@@ -2,7 +2,7 @@ import { useState, type SyntheticEvent } from 'react';
 import { newId, putFoodLog, type FoodLogEntry } from '../db/db.ts';
 import { entryUnit } from '../lib/foodCatalog.ts';
 import { SOURCE_LABELS, type FoodItem } from '../lib/foodSearch.ts';
-import { decimalInput, formatGrams, formatKcal } from '../lib/format.ts';
+import { decimalInput, formatGrams, formatKcal, parseDecimal } from '../lib/format.ts';
 import {
   MEAL_SLOTS,
   defaultMealSlot,
@@ -12,20 +12,25 @@ import {
 } from '../lib/nutrition.ts';
 import {
   GRAM,
+  MAX_GRAMS,
   QUICK_AMOUNTS,
   QUICK_AMOUNT_UNITS,
   amountLabel,
+  baseOf,
+  builtInUnits,
+  confirmGuess,
+  formatBase,
   gramsPerUnit,
+  guessQuestion,
   initialUsage,
   isGram,
+  isGuess,
   loggedAmountText,
   mergeUnits,
   parseUnitAmount,
-  standardUnitsFor,
   type FoodUnit,
   type Usage,
 } from '../lib/units.ts';
-import { UnitForm } from './UnitForm.tsx';
 import { UnitList } from './UnitList.tsx';
 
 interface FoodLogFormProps {
@@ -45,7 +50,10 @@ interface FoodLogFormProps {
   onCancel: () => void;
 }
 
-/** Logga ett livsmedel i gram eller en enhet (st, skiva, dl …), kopplat till en måltid. */
+/**
+ * Logga ett livsmedel i en enhet som passar det (dl, st, skiva …) eller gram,
+ * kopplat till en måltid. En gissad styckvikt bekräftas med ett tryck.
+ */
 export function FoodLogForm({
   food,
   customUnits,
@@ -58,7 +66,8 @@ export function FoodLogForm({
   onSaved,
   onCancel,
 }: FoodLogFormProps) {
-  const builtIn = mergeUnits(food.units, standardUnitsFor(food));
+  const builtIn = builtInUnits(food);
+  const base = baseOf(food);
   // Vid redigering gäller enheten som den vägde när posten loggades.
   const loggedUnit = editing ? entryUnit(editing) : null;
   const units = mergeUnits(builtIn, customUnits, loggedUnit ? [loggedUnit] : []);
@@ -71,12 +80,16 @@ export function FoodLogForm({
   const [meal, setMeal] = useState<MealSlot>(
     () => editing?.meal ?? defaultMealSlot(new Date().getHours()),
   );
-  const [adding, setAdding] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustGrams, setAdjustGrams] = useState('');
+  const [adjustError, setAdjustError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const parsed = parseUnitAmount(amount, unit, units);
   const preview = parsed.ok ? scaleNutrients(food.per100, parsed.value.grams) : null;
   const quick = QUICK_AMOUNT_UNITS.includes(unit);
+  const selected = units.find((u) => u.name === unit);
+  const guess = isGuess(selected) ? selected : undefined;
 
   function changeUnit(next: string) {
     if (next === unit) return;
@@ -84,13 +97,23 @@ export function FoodLogForm({
     setAmount(isGram(next) ? decimalInput(parsed.ok ? parsed.value.grams : 100) : '1');
     setUnit(next);
     setError(null);
+    setAdjusting(false);
   }
 
-  async function addUnit(added: FoodUnit) {
-    await onUnitsChange([...customUnits, added]);
-    setAdding(false);
-    setUnit(added.name);
-    setAmount('1');
+  /** Sparar den gissade enheten (eller den justerade vikten) som egen enhet. */
+  async function confirm(guessed: FoodUnit, grams?: number) {
+    await onUnitsChange(confirmGuess(customUnits, guessed, grams));
+    setAdjusting(false);
+  }
+
+  async function saveAdjusted(guessed: FoodUnit) {
+    const grams = parseDecimal(adjustGrams);
+    if (grams == null || grams < 0.1 || grams > MAX_GRAMS) {
+      setAdjustError(`Ange vikten i ${base === 'ml' ? 'ml' : 'gram'} (0,1–5 000).`);
+      return;
+    }
+    setAdjustError(null);
+    await confirm(guessed, grams);
   }
 
   async function handleSubmit(event: SyntheticEvent) {
@@ -112,6 +135,7 @@ export function FoodLogForm({
       createdAt: editing?.createdAt ?? now,
     };
     if (editing) entry.updatedAt = now;
+    if (food.per100Unit === 'ml') entry.per100Unit = 'ml';
     await putFoodLog(entry);
     onSaved(
       `${editing ? 'Uppdaterade' : 'Loggade'} ${food.name} (${loggedAmountText(entry)}) till ${mealLabel(meal).toLowerCase()}.`,
@@ -143,7 +167,7 @@ export function FoodLogForm({
         </button>
       </div>
       <p className="form-note muted">
-        {SOURCE_LABELS[food.source]} · {formatKcal(food.per100.kcal)} per 100 g
+        {SOURCE_LABELS[food.source]} · {formatKcal(food.per100.kcal)} per 100 {base}
       </p>
       <div className="field-row">
         <label className="field">
@@ -177,7 +201,7 @@ export function FoodLogForm({
         </label>
       </div>
       <div className="chip-grid" role="group" aria-label="Enhet">
-        {[GRAM, ...units.map((u) => u.name)].map((name) => (
+        {[...units.map((u) => u.name), GRAM].map((name) => (
           <button
             key={name}
             type="button"
@@ -190,27 +214,79 @@ export function FoodLogForm({
             {name}
           </button>
         ))}
-        {!adding && (
-          <button
-            type="button"
-            className="chip chip-add"
-            onClick={() => {
-              setAdding(true);
-            }}
-          >
-            + Lägg till enhet
-          </button>
-        )}
       </div>
-      {adding && (
-        <UnitForm
-          unit={null}
-          others={customUnits}
-          onSave={addUnit}
-          onCancel={() => {
-            setAdding(false);
-          }}
-        />
+      {guess && (
+        <div className="guess-confirm" role="group" aria-label="Bekräfta enhet" data-testid="guess">
+          <p className="guess-question">{guessQuestion(guess, base)}</p>
+          {adjusting ? (
+            <>
+              <label className="field">
+                <span className="field-label">
+                  {base === 'ml' ? 'ml' : 'Gram'} per {guess.name}
+                </span>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={adjustGrams}
+                  onChange={(e) => {
+                    setAdjustGrams(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void saveAdjusted(guess);
+                    }
+                  }}
+                />
+              </label>
+              {adjustError && (
+                <p className="form-error" role="alert">
+                  {adjustError}
+                </p>
+              )}
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="button button-small"
+                  onClick={() => void saveAdjusted(guess)}
+                >
+                  Spara vikten
+                </button>
+                <button
+                  type="button"
+                  className="button button-secondary button-small"
+                  onClick={() => {
+                    setAdjusting(false);
+                  }}
+                >
+                  Behåll gissningen
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="button-row">
+              <button
+                type="button"
+                className="button button-small"
+                onClick={() => void confirm(guess)}
+              >
+                Ja, det stämmer
+              </button>
+              <button
+                type="button"
+                className="button button-secondary button-small"
+                onClick={() => {
+                  setAdjustGrams(decimalInput(guess.grams));
+                  setAdjustError(null);
+                  setAdjusting(true);
+                }}
+              >
+                Justera
+              </button>
+            </div>
+          )}
+        </div>
       )}
       {quick && (
         <div className="chip-grid" role="group" aria-label="Snabbval mängd">
@@ -235,7 +311,7 @@ export function FoodLogForm({
         {preview && parsed.ok
           ? isGram(unit)
             ? `${formatGrams(parsed.value.grams)} · ${formatKcal(preview.kcal)}`
-            : `${amountLabel(parsed.value.amount, unit)} ≈ ${formatGrams(parsed.value.grams)} · ${formatKcal(preview.kcal)}`
+            : `${amountLabel(parsed.value.amount, unit)} ≈ ${formatBase(parsed.value.grams, base)} · ${formatKcal(preview.kcal)}`
           : 'Ange en mängd.'}
       </p>
       {preview && (
@@ -261,9 +337,19 @@ export function FoodLogForm({
         <summary>Enheter för {food.name}</summary>
         <UnitList
           builtIn={builtIn}
+          base={base}
+          canAdd
           custom={customUnits}
           onChange={async (next) => {
+            const added = next.find(
+              (u) => !customUnits.some((c) => c.name.toLowerCase() === u.name.toLowerCase()),
+            );
             await onUnitsChange(next);
+            // Ny egen enhet: välj den direkt.
+            if (added) {
+              changeUnit(added.name);
+              return;
+            }
             // Borttagen enhet: byt till gram med samma mängd.
             if (gramsPerUnit(mergeUnits(builtIn, next), unit) === null && !isGram(unit)) {
               changeUnit(GRAM);

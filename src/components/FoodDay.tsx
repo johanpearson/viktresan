@@ -142,6 +142,7 @@ export function FoodDay({
         createdAt: Date.now(),
       };
       if (food.units) stored.units = food.units;
+      if (food.per100Unit === 'ml') stored.per100Unit = 'ml';
       await putFood(stored);
       await reloadFood();
       select({ food, editing: null });

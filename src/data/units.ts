@@ -1,5 +1,5 @@
 /**
- * Standardenheter för vanliga livsmedel i Livsmedelsverkets databas.
+ * Standardenheter, kategori och densitet för vanliga livsmedel i Livsmedelsverkets databas.
  *
  * VÄRDENA ÄR UNGEFÄRLIGA. De är sammanställda för Viktresan utifrån svenska
  * hushållsmått (1 dl = 100 ml, 1 msk = 15 ml, 1 tsk = 5 ml) omräknade med
@@ -9,7 +9,11 @@
  * och hur man mäter (t.ex. hur hårt ett dl-mått packas). Ätlig del utan skal
  * och kärnor avses för frukt och grönsaker; ägg avses utan skal.
  *
- * Matchning (se `standardUnitsFor` i `src/lib/units.ts`):
+ * Volymenheter (dl, msk …) räknas fram ur densiteten – livsmedlets egen här,
+ * annars kategorins (`src/data/foodCategories.ts`). Tabellen innehåller därför
+ * bara styckenheter (st, skiva …) och densiteter som avviker från kategorin.
+ *
+ * Matchning (se `foodProfile` i `src/lib/units.ts`):
  * - `ids`: Livsmedelsverkets livsmedelsnummer (`lv:<nummer>`), matchar direkt.
  * - `pattern`: reguljärt uttryck mot det normaliserade namnet – gemener,
  *   å/ä → a, ö → o, skiljetecken → mellanslag (`normalize` i foodSearch.ts).
@@ -18,39 +22,32 @@
  * Första regeln som matchar gäller. Mer specifika regler står därför först.
  */
 
+import type { FoodCategory } from './foodCategories.ts';
+
 export interface StandardUnitRule {
   /** Vad regeln gäller, för läsaren av tabellen. */
   label: string;
   ids?: readonly number[];
   pattern?: RegExp;
   exclude?: RegExp;
-  units: readonly { name: string; grams: number }[];
+  /** Kategori, om namnmönstren i foodCategories.ts inte räcker eller blir fel. */
+  category?: FoodCategory;
+  /** Gram per ml, om livsmedlet avviker från kategorins densitet. */
+  density?: number;
+  /** Styckenheter med ungefärlig vikt. */
+  units?: readonly { name: string; grams: number }[];
 }
-
-const SPREAD = [
-  { name: 'msk', grams: 14 },
-  { name: 'tsk', grams: 5 },
-];
-
-const OIL = [
-  { name: 'msk', grams: 14 },
-  { name: 'tsk', grams: 4.5 },
-];
-
-const JAM = [
-  { name: 'msk', grams: 20 },
-  { name: 'tsk', grams: 7 },
-];
 
 /** Tillagat, torkat, konserverat m.m. – då stämmer inte styckvikten för råvaran. */
 const PROCESSED =
-  /(friterad|stekt|torkad|torkat|konserv|juice|saft|sylt|mos|soppa|sallad|chips|puré|pure|stuvad|gratang|pulver|dryck|smoothie|paj|kaka|glass)/;
+  /(friterad|stekt|torkad|torkat|konserv|juice|saft|sylt|mos|soppa|sallad|chips|pure|stuvad|gratang|pulver|dryck|smoothie|paj|kaka|glass)/;
 
 export const STANDARD_UNIT_RULES: readonly StandardUnitRule[] = [
   // --- Ägg ---------------------------------------------------------------
   {
     label: 'Ägg (kokt, rått, stekt), medelstort utan skal',
     pattern: /^agg (kokt|ratt|stekt)/,
+    category: 'agg',
     units: [{ name: 'st', grams: 60 }],
   },
 
@@ -75,6 +72,7 @@ export const STANDARD_UNIT_RULES: readonly StandardUnitRule[] = [
   {
     label: 'Körsbärstomat',
     pattern: /^tomat korsbarstomat/,
+    category: 'gronsak',
     units: [{ name: 'st', grams: 15 }],
   },
   { label: 'Tomat, medelstor', pattern: /^tomat$/, units: [{ name: 'st', grams: 100 }] },
@@ -97,19 +95,22 @@ export const STANDARD_UNIT_RULES: readonly StandardUnitRule[] = [
     label: 'Potatis, medelstor (rå eller kokt)',
     pattern: /^potatis .*\b(ra|kokt)\b/,
     exclude: /(stekt|stuvad|gratang|bakad|konserv|frysvara|mos|bullar|tarnad|hasselback)/,
+    category: 'potatis',
     units: [{ name: 'st', grams: 90 }],
   },
 
   // --- Bröd -------------------------------------------------------------
   {
     label: 'Knäckebröd och annat hårt bröd',
-    pattern: /^hart brod/,
+    pattern: /^(hart brod|knacke)/,
+    category: 'brod',
     units: [{ name: 'skiva', grams: 12 }],
   },
   {
     label: 'Mjukt bröd (limpa, formfranska m.m.)',
     pattern: /^brod /,
     exclude: /(tortilla|croissant|giffel|scones|chapati|pitabrod|baguette|krutong)/,
+    category: 'brod',
     units: [{ name: 'skiva', grams: 35 }],
   },
 
@@ -118,120 +119,66 @@ export const STANDARD_UNIT_RULES: readonly StandardUnitRule[] = [
     label: 'Hårdost, hyvlad skiva',
     pattern: /^ost hardost/,
     exclude: /parmesan/,
+    category: 'ost',
     units: [{ name: 'skiva', grams: 10 }],
   },
   {
     label: 'Skivat pålägg (skinka, kalkon, salami, leverpastej)',
     pattern: /^(gris skinka (skivad|rokt|lufttorkad)|kalkon rokt|palaggskorv|leverpastej skivbar)/,
+    category: 'palagg',
     units: [{ name: 'skiva', grams: 10 }],
   },
-
-  // --- Mejeri och drycker (dl) -----------------------------------------
   {
-    label: 'Mjölk och växtdryck',
+    label: 'Köttbullar',
+    pattern: /^kottbullar/,
+    units: [{ name: 'st', grams: 15 }],
+  },
+
+  // --- Mejeri och drycker -----------------------------------------------
+  {
+    label: 'Mjölk och växtdryck (1 dl ≈ 103 g)',
     pattern: /^(mjolk fett|mellanmjolk|lattmjolk|havredryck)/,
-    units: [
-      { name: 'dl', grams: 103 },
-      { name: 'glas', grams: 206 },
-    ],
+    category: 'mjolk',
+    density: 1.03,
   },
   {
-    label: 'Fil och yoghurt',
-    pattern: /^(filmjolk|yoghurt (naturell|mild|smaksatt))/,
-    units: [{ name: 'dl', grams: 105 }],
-  },
-  {
-    label: 'Kvarg',
+    label: 'Kvarg (1 dl ≈ 110 g)',
     pattern: /^kvarg (farskost|naturell|smaksatt)/,
-    units: [{ name: 'dl', grams: 110 }],
-  },
-  {
-    label: 'Crème fraiche och grädde',
-    pattern: /^(creme fraiche|matlagningsgradde|vispgradde fett)/,
-    units: [
-      { name: 'dl', grams: 100 },
-      { name: 'msk', grams: 15 },
-    ],
+    category: 'fil',
+    density: 1.1,
   },
 
-  // --- Gryn, flingor, ris och pasta (dl) --------------------------------
-  { label: 'Havregryn', pattern: /^havregryn( |$)/, units: [{ name: 'dl', grams: 35 }] },
+  // --- Gryn, flingor, ris och pasta -------------------------------------
+  { label: 'Havregryn (1 dl ≈ 35 g)', pattern: /^havregryn( |$)/, density: 0.35 },
   {
-    label: 'Gröt (kokt)',
-    pattern: /^(havregrynsgrot|grot$)/,
-    units: [{ name: 'dl', grams: 105 }],
-  },
-  {
-    label: 'Müsli och granola',
+    label: 'Müsli och granola (1 dl ≈ 45 g)',
     pattern: /^frukostflingor (musli|granola|flingblandning)/,
-    units: [{ name: 'dl', grams: 45 }],
+    category: 'gryn',
+    density: 0.45,
   },
   {
-    label: 'Lätta frukostflingor (cornflakes, puffat m.m.)',
+    label: 'Lätta frukostflingor, cornflakes, puffat m.m. (1 dl ≈ 15 g)',
     pattern: /^frukostflingor/,
-    units: [{ name: 'dl', grams: 15 }],
+    category: 'gryn',
+    density: 0.15,
   },
+  { label: 'Ris, okokt (1 dl ≈ 85 g)', pattern: /^ris .*okokt/, density: 0.85 },
+  { label: 'Ris, kokt (1 dl ≈ 70 g)', pattern: /^ris .*kokt/, density: 0.7 },
   {
-    label: 'Ris, okokt',
-    pattern: /^ris .*okokt/,
-    units: [{ name: 'dl', grams: 85 }],
-  },
-  {
-    label: 'Ris, kokt',
-    pattern: /^ris .*kokt/,
-    units: [{ name: 'dl', grams: 70 }],
-  },
-  {
-    label: 'Pasta, okokt (makaroner, penne o.d.)',
+    label: 'Pasta, okokt – makaroner, penne o.d. (1 dl ≈ 40 g)',
     pattern: /^pasta .*okokt/,
-    units: [{ name: 'dl', grams: 40 }],
+    density: 0.4,
   },
   {
-    label: 'Pasta, kokt',
+    label: 'Pasta, kokt (1 dl ≈ 60 g)',
     pattern: /^pasta .*kokt/,
     exclude: /(carbonara|farsk)/,
-    units: [{ name: 'dl', grams: 60 }],
-  },
-  {
-    label: 'Vetemjöl',
-    pattern: /^vetemjol/,
-    units: [
-      { name: 'dl', grams: 60 },
-      { name: 'msk', grams: 9 },
-    ],
+    category: 'kokt',
+    density: 0.6,
   },
 
-  // --- Fett, socker och sött (msk/tsk) ----------------------------------
-  {
-    label: 'Smör och bordsmargarin',
-    pattern: /^(smor (fett|extrasaltat|osaltat)|matfettsblandning|margarin)/,
-    units: SPREAD,
-  },
-  {
-    label: 'Olja',
-    pattern: /^(rapsolja|olivolja|solrosolja|majsolja|matolja|sesamolja|kokosolja|linfroolja)/,
-    units: OIL,
-  },
-  {
-    label: 'Socker',
-    pattern: /^socker$/,
-    units: [
-      { name: 'msk', grams: 13 },
-      { name: 'tsk', grams: 4 },
-    ],
-  },
-  {
-    label: 'Honung',
-    pattern: /^honung$/,
-    units: [
-      { name: 'msk', grams: 21 },
-      { name: 'tsk', grams: 7 },
-    ],
-  },
-  {
-    label: 'Sylt och marmelad',
-    pattern: /^(\w*sylt|\w*marmelad)(\s|$)/,
-    units: JAM,
-  },
-  { label: 'Majonnäs', pattern: /^majonnas/, units: SPREAD },
+  // --- Fett, socker och sött --------------------------------------------
+  { label: 'Honung (1 msk ≈ 21 g)', pattern: /^honung$/, density: 1.4 },
+  { label: 'Majonnäs (1 msk ≈ 14 g)', pattern: /^majonnas/, category: 'sas', density: 0.93 },
+  { label: 'Salt (1 tsk ≈ 6 g)', pattern: /^salt( |$)/, category: 'kryddor', density: 1.2 },
 ];

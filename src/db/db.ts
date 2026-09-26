@@ -89,6 +89,8 @@ export interface StoredFood {
   name: string;
   source: 'egen' | 'openfoodfacts';
   per100: Nutrients;
+  /** `ml` om näringsvärdena gäller per 100 ml (Open Food Facts). Saknas = per 100 g. */
+  per100Unit?: 'ml';
   units?: FoodUnit[];
   ean?: string;
   createdAt: number;
@@ -120,7 +122,10 @@ export interface CustomUnits {
 export interface LoggedAmount {
   amount: number;
   unit: string;
+  /** Det som räknas: gram – eller ml när `per100Unit` är `ml`. */
   grams: number;
+  /** `ml` om livsmedlets värden gällde per 100 ml. Saknas = per 100 g. */
+  per100Unit?: 'ml';
 }
 
 /** En ingrediens i en sparad måltid. Namn och näringsvärden kopieras in. */
@@ -161,6 +166,7 @@ export interface LegacyAmount {
   unit?: string;
   portionName?: string;
   portionCount?: number;
+  per100Unit?: 'ml';
 }
 
 export type LegacyFoodLogEntry = Omit<FoodLogEntry, keyof LoggedAmount> & LegacyAmount;

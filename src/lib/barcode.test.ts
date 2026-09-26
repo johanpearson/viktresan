@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { lookupOpenFoodFacts, normalizeEan, offProductUrl, parseOffProduct } from './barcode.ts';
+import {
+  lookupOpenFoodFacts,
+  normalizeEan,
+  offBaseUnit,
+  offProductUrl,
+  parseOffProduct,
+} from './barcode.ts';
 
 describe('normalizeEan', () => {
   it('godkänner EAN-13, EAN-8, UPC-A och GTIN-14 med rätt kontrollsiffra', () => {
@@ -78,6 +84,54 @@ describe('parseOffProduct', () => {
     ).toBeUndefined();
   });
 
+  it('värden per 100 ml räknas i volym, och hela förpackningen blir en enhet', () => {
+    const food = parseOffProduct(ean, {
+      status: 1,
+      product: {
+        product_name: 'Cola',
+        quantity: '33 cl',
+        product_quantity: 330,
+        product_quantity_unit: 'ml',
+        serving_size: '250 ml',
+        nutriments: { 'energy-kcal_100g': 42, carbohydrates_100g: 10.6 },
+      },
+    });
+    expect(food).toMatchObject({
+      per100Unit: 'ml',
+      per100: { kcal: 42, proteinG: 0, carbsG: 10.6, fatG: 0 },
+      units: [
+        { name: 'portion', grams: 250, source: 'openfoodfacts' },
+        { name: 'förpackning', grams: 330, source: 'openfoodfacts' },
+      ],
+    });
+  });
+
+  it('förpackning i gram för fasta livsmedel, och bara en gång om den är portionen', () => {
+    const product = (extra: Record<string, unknown>) =>
+      parseOffProduct(ean, {
+        status: 1,
+        product: { product_name: 'X', nutriments: { 'energy-kcal_100g': 50 }, ...extra },
+      });
+    const bar = product({ product_quantity: 45, product_quantity_unit: 'g', serving_quantity: 45 });
+    expect(bar?.per100Unit).toBeUndefined();
+    expect(bar?.units).toEqual([{ name: 'portion', grams: 45, source: 'openfoodfacts' }]);
+    expect(product({ quantity: '500 g' })?.units).toEqual([
+      { name: 'förpackning', grams: 500, source: 'openfoodfacts' },
+    ]);
+    // Förpackningar större än 5 kg är ingen rimlig enhet.
+    expect(product({ product_quantity: 10000, product_quantity_unit: 'g' })?.units).toBeUndefined();
+  });
+
+  it('avgör om värdena gäller per 100 ml', () => {
+    expect(offBaseUnit({ nutrition_data_per: '100ml' })).toBe('ml');
+    expect(offBaseUnit({ nutrition_data_per: '100g', product_quantity_unit: 'ml' })).toBe('ml');
+    expect(offBaseUnit({ nutrition_data_per: 'serving', product_quantity_unit: 'ml' })).toBe('g');
+    expect(offBaseUnit({ product_quantity_unit: 'g' })).toBe('g');
+    expect(offBaseUnit({ quantity: '1,5 l' })).toBe('ml');
+    expect(offBaseUnit({ quantity: '400 g' })).toBe('g');
+    expect(offBaseUnit({})).toBe('g');
+  });
+
   it('använder streckkoden som namn om namn saknas', () => {
     const food = parseOffProduct(ean, {
       status: 1,
@@ -95,6 +149,13 @@ describe('lookupOpenFoodFacts', () => {
       Promise.resolve(new Response(JSON.stringify(body), { status })),
     );
   }
+
+  it('ber bara om de fält som behövs', () => {
+    const url = offProductUrl('4006381333931');
+    for (const field of ['nutrition_data_per', 'product_quantity', 'product_quantity_unit']) {
+      expect(url).toContain(field);
+    }
+  });
 
   it('hämtar produkten från world.openfoodfacts.org', async () => {
     const fetchFn = respond(200, {

@@ -1,7 +1,7 @@
 import { useState, type SyntheticEvent } from 'react';
 import { newId, putFood, saveCustomUnits, type StoredFood } from '../db/db.ts';
 import { decimalInput } from '../lib/format.ts';
-import type { FoodUnit } from '../lib/units.ts';
+import { builtInUnits, type FoodUnit } from '../lib/units.ts';
 import { parseFoodFields, type FoodFields } from '../lib/validation.ts';
 import { UnitList } from './UnitList.tsx';
 
@@ -113,10 +113,15 @@ export function CustomFoodForm({
           ))}
         </div>
       </fieldset>
-      <fieldset className="fieldset">
-        <legend className="field-label">Enheter (valfria)</legend>
-        <UnitList builtIn={NO_UNITS} custom={units} onChange={setUnits} canAdd />
-      </fieldset>
+      <details className="plan-details" data-testid="food-units">
+        <summary>Enheter (valfria)</summary>
+        <UnitList
+          builtIn={builtInUnits({ id: food?.id ?? 'egen:ny', name: fields.name })}
+          custom={units}
+          onChange={setUnits}
+          canAdd
+        />
+      </details>
       <label className="field">
         <span className="field-label">Streckkod (valfri)</span>
         <input

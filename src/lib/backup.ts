@@ -805,6 +805,10 @@ function parseAmount(value: Record<string, unknown>, bad: () => BackupError): Le
     if (!isPositive(value.portionCount)) throw bad();
     result.portionCount = value.portionCount;
   }
+  if (value.per100Unit !== undefined) {
+    if (value.per100Unit !== 'ml') throw bad();
+    result.per100Unit = 'ml';
+  }
   return result;
 }
 
@@ -834,6 +838,10 @@ function parseFoodRecord(value: unknown, index: number): LegacyStoredFood {
     food.portionName = value.portionName;
   }
   if (value.units !== undefined) food.units = parseUnits(value.units, bad);
+  if (value.per100Unit !== undefined) {
+    if (value.per100Unit !== 'ml') throw bad();
+    food.per100Unit = 'ml';
+  }
   if (value.ean !== undefined) {
     if (typeof value.ean !== 'string' || !/^\d{8,14}$/.test(value.ean)) throw bad();
     food.ean = value.ean;

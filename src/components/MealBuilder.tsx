@@ -6,6 +6,8 @@ import { decimalInput, formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
 import {
   GRAM,
+  baseOf,
+  formatBase,
   initialUsage,
   isGram,
   mergeUnits,
@@ -34,6 +36,7 @@ interface Row {
   units: FoodUnit[];
   amount: string;
   unit: string;
+  per100Unit?: 'ml';
 }
 
 /** Sparad måltid: flera ingredienser, var och en i gram eller en enhet. */
@@ -56,7 +59,7 @@ export function MealBuilder({
       };
       // Ingrediensens enhet som den vägde när måltiden sparades.
       const logged = entryUnit(item);
-      return {
+      const row: Row = {
         key: newId(),
         foodId: item.foodId,
         name: item.name,
@@ -65,6 +68,8 @@ export function MealBuilder({
         amount: decimalInput(item.amount),
         unit: item.unit,
       };
+      if (item.per100Unit) row.per100Unit = item.per100Unit;
+      return row;
     }),
   );
   const [error, setError] = useState<string | null>(null);
@@ -86,18 +91,17 @@ export function MealBuilder({
   function addIngredient(item: FoodItem) {
     const units = unitsFor(item, customUnits.get(item.id));
     const usage = initialUsage(units, null);
-    setRows((prev) => [
-      ...prev,
-      {
-        key: newId(),
-        foodId: item.id,
-        name: item.name,
-        per100: item.per100,
-        units,
-        amount: decimalInput(usage.amount),
-        unit: usage.unit,
-      },
-    ]);
+    const row: Row = {
+      key: newId(),
+      foodId: item.id,
+      name: item.name,
+      per100: item.per100,
+      units,
+      amount: decimalInput(usage.amount),
+      unit: usage.unit,
+    };
+    if (item.per100Unit === 'ml') row.per100Unit = 'ml';
+    setRows((prev) => [...prev, row]);
   }
 
   async function handleSubmit(event: SyntheticEvent) {
@@ -118,7 +122,14 @@ export function MealBuilder({
         setError(`${row.name}: ${parsed.error}`);
         return;
       }
-      items.push({ foodId: row.foodId, name: row.name, ...parsed.value, per100: row.per100 });
+      const ingredient: MealIngredient = {
+        foodId: row.foodId,
+        name: row.name,
+        ...parsed.value,
+        per100: row.per100,
+      };
+      if (row.per100Unit) ingredient.per100Unit = row.per100Unit;
+      items.push(ingredient);
     }
     const now = Date.now();
     const saved: SavedMeal = {
@@ -187,7 +198,7 @@ export function MealBuilder({
                       });
                     }}
                   >
-                    {[GRAM, ...row.units.map((u) => u.name)].map((u) => (
+                    {[...row.units.map((u) => u.name), GRAM].map((u) => (
                       <option key={u} value={u}>
                         {u}
                       </option>
@@ -209,7 +220,7 @@ export function MealBuilder({
                 {parsed.ok
                   ? isGram(row.unit)
                     ? formatKcal((row.per100.kcal * parsed.value.grams) / 100)
-                    : `≈ ${formatGrams(parsed.value.grams)} · ${formatKcal((row.per100.kcal * parsed.value.grams) / 100)}`
+                    : `≈ ${formatBase(parsed.value.grams, baseOf(row))} · ${formatKcal((row.per100.kcal * parsed.value.grams) / 100)}`
                   : parsed.error}
               </span>
             </li>

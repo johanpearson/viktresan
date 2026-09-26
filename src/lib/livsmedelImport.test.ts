@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseLivsmedel } from './livsmedel.ts';
 import {
   parseFoodList,
+  pickGroup,
   pickNutrients,
   serializeCompactFile,
   toCompactFile,
@@ -28,9 +29,42 @@ describe('parseFoodList', () => {
     });
   });
 
+  it('tar med livsmedelsgruppen om listan har den', () => {
+    expect(
+      parseFoodList([
+        { nummer: 5, namn: 'Läsk', livsmedelsgrupp: 'Drycker' },
+        { nummer: 6, namn: 'Ost', huvudgrupp: { namn: 'Ost' } },
+      ]).items,
+    ).toEqual([
+      { nummer: 5, namn: 'Läsk', grupp: 'Drycker' },
+      { nummer: 6, namn: 'Ost', grupp: 'Ost' },
+    ]);
+  });
+
   it('klarar en ren lista och okänt svar', () => {
     expect(parseFoodList([{ nummer: 5, namn: 'A' }]).items).toEqual([{ nummer: 5, namn: 'A' }]);
     expect(parseFoodList(null)).toEqual({ items: [], total: null });
+  });
+});
+
+describe('pickGroup', () => {
+  it('hittar gruppen i klassificeringarna', () => {
+    expect(
+      pickGroup([
+        { typ: 'LanguaL', namn: 'A0361' },
+        { typ: 'Livsmedelsgrupp', namn: 'Drycker' },
+      ]),
+    ).toBe('Drycker');
+    expect(
+      pickGroup({ klassificeringar: [{ klassificeringstyp: 'Huvudgrupp', beskrivning: 'Bröd' }] }),
+    ).toBe('Bröd');
+    expect(pickGroup({ nummer: 1, livsmedelsgrupp: 'Fisk' })).toBe('Fisk');
+  });
+
+  it('null utan grupp', () => {
+    expect(pickGroup([{ typ: 'LanguaL', namn: 'A0361' }])).toBeNull();
+    expect(pickGroup(null)).toBeNull();
+    expect(pickGroup({})).toBeNull();
   });
 });
 
@@ -82,5 +116,21 @@ describe('toCompactFile', () => {
     expect(parsed.retrieved).toBe('2026-09-25');
     expect(parsed.license).toBe('CC BY 4.0');
     expect(parsed.foods.map((f) => f.id)).toEqual(['lv:1', 'lv:3', 'lv:2']);
+  });
+
+  it('skriver gruppen som sjunde kolumn när den finns', () => {
+    const file = toCompactFile(
+      [
+        { nummer: 1, namn: 'Läsk', kcal: 36, proteinG: 0, carbsG: 8.8, fatG: 0, grupp: 'Drycker' },
+        { nummer: 2, namn: 'Banan', kcal: 95, proteinG: 1.1, carbsG: 21, fatG: 0.3 },
+      ],
+      '2026-09-25',
+    );
+    expect(file.foods).toEqual([
+      [2, 'Banan', 95, 1.1, 21, 0.3],
+      [1, 'Läsk', 36, 0, 8.8, 0, 'Drycker'],
+    ]);
+    const parsed = parseLivsmedel(JSON.parse(serializeCompactFile(file)));
+    expect(parsed.foods[1]?.group).toBe('Drycker');
   });
 });

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { formatGrams } from '../lib/format.ts';
-import { UNIT_SOURCE_LABELS, type FoodUnit } from '../lib/units.ts';
+import { UNIT_SOURCE_LABELS, formatBase, type BaseUnit, type FoodUnit } from '../lib/units.ts';
 import { UnitForm } from './UnitForm.tsx';
 
 interface UnitListProps {
-  /** Livsmedlets övriga enheter (standard, Open Food Facts, måltidsportion) – visas bara. */
+  /** Livsmedlets övriga enheter (volym, standard, gissning, Open Food Facts …) – visas bara. */
   builtIn: readonly FoodUnit[];
+  /** Vad enheternas vikt anges i (ml för livsmedel med värden per 100 ml). */
+  base?: BaseUnit;
   /** Användarens egna enheter – kan ändras och tas bort. */
   custom: readonly FoodUnit[];
   onChange: (custom: FoodUnit[]) => void | Promise<void>;
@@ -14,7 +16,7 @@ interface UnitListProps {
 }
 
 /** Livsmedlets enheter med vikt och källa; egna enheter kan redigeras och tas bort. */
-export function UnitList({ builtIn, custom, onChange, canAdd = false }: UnitListProps) {
+export function UnitList({ builtIn, base = 'g', custom, onChange, canAdd = false }: UnitListProps) {
   // Index i `custom` som redigeras, 'ny' för en ny enhet.
   const [editing, setEditing] = useState<number | 'ny' | null>(null);
   const [confirm, setConfirm] = useState<number | null>(null);
@@ -43,7 +45,7 @@ export function UnitList({ builtIn, custom, onChange, canAdd = false }: UnitList
           <li key={`${u.source}:${u.name}`} className="entry unit-entry" data-testid="unit-entry">
             <div className="entry-main">
               <span className="entry-date">
-                1 {u.name} ≈ {formatGrams(u.grams)}
+                1 {u.name} ≈ {formatBase(u.grams, base)}
               </span>
               <span className="muted-inline">{UNIT_SOURCE_LABELS[u.source]}</span>
             </div>
@@ -123,11 +125,12 @@ export function UnitList({ builtIn, custom, onChange, canAdd = false }: UnitList
               setEditing('ny');
             }}
           >
-            Lägg till enhet
+            Lägg till egen enhet
           </button>
         ))}
       <p className="form-note muted">
-        Standardenheterna är ungefärliga. Ändrar du en enhet påverkas inte det du redan loggat.
+        Standard- och volymenheterna är ungefärliga (volym räknas om med en typisk densitet för
+        livsmedlet). Ändrar du en enhet påverkas inte det du redan loggat.
       </p>
     </div>
   );
