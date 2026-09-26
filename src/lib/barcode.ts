@@ -3,7 +3,7 @@
  * Endast streckkoden skickas till Open Food Facts – inga andra uppgifter.
  */
 import type { FoodItem } from './foodSearch.ts';
-import { parseServing } from './units.ts';
+import { PACKAGE_UNIT, parsePackage, parseServing, type BaseUnit, type FoodUnit } from './units.ts';
 
 export const OFF_ORIGIN = 'https://world.openfoodfacts.org';
 
@@ -24,7 +24,8 @@ export function normalizeEan(input: string): string | null {
 
 export function offProductUrl(ean: string): string {
   const fields =
-    'code,product_name,product_name_sv,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit';
+    'code,product_name,product_name_sv,brands,nutriments,nutrition_data_per,serving_size,' +
+    'serving_quantity,serving_quantity_unit,quantity,product_quantity,product_quantity_unit';
   return `${OFF_ORIGIN}/api/v2/product/${ean}.json?fields=${fields}`;
 }
 
@@ -42,9 +43,29 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * Gäller näringsvärdena per 100 ml? Open Food Facts lagrar dem i `*_100g`-fälten
+ * även för drycker; det är förpackningens mängd i ml (eller `nutrition_data_per`
+ * = "100ml") som visar att etiketten anger per 100 ml.
+ */
+export function offBaseUnit(product: Record<string, unknown>): BaseUnit {
+  const per = typeof product.nutrition_data_per === 'string' ? product.nutrition_data_per : '';
+  if (per.replace(/\s/g, '').toLowerCase() === '100ml') return 'ml';
+  if (per !== '' && per !== '100g') return 'g';
+  const unit =
+    typeof product.product_quantity_unit === 'string'
+      ? product.product_quantity_unit.trim().toLowerCase()
+      : '';
+  if (unit !== '') return ['ml', 'cl', 'dl', 'l'].includes(unit) ? 'ml' : 'g';
+  const text = typeof product.quantity === 'string' ? product.quantity : '';
+  return /\d\s*(ml|cl|dl|l)(?![a-zåäö])/i.test(text) ? 'ml' : 'g';
+}
+
+/**
  * Tolkar svaret från Open Food Facts. `null` om produkten saknas eller saknar
- * energivärde per 100 g. Makron som saknas blir 0. En portionsstorlek som går att
- * tolka till gram (`serving_size`/`serving_quantity`) blir enheten "portion".
+ * energivärde per 100 g/ml. Makron som saknas blir 0. Gäller värdena per 100 ml
+ * räknas mängden direkt i volym (`per100Unit: 'ml'`, ingen densitet). En
+ * portionsstorlek blir enheten "portion" och förpackningens mängd
+ * (`product_quantity`) enheten "förpackning" (t.ex. en 33 cl burk).
  */
 export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
   if (!isRecord(body) || body.status !== 1 || !isRecord(body.product)) return null;
@@ -72,8 +93,17 @@ export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
       fatG: num(n.fat_100g) ?? 0,
     },
   };
-  const serving = parseServing(p.serving_size, p.serving_quantity, p.serving_quantity_unit);
-  if (serving !== null) item.units = [{ name: 'portion', grams: serving, source: 'openfoodfacts' }];
+  const base = offBaseUnit(p);
+  if (base === 'ml') item.per100Unit = 'ml';
+  const units: FoodUnit[] = [];
+  const serving = parseServing(p.serving_size, p.serving_quantity, p.serving_quantity_unit, base);
+  if (serving !== null) units.push({ name: 'portion', grams: serving, source: 'openfoodfacts' });
+  const pack = parsePackage(p.product_quantity, p.product_quantity_unit, p.quantity, base);
+  // En förpackning som är samma som portionen behövs inte två gånger.
+  if (pack !== null && pack !== serving) {
+    units.push({ name: PACKAGE_UNIT, grams: pack, source: 'openfoodfacts' });
+  }
+  if (units.length > 0) item.units = units;
   return item;
 }
 

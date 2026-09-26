@@ -65,8 +65,9 @@ src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
 src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
 src/lib/planText.ts     Sakliga förklaringar (spärrar, måldatum, TDEE-källa)
 src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-dagarssnitt, måltider
-src/lib/units.ts        Enheter (st, skiva, dl …): omräkning, standard/OFF/egna, senast använda, serving_size
-src/data/units.ts       Kuraterad tabell med ungefärliga standardenheter för Livsmedelsverkets livsmedel
+src/lib/units.ts        Enheter: volym via densitet, kategori (foodProfile), relevanta enheter, gissningar, förval, OFF-portion/förpackning
+src/data/units.ts       Kuraterad tabell per livsmedel (Livsmedelsverket): styckvikter, egen densitet/kategori (ungefärliga)
+src/data/foodCategories.ts  Kategorier: densitet, relevanta enheter, gissade styckvikter; namnmönster + Livsmedelsverkets grupper
 src/lib/foodSearch.ts   FoodItem + fuzzy-sökning (å/ä/ö-vikning, Damerau-Levenshtein)
 src/lib/foodCatalog.ts  Lagrat → FoodItem, snabbval (senaste, favoriter)
 src/lib/livsmedel.ts    Laddar/tolkar public/livsmedel.json (format i livsmedelFormat.ts)
@@ -206,14 +207,26 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   små = `MilestoneToast` (popover högst upp, läggs i öppen panel så den går att trycka bort). prefers-reduced-motion
   → ingen animation/konfetti. "Mål nått" erbjuder nytt mål eller takt 0. `bild-30` länkar till
   `#/framsteg/bilder/jamfor` (första och senaste bilden jämförs). Framsteg → Milstolpar: uppnådda + tre närmaste.
-- **Enheter** (`units.ts`): gram finns alltid. Övriga enheter = livsmedlets egna (`FoodItem.units`:
-  OFF-`serving_size`/`serving_quantity` tolkat till gram → "portion", måltid → "portion") +
-  standardtabellen (`src/data/units.ts`, bara `lv:`, matchning på nummer eller normaliserat namnmönster,
-  första regeln vinner, värdena ungefärliga) + egna (`foodUnits`, vinner vid samma namn). Förval:
-  senast använda enhet/mängd ur matloggen (`lastUsage`), annars 1 av första enheten, annars 100 g.
-  Vid redigering av en post gäller enhetens vikt när posten loggades (`entryUnit`).
+- **Enheter** (`units.ts`): användaren väljer enhet och mängd – gram per enhet anges inte i normalfallet.
+  Varje livsmedel får en kategori (`foodProfile`): regel i `src/data/units.ts` (bara `lv:`) → namnmönster
+  (`CATEGORY_RULES`, normaliserat namn, klassas på delen före "m."/"i"/"u." …, provas även från senare ord
+  utom `FIRST_WORD_ONLY`) → Livsmedelsverkets grupp (`GROUP_RULES`, valfri sjunde kolumn i
+  `livsmedel.json`) → `ovrigt`. Kategorin (`CATEGORIES`) ger densitet (g/ml, `null` = ingen volym), vilka
+  enheter som visas (vanligaste först) och gissade styckvikter. Enheterna (`unitsFor`) = livsmedlets egna
+  (OFF "portion"/"förpackning", måltidens "portion") + kategorins i ordning: standardvikt (`standard`),
+  volym (`volym`, `VOLUME_UNITS`: ml, cl, dl, l, krm 1, tsk 5, msk 15, glas 200, kopp 150 ml × densitet)
+  eller gissning (`gissning`) + egna (`foodUnits`, vinner vid samma namn, läggs annars sist). Gram alltid
+  sist. En gissning visas som "1 skiva ≈ 30 g, stämmer det?" – "Ja, det stämmer" eller "Justera" sparar
+  den som egen enhet (`confirmGuess`). "Lägg till egen enhet" finns i livsmedlets detaljer ("Enheter för …",
+  Egna → livsmedlet). `volym`/`gissning` lagras aldrig. Förval: senast använda (`lastUsage`), annars första
+  enheten med känd vikt (egen/OFF/standard), annars kategorins första, annars 100 g. Alla värden
+  (densitet, styckvikter) är ungefärliga. Vid redigering av en post gäller enhetens vikt när posten
+  loggades (`entryUnit`).
+  Open Food Facts: värden per 100 ml (`nutrition_data_per` = 100ml, eller förpackning i ml) →
+  `per100Unit: 'ml'` på livsmedel, loggpost och ingrediens; mängden räknas då direkt i ml (densitet 1).
+  `product_quantity`/`product_quantity_unit` (reserv `quantity`) → enheten "förpackning" (t.ex. 33 cl).
 - **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Mat-vyn) hämtas med
-  `npm run livsmedel` och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
+  `npm run livsmedel` (inkl. livsmedelsgrupp när API:t har den – `pickGroup`, förlåtande tolkning) och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
   ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
   `BarcodeDetector` + kamera, annars manuell EAN. Okända koder slås upp i Open Food Facts
   (enda externa anropet, bara streckkoden skickas) och cachas i `foods`.

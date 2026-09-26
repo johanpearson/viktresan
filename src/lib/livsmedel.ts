@@ -29,15 +29,17 @@ export function parseLivsmedel(value: unknown): Livsmedel {
   const foods: FoodItem[] = [];
   for (const row of file.foods as unknown[]) {
     if (!Array.isArray(row) || row.length < 6) continue;
-    const [nummer, namn, kcal, proteinG, carbsG, fatG] = row as unknown[];
+    const [nummer, namn, kcal, proteinG, carbsG, fatG, grupp] = row as unknown[];
     if (!Number.isInteger(nummer) || typeof namn !== 'string' || namn === '') continue;
     if (!isNum(kcal) || !isNum(proteinG) || !isNum(carbsG) || !isNum(fatG)) continue;
-    foods.push({
+    const food: FoodItem = {
       id: `lv:${String(nummer)}`,
       name: namn,
       source: 'livsmedelsverket',
       per100: { kcal, proteinG, carbsG, fatG },
-    });
+    };
+    if (typeof grupp === 'string' && grupp.trim() !== '') food.group = grupp.trim();
+    foods.push(food);
   }
   return {
     source: typeof file.source === 'string' ? file.source : '',

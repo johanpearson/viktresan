@@ -10,6 +10,7 @@ import { isGram, round1, type FoodUnit, type UnitSource } from './units.ts';
 export function storedToItem(food: StoredFood): FoodItem {
   const item: FoodItem = { id: food.id, name: food.name, source: food.source, per100: food.per100 };
   if (food.units !== undefined && food.units.length > 0) item.units = food.units;
+  if (food.per100Unit !== undefined) item.per100Unit = food.per100Unit;
   if (food.ean !== undefined) item.ean = food.ean;
   return item;
 }
@@ -43,6 +44,7 @@ export function entryToItem(entry: FoodLogEntry): FoodItem {
   };
   const unit = entryUnit(entry);
   if (unit) item.units = [unit];
+  if (entry.per100Unit !== undefined) item.per100Unit = entry.per100Unit;
   return item;
 }
 

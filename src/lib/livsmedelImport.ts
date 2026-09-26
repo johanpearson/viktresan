@@ -14,6 +14,8 @@ export const LIVSMEDEL_LICENSE = 'CC BY 4.0';
 export interface ListedFood {
   nummer: number;
   namn: string;
+  /** Livsmedelsgrupp, om listan har den. */
+  grupp?: string;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -39,12 +41,65 @@ export function parseFoodList(body: unknown): { items: ListedFood[]; total: numb
       if (!isRecord(row)) continue;
       const nummer = toNumber(row.nummer);
       const namn = typeof row.namn === 'string' ? row.namn.trim() : '';
-      if (nummer !== null && Number.isInteger(nummer) && namn !== '') items.push({ nummer, namn });
+      if (nummer === null || !Number.isInteger(nummer) || namn === '') continue;
+      const item: ListedFood = { nummer, namn };
+      const grupp = groupField(row);
+      if (grupp !== null) item.grupp = grupp;
+      items.push(item);
     }
   }
   const meta = isRecord(body) && isRecord(body._meta) ? body._meta : null;
   const total = meta ? toNumber(meta.totalRecords) : null;
   return { items, total };
+}
+
+/** Text ur ett fält som är en sträng eller ett objekt med `namn`/`beskrivning`. */
+function text(v: unknown): string | null {
+  if (typeof v === 'string' && v.trim() !== '') return v.trim();
+  if (isRecord(v)) return text(v.namn) ?? text(v.beskrivning) ?? text(v.varde);
+  return null;
+}
+
+/** Ett fält vars namn innehåller "grupp" (t.ex. `livsmedelsgrupp`, `huvudgrupp`). */
+function groupField(row: Record<string, unknown>): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    if (!/grupp/i.test(key)) continue;
+    const t = text(value);
+    if (t !== null) return t;
+  }
+  return null;
+}
+
+/**
+ * Livsmedelsgruppen ur ett livsmedels klassificeringar
+ * (`/livsmedel/{nummer}/klassificeringar`) eller ur livsmedlet självt. Svaret
+ * tolkas förlåtande: en post vars typ/namn nämner "grupp" (livsmedelsgrupp,
+ * huvudgrupp) ger sitt namn eller sin beskrivning. `null` om ingen grupp finns.
+ */
+export function pickGroup(body: unknown): string | null {
+  if (isRecord(body)) {
+    const direct = groupField(body);
+    if (direct !== null) return direct;
+  }
+  const list: unknown = Array.isArray(body)
+    ? body
+    : isRecord(body)
+      ? (body.klassificeringar ?? body.klassificering)
+      : null;
+  if (!Array.isArray(list)) return null;
+  for (const entry of list) {
+    if (!isRecord(entry)) continue;
+    const direct = groupField(entry);
+    if (direct !== null) return direct;
+    const kind = [entry.typ, entry.klassificeringstyp, entry.klassificering, entry.kategori]
+      .map(text)
+      .find((t) => t !== null);
+    if (kind && /grupp/i.test(kind)) {
+      const name = text(entry.namn) ?? text(entry.beskrivning) ?? text(entry.varde);
+      if (name !== null && name !== kind) return name;
+    }
+  }
+  return null;
 }
 
 interface Rule {
@@ -108,12 +163,16 @@ export function toCompactFile(
     proteinG: number;
     carbsG: number;
     fatG: number;
+    grupp?: string;
   }[],
   retrieved: string,
 ): LivsmedelFile {
   const foods: CompactFood[] = [...rows]
     .sort((a, b) => a.namn.localeCompare(b.namn, 'sv'))
-    .map((r) => [r.nummer, r.namn, r.kcal, r.proteinG, r.carbsG, r.fatG]);
+    .map((r): CompactFood => {
+      const row: CompactFood = [r.nummer, r.namn, r.kcal, r.proteinG, r.carbsG, r.fatG];
+      return r.grupp ? [...row, r.grupp] : row;
+    });
   return {
     format: LIVSMEDEL_FORMAT,
     source: LIVSMEDEL_SOURCE,

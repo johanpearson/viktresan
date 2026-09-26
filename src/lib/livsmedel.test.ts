@@ -25,6 +25,18 @@ describe('parseLivsmedel', () => {
     });
   });
 
+  it('läser livsmedelsgruppen när den finns', () => {
+    const result = parseLivsmedel({
+      format: LIVSMEDEL_FORMAT,
+      foods: [
+        [1, 'Läsk', 36, 0, 8.8, 0, ' Drycker '],
+        [2, 'Havregryn', 370, 13, 59, 7, ''],
+        [3, 'Banan', 95, 1.1, 21, 0.3, 42],
+      ],
+    });
+    expect(result.foods.map((f) => f.group)).toEqual(['Drycker', undefined, undefined]);
+  });
+
   it('hoppar över ogiltiga rader', () => {
     const result = parseLivsmedel({
       format: LIVSMEDEL_FORMAT,

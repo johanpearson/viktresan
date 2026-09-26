@@ -615,6 +615,55 @@ describe('backup validering', () => {
     expect(contents.snapshot.foodUnits).toEqual(foodUnits);
   });
 
+  it('behåller värden per 100 ml för livsmedel, loggposter och ingredienser', async () => {
+    const cola: StoredFood = {
+      id: 'off:7310070000019',
+      name: 'Cola',
+      source: 'openfoodfacts',
+      per100: { kcal: 42, proteinG: 0, carbsG: 10.6, fatG: 0 },
+      per100Unit: 'ml',
+      units: [{ name: 'förpackning', grams: 330, source: 'openfoodfacts' }],
+      ean: '7310070000019',
+      createdAt: 1,
+    };
+    const drink: FoodLogEntry = {
+      ...(foodLog[1] as FoodLogEntry),
+      id: 'cola',
+      foodId: cola.id,
+      amount: 33,
+      unit: 'cl',
+      grams: 330,
+      per100Unit: 'ml',
+    };
+    const meal: SavedMeal = {
+      ...(meals[0] as SavedMeal),
+      items: [
+        {
+          foodId: cola.id,
+          name: 'Cola',
+          amount: 2,
+          unit: 'dl',
+          grams: 200,
+          per100: cola.per100,
+          per100Unit: 'ml',
+        },
+      ],
+    };
+    const contents = await readBackup(
+      await createBackup(
+        { ...emptySnapshot(), foods: [cola], foodLog: [drink], meals: [meal] },
+        { now: NOW },
+      ),
+    );
+    expect(contents.snapshot.foods).toEqual([cola]);
+    expect(contents.snapshot.foodLog).toEqual([drink]);
+    expect(contents.snapshot.meals).toEqual([meal]);
+    const bad = zipOf({
+      'backup.json': JSON.stringify({ ...valid, foodLog: [{ ...drink, per100Unit: 'l' }] }),
+    });
+    expect((await errorOf(readBackup(bad))).code).toBe('invalid-data');
+  });
+
   it('tar bort okända fält', async () => {
     const file = zipOf({
       'backup.json': JSON.stringify({

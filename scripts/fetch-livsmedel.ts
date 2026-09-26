@@ -1,5 +1,6 @@
 // Hämtar Livsmedelsverkets livsmedelsdatabas och skriver public/livsmedel.json
-// (namn, kcal, protein, kolhydrater, fett per 100 g). Körs manuellt:
+// (namn, kcal, protein, kolhydrater, fett per 100 g och livsmedelsgrupp när API:t
+// har den – gruppen styr vilka enheter appen visar). Körs manuellt:
 //   npm run livsmedel
 // Resultatet checkas in och precachas av service workern – appen gör aldrig
 // egna anrop till Livsmedelsverket.
@@ -10,6 +11,7 @@ import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
   parseFoodList,
+  pickGroup,
   pickNutrients,
   serializeCompactFile,
   toCompactFile,
@@ -52,8 +54,34 @@ async function listAll(): Promise<ListedFood[]> {
   return all;
 }
 
+/** Gruppen ur klassificeringarna; fel är inte fatala (gruppen är valfri). */
+async function fetchGroup(nummer: number): Promise<string | null> {
+  try {
+    const res = await fetch(`${API}/livsmedel/${String(nummer)}/klassificeringar?sprak=1`, {
+      headers: { Accept: 'application/json' },
+    });
+    return res.ok ? pickGroup(await res.json()) : null;
+  } catch {
+    return null;
+  }
+}
+
 const foods = await listAll();
 if (foods.length === 0) throw new Error('API:t returnerade inga livsmedel.');
+
+// Har listan inga grupper: prova klassificeringarna på det första livsmedlet och
+// hämta dem för alla bara om det gav en grupp.
+const listHasGroups = foods.some((f) => f.grupp !== undefined);
+const first = foods[0];
+const fetchGroups =
+  !listHasGroups && first !== undefined && (await fetchGroup(first.nummer)) !== null;
+console.log(
+  listHasGroups
+    ? 'Livsmedelsgrupper finns i listan.'
+    : fetchGroups
+      ? 'Hämtar livsmedelsgrupper ur klassificeringarna.'
+      : 'Inga livsmedelsgrupper hittades – appen använder namnen.',
+);
 
 const rows: {
   nummer: number;
@@ -62,6 +90,7 @@ const rows: {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  grupp?: string;
 }[] = [];
 let skipped = 0;
 let next = 0;
@@ -72,6 +101,10 @@ async function worker() {
     const nutrients = pickNutrients(
       await getJson(`${API}/livsmedel/${String(food.nummer)}/naringsvarden?sprak=1`),
     );
+    if (fetchGroups) {
+      const grupp = await fetchGroup(food.nummer);
+      if (grupp !== null) food.grupp = grupp;
+    }
     if (nutrients) rows.push({ ...food, ...nutrients });
     else skipped++;
     process.stdout.write(
