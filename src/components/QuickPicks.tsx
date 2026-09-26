@@ -49,6 +49,7 @@ export function QuickPicks({ recent, favorites, meals, onPick }: QuickPicksProps
             onPick={onPick}
             empty="Inga favoriter ännu. Tryck på stjärnan när du loggar."
             testId="quick-pick"
+            markProteinRich
           />
         )}
         {tab === 'maltider' && (

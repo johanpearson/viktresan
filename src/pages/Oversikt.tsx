@@ -10,6 +10,7 @@ import { EmptyState, Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
 import { TodayCard } from '../components/TodayCard.tsx';
 import { UpcomingCard } from '../components/UpcomingCard.tsx';
+import { WeekSummaryCard } from '../components/WeekSummaryCard.tsx';
 import type { FoodLogEntry, Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatBmi, formatDate, formatKg, formatShortDate } from '../lib/format.ts';
@@ -24,6 +25,7 @@ import {
   type GoalForecast,
 } from '../lib/stats.ts';
 import { buildPlan } from '../lib/plan.ts';
+import { usePreferences } from '../lib/preferences.ts';
 import { useAppData } from '../lib/useAppData.ts';
 
 export function Oversikt() {
@@ -48,6 +50,7 @@ export function Oversikt() {
           <MissedWorkouts data={data} now={now} onChange={reload} />
         </Feature>
       )}
+      {data && <WeekSummaryCard data={data} now={now} />}
       <BackupReminder />
       {data === null ? null : data.profile === null ? (
         <EmptyState>
@@ -94,19 +97,36 @@ function Summary({ profile, weights, foodLog, children }: SummaryProps) {
     goalDate: profile.goalDate,
   });
   const plan = buildPlan(profile, weights, foodLog, today);
+  const { prefs } = usePreferences();
 
   return (
     <>
-      <div className="card hero">
-        <p className="hero-label">Nuvarande vikt</p>
-        <p className="hero-value" data-testid="current-weight">
-          {formatKg(currentKg)}
-        </p>
-        <p className="muted hero-meta">
-          {latest ? `Senast loggad ${formatDate(latest.date)}` : 'Startvikt – ingen mätning ännu'}
-          {trendKg != null && daily.length > 1 ? ` · Trend ${formatKg(trendKg)}` : ''}
-        </p>
-      </div>
+      {prefs.trendHero && latest && trendKg != null ? (
+        <div className="card hero" data-testid="hero">
+          <p className="hero-label">Trendvikt</p>
+          <p className="hero-value" data-testid="trend-weight">
+            {formatKg(trendKg)}
+          </p>
+          <p className="hero-sub">
+            Dagsvikt <span data-testid="current-weight">{formatKg(currentKg)}</span>
+            <span className="muted"> · {formatDate(latest.date)}</span>
+          </p>
+          <p className="hero-note" data-testid="trend-note">
+            Dagsvikten varierar normalt med vätska och salt – trenden visar den verkliga riktningen.
+          </p>
+        </div>
+      ) : (
+        <div className="card hero" data-testid="hero">
+          <p className="hero-label">Nuvarande vikt</p>
+          <p className="hero-value" data-testid="current-weight">
+            {formatKg(currentKg)}
+          </p>
+          <p className="muted hero-meta">
+            {latest ? `Senast loggad ${formatDate(latest.date)}` : 'Startvikt – ingen mätning ännu'}
+            {trendKg != null && daily.length > 1 ? ` · Trend ${formatKg(trendKg)}` : ''}
+          </p>
+        </div>
+      )}
 
       {children}
 

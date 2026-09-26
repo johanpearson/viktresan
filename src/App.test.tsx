@@ -1,10 +1,11 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.tsx';
 import {
   SETTING_FEATURES,
   getSetting,
+  listWater,
   saveProfile,
   setSetting,
   upsertSteps,
@@ -20,6 +21,8 @@ import {
   resetFeaturesForTests,
   type FeatureId,
 } from './lib/features.ts';
+import { resetPreferencesForTests } from './lib/preferences.ts';
+import { resetShortcutForTests } from './lib/useShortcut.ts';
 import { deleteTestDb } from './test/db.ts';
 
 // uPlot behöver canvas, som jsdom saknar. Graferna testas i e2e.
@@ -27,7 +30,12 @@ vi.mock('./components/WeightChart.tsx', () => ({ WeightChart: () => null }));
 vi.mock('./components/StepsChart.tsx', () => ({ StepsChart: () => null }));
 
 afterEach(async () => {
+  // Avmontera först, så att inga laddningar hinner öppna databasen igen medan den raderas.
+  cleanup();
   resetFeaturesForTests();
+  resetPreferencesForTests();
+  resetShortcutForTests();
+  window.history.replaceState(null, '', '/');
   await deleteTestDb();
 });
 
@@ -151,6 +159,8 @@ describe('funktionsbrytare', () => {
       .getAllByRole('term')
       .map((dt) => dt.textContent);
     const calorieCard = screen.queryByRole('heading', { name: 'Kalorimål' }) !== null;
+    // Kalorier och protein visas som ringar i Idag.
+    const rings = screen.queryByTestId('protein-ring') !== null;
     const nav = navLabels();
 
     goTo('#/logga');
@@ -185,14 +195,27 @@ describe('funktionsbrytare', () => {
     await screen.findAllByRole('heading', { level: 2 });
     const bilderTab = screen.queryByRole('heading', { name: 'Ny bild' }) !== null;
 
-    return { today, calorieCard, nav, tiles, tabs, history, legend, day, matPage, bilderTab };
+    return {
+      today,
+      calorieCard,
+      rings,
+      nav,
+      tiles,
+      tabs,
+      history,
+      legend,
+      day,
+      matPage,
+      bilderTab,
+    };
   }
 
   it('allt påslaget: alla vyer visar steg, midja, mat och bilder', async () => {
     const v = await observe([]);
     expect(v.nav).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-    expect(v.today).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
+    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
     expect(v.calorieCard).toBe(true);
+    expect(v.rings).toBe(true);
     expect(v.tiles).toEqual([
       'log-tile-vikt',
       'log-tile-midja',
@@ -216,7 +239,7 @@ describe('funktionsbrytare', () => {
       'log-tile-vatten',
       'log-tile-traning',
     ]);
-    expect(v.today).toEqual(['Vatten', 'Mat', 'Träning']);
+    expect(v.today).toEqual(['Vatten', 'Träning']);
     expect(v.history).not.toContain('Steg');
     expect(v.history).toContain('Midjemått');
     expect(v.legend).not.toContain('Steg');
@@ -232,7 +255,7 @@ describe('funktionsbrytare', () => {
       'log-tile-vatten',
       'log-tile-traning',
     ]);
-    expect(v.today).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
+    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
     expect(v.history).not.toContain('Midjemått');
     expect(v.history).toContain('Steg');
     expect(v.legend).not.toContain('Midja');
@@ -243,6 +266,7 @@ describe('funktionsbrytare', () => {
     const v = await observe(['mat']);
     expect(v.nav).toEqual(['Översikt', 'Logga', 'Kalender', 'Framsteg']);
     expect(v.calorieCard).toBe(false);
+    expect(v.rings).toBe(false);
     expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
     expect(v.legend).not.toContain('Mat');
     expect(v.day).not.toContain('Mat');
@@ -252,17 +276,18 @@ describe('funktionsbrytare', () => {
 
   it('bilder av: fliken döljs i Framsteg och i Kalender', async () => {
     const v = await observe(['bilder']);
-    expect(v.tabs).toEqual([]);
+    expect(v.tabs).toEqual(['Historik']);
     expect(v.bilderTab).toBe(false);
     expect(v.legend).not.toContain('Bilder');
     expect(v.day).not.toContain('Bilder');
-    expect(v.today).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
+    expect(v.today).toEqual(['Vatten', 'Steg', 'Träning']);
   });
 
   it('vatten och träning av: döljs i Logga, Översikt, Kalender och historik', async () => {
     const v = await observe(['vatten', 'traning']);
     expect(v.tiles).toEqual(['log-tile-vikt', 'log-tile-midja', 'log-tile-steg']);
-    expect(v.today).toEqual(['Steg', 'Mat']);
+    expect(v.today).toEqual(['Steg']);
+    expect(v.rings).toBe(true);
     expect(screen.queryByTestId('water-ring')).not.toBeInTheDocument();
     expect(v.history).not.toContain('Vatten');
     expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
@@ -307,5 +332,60 @@ describe('funktionsbrytare', () => {
     await waitFor(() => {
       expect(tile).toHaveTextContent('Lägg in läkemedel');
     });
+  });
+});
+
+describe('genvägar på appikonen', () => {
+  async function launch(action: string, off: FeatureId[] = []) {
+    window.history.replaceState(null, '', `/?action=${action}`);
+    return renderAt('', off);
+  }
+
+  it('?action=log-weight öppnar viktpanelen och tas bort ur adressen', async () => {
+    await launch('log-weight');
+    expect(await screen.findByRole('dialog', { name: 'Logga vikt' })).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+    expect(window.location.hash).toBe('#/logga/vikt');
+  });
+
+  it('?action=log-food öppnar panelen Logga mat', async () => {
+    await launch('log-food');
+    const sheet = await screen.findByRole('dialog', { name: 'Logga mat' });
+    expect(within(sheet).getByLabelText('Sök livsmedel')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/mat/logga');
+  });
+
+  it('?action=add-water loggar 250 ml direkt och kan ångras', async () => {
+    const user = userEvent.setup();
+    await launch('add-water');
+    const toast = await screen.findByTestId('shortcut-toast');
+    expect(toast).toHaveTextContent('La till 250 ml vatten.');
+    expect((await listWater()).map((w) => w.ml)).toEqual([250]);
+    await user.click(within(toast).getByRole('button', { name: 'Ångra' }));
+    expect(await within(toast).findByText('Ångrade 250 ml.')).toBeInTheDocument();
+    expect(await listWater()).toEqual([]);
+    expect(window.location.search).toBe('');
+  });
+
+  it('avstängd funktion: meddelande med knapp som slår på den och kör genvägen', async () => {
+    const user = userEvent.setup();
+    await launch('add-water', ['vatten']);
+    const toast = await screen.findByTestId('shortcut-toast');
+    expect(toast).toHaveTextContent('Vatten är avstängt');
+    expect(await listWater()).toEqual([]);
+    await user.click(within(toast).getByRole('button', { name: 'Slå på Vatten' }));
+    expect(await screen.findByText('La till 250 ml vatten.')).toBeInTheDocument();
+    expect((await listWater()).map((w) => w.ml)).toEqual([250]);
+    expect(await getSetting(SETTING_FEATURES)).toMatchObject({ vatten: true });
+  });
+
+  it('avstängd mat: Inte nu stänger meddelandet utan att slå på', async () => {
+    const user = userEvent.setup();
+    await launch('log-food', ['mat']);
+    const toast = await screen.findByTestId('shortcut-toast');
+    expect(toast).toHaveTextContent('Mat är avstängt');
+    await user.click(within(toast).getByRole('button', { name: 'Inte nu' }));
+    expect(screen.queryByTestId('shortcut-toast')).not.toBeInTheDocument();
+    expect(navLabels()).not.toContain('Mat');
   });
 });

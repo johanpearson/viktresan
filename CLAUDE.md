@@ -37,6 +37,11 @@ src/App.tsx             Layout: header, aktiv sida, uppdateringstoast, bottennav
 src/routes.ts           Route-tabell (id, hash-path, svensk etikett, ev. funktion), gamla adresser
 src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore → { route, sub }
 src/lib/features.ts     Funktionsbrytare: FEATURES, useFeatures() (filter/isEnabled), lagras i settings
+src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt veckokort), usePreferences()
+src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
+src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
+src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (≥ 15 g/100 kcal)
+src/lib/weekSummary.ts  Veckosummering mån–sön: trend, intag, protein, vatten, pass, steg + pilar och texter
 src/lib/pwaUpdate.ts    Registrerar sw.js, söker uppdateringar, toast-tillstånd, SKIP_WAITING
 src/lib/version.ts      Version, commit och byggtid (Vite define)
 src/lib/calendar.ts     Månads-/veckorutnät + vad som loggats/planerats per dag (buildDayIndex)
@@ -75,14 +80,14 @@ src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …)
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
-                        (Dag | Egna | Historik), Kalender (Månad | Vecka), Framsteg (Historik | Bilder),
-                        Inställningar
-e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1); hjälpare i
-                        helpers.ts. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
+                        (Dag | Egna | Historik; `#/mat/logga` = panelen Logga mat), Kalender (Månad | Vecka),
+                        Framsteg (Historik | Veckor | Bilder), Inställningar
+e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
+                        veckokort); hjälpare i helpers.ts. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
-scripts/                Engångsskript (ikongenerering, fetch-livsmedel.ts)
+scripts/                Engångsskript (ikongenerering inkl. genvägsikoner shortcut-*.svg, fetch-livsmedel.ts)
 public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), precachad
 ```
 
@@ -111,7 +116,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   index `by-date`), `symptoms` (v6, aptit/biverkningar, nyckel = `date`, ett per dag, `upsertSymptoms`),
   `foodUnits` (v7, användarens egna enheter per livsmedel, nyckel = `foodId`, alla källor, `saveCustomUnits`).
   Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5)
-  och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål).
+  och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål) samt `proteinFactor`
+  (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
   är det som räknas, så en senare ändrad enhet påverkar inte historiken. Migreringen v6 → v7
@@ -121,7 +127,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
-  när låset är på), `features` (funktionsbrytarna). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -160,6 +166,22 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   läkemedlets namn. `doseChanges` (start + byte av dos/läkemedel) ritas som streckade linjer i
   viktgrafen (`WeightChart` `markers`, färg `--chart-dose`) och listas i Framsteg → Historik.
   Kalendern: romb-prick, fylld = loggad, kontur = planerad; `maende`-markören visar aptit/biverkningar.
+- **Genvägar** (`shortcuts.ts`, manifestets `shortcuts` byggs från samma lista i vite.config.ts):
+  "Logga vikt" (`?action=log-weight` → `#/logga/vikt`), "+250 ml vatten" (`add-water`: loggas direkt,
+  Översikt + toast med Ångra) och "Logga mat" (`log-food` → `#/mat/logga`). `useShortcut` i `App` läser
+  `?action=` en gång när brytarna är lästa och tar bort den ur adressen (omladdning kör inte om). Avstängd
+  funktion → toast med "Slå på …" som slår på den och kör genvägen. Ikoner: `public/shortcut-*-96x96.png`.
+- **Protein** (`protein.ts`): mål = `proteinFactor` (profil, 1,2–2,0 i steg om 0,1, saknas → 1,6) × målvikt.
+  Ringar för kalorier och protein (`NutritionRings`) i Översikt → Idag och Mat → Dag; proteinkolumn och
+  snitt i Mat → Historik. "Proteinrik" (≥ 15 g protein per 100 kcal) märks i sökträffar och favoriter.
+- **Trendvikt**: `preferences.trendHero` (på som standard, Inställningar → Visning) visar trendvikten som
+  huvudsiffra och dagsvikten under (`current-weight`), med en kort förklaring. Viktgrafen: trendlinjen
+  tjock, dagsvärden som svaga punkter (`--chart-point-faint`).
+- **Veckosummering** (`weekSummary.ts`, veckor mån–sön): `WeekSummaryCard` på Översikt visar förra veckan
+  från veckans första öppning tills den stängs (`preferences.weekCardDismissed` = måndagen); alla avslutade
+  veckor med data under Framsteg → Veckor (`pastWeeks`). Trend = EMA vid veckans slut − dagen före veckan
+  (kräver vägning i veckan); snitt räknas över loggade dagar. Rader har `feature` och filtreras. Texter är
+  sakliga och uppmuntrande, aldrig skuldbeläggande; uppgång (bort från målet) beskrivs neutralt.
 - **Enheter** (`units.ts`): gram finns alltid. Övriga enheter = livsmedlets egna (`FoodItem.units`:
   OFF-`serving_size`/`serving_quantity` tolkat till gram → "portion", måltid → "portion") +
   standardtabellen (`src/data/units.ts`, bara `lv:`, matchning på nummer eller normaliserat namnmönster,

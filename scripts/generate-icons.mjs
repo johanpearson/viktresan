@@ -7,12 +7,17 @@ import { chromium } from '@playwright/test';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const standard = await readFile(`${root}public/favicon.svg`, 'utf8');
 const maskable = await readFile(`${root}scripts/icon-maskable.svg`, 'utf8');
+const shortcut = (name) => readFile(`${root}scripts/shortcut-${name}.svg`, 'utf8');
 
 const targets = [
   { file: 'pwa-192x192.png', size: 192, svg: standard },
   { file: 'pwa-512x512.png', size: 512, svg: standard },
   { file: 'maskable-512x512.png', size: 512, svg: maskable },
   { file: 'apple-touch-icon.png', size: 180, svg: maskable },
+  // Genvägar på appikonen (manifestets shortcuts, se src/lib/shortcuts.ts).
+  { file: 'shortcut-weight-96x96.png', size: 96, svg: await shortcut('weight') },
+  { file: 'shortcut-water-96x96.png', size: 96, svg: await shortcut('water') },
+  { file: 'shortcut-food-96x96.png', size: 96, svg: await shortcut('food') },
 ];
 
 const executablePath = process.env.PW_CHROMIUM_PATH;

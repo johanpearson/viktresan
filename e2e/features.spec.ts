@@ -61,6 +61,8 @@ async function observe(page: Page) {
   const navLabels = await nav(page).getByRole('link').allTextContents();
   const todayLabels = await today.locator('dt').allTextContents();
   const calorieCard = await page.getByRole('heading', { name: 'Kalorimål' }).count();
+  // Kalorier och protein visas som ringar i Idag.
+  const rings = await today.getByRole('progressbar', { name: /^(Kalorier|Protein) idag$/ }).count();
 
   await page.goto('./#/logga');
   await expect(page.getByTestId('log-tile-vikt')).toBeVisible();
@@ -83,7 +85,7 @@ async function observe(page: Page) {
     .allTextContents();
   const day = await page.getByTestId('calendar-day').locator('dt').allTextContents();
 
-  return { navLabels, todayLabels, calorieCard, tiles, tabs, sections, legend, day };
+  return { navLabels, todayLabels, calorieCard, rings, tiles, tabs, sections, legend, day };
 }
 
 test.beforeEach(async ({ page }) => {
@@ -95,10 +97,11 @@ test('allt på som standard', async ({ page }) => {
   const errors = collectErrors(page);
   const v = await observe(page);
   expect(v.navLabels).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-  expect(v.todayLabels).toEqual(['Vatten', 'Steg', 'Mat', 'Träning']);
+  expect(v.todayLabels).toEqual(['Vatten', 'Steg', 'Träning']);
   expect(v.calorieCard).toBe(1);
+  expect(v.rings).toBe(2);
   expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg', 'Vatten', 'Träning']);
-  expect(v.tabs).toEqual(['Historik', 'Bilder']);
+  expect(v.tabs).toEqual(['Historik', 'Veckor', 'Bilder']);
   expect(v.sections).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
   expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Vatten', 'Träning', 'Bilder']);
   await expect(page.getByTestId('calendar-value-bilder')).toHaveText(/1 bild/);
@@ -136,7 +139,7 @@ test('mat av döljer Mat i navigeringen, kalorimålet och kalendern', async ({ p
   const v = await observe(page);
   expect(v.navLabels).toEqual(['Översikt', 'Logga', 'Kalender', 'Framsteg']);
   expect(v.calorieCard).toBe(0);
-  expect(v.todayLabels).not.toContain('Mat');
+  expect(v.rings).toBe(0);
   expect(v.legend).not.toContain('Mat');
   expect(v.day).not.toContain('Mat');
   // Ett gammalt bokmärke till Mat visar Översikt.
@@ -151,7 +154,7 @@ test('mat av döljer Mat i navigeringen, kalorimålet och kalendern', async ({ p
 test('bilder av döljer fliken i Framsteg och i kalendern', async ({ page }) => {
   await setFeature(page, /^Bilder/, false);
   const v = await observe(page);
-  expect(v.tabs).toEqual([]);
+  expect(v.tabs).toEqual(['Historik', 'Veckor']);
   expect(v.todayLabels).not.toContain('Bilder');
   expect(v.legend).not.toContain('Bilder');
   expect(v.day).not.toContain('Bilder');

@@ -50,6 +50,7 @@ import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
 import { APPETITE_MAX, APPETITE_MIN, DOSE_FREQUENCIES, isInjectionSite } from './glp1.ts';
 import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
 import type { FoodUnit, UnitSource } from './units.ts';
+import { isValidProteinFactor } from './protein.ts';
 import { isTime } from './validation.ts';
 import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
@@ -584,6 +585,10 @@ function parseProfileRecord(value: unknown): Profile {
     )
       throw bad();
     profile.waterGoalMl = value.waterGoalMl;
+  }
+  if (value.proteinFactor !== undefined) {
+    if (!isValidProteinFactor(value.proteinFactor)) throw bad();
+    profile.proteinFactor = value.proteinFactor;
   }
   return profile;
 }

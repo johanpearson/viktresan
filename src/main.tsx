@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { LockGate } from './components/LockGate.tsx';
 import { initFeatures } from './lib/features.ts';
+import { initPreferences } from './lib/preferences.ts';
 import { registerServiceWorker } from './lib/pwaUpdate.ts';
 import { requestPersistence } from './lib/storage.ts';
 import './index.css';
@@ -12,6 +13,7 @@ import './index.css';
 void requestPersistence();
 // Läs funktionsbrytarna direkt, parallellt med låsinställningen.
 void initFeatures();
+void initPreferences();
 
 // Service workern finns bara i produktionsbygget. Registrera efter laddningen så
 // att den inte konkurrerar med appens egna filer.

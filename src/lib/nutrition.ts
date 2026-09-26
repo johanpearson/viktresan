@@ -140,17 +140,18 @@ export function rollingAverageKcal(
   });
 }
 
-/** Snittintag (kcal) för loggade dagar i de senaste `windowDays` dagarna fram till `today`. */
+/** Snittintag (kcal och protein) för loggade dagar i de senaste `windowDays` dagarna fram till `today`. */
 export function averageKcal(
   days: readonly DailyIntake[],
   today: string,
   windowDays = 7,
-): { kcal: number; days: number } | null {
+): { kcal: number; proteinG: number; days: number } | null {
   const from = addDays(today, -(windowDays - 1));
   const inWindow = days.filter((d) => d.date >= from && d.date <= today);
   if (inWindow.length === 0) return null;
   return {
     kcal: inWindow.reduce((s, d) => s + d.kcal, 0) / inWindow.length,
+    proteinG: inWindow.reduce((s, d) => s + d.proteinG, 0) / inWindow.length,
     days: inWindow.length,
   };
 }

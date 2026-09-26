@@ -50,12 +50,11 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
       setMessage({ kind: 'error', text: result.error });
       return;
     }
-    // Vattenmålet sparas under Inställningar → Vattenmål och ska inte försvinna här.
-    await saveProfile(
-      profile?.waterGoalMl != null
-        ? { ...result.value, waterGoalMl: profile.waterGoalMl }
-        : result.value,
-    );
+    // Vatten- och proteinmålet sparas i egna kort under Inställningar och ska inte försvinna här.
+    const next: Profile = { ...result.value };
+    if (profile?.waterGoalMl != null) next.waterGoalMl = profile.waterGoalMl;
+    if (profile?.proteinFactor != null) next.proteinFactor = profile.proteinFactor;
+    await saveProfile(next);
     setMessage({ kind: 'ok', text: 'Profilen är sparad.' });
     onSaved();
   }

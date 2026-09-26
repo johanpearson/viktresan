@@ -118,7 +118,7 @@ describe('averageKcal', () => {
         [day('2026-01-01', 3000), day('2026-01-05', 2000), day('2026-01-08', 1800)],
         '2026-01-08',
       ),
-    ).toEqual({ kcal: 1900, days: 2 });
+    ).toEqual({ kcal: 1900, proteinG: 0, days: 2 });
   });
 
   it('null utan data i fönstret', () => {
