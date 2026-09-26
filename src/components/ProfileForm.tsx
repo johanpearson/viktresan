@@ -50,7 +50,12 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
       setMessage({ kind: 'error', text: result.error });
       return;
     }
-    await saveProfile(result.value);
+    // Vattenmålet sparas under Inställningar → Vattenmål och ska inte försvinna här.
+    await saveProfile(
+      profile?.waterGoalMl != null
+        ? { ...result.value, waterGoalMl: profile.waterGoalMl }
+        : result.value,
+    );
     setMessage({ kind: 'ok', text: 'Profilen är sparad.' });
     onSaved();
   }

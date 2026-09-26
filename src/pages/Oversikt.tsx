@@ -2,10 +2,12 @@ import type { ReactNode } from 'react';
 import { BackupReminder } from '../components/BackupReminder.tsx';
 import { CaloriePlanCard } from '../components/CaloriePlanCard.tsx';
 import { Feature } from '../components/Feature.tsx';
+import { MissedWorkouts } from '../components/MissedWorkouts.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
 import { TodayCard } from '../components/TodayCard.tsx';
+import { UpcomingCard } from '../components/UpcomingCard.tsx';
 import type { FoodLogEntry, Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatBmi, formatDate, formatKg, formatShortDate } from '../lib/format.ts';
@@ -23,7 +25,8 @@ import { buildPlan } from '../lib/plan.ts';
 import { useAppData } from '../lib/useAppData.ts';
 
 export function Oversikt() {
-  const { data } = useAppData();
+  const { data, reload } = useAppData();
+  const now = new Date();
   return (
     <Page
       title="Översikt"
@@ -33,6 +36,11 @@ export function Oversikt() {
         </a>
       }
     >
+      {data && (
+        <Feature id="traning">
+          <MissedWorkouts data={data} now={now} onChange={reload} />
+        </Feature>
+      )}
       <BackupReminder />
       {data === null ? null : data.profile === null ? (
         <EmptyState>
@@ -41,7 +49,10 @@ export function Oversikt() {
         </EmptyState>
       ) : (
         <Summary profile={data.profile} weights={data.weights} foodLog={data.foodLog}>
-          <TodayCard data={data} />
+          <TodayCard data={data} now={now} onChange={reload} />
+          <Feature id="traning">
+            <UpcomingCard data={data} now={now} onChange={reload} />
+          </Feature>
         </Summary>
       )}
     </Page>
@@ -52,7 +63,7 @@ interface SummaryProps {
   profile: Profile;
   weights: WeightEntry[];
   foodLog: FoodLogEntry[];
-  /** Visas direkt under dagens vikt. */
+  /** Visas direkt under dagens vikt (Idag, Kommande). */
   children?: ReactNode;
 }
 

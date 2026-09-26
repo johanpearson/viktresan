@@ -4,13 +4,15 @@ import { EmptyState } from '../components/Page.tsx';
 import { RangeFilter } from '../components/RangeFilter.tsx';
 import { StepsHistory } from '../components/StepsHistory.tsx';
 import { WaistHistory } from '../components/WaistHistory.tsx';
+import { WaterHistory } from '../components/WaterHistory.tsx';
 import { WeightChart } from '../components/WeightChart.tsx';
 import { todayIso } from '../lib/dates.ts';
 import { formatDate, formatKg } from '../lib/format.ts';
 import { dailyWeights, emaTrend, filterRange, type RangeId } from '../lib/stats.ts';
 import { useAppData } from '../lib/useAppData.ts';
+import { waterGoal } from '../lib/water.ts';
 
-/** Framsteg → Historik: viktgraf och -tabell, plus steg och midja när de är påslagna. */
+/** Framsteg → Historik: viktgraf och -tabell, plus steg, midja och vatten när de är påslagna. */
 export function Historik() {
   const { data } = useAppData();
   const [range, setRange] = useState<RangeId>('3m');
@@ -41,6 +43,14 @@ export function Historik() {
       </Feature>
       <Feature id="midja">
         <WaistHistory waist={data.waist} range={range} today={today} />
+      </Feature>
+      <Feature id="vatten">
+        <WaterHistory
+          water={data.water}
+          goalMl={waterGoal(data)?.ml ?? null}
+          range={range}
+          today={today}
+        />
       </Feature>
       {daily.length > 0 && (
         <section className="card" aria-labelledby="history-list-title">

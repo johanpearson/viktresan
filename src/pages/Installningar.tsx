@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { AboutApp } from '../components/AboutApp.tsx';
 import { ExportBackup } from '../components/ExportBackup.tsx';
+import { Feature } from '../components/Feature.tsx';
 import { FeatureSettings } from '../components/FeatureSettings.tsx';
 import { ImportBackup } from '../components/ImportBackup.tsx';
 import { LockSettings } from '../components/LockSettings.tsx';
 import { Page } from '../components/Page.tsx';
 import { ProfileForm } from '../components/ProfileForm.tsx';
+import { WaterGoalSettings } from '../components/WaterGoalSettings.tsx';
 import {
   formatBytes,
   getStorageStatus,
@@ -67,6 +69,11 @@ export function Installningar() {
         )}
       </div>
       <FeatureSettings />
+      {data && (
+        <Feature id="vatten">
+          <WaterGoalSettings key={imports} data={data} onChange={reload} />
+        </Feature>
+      )}
       <section className="card" aria-labelledby="backup-title">
         <h2 className="card-title" id="backup-title">
           Säkerhetskopia

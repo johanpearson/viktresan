@@ -155,6 +155,86 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, 'Förhandsvisning');
     });
 
+    test('vatten, träning och kalenderns vyer saknar tillgänglighetsfel', async ({ page }) => {
+      await page.clock.setFixedTime(new Date('2026-09-16T12:00:00'));
+      await page.goto('./');
+      await seed(page, {
+        profile: {
+          startDate: '2026-09-01',
+          startWeightKg: 82,
+          heightCm: 180,
+          goalWeightKg: 75,
+        },
+        water: [{ id: 'v1', date: '2026-09-16', ml: 750, createdAt: 1 }],
+        workoutPlans: [
+          {
+            id: 'plan1',
+            type: 'Löpning',
+            weekdays: [0, 2, 4],
+            time: '07:00',
+            durationMin: 30,
+            intensity: 'medel',
+            startDate: '2026-09-14',
+            createdAt: 1,
+          },
+        ],
+        workouts: [
+          {
+            id: 'w1',
+            date: '2026-09-15',
+            type: 'Simning',
+            durationMin: 40,
+            status: 'hoppad',
+            createdAt: 2,
+          },
+          {
+            id: 'w2',
+            date: '2026-09-16',
+            time: '18:00',
+            type: 'Yoga',
+            durationMin: 30,
+            status: 'planerad',
+            createdAt: 3,
+          },
+        ],
+      });
+      await page.reload();
+      // Översikt med "Blev passet av?", Idag (ring + pass) och Kommande.
+      await expect(page.getByTestId('missed-workouts')).toBeVisible();
+      await expect(page.getByTestId('upcoming-card').getByTestId('workout')).toHaveCount(3);
+      await expectNoViolations(page, 'Översikt med pass och vatten');
+      await page.getByTestId('today-card').getByRole('button', { name: /^Klar/ }).tap();
+      await expect(page.getByRole('dialog', { name: 'Markera som klar' })).toBeVisible();
+      await expectNoViolations(page, 'Markera som klar');
+      await page.getByRole('button', { name: 'Stäng' }).tap();
+
+      // Logga: vatten och träning (pass + återkommande).
+      await page.goto('./#/logga');
+      await openLog(page, 'vatten');
+      await expectNoViolations(page, 'Logga vatten');
+      await openLog(page, 'traning');
+      await expectNoViolations(page, 'Logga pass');
+      await page.getByRole('dialog').getByRole('button', { name: 'Återkommande' }).tap();
+      await page.getByRole('dialog').getByRole('button', { name: 'måndag' }).tap();
+      await expectNoViolations(page, 'Logga återkommande');
+
+      // Kalender: månad med pass i olika status, dagsvy och veckovy.
+      await page.goto('./#/kalender');
+      await expect(page.getByTestId('calendar-day').getByTestId('workout')).toHaveCount(2);
+      await expectNoViolations(page, 'Kalender månad');
+      await page.getByRole('button', { name: 'Vecka', exact: true }).tap();
+      await expect(page.getByTestId('calendar-week')).toBeVisible();
+      await expectNoViolations(page, 'Kalender vecka');
+
+      // Framsteg (vattenhistorik) och Inställningar (vattenmål).
+      await page.goto('./#/framsteg');
+      await expect(page.getByTestId('water-history')).toBeVisible();
+      await expectNoViolations(page, 'Framsteg vatten');
+      await page.goto('./#/installningar');
+      await expect(page.getByTestId('water-goal-standard')).toBeVisible();
+      await expectNoViolations(page, 'Inställningar vattenmål');
+    });
+
     test('låsskärmen saknar tillgänglighetsfel', async ({ page }) => {
       await page.goto('./');
       await seed(page, { settings: { lock: { credentialId: 'AQID', createdAt: 1 } } });

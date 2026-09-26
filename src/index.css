@@ -18,6 +18,8 @@
   --macro-carbs: #b45309;
   --macro-fat: #7c3aed;
   --dot-waist: #db2777;
+  --dot-water: #0284c7;
+  --dot-training: #4d7c0f;
 
   --radius: 16px;
   --tap: 56px;
@@ -54,6 +56,8 @@
     --macro-carbs: #fbbf24;
     --macro-fat: #c4b5fd;
     --dot-waist: #f472b6;
+    --dot-water: #38bdf8;
+    --dot-training: #a3e635;
   }
 }
 
@@ -1650,4 +1654,325 @@ a.button {
 .calendar-legend .calendar-dot {
   width: 10px;
   height: 10px;
+}
+
+.dot-vatten {
+  background: var(--dot-water);
+}
+
+.dot-traning {
+  background: var(--dot-training);
+}
+
+/* Pass: genomfört = fylld, planerat = ring, obesvarat = röd (skild från Mat), hoppat = grå fyrkant. */
+.dot-traning.status-planerad {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--dot-training);
+}
+
+.dot-traning.status-obesvarad {
+  background: var(--danger);
+}
+
+.dot-traning.status-hoppad {
+  background: var(--muted);
+  border-radius: 1px;
+}
+
+.calendar-legend + .calendar-legend {
+  margin-top: 4px;
+}
+
+/* Kalender: veckovy */
+.week-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.week-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.week-day {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.week-day[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.week-day[aria-current='date'] .week-day-weekday {
+  color: var(--accent);
+}
+
+.week-day:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.week-day-name {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 84px;
+}
+
+.week-day-weekday {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.week-day-date {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.week-day-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.week-day-body .calendar-dots {
+  justify-content: flex-start;
+}
+
+.week-day-summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/* Träningspass */
+.workout-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workout {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.workout:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.stats + .workout-list,
+.today-water + .stats {
+  margin-top: 4px;
+}
+
+.workout-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.workout-when {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.workout-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workout-badge {
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge-planerad {
+  color: var(--accent);
+}
+
+.badge-genomford {
+  color: var(--ok);
+}
+
+.badge-obesvarad {
+  color: var(--chart-goal);
+}
+
+.badge-hoppad {
+  color: var(--muted);
+}
+
+.workout.status-hoppad .workout-title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.workout-manage {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.workout-status-field {
+  flex: 1;
+}
+
+.missed-card {
+  border: 2px solid var(--chart-goal);
+  margin-bottom: 16px;
+}
+
+.weekday-picker {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.weekday-button {
+  min-height: 48px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.weekday-button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.weekday-button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Vatten */
+.today-water {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.today-water .water-controls {
+  flex: 1;
+  min-width: 0;
+}
+
+.today-water .button-row {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.water-ring {
+  position: relative;
+  flex: none;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+}
+
+.water-ring svg {
+  display: block;
+}
+
+.water-ring-track {
+  stroke: var(--track);
+}
+
+.water-ring-fill {
+  stroke: var(--dot-water);
+}
+
+.water-ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.water-ring-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.water-ring-goal {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.water-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.water-custom {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.water-custom .button {
+  width: auto;
+}
+
+.water-undo {
+  align-self: flex-start;
+}
+
+.water-days {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.water-day {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.water-day .progress {
+  grid-column: 1 / -1;
+  height: 8px;
+}
+
+.water-day-ml {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }

@@ -7,9 +7,10 @@ import {
 } from 'idb';
 import type { ActivityLevel, Sex } from '../lib/energy.ts';
 import type { MealSlot, Nutrients } from '../lib/nutrition.ts';
+import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -62,6 +63,8 @@ export interface Profile {
   activityLevel?: ActivityLevel;
   /** Önskad takt i kg per vecka (0,25–1,0). Saknas → 0,5. */
   ratePerWeekKg?: number;
+  /** Sedan v5 (utan schemaändring): eget vattenmål i ml. Saknas → 33 ml × trendvikten. */
+  waterGoalMl?: number;
 }
 
 /** Eget livsmedel eller cachad träff från Open Food Facts. Värden per 100 g. */
@@ -118,6 +121,50 @@ export interface FoodLogEntry {
 export interface Favorite {
   foodId: string;
   createdAt: number;
+}
+
+/** Vatten: en post per tillfälle (+250 ml osv.), flera per dag (sedan v5). */
+export interface WaterEntry {
+  id: string;
+  date: string;
+  ml: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * Ett träningspass (sedan v5). Pass ur ett återkommande schema sparas först när de
+ * besvaras (klar/hoppade över) och har då id `<planId>:<datum>`.
+ */
+export interface Workout {
+  id: string;
+  date: string;
+  /** Lokal tid "HH:MM". Saknas → passet gäller hela dagen. */
+  time?: string;
+  type: string;
+  durationMin: number;
+  intensity?: Intensity;
+  note?: string;
+  status: WorkoutStatus;
+  planId?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** Återkommande planering, t.ex. mån/ons/fre 07:00 (sedan v5). */
+export interface WorkoutPlan {
+  id: string;
+  type: string;
+  /** 0 = måndag … 6 = söndag. */
+  weekdays: number[];
+  time: string;
+  durationMin: number;
+  intensity?: Intensity;
+  note?: string;
+  startDate: string;
+  endDate?: string;
+  createdAt: number;
+  updatedAt?: number;
 }
 
 /**
@@ -187,6 +234,23 @@ export interface ViktresanDB extends DBSchema {
   favorites: {
     key: string;
     value: Favorite;
+  };
+  /** Sedan v5. */
+  water: {
+    key: string;
+    value: WaterEntry;
+    indexes: { 'by-date': string };
+  };
+  /** Sedan v5. */
+  workouts: {
+    key: string;
+    value: Workout;
+    indexes: { 'by-date': string };
+  };
+  /** Sedan v5. */
+  workoutPlans: {
+    key: string;
+    value: WorkoutPlan;
   };
 }
 
@@ -291,6 +355,14 @@ export function getDb(): Promise<Database> {
         const foodLog = db.createObjectStore('foodLog', { keyPath: 'id' });
         foodLog.createIndex('by-date', 'date');
         db.createObjectStore('favorites', { keyPath: 'foodId' });
+      }
+      if (oldVersion < 5) {
+        // v5: vatten och träning. Nya stores – befintlig data berörs inte.
+        const water = db.createObjectStore('water', { keyPath: 'id' });
+        water.createIndex('by-date', 'date');
+        const workouts = db.createObjectStore('workouts', { keyPath: 'id' });
+        workouts.createIndex('by-date', 'date');
+        db.createObjectStore('workoutPlans', { keyPath: 'id' });
       }
     },
     blocking() {
@@ -468,6 +540,70 @@ export async function setFavorite(foodId: string, favorite: boolean, now = Date.
   else await db.delete('favorites', foodId);
 }
 
+/**
+ * Lägger till en vattenpost. `createdAt` hålls strikt växande per dag så att
+ * "Ångra senaste" alltid hittar rätt post, även vid två tryck samma millisekund.
+ */
+export async function addWater(date: string, ml: number, now = Date.now()): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('water', 'readwrite');
+  const entries = await tx.store.index('by-date').getAll(date);
+  const latest = Math.max(-1, ...entries.map((e) => e.createdAt));
+  await tx.store.put({ id: newId(), date, ml, createdAt: Math.max(now, latest + 1) });
+  await tx.done;
+}
+
+/** Ångrar dagens senast registrerade vattenpost. Returnerar den borttagna posten. */
+export async function undoLastWater(date: string): Promise<WaterEntry | null> {
+  const db = await getDb();
+  const tx = db.transaction('water', 'readwrite');
+  const entries = await tx.store.index('by-date').getAll(date);
+  const last = entries.sort((a, b) => a.createdAt - b.createdAt).at(-1) ?? null;
+  if (last) await tx.store.delete(last.id);
+  await tx.done;
+  return last;
+}
+
+/** Alla vattenposter, äldst först. */
+export async function listWater(): Promise<WaterEntry[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex('water', 'by-date');
+  return all.sort(byDateThenCreated);
+}
+
+export async function putWorkout(workout: Workout): Promise<void> {
+  const db = await getDb();
+  await db.put('workouts', workout);
+}
+
+export async function deleteWorkout(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('workouts', id);
+}
+
+/** Alla sparade pass, äldst först. */
+export async function listWorkouts(): Promise<Workout[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex('workouts', 'by-date');
+  return all.sort(byDateThenCreated);
+}
+
+export async function putWorkoutPlan(plan: WorkoutPlan): Promise<void> {
+  const db = await getDb();
+  await db.put('workoutPlans', plan);
+}
+
+export async function deleteWorkoutPlan(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('workoutPlans', id);
+}
+
+export async function listWorkoutPlans(): Promise<WorkoutPlan[]> {
+  const db = await getDb();
+  const all = await db.getAll('workoutPlans');
+  return all.sort((a, b) => a.createdAt - b.createdAt);
+}
+
 export async function putPhoto(photo: PhotoEntry): Promise<void> {
   const db = await getDb();
   await db.put('photos', photo);
@@ -528,6 +664,9 @@ export interface Snapshot {
   meals: SavedMeal[];
   foodLog: FoodLogEntry[];
   favorites: Favorite[];
+  water: WaterEntry[];
+  workouts: Workout[];
+  workoutPlans: WorkoutPlan[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -541,27 +680,58 @@ export function emptySnapshot(): Snapshot {
     meals: [],
     foodLog: [],
     favorites: [],
+    water: [],
+    workouts: [],
+    workoutPlans: [],
   };
 }
 
 export async function readSnapshot(): Promise<Snapshot> {
-  const [profile, weights, waist, steps, photos, foods, meals, foodLog, favorites] =
-    await Promise.all([
-      getProfile(),
-      listWeights(),
-      listWaist(),
-      listSteps(),
-      listPhotos(),
-      listFoods(),
-      listMeals(),
-      listFoodLog(),
-      listFavorites(),
-    ]);
-  return { profile, weights, waist, steps, photos, foods, meals, foodLog, favorites };
+  const [
+    profile,
+    weights,
+    waist,
+    steps,
+    photos,
+    foods,
+    meals,
+    foodLog,
+    favorites,
+    water,
+    workouts,
+    workoutPlans,
+  ] = await Promise.all([
+    getProfile(),
+    listWeights(),
+    listWaist(),
+    listSteps(),
+    listPhotos(),
+    listFoods(),
+    listMeals(),
+    listFoodLog(),
+    listFavorites(),
+    listWater(),
+    listWorkouts(),
+    listWorkoutPlans(),
+  ]);
+  return {
+    profile,
+    weights,
+    waist,
+    steps,
+    photos,
+    foods,
+    meals,
+    foodLog,
+    favorites,
+    water,
+    workouts,
+    workoutPlans,
+  };
 }
 
 /**
- * `replace`: all befintlig data (profil, vikt, midja, steg, bilder, mat) ersätts.
+ * `replace`: all befintlig data (profil, vikt, midja, steg, bilder, mat, vatten, träning) ersätts.
  * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg datumet, för
  * favoriter `foodId`) vinner den senast ändrade (`updatedAt ?? createdAt`, lika →
  * befintlig behålls). Befintlig profil behålls.
@@ -578,6 +748,9 @@ const DATA_STORES = [
   'meals',
   'foodLog',
   'favorites',
+  'water',
+  'workouts',
+  'workoutPlans',
 ] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
@@ -593,6 +766,9 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const meals = tx.objectStore('meals');
   const foodLog = tx.objectStore('foodLog');
   const favorites = tx.objectStore('favorites');
+  const water = tx.objectStore('water');
+  const workouts = tx.objectStore('workouts');
+  const workoutPlans = tx.objectStore('workoutPlans');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -605,6 +781,9 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.meals.map((m) => meals.put(m)),
       ...snapshot.foodLog.map((e) => foodLog.put(e)),
       ...snapshot.favorites.map((f) => favorites.put(f)),
+      ...snapshot.water.map((w) => water.put(w)),
+      ...snapshot.workouts.map((w) => workouts.put(w)),
+      ...snapshot.workoutPlans.map((p) => workoutPlans.put(p)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -639,6 +818,18 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     for (const f of snapshot.favorites) {
       if (!(await favorites.get(f.foodId))) await favorites.put(f);
     }
+    for (const w of snapshot.water) {
+      const existing = await water.get(w.id);
+      if (!existing || changedAt(w) > changedAt(existing)) await water.put(w);
+    }
+    for (const w of snapshot.workouts) {
+      const existing = await workouts.get(w.id);
+      if (!existing || changedAt(w) > changedAt(existing)) await workouts.put(w);
+    }
+    for (const p of snapshot.workoutPlans) {
+      const existing = await workoutPlans.get(p.id);
+      if (!existing || changedAt(p) > changedAt(existing)) await workoutPlans.put(p);
+    }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);
     }
@@ -646,7 +837,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   await tx.done;
 }
 
-/** När den äldsta posten (vikt, midja, steg, bild eller matlogg) skapades (ms), eller null. */
+/** När den äldsta posten (vikt, midja, steg, bild, matlogg, vatten, pass) skapades (ms), eller null. */
 export async function getOldestEntryTime(): Promise<number | null> {
   const db = await getDb();
   const all = await Promise.all([
@@ -655,6 +846,9 @@ export async function getOldestEntryTime(): Promise<number | null> {
     db.getAll('steps'),
     db.getAll('photos'),
     db.getAll('foodLog'),
+    db.getAll('water'),
+    db.getAll('workouts'),
+    db.getAll('workoutPlans'),
   ]);
   let oldest: number | null = null;
   for (const { createdAt } of all.flat()) {

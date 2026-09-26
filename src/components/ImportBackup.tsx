@@ -190,6 +190,12 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
         <dd data-testid="preview-foods">
           {summary.foods} + {summary.meals}
         </dd>
+        <dt>Vattenposter</dt>
+        <dd data-testid="preview-water">{summary.water}</dd>
+        <dt>Träningspass och scheman</dt>
+        <dd data-testid="preview-workouts">
+          {summary.workouts} + {summary.workoutPlans}
+        </dd>
         <dt>Bilder</dt>
         <dd data-testid="preview-photos">
           {summary.photos} ({formatBytes(summary.photoBytes)})

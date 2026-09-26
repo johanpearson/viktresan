@@ -2,6 +2,8 @@
 import { addDays, toDayNumber } from './dates.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { dailySteps, dailyWeights, type DatedSteps } from './stats.ts';
+import { dailyWater, type DatedWater } from './water.ts';
+import { displayStatus, type DisplayStatus, type WorkoutItem } from './workouts.ts';
 
 /** Månad som "YYYY-MM". */
 export type Month = string;
@@ -47,13 +49,34 @@ export function formatMonth(month: Month): string {
   return monthFormat.format(new Date(toDayNumber(`${month}-01`) * 86_400_000));
 }
 
-/** Det som loggats en dag. Saknat fält = inget loggat. */
+/** Veckan (måndag–söndag) som innehåller datumet. */
+export function weekOf(iso: string): string[] {
+  const monday = addDays(iso, -weekdayIndex(iso));
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+}
+
+/** Första och sista datum i månadens rutnät (hela veckor). */
+export function monthRange(month: Month): { from: string; to: string } {
+  const first = `${month}-01`;
+  const from = addDays(first, -weekdayIndex(first));
+  const last = addDays(`${shiftMonth(month, 1)}-01`, -1);
+  return { from, to: addDays(last, 6 - weekdayIndex(last)) };
+}
+
+export interface DayWorkout {
+  item: WorkoutItem;
+  status: DisplayStatus;
+}
+
+/** Det som loggats (eller planerats) en dag. Saknat fält = inget. */
 export interface DayLog {
   weightKg?: number;
   waistCm?: number;
   steps?: number;
   kcal?: number;
   photos?: number;
+  waterMl?: number;
+  workouts?: DayWorkout[];
 }
 
 export interface DayIndexInput {
@@ -62,6 +85,11 @@ export interface DayIndexInput {
   steps: readonly DatedSteps[];
   foodLog: readonly DatedPortion[];
   photoDates: readonly string[];
+  water?: readonly DatedWater[];
+  /** Sparade och genererade pass (se `workoutsBetween`) för de dagar som visas. */
+  workouts?: readonly WorkoutItem[];
+  /** Avgör om planerade pass är obesvarade. */
+  now?: Date;
 }
 
 export function buildDayIndex(input: DayIndexInput): Map<string, DayLog> {
@@ -81,6 +109,12 @@ export function buildDayIndex(input: DayIndexInput): Map<string, DayLog> {
   for (const date of input.photoDates) {
     const entry = day(date);
     entry.photos = (entry.photos ?? 0) + 1;
+  }
+  for (const w of dailyWater(input.water ?? [])) day(w.date).waterMl = w.ml;
+  const now = input.now ?? new Date();
+  for (const item of input.workouts ?? []) {
+    const entry = day(item.date);
+    (entry.workouts ??= []).push({ item, status: displayStatus(item, now) });
   }
   return index;
 }
