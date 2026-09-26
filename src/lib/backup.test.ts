@@ -15,6 +15,7 @@ import {
   type Medication,
   type MilestoneRecord,
   type PhotoEntry,
+  type PhotoSession,
   type Profile,
   type SavedMeal,
   type StoredFood,
@@ -313,7 +314,9 @@ const steps: StepsEntry[] = [
 function photo(id: string, date: string, bytes: number[], extra: Partial<PhotoEntry> = {}) {
   return {
     id,
+    sessionId: `s-${date}`,
     date,
+    angle: 'fram',
     blob: new Blob([new Uint8Array(bytes)], { type: 'image/webp' }),
     mimeType: 'image/webp',
     createdAt: 10,
@@ -321,14 +324,18 @@ function photo(id: string, date: string, bytes: number[], extra: Partial<PhotoEn
   } satisfies PhotoEntry;
 }
 
+const photoSessions: PhotoSession[] = [
+  { id: 's-2026-01-01', date: '2026-01-01', weightKg: 92.5, note: 'Första', createdAt: 10 },
+  { id: 's-2026-02-01', date: '2026-02-01', createdAt: 10, updatedAt: 12 },
+];
+
 const photos: PhotoEntry[] = [
   photo('p1', '2026-01-01', [0x52, 0x49, 0x46, 0x46, 0, 1, 2, 3, 255], {
-    weightKg: 92.5,
     width: 1080,
     height: 1440,
   }),
   {
-    ...photo('p2', '2026-02-01', [9, 8, 7]),
+    ...photo('p2', '2026-02-01', [9, 8, 7], { angle: 'profil', side: 'hoger', updatedAt: 11 }),
     blob: new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' }),
     mimeType: 'image/jpeg',
   },
@@ -341,6 +348,7 @@ async function seed(): Promise<void> {
       weights,
       waist,
       steps,
+      photoSessions,
       photos,
       ...foodData,
       ...trainingData,
@@ -477,6 +485,7 @@ describe('backup validering', () => {
     weights: [{ id: 'a', date: '2026-01-01', weightKg: 80, createdAt: 1 }],
     waist: [{ date: '2026-01-01', waistCm: 90, createdAt: 1 }],
     steps: [{ date: '2026-01-01', steps: 8000, createdAt: 1 }],
+    photoSessions: [],
     photos: [],
     foods: [],
     meals: [],
@@ -570,6 +579,17 @@ describe('backup validering', () => {
       {
         ...valid,
         photos: [{ id: 'p', date: '2026-01-01', mimeType: 'text/html', createdAt: 1, file: 'x' }],
+      },
+      // Version 8 kräver fototillfällen, och varje bild ska höra till ett.
+      { ...valid, photoSessions: undefined },
+      { ...valid, photoSessions: [{ id: 's', date: 'nej', createdAt: 1 }] },
+      { ...valid, photoSessions: [{ id: 's', date: '2026-01-01', createdAt: 1, weightKg: -1 }] },
+      {
+        ...valid,
+        photoSessions: [
+          { id: 's', date: '2026-01-01', createdAt: 1 },
+          { id: 's', date: '2026-01-02', createdAt: 1 },
+        ],
       },
     ];
     for (const manifest of cases) {
@@ -679,6 +699,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   };
 
   const expected: Omit<Snapshot, 'photos'> = {
+    photoSessions: [{ id: 'migrerad:2026-01-01', date: '2026-01-01', createdAt: 10 }],
     milestones: [],
     foods: [],
     meals: [],
@@ -771,6 +792,121 @@ describe('import av version 1 (kombinerade mätningar)', () => {
     const contents = await readBackup(file, password);
     expect(contents.encrypted).toBe(true);
     expect({ ...contents.snapshot, photos: [] }).toEqual({ ...expected, photos: [] });
+  });
+});
+
+describe('import av version 7 (bilder utan tillfällen)', () => {
+  it('grupperar bilderna per datum med vinkel "ej angiven" och vikten på tillfället', async () => {
+    const v7 = {
+      format: BACKUP_FORMAT,
+      version: 7,
+      exportedAt: NOW.toISOString(),
+      profile: null,
+      weights: [],
+      waist: [],
+      steps: [],
+      photos: [
+        {
+          id: 'a',
+          date: '2026-01-01',
+          mimeType: 'image/webp',
+          createdAt: 1,
+          weightKg: 90,
+          file: 'photos/a.webp',
+        },
+        {
+          id: 'b',
+          date: '2026-01-01',
+          mimeType: 'image/webp',
+          createdAt: 2,
+          file: 'photos/b.webp',
+        },
+        {
+          id: 'c',
+          date: '2026-02-01',
+          mimeType: 'image/webp',
+          createdAt: 3,
+          weightKg: 88,
+          width: 3,
+          height: 4,
+          file: 'photos/c.webp',
+        },
+      ],
+      foods: [],
+      meals: [],
+      foodLog: [],
+      favorites: [],
+      water: [],
+      workouts: [],
+      workoutPlans: [],
+      medications: [],
+      injections: [],
+      symptoms: [],
+      foodUnits: [],
+      milestones: [],
+    };
+    const file = zipOf({
+      'backup.json': JSON.stringify(v7),
+      'photos/a.webp': new Uint8Array([1]),
+      'photos/b.webp': new Uint8Array([2]),
+      'photos/c.webp': new Uint8Array([3]),
+    });
+    const { snapshot } = await readBackup(file);
+    expect(snapshot.photoSessions).toEqual([
+      { id: 'migrerad:2026-01-01', date: '2026-01-01', weightKg: 90, createdAt: 1 },
+      { id: 'migrerad:2026-02-01', date: '2026-02-01', weightKg: 88, createdAt: 3 },
+    ]);
+    expect(snapshot.photos.map((p) => [p.id, p.sessionId, p.angle])).toEqual([
+      ['a', 'migrerad:2026-01-01', 'okand'],
+      ['b', 'migrerad:2026-01-01', 'okand'],
+      ['c', 'migrerad:2026-02-01', 'okand'],
+    ]);
+    expect(snapshot.photos.some((p) => 'weightKg' in p)).toBe(false);
+
+    // Sammanslagning två gånger dubblerar inte tillfällena.
+    await applySnapshot(snapshot, 'merge');
+    await applySnapshot(snapshot, 'merge');
+    expect((await readSnapshot()).photoSessions).toHaveLength(2);
+  });
+
+  it('en bild som pekar på ett okänt tillfälle avvisas i version 8', async () => {
+    const file = zipOf({
+      'backup.json': JSON.stringify({
+        format: BACKUP_FORMAT,
+        version: 8,
+        exportedAt: NOW.toISOString(),
+        profile: null,
+        weights: [],
+        waist: [],
+        steps: [],
+        photoSessions: [{ id: 's1', date: '2026-01-01', createdAt: 1 }],
+        photos: [
+          {
+            id: 'a',
+            sessionId: 'okänt',
+            angle: 'fram',
+            date: '2026-01-01',
+            mimeType: 'image/webp',
+            createdAt: 1,
+            file: 'photos/a.webp',
+          },
+        ],
+        foods: [],
+        meals: [],
+        foodLog: [],
+        favorites: [],
+        water: [],
+        workouts: [],
+        workoutPlans: [],
+        medications: [],
+        injections: [],
+        symptoms: [],
+        foodUnits: [],
+        milestones: [],
+      }),
+      'photos/a.webp': new Uint8Array([1]),
+    });
+    expect((await errorOf(readBackup(file))).message).toMatch(/okänt fototillfälle/);
   });
 });
 
@@ -899,6 +1035,7 @@ describe('validering av GLP-1', () => {
       waist: [],
       steps: [],
       photos: [],
+      photoSessions: [],
       foods: [],
       meals: [],
       foodLog: [],
@@ -955,6 +1092,7 @@ describe('validering av vatten och träning', () => {
       waist: [],
       steps: [],
       photos: [],
+      photoSessions: [],
       foods: [],
       meals: [],
       foodLog: [],
@@ -1029,7 +1167,16 @@ describe('import slå ihop', () => {
         // Lika gammalt → befintligt behålls.
         { date: '2026-01-07', steps: 1, createdAt: 2 },
       ],
-      photos: [photo('p3', '2026-03-01', [1, 2, 3])],
+      photoSessions: [
+        // Vikten ändrad senare på den andra enheten → ersätter; nytt tillfälle läggs till.
+        { ...(photoSessions[0] as PhotoSession), weightKg: 92, updatedAt: 60 },
+        { id: 's-2026-03-01', date: '2026-03-01', createdAt: 10 },
+      ],
+      photos: [
+        photo('p3', '2026-03-01', [1, 2, 3]),
+        // Vinkeln ändrad tidigare än lokalt → lokal behålls.
+        { ...(photos[1] as PhotoEntry), angle: 'fram', updatedAt: 5 },
+      ],
       foods: [
         // Nyare version av den cachade produkten → ersätter.
         { ...(foods[1] as StoredFood), name: 'Havregryn 1 kg', updatedAt: 20 },
@@ -1100,7 +1247,16 @@ describe('import slå ihop', () => {
       ['2026-01-07', 12034],
       ['2026-01-08', 5000],
     ]);
-    expect(after.photos.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+    expect(after.photos.map((p) => [p.id, p.angle])).toEqual([
+      ['p1', 'fram'],
+      ['p2', 'profil'],
+      ['p3', 'fram'],
+    ]);
+    expect(after.photoSessions.map((x) => [x.id, x.weightKg])).toEqual([
+      ['s-2026-01-01', 92],
+      ['s-2026-02-01', undefined],
+      ['s-2026-03-01', undefined],
+    ]);
     expect(after.foods.map((f) => f.name)).toEqual(['Havregryn 1 kg', 'Mormors gröt']);
     expect(after.meals.map((m) => m.name)).toEqual(['Frukostgröt']);
     expect(after.foodLog.map((e) => e.id)).toEqual(['f1', 'f2', 'f3']);
@@ -1159,6 +1315,7 @@ describe('summarizeBackup', () => {
           weights,
           waist,
           steps,
+          photoSessions,
           photos,
           ...foodData,
           ...trainingData,
@@ -1187,6 +1344,7 @@ describe('summarizeBackup', () => {
       steps: 2,
       photos: 2,
       photoBytes: 13,
+      photoSessions: 2,
       firstDate: '2026-01-01',
       lastDate: '2026-02-01',
     });

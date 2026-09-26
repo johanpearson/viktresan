@@ -7,6 +7,7 @@ import { FeatureSettings } from '../components/FeatureSettings.tsx';
 import { ImportBackup } from '../components/ImportBackup.tsx';
 import { LockSettings } from '../components/LockSettings.tsx';
 import { Page } from '../components/Page.tsx';
+import { PhotoSettings } from '../components/PhotoSettings.tsx';
 import { ProfileForm } from '../components/ProfileForm.tsx';
 import { ProteinGoalSettings } from '../components/ProteinGoalSettings.tsx';
 import { WaterGoalSettings } from '../components/WaterGoalSettings.tsx';
@@ -72,6 +73,9 @@ export function Installningar() {
       </div>
       <FeatureSettings />
       <DisplaySettings />
+      <Feature id="bilder">
+        <PhotoSettings />
+      </Feature>
       {data && (
         <Feature id="mat">
           <ProteinGoalSettings key={imports} data={data} onChange={reload} />

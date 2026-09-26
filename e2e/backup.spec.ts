@@ -128,12 +128,23 @@ const DATA = {
       updatedAt: 1_700_000_200_000,
     },
   ],
+  photoSessions: [
+    {
+      id: 's1',
+      date: isoDaysFromToday(-30),
+      weightKg: 90,
+      note: 'Före',
+      createdAt: 1_700_000_050_000,
+    },
+  ],
   photos: [
     {
       id: 'p1',
+      sessionId: 's1',
+      angle: 'profil',
+      side: 'vanster',
       date: isoDaysFromToday(-30),
       createdAt: 1_700_000_050_000,
-      weightKg: 90,
       width: 1080,
       height: 1440,
       bytes: [0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4, 250, 251, 252, 253],

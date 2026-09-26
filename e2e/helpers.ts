@@ -26,7 +26,9 @@ export interface SeedData {
   waist?: Record<string, unknown>[];
   /** Steg; nyckel = `date`. */
   steps?: Record<string, unknown>[];
-  /** Bilder; `bytes` blir en image/webp-Blob. */
+  /** Fototillfällen. */
+  photoSessions?: Record<string, unknown>[];
+  /** Bilder; `bytes` blir en image/webp-Blob. Ange `sessionId` och `angle`. */
   photos?: (Record<string, unknown> & { bytes: number[] })[];
   settings?: Record<string, unknown>;
   /** Egna livsmedel och cachade Open Food Facts-produkter. */
@@ -67,6 +69,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
         'weights',
         'waist',
         'steps',
+        'photoSessions',
         'photos',
         'profile',
         'settings',
@@ -89,6 +92,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
     for (const w of data.weights ?? []) tx.objectStore('weights').put(w);
     for (const w of data.waist ?? []) tx.objectStore('waist').put(w);
     for (const s of data.steps ?? []) tx.objectStore('steps').put(s);
+    for (const p of data.photoSessions ?? []) tx.objectStore('photoSessions').put(p);
     for (const { bytes, ...p } of data.photos ?? []) {
       const blob = new Blob([new Uint8Array(bytes)], { type: 'image/webp' });
       tx.objectStore('photos').put({ ...p, blob, mimeType: 'image/webp' });
@@ -125,6 +129,7 @@ export interface Dump {
   weights: unknown[];
   waist: unknown[];
   steps: unknown[];
+  photoSessions: unknown[];
   photos: (Record<string, unknown> & { bytes: number[]; type: string })[];
   settings: Record<string, unknown>;
   foods: unknown[];
@@ -180,6 +185,7 @@ export async function dump(page: Page): Promise<Dump> {
       weights,
       waist,
       steps,
+      photoSessions,
       photos,
       settingValues,
       settingKeys,
@@ -200,6 +206,7 @@ export async function dump(page: Page): Promise<Dump> {
       all('weights'),
       all('waist'),
       all('steps'),
+      all('photoSessions'),
       all('photos'),
       all('settings'),
       keys(),
@@ -222,6 +229,7 @@ export async function dump(page: Page): Promise<Dump> {
       weights: weights.sort(byId),
       waist,
       steps,
+      photoSessions: photoSessions.sort(byId),
       photos: await Promise.all(
         (photos as (Record<string, unknown> & { blob: Blob })[])
           .sort(byId)
@@ -248,7 +256,7 @@ export async function dump(page: Page): Promise<Dump> {
   });
 }
 
-/** Tömmer profil, mätningar (vikt, midja, steg), bilder, mat (inkl. egna enheter), vatten, träning, GLP-1 och milstolpar – som en ny enhet. */
+/** Tömmer profil, mätningar (vikt, midja, steg), bilder och fototillfällen, mat (inkl. egna enheter), vatten, träning, GLP-1 och milstolpar – som en ny enhet. */
 export async function wipe(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -264,6 +272,7 @@ export async function wipe(page: Page): Promise<void> {
       'weights',
       'waist',
       'steps',
+      'photoSessions',
       'photos',
       'profile',
       'foods',
