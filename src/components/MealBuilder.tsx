@@ -1,14 +1,26 @@
-import { useState, type SyntheticEvent } from 'react';
+import { useMemo, useState, type SyntheticEvent } from 'react';
 import { newId, putMeal, type MealIngredient, type SavedMeal } from '../db/db.ts';
+import { entryUnit, sourceOf } from '../lib/foodCatalog.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
-import { decimalInput, formatGrams, formatKcal, parseDecimal } from '../lib/format.ts';
+import { decimalInput, formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
+import {
+  GRAM,
+  initialUsage,
+  isGram,
+  mergeUnits,
+  parseUnitAmount,
+  unitsFor,
+  type FoodUnit,
+} from '../lib/units.ts';
 import { FoodSearch } from './FoodSearch.tsx';
 
 interface MealBuilderProps {
   /** Måltiden som redigeras, annars skapas en ny. */
   meal: SavedMeal | null;
   searchItems: readonly FoodItem[];
+  /** Användarens egna enheter per livsmedel. */
+  customUnits: ReadonlyMap<string, readonly FoodUnit[]>;
   loading: boolean;
   onSaved: (meal: SavedMeal) => void;
   onCancel: () => void;
@@ -19,34 +31,61 @@ interface Row {
   foodId: string;
   name: string;
   per100: MealIngredient['per100'];
-  grams: string;
+  units: FoodUnit[];
+  amount: string;
+  unit: string;
 }
 
-function rowsFor(meal: SavedMeal | null): Row[] {
-  return (meal?.items ?? []).map((item) => ({
-    key: newId(),
-    foodId: item.foodId,
-    name: item.name,
-    per100: item.per100,
-    grams: decimalInput(item.grams),
-  }));
-}
-
-/** Sparad måltid: flera ingredienser med gram. */
-export function MealBuilder({ meal, searchItems, loading, onSaved, onCancel }: MealBuilderProps) {
+/** Sparad måltid: flera ingredienser, var och en i gram eller en enhet. */
+export function MealBuilder({
+  meal,
+  searchItems,
+  customUnits,
+  loading,
+  onSaved,
+  onCancel,
+}: MealBuilderProps) {
+  const catalog = useMemo(() => new Map(searchItems.map((i) => [i.id, i])), [searchItems]);
   const [name, setName] = useState(meal?.name ?? '');
-  const [rows, setRows] = useState<Row[]>(() => rowsFor(meal));
+  const [rows, setRows] = useState<Row[]>(() =>
+    (meal?.items ?? []).map((item) => {
+      const food = catalog.get(item.foodId) ?? {
+        id: item.foodId,
+        name: item.name,
+        source: sourceOf(item.foodId),
+      };
+      // Ingrediensens enhet som den vägde när måltiden sparades.
+      const logged = entryUnit(item);
+      return {
+        key: newId(),
+        foodId: item.foodId,
+        name: item.name,
+        per100: item.per100,
+        units: mergeUnits(unitsFor(food, customUnits.get(item.foodId)), logged ? [logged] : []),
+        amount: decimalInput(item.amount),
+        unit: item.unit,
+      };
+    }),
+  );
   const [error, setError] = useState<string | null>(null);
 
-  const valid = rows.map((r) => ({ row: r, grams: parseDecimal(r.grams) }));
-  const totals = totalOf(
-    valid.flatMap(({ row, grams }) =>
-      grams != null && grams > 0 ? [{ grams, per100: row.per100 }] : [],
-    ),
+  const parsedRows = rows.map((row) => ({
+    row,
+    parsed: parseUnitAmount(row.amount, row.unit, row.units),
+  }));
+  const valid = parsedRows.flatMap(({ row, parsed }) =>
+    parsed.ok ? [{ grams: parsed.value.grams, per100: row.per100 }] : [],
   );
-  const totalG = valid.reduce((s, v) => s + (v.grams != null && v.grams > 0 ? v.grams : 0), 0);
+  const totals = totalOf(valid);
+  const totalG = valid.reduce((s, v) => s + v.grams, 0);
+
+  function updateRow(key: string, change: Partial<Row>) {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...change } : r)));
+  }
 
   function addIngredient(item: FoodItem) {
+    const units = unitsFor(item, customUnits.get(item.id));
+    const usage = initialUsage(units, null);
     setRows((prev) => [
       ...prev,
       {
@@ -54,7 +93,9 @@ export function MealBuilder({ meal, searchItems, loading, onSaved, onCancel }: M
         foodId: item.id,
         name: item.name,
         per100: item.per100,
-        grams: decimalInput(item.portionG ?? 100),
+        units,
+        amount: decimalInput(usage.amount),
+        unit: usage.unit,
       },
     ]);
   }
@@ -72,12 +113,12 @@ export function MealBuilder({ meal, searchItems, loading, onSaved, onCancel }: M
     }
     const items: MealIngredient[] = [];
     for (const row of rows) {
-      const grams = parseDecimal(row.grams);
-      if (grams == null || grams <= 0 || grams > 5000) {
-        setError(`Ange gram för ${row.name} (1–5 000).`);
+      const parsed = parseUnitAmount(row.amount, row.unit, row.units);
+      if (!parsed.ok) {
+        setError(`${row.name}: ${parsed.error}`);
         return;
       }
-      items.push({ foodId: row.foodId, name: row.name, grams, per100: row.per100 });
+      items.push({ foodId: row.foodId, name: row.name, ...parsed.value, per100: row.per100 });
     }
     const now = Date.now();
     const saved: SavedMeal = {
@@ -114,23 +155,46 @@ export function MealBuilder({ meal, searchItems, loading, onSaved, onCancel }: M
       </label>
       {rows.length > 0 && (
         <ul className="ingredient-list" aria-label="Ingredienser">
-          {rows.map((row) => (
+          {parsedRows.map(({ row, parsed }) => (
             <li key={row.key} className="ingredient" data-testid="ingredient">
               <span className="ingredient-name">{row.name}</span>
-              <label className="ingredient-grams">
-                <span className="visually-hidden">Gram {row.name}</span>
-                <input
-                  className="input"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={row.grams}
-                  onChange={(e) => {
-                    const grams = e.target.value;
-                    setRows((prev) => prev.map((r) => (r.key === row.key ? { ...r, grams } : r)));
-                  }}
-                />
-                <span aria-hidden="true">g</span>
-              </label>
+              <div className="ingredient-amount">
+                <label>
+                  <span className="visually-hidden">Mängd {row.name}</span>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={row.amount}
+                    onChange={(e) => {
+                      updateRow(row.key, { amount: e.target.value });
+                    }}
+                  />
+                </label>
+                <label>
+                  <span className="visually-hidden">Enhet {row.name}</span>
+                  <select
+                    className="input"
+                    value={row.unit}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      updateRow(row.key, {
+                        unit: next,
+                        // Till gram: behåll vikten. Till en annan enhet: börja på 1.
+                        amount: isGram(next)
+                          ? decimalInput(parsed.ok ? parsed.value.grams : 100)
+                          : '1',
+                      });
+                    }}
+                  >
+                    {[GRAM, ...row.units.map((u) => u.name)].map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <button
                 type="button"
                 className="button button-danger button-small"
@@ -141,6 +205,13 @@ export function MealBuilder({ meal, searchItems, loading, onSaved, onCancel }: M
               >
                 Ta bort
               </button>
+              <span className="ingredient-grams muted-inline" data-testid="ingredient-grams">
+                {parsed.ok
+                  ? isGram(row.unit)
+                    ? formatKcal((row.per100.kcal * parsed.value.grams) / 100)
+                    : `≈ ${formatGrams(parsed.value.grams)} · ${formatKcal((row.per100.kcal * parsed.value.grams) / 100)}`
+                  : parsed.error}
+              </span>
             </li>
           ))}
         </ul>

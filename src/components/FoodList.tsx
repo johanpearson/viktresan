@@ -11,9 +11,10 @@ interface FoodListProps {
 
 function detail(item: FoodItem): string {
   const per100 = `${formatKcal(item.per100.kcal)}/100 g`;
-  if (item.portionG == null) return `${SOURCE_LABELS[item.source]} · ${per100}`;
-  const portion = formatKcal((item.per100.kcal * item.portionG) / 100);
-  return `${SOURCE_LABELS[item.source]} · ${portion} per ${item.portionName ?? 'portion'} (${formatGrams(item.portionG)})`;
+  const unit = item.units?.[0];
+  if (!unit) return `${SOURCE_LABELS[item.source]} · ${per100}`;
+  const perUnit = formatKcal((item.per100.kcal * unit.grams) / 100);
+  return `${SOURCE_LABELS[item.source]} · ${perUnit} per ${unit.name} (${formatGrams(unit.grams)})`;
 }
 
 /** Lista med livsmedel att välja, t.ex. sökträffar eller snabbval. */

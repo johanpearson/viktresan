@@ -7,7 +7,9 @@
  *   backup.json        format, version, exportedAt, profil, weights, waist, steps, bildmetadata,
  *                      foods, meals, foodLog, favorites (sedan version 3),
  *                      water, workouts, workoutPlans (sedan version 4),
- *                      medications, injections, symptoms (sedan version 5)
+ *                      medications, injections, symptoms (sedan version 5),
+ *                      foodUnits + mängd/enhet i matlogg och måltider (sedan version 6;
+ *                      äldre portioner räknas om med samma funktioner som databasmigreringen)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -18,12 +20,18 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import {
   splitLegacyMeasurements,
+  upgradeFoodData,
+  type CustomUnits,
+  type LegacyAmount,
+  type LegacyFoodLogEntry,
+  type LegacyMealIngredient,
+  type LegacySavedMeal,
+  type LegacyStoredFood,
   type Favorite,
   type FoodLogEntry,
   type Injection,
   type LegacyMeasurement,
   type Medication,
-  type MealIngredient,
   type PhotoEntry,
   type SavedMeal,
   type StoredFood,
@@ -41,14 +49,15 @@ import { isIsoDate } from './dates.ts';
 import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
 import { APPETITE_MAX, APPETITE_MIN, DOSE_FREQUENCIES, isInjectionSite } from './glp1.ts';
 import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
+import type { FoodUnit, UnitSource } from './units.ts';
 import { isTime } from './validation.ts';
 import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 5;
+export const BACKUP_VERSION = 6;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -137,6 +146,7 @@ interface PlainManifest {
   medications: Medication[];
   injections: Injection[];
   symptoms: SymptomEntry[];
+  foodUnits: CustomUnits[];
 }
 
 interface EncryptedManifest {
@@ -193,6 +203,7 @@ export async function createBackup(
     medications: snapshot.medications,
     injections: snapshot.injections,
     symptoms: snapshot.symptoms,
+    foodUnits: snapshot.foodUnits,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -399,7 +410,7 @@ function parsePlain(
       ...(version === 1 ? parseV1Measurements(manifest) : parseV2Measurements(manifest)),
       photos: parsedPhotos,
       // Version 1–2 saknar mat.
-      ...(version >= 3 ? parseFoodData(manifest) : emptyFoodData()),
+      ...(version >= 3 ? parseFoodData(manifest, version) : emptyFoodData()),
       // Version 1–3 saknar vatten och träning.
       ...(version >= 4 ? parseTrainingData(manifest) : emptyTrainingData()),
       // Version 1–4 saknar GLP-1.
@@ -435,32 +446,49 @@ function parseV2Measurements(manifest: Record<string, unknown>): MeasurementList
   return result;
 }
 
-type FoodData = Pick<Snapshot, 'foods' | 'meals' | 'foodLog' | 'favorites'>;
+type FoodData = Pick<Snapshot, 'foods' | 'meals' | 'foodLog' | 'favorites' | 'foodUnits'>;
 
 function emptyFoodData(): FoodData {
-  return { foods: [], meals: [], foodLog: [], favorites: [] };
+  return { foods: [], meals: [], foodLog: [], favorites: [], foodUnits: [] };
 }
 
-function parseFoodData(manifest: Record<string, unknown>): FoodData {
-  const { foods, meals, foodLog, favorites } = manifest;
+/**
+ * Mat (version 3+). Version 3–5 har portioner i stället för enheter; de räknas om
+ * med `upgradeFoodData` precis som i databasmigreringen till v7.
+ */
+function parseFoodData(manifest: Record<string, unknown>, version: number): FoodData {
+  const { foods, meals, foodLog, favorites, foodUnits } = manifest;
   if (
     !Array.isArray(foods) ||
     !Array.isArray(meals) ||
     !Array.isArray(foodLog) ||
-    !Array.isArray(favorites)
+    !Array.isArray(favorites) ||
+    (version >= 6 && !Array.isArray(foodUnits))
   ) {
     throw invalid('Matdata saknas.');
   }
-  const result: FoodData = {
+  const upgraded = upgradeFoodData({
     foods: foods.map((f, i) => parseFoodRecord(f, i)),
     meals: meals.map((m, i) => parseMealRecord(m, i)),
     foodLog: foodLog.map((e, i) => parseFoodLogRecord(e, i)),
+  });
+  const custom = Array.isArray(foodUnits)
+    ? foodUnits.map((u, i) => parseCustomUnitsRecord(u, i))
+    : [];
+  const result: FoodData = {
+    ...upgraded,
     favorites: favorites.map((f, i) => parseFavoriteRecord(f, i)),
+    // Egna enheter i filen går före enheter som räknats fram ur gamla portioner.
+    foodUnits: [
+      ...custom,
+      ...upgraded.foodUnits.filter((u) => !custom.some((c) => c.foodId === u.foodId)),
+    ],
   };
   assertUniqueKeys(result.foods, (f) => f.id, 'livsmedel');
   assertUniqueKeys(result.meals, (m) => m.id, 'måltid');
   assertUniqueKeys(result.foodLog, (e) => e.id, 'matloggpost');
   assertUniqueKeys(result.favorites, (f) => f.foodId, 'favorit');
+  assertUniqueKeys(result.foodUnits, (u) => u.foodId, 'livsmedel med egna enheter');
   return result;
 }
 
@@ -662,7 +690,57 @@ function isName(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '' && value.length <= 200;
 }
 
-function parseFoodRecord(value: unknown, index: number): StoredFood {
+const UNIT_SOURCES: readonly UnitSource[] = ['standard', 'openfoodfacts', 'egen'];
+
+function parseUnit(value: unknown, bad: () => BackupError): FoodUnit {
+  if (
+    !isRecord(value) ||
+    typeof value.name !== 'string' ||
+    value.name.trim() === '' ||
+    value.name.length > 40 ||
+    !isPositive(value.grams) ||
+    !UNIT_SOURCES.includes(value.source as UnitSource)
+  ) {
+    throw bad();
+  }
+  return { name: value.name, grams: value.grams, source: value.source as UnitSource };
+}
+
+function parseUnits(value: unknown, bad: () => BackupError): FoodUnit[] {
+  if (!Array.isArray(value) || value.length > 50) throw bad();
+  return value.map((u) => parseUnit(u, bad));
+}
+
+function parseCustomUnitsRecord(value: unknown, index: number): CustomUnits {
+  const bad = () => invalid(`Egna enheter nr ${index + 1} i säkerhetskopian är ogiltiga.`);
+  if (!isRecord(value) || !isId(value.foodId)) throw bad();
+  return { foodId: value.foodId, units: parseUnits(value.units, bad), ...parseTimes(value, bad) };
+}
+
+/**
+ * Mängd: `amount` + `unit` (version 6) eller gram med valfria portioner (version 3–5).
+ * Gram krävs alltid.
+ */
+function parseAmount(value: Record<string, unknown>, bad: () => BackupError): LegacyAmount {
+  if (!isPositive(value.grams)) throw bad();
+  const result: LegacyAmount = { grams: value.grams };
+  if (value.amount !== undefined || value.unit !== undefined) {
+    if (!isPositive(value.amount) || !isName(value.unit) || value.unit.length > 40) throw bad();
+    result.amount = value.amount;
+    result.unit = value.unit;
+  }
+  if (value.portionName !== undefined) {
+    if (!isName(value.portionName)) throw bad();
+    result.portionName = value.portionName;
+  }
+  if (value.portionCount !== undefined) {
+    if (!isPositive(value.portionCount)) throw bad();
+    result.portionCount = value.portionCount;
+  }
+  return result;
+}
+
+function parseFoodRecord(value: unknown, index: number): LegacyStoredFood {
   const bad = () => invalid(`Livsmedel nr ${index + 1} i säkerhetskopian är ogiltigt.`);
   if (
     !isRecord(value) ||
@@ -672,7 +750,7 @@ function parseFoodRecord(value: unknown, index: number): StoredFood {
   ) {
     throw bad();
   }
-  const food: StoredFood = {
+  const food: LegacyStoredFood = {
     id: value.id,
     name: value.name,
     source: value.source,
@@ -687,6 +765,7 @@ function parseFoodRecord(value: unknown, index: number): StoredFood {
     if (!isName(value.portionName)) throw bad();
     food.portionName = value.portionName;
   }
+  if (value.units !== undefined) food.units = parseUnits(value.units, bad);
   if (value.ean !== undefined) {
     if (typeof value.ean !== 'string' || !/^\d{8,14}$/.test(value.ean)) throw bad();
     food.ean = value.ean;
@@ -694,19 +773,17 @@ function parseFoodRecord(value: unknown, index: number): StoredFood {
   return food;
 }
 
-function parseIngredient(value: unknown, bad: () => BackupError): MealIngredient {
-  if (!isRecord(value) || !isId(value.foodId) || !isName(value.name) || !isPositive(value.grams)) {
-    throw bad();
-  }
+function parseIngredient(value: unknown, bad: () => BackupError): LegacyMealIngredient {
+  if (!isRecord(value) || !isId(value.foodId) || !isName(value.name)) throw bad();
   return {
     foodId: value.foodId,
     name: value.name,
-    grams: value.grams,
+    ...parseAmount(value, bad),
     per100: parseNutrients(value.per100, bad),
   };
 }
 
-function parseMealRecord(value: unknown, index: number): SavedMeal {
+function parseMealRecord(value: unknown, index: number): LegacySavedMeal {
   const bad = () => invalid(`Måltid nr ${index + 1} i säkerhetskopian är ogiltig.`);
   if (!isRecord(value) || !isId(value.id) || !isName(value.name) || !Array.isArray(value.items)) {
     throw bad();
@@ -719,7 +796,7 @@ function parseMealRecord(value: unknown, index: number): SavedMeal {
   };
 }
 
-function parseFoodLogRecord(value: unknown, index: number): FoodLogEntry {
+function parseFoodLogRecord(value: unknown, index: number): LegacyFoodLogEntry {
   const bad = () => invalid(`Matloggpost nr ${index + 1} i säkerhetskopian är ogiltig.`);
   const slot = isRecord(value) ? MEAL_SLOTS.find((m) => m.id === value.meal) : undefined;
   if (
@@ -728,30 +805,20 @@ function parseFoodLogRecord(value: unknown, index: number): FoodLogEntry {
     !isDate(value.date) ||
     !slot ||
     !isId(value.foodId) ||
-    !isName(value.name) ||
-    !isPositive(value.grams)
+    !isName(value.name)
   ) {
     throw bad();
   }
-  const entry: FoodLogEntry = {
+  return {
     id: value.id,
     date: value.date,
     meal: slot.id,
     foodId: value.foodId,
     name: value.name,
-    grams: value.grams,
+    ...parseAmount(value, bad),
     per100: parseNutrients(value.per100, bad),
     ...parseTimes(value, bad),
   };
-  if (value.portionName !== undefined) {
-    if (!isName(value.portionName)) throw bad();
-    entry.portionName = value.portionName;
-  }
-  if (value.portionCount !== undefined) {
-    if (!isPositive(value.portionCount)) throw bad();
-    entry.portionCount = value.portionCount;
-  }
-  return entry;
 }
 
 function parseFavoriteRecord(value: unknown, index: number): Favorite {

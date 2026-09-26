@@ -43,8 +43,7 @@ describe('parseOffProduct', () => {
       source: 'openfoodfacts',
       ean,
       per100: { kcal: 370, proteinG: 13, carbsG: 59, fatG: 7 },
-      portionG: 40,
-      portionName: 'portion',
+      units: [{ name: 'portion', grams: 40, source: 'openfoodfacts' }],
     });
   });
 
@@ -54,13 +53,29 @@ describe('parseOffProduct', () => {
       product: { product_name: 'Saft', nutriments: { 'energy-kj_100g': 418.4 } },
     });
     expect(food?.per100).toEqual({ kcal: 100, proteinG: 0, carbsG: 0, fatG: 0 });
-    expect(food?.portionG).toBeUndefined();
+    expect(food?.units).toBeUndefined();
   });
 
   it('null om produkten saknas eller saknar energi', () => {
     expect(parseOffProduct(ean, { status: 0, status_verbose: 'product not found' })).toBeNull();
     expect(parseOffProduct(ean, { status: 1, product: { product_name: 'X' } })).toBeNull();
     expect(parseOffProduct(ean, null)).toBeNull();
+  });
+
+  it('serving_size blir enheten portion när den går att tolka till gram', () => {
+    const product = (extra: Record<string, unknown>) =>
+      parseOffProduct(ean, {
+        status: 1,
+        product: { product_name: 'X', nutriments: { 'energy-kcal_100g': 50 }, ...extra },
+      });
+    expect(product({ serving_size: '1 portion (30 g)', serving_quantity: 30 })?.units).toEqual([
+      { name: 'portion', grams: 30, source: 'openfoodfacts' },
+    ]);
+    // Volym räknas inte om till gram.
+    expect(
+      product({ serving_size: '250 ml', serving_quantity: 250, serving_quantity_unit: 'ml' })
+        ?.units,
+    ).toBeUndefined();
   });
 
   it('använder streckkoden som namn om namn saknas', () => {

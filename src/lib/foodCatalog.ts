@@ -5,11 +5,11 @@
 import type { Favorite, FoodLogEntry, SavedMeal, StoredFood } from '../db/db.ts';
 import type { FoodItem, FoodSource } from './foodSearch.ts';
 import { combineIngredients } from './nutrition.ts';
+import { isGram, round1, type FoodUnit, type UnitSource } from './units.ts';
 
 export function storedToItem(food: StoredFood): FoodItem {
   const item: FoodItem = { id: food.id, name: food.name, source: food.source, per100: food.per100 };
-  if (food.portionG !== undefined) item.portionG = food.portionG;
-  if (food.portionName !== undefined) item.portionName = food.portionName;
+  if (food.units !== undefined && food.units.length > 0) item.units = food.units;
   if (food.ean !== undefined) item.ean = food.ean;
   return item;
 }
@@ -21,14 +21,9 @@ export function mealFoodId(mealId: string): string {
 /** En sparad måltid som livsmedel: en portion = hela måltiden. */
 export function mealToItem(meal: SavedMeal): FoodItem {
   const { totalG, per100 } = combineIngredients(meal.items);
-  return {
-    id: mealFoodId(meal.id),
-    name: meal.name,
-    source: 'maltid',
-    per100,
-    portionG: totalG,
-    portionName: 'portion',
-  };
+  const item: FoodItem = { id: mealFoodId(meal.id), name: meal.name, source: 'maltid', per100 };
+  if (totalG > 0) item.units = [{ name: 'portion', grams: totalG, source: 'egen' }];
+  return item;
 }
 
 export function sourceOf(foodId: string): FoodSource {
@@ -46,11 +41,21 @@ export function entryToItem(entry: FoodLogEntry): FoodItem {
     source: sourceOf(entry.foodId),
     per100: entry.per100,
   };
-  if (entry.portionName !== undefined && entry.portionCount !== undefined) {
-    item.portionName = entry.portionName;
-    item.portionG = Math.round((entry.grams / entry.portionCount) * 10) / 10;
-  }
+  const unit = entryUnit(entry);
+  if (unit) item.units = [unit];
   return item;
+}
+
+/**
+ * Enheten så som den vägde när posten loggades (gram ÷ antal), eller null för
+ * gram. Används vid redigering så att en senare ändrad enhet inte slår igenom.
+ */
+export function entryUnit(
+  entry: { unit: string; amount: number; grams: number },
+  source: UnitSource = 'egen',
+): FoodUnit | null {
+  if (isGram(entry.unit) || !(entry.amount > 0)) return null;
+  return { name: entry.unit, grams: round1(entry.grams / entry.amount), source };
 }
 
 function changedAt(entry: { createdAt: number; updatedAt?: number }): number {

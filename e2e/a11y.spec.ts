@@ -45,6 +45,8 @@ async function seedData(page: Page) {
         meal: 'frukost',
         foodId: 'egen:gröt',
         name: 'Gröt',
+        amount: 250,
+        unit: 'g',
         grams: 250,
         per100: { kcal: 90, proteinG: 3, carbsG: 15, fatG: 2 },
         createdAt: Date.now(),

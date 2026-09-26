@@ -2,18 +2,22 @@
  * Livsmedel från olika källor i ett gemensamt format, och fuzzy-sökning på svenska.
  */
 import type { Nutrients } from './nutrition.ts';
+import type { FoodUnit } from './units.ts';
 
 export type FoodSource = 'livsmedelsverket' | 'egen' | 'openfoodfacts' | 'maltid';
 
-/** Ett livsmedel att logga. Värden per 100 g; en portion är valfri. */
+/**
+ * Ett livsmedel att logga. Värden per 100 g. `units` är livsmedlets egna enheter
+ * (portion från Open Food Facts, en måltid); standardenheter och användarens egna
+ * läggs till med `unitsFor` (units.ts).
+ */
 export interface FoodItem {
   /** Unikt över källor: `lv:<nummer>`, `egen:<uuid>`, `off:<ean>`, `maltid:<uuid>`. */
   id: string;
   name: string;
   source: FoodSource;
   per100: Nutrients;
-  portionG?: number;
-  portionName?: string;
+  units?: FoodUnit[];
   ean?: string;
 }
 

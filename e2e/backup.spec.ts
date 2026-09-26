@@ -20,8 +20,18 @@ const DATA = {
       name: 'Kanelbulle',
       source: 'egen',
       per100: { kcal: 380, proteinG: 7, carbsG: 50, fatG: 16 },
-      portionG: 60,
-      portionName: 'bulle',
+      createdAt: 1_700_000_000_000,
+    },
+  ],
+  foodUnits: [
+    {
+      foodId: 'egen:bulle',
+      units: [{ name: 'bulle', grams: 60, source: 'egen' }],
+      createdAt: 1_700_000_000_000,
+    },
+    {
+      foodId: 'lv:1',
+      units: [{ name: 'tallrik', grams: 250, source: 'egen' }],
       createdAt: 1_700_000_000_000,
     },
   ],
@@ -33,6 +43,8 @@ const DATA = {
         {
           foodId: 'egen:bulle',
           name: 'Kanelbulle',
+          amount: 1,
+          unit: 'bulle',
           grams: 60,
           per100: { kcal: 380, proteinG: 7, carbsG: 50, fatG: 16 },
         },
@@ -47,10 +59,10 @@ const DATA = {
       meal: 'mellanmal',
       foodId: 'maltid:meal1',
       name: 'Fika',
+      amount: 1,
+      unit: 'portion',
       grams: 60,
       per100: { kcal: 380, proteinG: 7, carbsG: 50, fatG: 16 },
-      portionName: 'portion',
-      portionCount: 1,
       createdAt: 1_700_000_100_000,
     },
     {
@@ -59,6 +71,8 @@ const DATA = {
       meal: 'lunch',
       foodId: 'lv:1',
       name: 'Pasta kokt',
+      amount: 1,
+      unit: 'tallrik',
       grams: 250,
       per100: { kcal: 150, proteinG: 5, carbsG: 30, fatG: 1 },
       createdAt: 1_700_000_100_000,
@@ -166,6 +180,7 @@ test('export → import ger identisk data', async ({ page }) => {
   expect(before.foods).toHaveLength(1);
   expect(before.meals).toHaveLength(1);
   expect(before.favorites).toHaveLength(1);
+  expect(before.foodUnits).toHaveLength(2);
   expect(before.water).toHaveLength(2);
   expect(before.workouts).toHaveLength(1);
   expect(before.workoutPlans).toHaveLength(1);

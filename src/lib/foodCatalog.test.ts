@@ -3,6 +3,7 @@ import type { FoodLogEntry } from '../db/db.ts';
 import {
   buildCatalog,
   entryToItem,
+  entryUnit,
   favoriteFoods,
   mealToItem,
   recentFoods,
@@ -19,6 +20,8 @@ function entry(id: string, foodId: string, createdAt: number, extra: Partial<Foo
     meal: 'lunch',
     foodId,
     name: `Namn ${foodId}`,
+    amount: 100,
+    unit: 'g',
     grams: 100,
     per100,
     createdAt,
@@ -32,12 +35,30 @@ describe('foodCatalog', () => {
       id: 'm1',
       name: 'Gröt',
       items: [
-        { foodId: 'lv:1', name: 'Havregryn', grams: 60, per100: { ...per100, kcal: 370 } },
-        { foodId: 'lv:2', name: 'Mjölk', grams: 200, per100: { ...per100, kcal: 60 } },
+        {
+          foodId: 'lv:1',
+          name: 'Havregryn',
+          amount: 60,
+          unit: 'g',
+          grams: 60,
+          per100: { ...per100, kcal: 370 },
+        },
+        {
+          foodId: 'lv:2',
+          name: 'Mjölk',
+          amount: 2,
+          unit: 'dl',
+          grams: 200,
+          per100: { ...per100, kcal: 60 },
+        },
       ],
       createdAt: 1,
     });
-    expect(item).toMatchObject({ id: 'maltid:m1', source: 'maltid', portionG: 260 });
+    expect(item).toMatchObject({
+      id: 'maltid:m1',
+      source: 'maltid',
+      units: [{ name: 'portion', grams: 260 }],
+    });
     expect((item.per100.kcal * 260) / 100).toBeCloseTo(222 + 120);
   });
 
@@ -54,11 +75,19 @@ describe('foodCatalog', () => {
     expect(sourceOf('egen:x')).toBe('egen');
   });
 
-  it('återskapar portionen ur en post loggad i portioner', () => {
-    const item = entryToItem(
-      entry('e', 'off:1', 1, { grams: 90, portionName: 'portion', portionCount: 1.5 }),
-    );
-    expect(item).toMatchObject({ source: 'openfoodfacts', portionG: 60, portionName: 'portion' });
+  it('återskapar enheten ur en post loggad i en enhet (som den vägde då)', () => {
+    const item = entryToItem(entry('e', 'off:1', 1, { amount: 1.5, unit: 'portion', grams: 90 }));
+    expect(item).toMatchObject({
+      source: 'openfoodfacts',
+      units: [{ name: 'portion', grams: 60, source: 'egen' }],
+    });
+    expect(entryToItem(entry('g', 'lv:1', 1)).units).toBeUndefined();
+    expect(entryUnit({ amount: 2, unit: 'st', grams: 120 })).toEqual({
+      name: 'st',
+      grams: 60,
+      source: 'egen',
+    });
+    expect(entryUnit({ amount: 120, unit: 'g', grams: 120 })).toBeNull();
   });
 
   it('senaste: nyast först, ett per livsmedel, aktuell version från katalogen', () => {

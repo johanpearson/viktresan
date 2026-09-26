@@ -65,6 +65,7 @@ export function Mat() {
         <OwnFoods
           foods={food.data.foods}
           meals={food.data.meals}
+          foodUnits={food.data.foodUnits}
           searchItems={searchItems}
           loading={food.livsmedel === null}
           onChange={food.reload}

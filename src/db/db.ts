@@ -8,10 +8,11 @@ import {
 import type { ActivityLevel, Sex } from '../lib/energy.ts';
 import type { DoseFrequency, InjectionSite } from '../lib/glp1.ts';
 import type { MealSlot, Nutrients } from '../lib/nutrition.ts';
+import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 6;
+export const DB_VERSION = 7;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -68,25 +69,55 @@ export interface Profile {
   waterGoalMl?: number;
 }
 
-/** Eget livsmedel eller cachad träff från Open Food Facts. Värden per 100 g. */
+/**
+ * Eget livsmedel eller cachad träff från Open Food Facts. Värden per 100 g.
+ * `units` (sedan v7) är produktens egna enheter, dvs. portionen från Open Food
+ * Facts. Användarens egna enheter ligger i `foodUnits`.
+ */
 export interface StoredFood {
   /** `egen:<uuid>` eller `off:<ean>`. */
   id: string;
   name: string;
   source: 'egen' | 'openfoodfacts';
   per100: Nutrients;
-  portionG?: number;
-  portionName?: string;
+  units?: FoodUnit[];
   ean?: string;
   createdAt: number;
   updatedAt?: number;
 }
 
+/** Livsmedel i v4–v6: en valfri portion i stället för `units`. */
+export interface LegacyStoredFood extends Omit<StoredFood, 'units'> {
+  units?: FoodUnit[];
+  portionG?: number;
+  portionName?: string;
+}
+
+/**
+ * Användarens egna enheter för ett livsmedel (sedan v7), nyckel = `foodId`.
+ * Gäller alla källor – även Livsmedelsverket och måltider, som inte lagras i `foods`.
+ */
+export interface CustomUnits {
+  foodId: string;
+  units: FoodUnit[];
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * Mängd i en enhet och uträknade gram (sedan v7). `unit` är `g` för gram. Gram
+ * sparas så att posten inte ändras om enheten redigeras eller tas bort senare.
+ */
+export interface LoggedAmount {
+  amount: number;
+  unit: string;
+  grams: number;
+}
+
 /** En ingrediens i en sparad måltid. Namn och näringsvärden kopieras in. */
-export interface MealIngredient {
+export interface MealIngredient extends LoggedAmount {
   foodId: string;
   name: string;
-  grams: number;
   per100: Nutrients;
 }
 
@@ -103,20 +134,29 @@ export interface SavedMeal {
  * En post i matloggen. Namn och näringsvärden per 100 g kopieras in så att
  * loggen inte ändras om livsmedlet ändras eller tas bort.
  */
-export interface FoodLogEntry {
+export interface FoodLogEntry extends LoggedAmount {
   id: string;
   date: string;
   meal: MealSlot;
   foodId: string;
   name: string;
-  grams: number;
   per100: Nutrients;
-  /** Satt när posten loggades i portioner: gram = antal × portionens vikt. */
-  portionName?: string;
-  portionCount?: number;
   createdAt: number;
   updatedAt?: number;
 }
+
+/** Mängd i v4–v6: gram, och antal portioner om posten loggades i portioner. */
+export interface LegacyAmount {
+  grams: number;
+  amount?: number;
+  unit?: string;
+  portionName?: string;
+  portionCount?: number;
+}
+
+export type LegacyFoodLogEntry = Omit<FoodLogEntry, keyof LoggedAmount> & LegacyAmount;
+export type LegacyMealIngredient = Omit<MealIngredient, keyof LoggedAmount> & LegacyAmount;
+export type LegacySavedMeal = Omit<SavedMeal, 'items'> & { items: LegacyMealIngredient[] };
 
 /** Ett favoritmarkerat livsmedel (eller en måltid, `maltid:<id>`). */
 export interface Favorite {
@@ -321,6 +361,11 @@ export interface ViktresanDB extends DBSchema {
     key: string;
     value: SymptomEntry;
   };
+  /** Sedan v7. Egna enheter per livsmedel, nyckel = `foodId`. */
+  foodUnits: {
+    key: string;
+    value: CustomUnits;
+  };
 }
 
 export type Database = IDBPDatabase<ViktresanDB>;
@@ -371,6 +416,105 @@ export function splitLegacyMeasurements(legacy: readonly LegacyMeasurement[]): {
   };
 }
 
+/**
+ * Mängd i v4–v6 → v7: poster loggade i portioner får enheten (portionens namn) och
+ * antalet; övriga tolkas som gram. Gram behålls oförändrade. Används av migreringen
+ * till v7 och vid import av säkerhetskopior version 3–5.
+ */
+export function upgradeAmount(value: LegacyAmount): LoggedAmount {
+  if (value.amount !== undefined && value.unit !== undefined) {
+    return { amount: value.amount, unit: value.unit, grams: value.grams };
+  }
+  if (value.portionCount !== undefined && value.portionCount > 0) {
+    return {
+      amount: value.portionCount,
+      unit: value.portionName?.trim() || 'portion',
+      grams: value.grams,
+    };
+  }
+  return { amount: value.grams, unit: GRAM, grams: value.grams };
+}
+
+function withoutLegacyAmount<T extends LegacyAmount>(
+  value: T,
+): Omit<T, 'amount' | 'unit' | 'grams' | 'portionName' | 'portionCount'> {
+  const rest: Partial<T> = { ...value };
+  delete rest.amount;
+  delete rest.unit;
+  delete rest.grams;
+  delete rest.portionName;
+  delete rest.portionCount;
+  return rest as Omit<T, 'amount' | 'unit' | 'grams' | 'portionName' | 'portionCount'>;
+}
+
+export function upgradeFoodLogEntry(entry: LegacyFoodLogEntry): FoodLogEntry {
+  return { ...withoutLegacyAmount(entry), ...upgradeAmount(entry) };
+}
+
+export function upgradeMeal(meal: LegacySavedMeal): SavedMeal {
+  return {
+    ...meal,
+    items: meal.items.map((item) => ({ ...withoutLegacyAmount(item), ...upgradeAmount(item) })),
+  };
+}
+
+/**
+ * Livsmedel i v4–v6 → v7: portionen blir en enhet. För Open Food Facts-produkter
+ * är den produktens (`units`), för egna livsmedel en egen enhet (`foodUnits`).
+ */
+export function upgradeFood(food: LegacyStoredFood): {
+  food: StoredFood;
+  custom: CustomUnits | null;
+} {
+  const { portionG, portionName, ...rest } = food;
+  const result: StoredFood = { ...rest };
+  if (portionG === undefined || !(portionG > 0)) return { food: result, custom: null };
+  const name = portionName?.trim() || 'portion';
+  if (food.source === 'openfoodfacts') {
+    result.units = mergeFoodUnits(result.units, [
+      { name, grams: portionG, source: 'openfoodfacts' },
+    ]);
+    return { food: result, custom: null };
+  }
+  const times: { createdAt: number; updatedAt?: number } = { createdAt: food.createdAt };
+  if (food.updatedAt !== undefined) times.updatedAt = food.updatedAt;
+  return {
+    food: result,
+    custom: { foodId: food.id, units: [{ name, grams: portionG, source: 'egen' }], ...times },
+  };
+}
+
+function mergeFoodUnits(a: FoodUnit[] | undefined, b: FoodUnit[]): FoodUnit[] {
+  const names = new Set(b.map((u) => u.name.toLowerCase()));
+  return [...(a ?? []).filter((u) => !names.has(u.name.toLowerCase())), ...b];
+}
+
+/** Uppgraderar mat i v4–v6-format (databasmigrering och gamla säkerhetskopior). */
+export function upgradeFoodData(data: {
+  foods: readonly LegacyStoredFood[];
+  meals: readonly LegacySavedMeal[];
+  foodLog: readonly LegacyFoodLogEntry[];
+}): {
+  foods: StoredFood[];
+  meals: SavedMeal[];
+  foodLog: FoodLogEntry[];
+  foodUnits: CustomUnits[];
+} {
+  const foods: StoredFood[] = [];
+  const foodUnits: CustomUnits[] = [];
+  for (const f of data.foods) {
+    const { food, custom } = upgradeFood(f);
+    foods.push(food);
+    if (custom) foodUnits.push(custom);
+  }
+  return {
+    foods,
+    meals: data.meals.map(upgradeMeal),
+    foodLog: data.foodLog.map(upgradeFoodLogEntry),
+    foodUnits,
+  };
+}
+
 export const PROFILE_KEY = 'current';
 
 type UpgradeTransaction = IDBPTransaction<ViktresanDB, StoreNames<ViktresanDB>[], 'versionchange'>;
@@ -386,6 +530,30 @@ async function migrateToV3(tx: UpgradeTransaction): Promise<void> {
     ...split.weights.map((w) => weights.put(w)),
     ...split.waist.map((w) => waist.put(w)),
     ...split.steps.map((s) => steps.put(s)),
+  ]);
+}
+
+/** v6 → v7: portioner blir enheter, matloggen och måltiderna får mängd + enhet. */
+async function migrateToV7(tx: UpgradeTransaction): Promise<void> {
+  const foods = tx.objectStore('foods');
+  const meals = tx.objectStore('meals');
+  const foodLog = tx.objectStore('foodLog');
+  const foodUnits = tx.objectStore('foodUnits');
+  const [legacyFoods, legacyMeals, legacyLog] = await Promise.all([
+    foods.getAll() as Promise<LegacyStoredFood[]>,
+    meals.getAll() as Promise<LegacySavedMeal[]>,
+    foodLog.getAll() as Promise<LegacyFoodLogEntry[]>,
+  ]);
+  const upgraded = upgradeFoodData({
+    foods: legacyFoods,
+    meals: legacyMeals,
+    foodLog: legacyLog,
+  });
+  await Promise.all([
+    ...upgraded.foods.map((f) => foods.put(f)),
+    ...upgraded.meals.map((m) => meals.put(m)),
+    ...upgraded.foodLog.map((e) => foodLog.put(e)),
+    ...upgraded.foodUnits.map((u) => foodUnits.put(u)),
   ]);
 }
 
@@ -439,6 +607,12 @@ export function getDb(): Promise<Database> {
         const injections = db.createObjectStore('injections', { keyPath: 'id' });
         injections.createIndex('by-date', 'date');
         db.createObjectStore('symptoms', { keyPath: 'date' });
+      }
+      if (oldVersion < 7) {
+        // v7: enheter för matloggning. Egna enheter i en ny store; portioner blir
+        // enheter och matloggen/måltiderna får mängd + enhet (äldre poster = gram).
+        db.createObjectStore('foodUnits', { keyPath: 'foodId' });
+        if (oldVersion >= 4) void migrateToV7(transaction);
       }
     },
     blocking() {
@@ -547,9 +721,41 @@ export async function putFood(food: StoredFood): Promise<void> {
 
 export async function deleteFood(id: string): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(['foods', 'favorites'], 'readwrite');
-  await Promise.all([tx.objectStore('foods').delete(id), tx.objectStore('favorites').delete(id)]);
+  const tx = db.transaction(['foods', 'favorites', 'foodUnits'], 'readwrite');
+  await Promise.all([
+    tx.objectStore('foods').delete(id),
+    tx.objectStore('favorites').delete(id),
+    tx.objectStore('foodUnits').delete(id),
+  ]);
   await tx.done;
+}
+
+/**
+ * Sparar användarens egna enheter för ett livsmedel (ersätter listan). En tom
+ * lista tar bort posten. Loggade poster påverkas inte – de har sina gram.
+ */
+export async function saveCustomUnits(
+  foodId: string,
+  units: readonly FoodUnit[],
+  now = Date.now(),
+): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('foodUnits', 'readwrite');
+  const existing = await tx.store.get(foodId);
+  if (units.length === 0) {
+    if (existing) await tx.store.delete(foodId);
+  } else {
+    const entry: CustomUnits = existing
+      ? { foodId, units: [...units], createdAt: existing.createdAt, updatedAt: now }
+      : { foodId, units: [...units], createdAt: now };
+    await tx.store.put(entry);
+  }
+  await tx.done;
+}
+
+export async function listCustomUnits(): Promise<CustomUnits[]> {
+  const db = await getDb();
+  return db.getAll('foodUnits');
 }
 
 /** Egna livsmedel och cachade produkter, sorterade på namn. */
@@ -573,10 +779,11 @@ export async function putMeal(meal: SavedMeal): Promise<void> {
 
 export async function deleteMeal(id: string): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(['meals', 'favorites'], 'readwrite');
+  const tx = db.transaction(['meals', 'favorites', 'foodUnits'], 'readwrite');
   await Promise.all([
     tx.objectStore('meals').delete(id),
     tx.objectStore('favorites').delete(`maltid:${id}`),
+    tx.objectStore('foodUnits').delete(`maltid:${id}`),
   ]);
   await tx.done;
 }
@@ -811,6 +1018,7 @@ export interface Snapshot {
   medications: Medication[];
   injections: Injection[];
   symptoms: SymptomEntry[];
+  foodUnits: CustomUnits[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -830,6 +1038,7 @@ export function emptySnapshot(): Snapshot {
     medications: [],
     injections: [],
     symptoms: [],
+    foodUnits: [],
   };
 }
 
@@ -850,6 +1059,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     medications,
     injections,
     symptoms,
+    foodUnits,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -866,6 +1076,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listMedications(),
     listInjections(),
     listSymptoms(),
+    listCustomUnits(),
   ]);
   return {
     profile,
@@ -883,13 +1094,14 @@ export async function readSnapshot(): Promise<Snapshot> {
     medications,
     injections,
     symptoms,
+    foodUnits,
   };
 }
 
 /**
  * `replace`: all befintlig data (profil, vikt, midja, steg, bilder, mat, vatten, träning, GLP-1) ersätts.
  * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg/mående datumet, för
- * favoriter `foodId`) vinner den senast ändrade (`updatedAt ?? createdAt`, lika →
+ * favoriter och egna enheter `foodId`) vinner den senast ändrade (`updatedAt ?? createdAt`, lika →
  * befintlig behålls). Befintlig profil behålls.
  */
 export type ImportMode = 'replace' | 'merge';
@@ -910,6 +1122,7 @@ const DATA_STORES = [
   'medications',
   'injections',
   'symptoms',
+  'foodUnits',
 ] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
@@ -931,6 +1144,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const medications = tx.objectStore('medications');
   const injections = tx.objectStore('injections');
   const symptoms = tx.objectStore('symptoms');
+  const foodUnits = tx.objectStore('foodUnits');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -949,6 +1163,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.medications.map((m) => medications.put(m)),
       ...snapshot.injections.map((i) => injections.put(i)),
       ...snapshot.symptoms.map((s) => symptoms.put(s)),
+      ...snapshot.foodUnits.map((u) => foodUnits.put(u)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -1006,6 +1221,10 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     for (const s of snapshot.symptoms) {
       const existing = await symptoms.get(s.date);
       if (!existing || changedAt(s) > changedAt(existing)) await symptoms.put(s);
+    }
+    for (const u of snapshot.foodUnits) {
+      const existing = await foodUnits.get(u.foodId);
+      if (!existing || changedAt(u) > changedAt(existing)) await foodUnits.put(u);
     }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);
