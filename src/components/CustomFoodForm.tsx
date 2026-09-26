@@ -1,11 +1,15 @@
 import { useState, type SyntheticEvent } from 'react';
-import { newId, putFood, type StoredFood } from '../db/db.ts';
+import { newId, putFood, saveCustomUnits, type StoredFood } from '../db/db.ts';
 import { decimalInput } from '../lib/format.ts';
+import type { FoodUnit } from '../lib/units.ts';
 import { parseFoodFields, type FoodFields } from '../lib/validation.ts';
+import { UnitList } from './UnitList.tsx';
 
 interface CustomFoodFormProps {
   /** Livsmedlet som redigeras, annars skapas ett nytt. */
   food: StoredFood | null;
+  /** Livsmedlets egna enheter (st, skiva …). */
+  customUnits?: readonly FoodUnit[];
   /** Förifylld streckkod (efter en skanning utan träff). */
   ean?: string;
   onSaved: (food: StoredFood) => void;
@@ -20,8 +24,6 @@ function fieldsFor(food: StoredFood | null, ean: string | undefined): FoodFields
     protein: text(food?.per100.proteinG),
     carbs: text(food?.per100.carbsG),
     fat: text(food?.per100.fatG),
-    portionName: food?.portionName ?? '',
-    portionG: text(food?.portionG),
     ean: food?.ean ?? ean ?? '',
   };
 }
@@ -33,9 +35,18 @@ const NUTRIENT_FIELDS: readonly { key: keyof FoodFields; label: string }[] = [
   { key: 'fat', label: 'Fett (g)' },
 ];
 
-/** Skapa eller redigera ett eget livsmedel (värden per 100 g). */
-export function CustomFoodForm({ food, ean, onSaved, onCancel }: CustomFoodFormProps) {
+const NO_UNITS: readonly FoodUnit[] = [];
+
+/** Skapa eller redigera ett eget livsmedel (värden per 100 g) och dess enheter. */
+export function CustomFoodForm({
+  food,
+  customUnits = NO_UNITS,
+  ean,
+  onSaved,
+  onCancel,
+}: CustomFoodFormProps) {
   const [fields, setFields] = useState<FoodFields>(() => fieldsFor(food, ean));
+  const [units, setUnits] = useState<FoodUnit[]>(() => [...customUnits]);
   const [error, setError] = useState<string | null>(null);
 
   function update(key: keyof FoodFields, value: string) {
@@ -58,6 +69,7 @@ export function CustomFoodForm({ food, ean, onSaved, onCancel }: CustomFoodFormP
     };
     if (food) saved.updatedAt = now;
     await putFood(saved);
+    await saveCustomUnits(saved.id, units, now);
     onSaved(saved);
   }
 
@@ -101,32 +113,10 @@ export function CustomFoodForm({ food, ean, onSaved, onCancel }: CustomFoodFormP
           ))}
         </div>
       </fieldset>
-      <div className="field-row">
-        <label className="field">
-          <span className="field-label">Portion (valfri)</span>
-          <input
-            className="input"
-            autoComplete="off"
-            placeholder="t.ex. skiva"
-            value={fields.portionName}
-            onChange={(e) => {
-              update('portionName', e.target.value);
-            }}
-          />
-        </label>
-        <label className="field">
-          <span className="field-label">Portionens vikt (g)</span>
-          <input
-            className="input"
-            inputMode="decimal"
-            autoComplete="off"
-            value={fields.portionG}
-            onChange={(e) => {
-              update('portionG', e.target.value);
-            }}
-          />
-        </label>
-      </div>
+      <fieldset className="fieldset">
+        <legend className="field-label">Enheter (valfria)</legend>
+        <UnitList builtIn={NO_UNITS} custom={units} onChange={setUnits} canAdd />
+      </fieldset>
       <label className="field">
         <span className="field-label">Streckkod (valfri)</span>
         <input

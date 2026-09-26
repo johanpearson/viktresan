@@ -55,6 +55,8 @@ src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
 src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
 src/lib/planText.ts     Sakliga förklaringar (spärrar, måldatum, TDEE-källa)
 src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-dagarssnitt, måltider
+src/lib/units.ts        Enheter (st, skiva, dl …): omräkning, standard/OFF/egna, senast använda, serving_size
+src/data/units.ts       Kuraterad tabell med ungefärliga standardenheter för Livsmedelsverkets livsmedel
 src/lib/foodSearch.ts   FoodItem + fuzzy-sökning (å/ä/ö-vikning, Damerau-Levenshtein)
 src/lib/foodCatalog.ts  Lagrat → FoodItem, snabbval (senaste, favoriter)
 src/lib/livsmedel.ts    Laddar/tolkar public/livsmedel.json (format i livsmedelFormat.ts)
@@ -97,7 +99,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`, `FLAGS_VERSION = 3`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 6`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 7`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
@@ -106,11 +108,15 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `favorites` (v4, nyckel `foodId`), `water` (v5, en post per tillfälle, index `by-date`),
   `workouts` (v5, pass, index `by-date`), `workoutPlans` (v5, återkommande scheman),
   `medications` (v6, GLP-1-läkemedel med schema och dostrappa), `injections` (v6, loggade doser,
-  index `by-date`), `symptoms` (v6, aptit/biverkningar, nyckel = `date`, ett per dag, `upsertSymptoms`).
+  index `by-date`), `symptoms` (v6, aptit/biverkningar, nyckel = `date`, ett per dag, `upsertSymptoms`),
+  `foodUnits` (v7, användarens egna enheter per livsmedel, nyckel = `foodId`, alla källor, `saveCustomUnits`).
   Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5)
   och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
-  om livsmedlet ändras. Livsmedels-id:n: `lv:<nummer>`, `egen:…`, `off:<ean>`, `maltid:<id>`.
+  om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
+  är det som räknas, så en senare ändrad enhet påverkar inte historiken. Migreringen v6 → v7
+  (`upgradeFoodData`, även för säkerhetskopior version 3–5) gör portioner till enheter: OFF-portion →
+  `StoredFood.units`, eget livsmedels portion → `foodUnits`; loggar utan portion tolkas som gram. Livsmedels-id:n: `lv:<nummer>`, `egen:…`, `off:<ean>`, `maltid:<id>`.
   Midja och steg sparas med `upsertWaist`/`upsertSteps` (samma dag skrivs över, `createdAt` behålls).
   Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
   den senast registrerade posten.
@@ -154,6 +160,12 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   läkemedlets namn. `doseChanges` (start + byte av dos/läkemedel) ritas som streckade linjer i
   viktgrafen (`WeightChart` `markers`, färg `--chart-dose`) och listas i Framsteg → Historik.
   Kalendern: romb-prick, fylld = loggad, kontur = planerad; `maende`-markören visar aptit/biverkningar.
+- **Enheter** (`units.ts`): gram finns alltid. Övriga enheter = livsmedlets egna (`FoodItem.units`:
+  OFF-`serving_size`/`serving_quantity` tolkat till gram → "portion", måltid → "portion") +
+  standardtabellen (`src/data/units.ts`, bara `lv:`, matchning på nummer eller normaliserat namnmönster,
+  första regeln vinner, värdena ungefärliga) + egna (`foodUnits`, vinner vid samma namn). Förval:
+  senast använda enhet/mängd ur matloggen (`lastUsage`), annars 1 av första enheten, annars 100 g.
+  Vid redigering av en post gäller enhetens vikt när posten loggades (`entryUnit`).
 - **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Mat-vyn) hämtas med
   `npm run livsmedel` och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
   ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
@@ -179,13 +191,14 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 5`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 6`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     bildmetadata med `file`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
-    vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor.
+    vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
+    har portioner i stället för enheter och uppgraderas med `upgradeFoodData`.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.
@@ -196,7 +209,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (`summarizeBackup`) och låter användaren välja läge. `applySnapshot()` skriver i **en**
   transaktion:
   - `replace`: profil, mätningar och bilder töms och ersätts.
-  - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg/mående datum) → senast ändrad (`updatedAt ?? createdAt`) vinner,
+  - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg/mående datum, för egna enheter `foodId`) → senast ändrad (`updatedAt ?? createdAt`) vinner,
     lika → befintlig behålls. Befintlig profil behålls; saknas den tas den från filen.
 - **Påminnelse** (`BackupReminder` på Översikt): visas när det finns data och ingen export gjorts
   på 7 dagar. Utan tidigare export räknas från äldsta postens `createdAt`.

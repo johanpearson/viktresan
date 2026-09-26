@@ -41,6 +41,8 @@ export interface SeedData {
   injections?: Record<string, unknown>[];
   /** Mående; nyckel = `date`. */
   symptoms?: Record<string, unknown>[];
+  /** Egna enheter per livsmedel; nyckel = `foodId`. */
+  foodUnits?: Record<string, unknown>[];
 }
 
 /**
@@ -76,6 +78,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
         'medications',
         'injections',
         'symptoms',
+        'foodUnits',
       ],
       'readwrite',
     );
@@ -97,6 +100,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
     for (const m of data.medications ?? []) tx.objectStore('medications').put(m);
     for (const i of data.injections ?? []) tx.objectStore('injections').put(i);
     for (const s of data.symptoms ?? []) tx.objectStore('symptoms').put(s);
+    for (const u of data.foodUnits ?? []) tx.objectStore('foodUnits').put(u);
     for (const [key, value] of Object.entries(data.settings ?? {})) {
       tx.objectStore('settings').put(value, key);
     }
@@ -129,6 +133,7 @@ export interface Dump {
   medications: unknown[];
   injections: unknown[];
   symptoms: unknown[];
+  foodUnits: unknown[];
 }
 
 /** Läser ut all data ur IndexedDB (bilder som byte-arrayer), sorterat på id. */
@@ -183,6 +188,7 @@ export async function dump(page: Page): Promise<Dump> {
       medications,
       injections,
       symptoms,
+      foodUnits,
     ] = await Promise.all([
       all('profile'),
       all('weights'),
@@ -201,6 +207,7 @@ export async function dump(page: Page): Promise<Dump> {
       all('medications'),
       all('injections'),
       all('symptoms'),
+      all('foodUnits'),
     ]);
     db.close();
     return {
@@ -228,11 +235,12 @@ export async function dump(page: Page): Promise<Dump> {
       medications: medications.sort(byId),
       injections: injections.sort(byId),
       symptoms,
+      foodUnits,
     };
   });
 }
 
-/** Tömmer profil, mätningar (vikt, midja, steg), bilder, mat, vatten, träning och GLP-1 – som en ny enhet. */
+/** Tömmer profil, mätningar (vikt, midja, steg), bilder, mat (inkl. egna enheter), vatten, träning och GLP-1 – som en ny enhet. */
 export async function wipe(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -260,6 +268,7 @@ export async function wipe(page: Page): Promise<void> {
       'medications',
       'injections',
       'symptoms',
+      'foodUnits',
     ];
     const tx = db.transaction(stores, 'readwrite');
     for (const store of stores) tx.objectStore(store).clear();

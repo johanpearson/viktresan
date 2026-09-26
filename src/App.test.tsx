@@ -81,6 +81,8 @@ async function seedToday() {
     meal: 'frukost',
     foodId: 'egen:x',
     name: 'Gröt',
+    amount: 200,
+    unit: 'g',
     grams: 200,
     per100: { kcal: 100, proteinG: 3, carbsG: 15, fatG: 2 },
     createdAt: 1,

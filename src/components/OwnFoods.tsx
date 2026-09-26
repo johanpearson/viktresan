@@ -1,14 +1,22 @@
 import { useMemo, useState } from 'react';
-import { deleteFood, deleteMeal, type SavedMeal, type StoredFood } from '../db/db.ts';
-import { mealToItem } from '../lib/foodCatalog.ts';
+import {
+  deleteFood,
+  deleteMeal,
+  type CustomUnits,
+  type SavedMeal,
+  type StoredFood,
+} from '../db/db.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
-import { formatGrams, formatKcal } from '../lib/format.ts';
+import { formatKcal } from '../lib/format.ts';
+import { totalOf } from '../lib/nutrition.ts';
+import { loggedAmountText } from '../lib/units.ts';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import { MealBuilder } from './MealBuilder.tsx';
 
 interface OwnFoodsProps {
   foods: readonly StoredFood[];
   meals: readonly SavedMeal[];
+  foodUnits: readonly CustomUnits[];
   searchItems: readonly FoodItem[];
   loading: boolean;
   onChange: () => Promise<unknown>;
@@ -18,11 +26,22 @@ type Editing =
   { kind: 'food'; food: StoredFood | null } | { kind: 'meal'; meal: SavedMeal | null } | null;
 
 /** Egna livsmedel och sparade måltider: skapa, redigera, ta bort. */
-export function OwnFoods({ foods, meals, searchItems, loading, onChange }: OwnFoodsProps) {
+export function OwnFoods({
+  foods,
+  meals,
+  foodUnits,
+  searchItems,
+  loading,
+  onChange,
+}: OwnFoodsProps) {
   const [editing, setEditing] = useState<Editing>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const own = useMemo(() => foods.filter((f) => f.source === 'egen'), [foods]);
+  const customUnits = useMemo(
+    () => new Map(foodUnits.map((u) => [u.foodId, u.units])),
+    [foodUnits],
+  );
 
   async function remove(id: string, name: string, kind: 'food' | 'meal') {
     if (confirmId !== id) {
@@ -46,6 +65,7 @@ export function OwnFoods({ foods, meals, searchItems, loading, onChange }: OwnFo
     return (
       <CustomFoodForm
         food={editing.food}
+        customUnits={editing.food ? (customUnits.get(editing.food.id) ?? []) : []}
         onSaved={(food) => void saved(`Sparade ${food.name}.`)}
         onCancel={() => {
           setEditing(null);
@@ -58,6 +78,7 @@ export function OwnFoods({ foods, meals, searchItems, loading, onChange }: OwnFo
       <MealBuilder
         meal={editing.meal}
         searchItems={searchItems}
+        customUnits={customUnits}
         loading={loading}
         onSaved={(meal) => void saved(`Sparade måltiden ${meal.name}.`)}
         onCancel={() => {
@@ -107,8 +128,7 @@ export function OwnFoods({ foods, meals, searchItems, loading, onChange }: OwnFo
         ) : (
           <ul className="entry-list">
             {meals.map((meal) => {
-              const item = mealToItem(meal);
-              const kcal = ((item.portionG ?? 0) * item.per100.kcal) / 100;
+              const kcal = totalOf(meal.items).kcal;
               return (
                 <li key={meal.id} className="entry" data-testid="own-meal">
                   <div className="entry-main">
@@ -116,7 +136,7 @@ export function OwnFoods({ foods, meals, searchItems, loading, onChange }: OwnFo
                     <span className="entry-weight">{formatKcal(kcal)}</span>
                   </div>
                   <p className="entry-extra">
-                    {meal.items.map((i) => `${i.name} ${formatGrams(i.grams)}`).join(', ')}
+                    {meal.items.map((i) => `${i.name} ${loggedAmountText(i)}`).join(', ')}
                   </p>
                   <div className="entry-actions">
                     <button

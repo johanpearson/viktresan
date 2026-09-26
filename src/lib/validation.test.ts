@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   parseFoodFields,
   parseInjectionFields,
-  parseLogAmount,
   parseMedicationFields,
   parsePhotoFields,
   parseProfile,
@@ -162,8 +161,6 @@ describe('parseFoodFields', () => {
     protein: '3',
     carbs: '15,5',
     fat: '',
-    portionName: '',
-    portionG: '',
     ean: '',
   };
 
@@ -174,15 +171,10 @@ describe('parseFoodFields', () => {
     });
   });
 
-  it('tar med portion och streckkod', () => {
-    expect(
-      parseFoodFields({ ...food, portionG: '250', portionName: 'tallrik', ean: '4006381333931' }),
-    ).toMatchObject({
+  it('tar med streckkod', () => {
+    expect(parseFoodFields({ ...food, ean: '4006381333931' })).toMatchObject({
       ok: true,
-      value: { portionG: 250, portionName: 'tallrik', ean: '4006381333931' },
-    });
-    expect(parseFoodFields({ ...food, portionG: '250' })).toMatchObject({
-      value: { portionName: 'portion' },
+      value: { ean: '4006381333931' },
     });
   });
 
@@ -194,25 +186,7 @@ describe('parseFoodFields', () => {
     expect(parseFoodFields({ ...food, protein: '50', carbs: '40', fat: '20' })).toMatchObject({
       ok: false,
     });
-    expect(parseFoodFields({ ...food, portionG: '0' })).toMatchObject({ ok: false });
     expect(parseFoodFields({ ...food, ean: '123' })).toMatchObject({ ok: false });
-  });
-});
-
-describe('parseLogAmount', () => {
-  it('gram', () => {
-    expect(parseLogAmount('60', 'g')).toEqual({ ok: true, value: { grams: 60 } });
-    expect(parseLogAmount('0', 'g')).toMatchObject({ ok: false });
-    expect(parseLogAmount('abc', 'g')).toMatchObject({ ok: false });
-  });
-
-  it('portioner räknas om till gram', () => {
-    expect(parseLogAmount('1,5', 'portion', 40)).toEqual({
-      ok: true,
-      value: { grams: 60, portionCount: 1.5 },
-    });
-    expect(parseLogAmount('1', 'portion')).toMatchObject({ ok: false });
-    expect(parseLogAmount('0', 'portion', 40)).toMatchObject({ ok: false });
   });
 });
 

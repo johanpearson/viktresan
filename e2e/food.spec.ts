@@ -15,6 +15,7 @@ const LIVSMEDEL = {
     [2, 'Mjölk fett 3 %', 60, 3.5, 4.8, 3],
     [3, 'Banan', 95, 1.1, 21, 0.3],
     [4, 'Potatis kokt', 80, 2, 17, 0.1],
+    [5, 'Ägg kokt', 136, 12.1, 0, 9.8],
   ],
 };
 
@@ -58,13 +59,24 @@ async function searchAndPick(page: Page, query: string, name: string, label = 'S
   await page.getByTestId('search-result').filter({ hasText: name }).first().tap();
 }
 
-async function logAmount(page: Page, amount: string, meal?: string) {
+/** Loggar en mängd i vald enhet (tryck på enhetschippet först), annars i den förvalda. */
+async function logAmount(page: Page, amount: string, meal?: string, unit?: string) {
   const form = page.getByTestId('food-log-form');
   await expect(form).toBeVisible();
-  await form.getByLabel(/Mängd \(g\)|Antal portioner/).fill(amount);
+  if (unit) await chooseUnit(page, unit);
+  await form.getByLabel(/^Mängd/).fill(amount);
   if (meal) await form.getByLabel('Måltid').selectOption({ label: meal });
   await form.getByRole('button', { name: 'Logga', exact: true }).tap();
   await expect(form).toBeHidden();
+}
+
+async function chooseUnit(page: Page, unit: string) {
+  const chip = page
+    .getByTestId('food-log-form')
+    .getByRole('group', { name: 'Enhet' })
+    .getByRole('button', { name: unit, exact: true });
+  await chip.tap();
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
 }
 
 test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ page }) => {
@@ -76,7 +88,12 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
 
   // Fuzzy: stavfel och ö utan prickar.
   await searchAndPick(page, 'havregrin', 'Havregryn');
-  await expect(page.getByTestId('log-preview')).toContainText('100 g ger 370 kcal');
+  // Havregryn har standardenheten dl (≈ 35 g).
+  await expect(page.getByTestId('log-preview')).toHaveText('1 dl ≈ 35 g · 130 kcal');
+  await chooseUnit(page, 'g');
+  await expect(page.getByLabel('Mängd (g)')).toHaveValue('35');
+  await page.getByLabel('Mängd (g)').fill('100');
+  await expect(page.getByTestId('log-preview')).toHaveText('100 g · 370 kcal');
   await logAmount(page, '60', 'Frukost');
   await expect(page.getByRole('status').filter({ hasText: 'Loggade' })).toHaveText(
     'Loggade Havregryn (60 g) till frukost.',
@@ -84,7 +101,7 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   await expect(intake).toHaveText(`222 / ${kcalText(target)} kcal`);
 
   await searchAndPick(page, 'mjolk', 'Mjölk fett 3 %');
-  await logAmount(page, '200', 'Frukost');
+  await logAmount(page, '200', 'Frukost', 'g');
   await expect(intake).toContainText('342');
   await expect(page.getByTestId('remaining-kcal')).toHaveText(
     `${kcalText(target - 342)} kcal kvar`,
@@ -123,7 +140,10 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   await expect(star).toHaveAttribute('aria-pressed', 'false');
   await star.tap();
   await expect(star).toHaveAttribute('aria-pressed', 'true');
-  await logAmount(page, '120', 'Mellanmål');
+  // En banan ≈ 120 g.
+  await expect(page.getByLabel('Mängd (st)')).toHaveValue('1');
+  await logAmount(page, '1', 'Mellanmål');
+  await expect(page.getByTestId('meal-mellanmal')).toContainText('1 st (120 g)');
   await expect(page.getByTestId('meal-mellanmal')).toContainText('Banan');
   await expect(intake).toContainText('294');
 
@@ -134,7 +154,9 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   await page.getByRole('button', { name: 'Favoriter', exact: true }).tap();
   await expect(quick).toHaveCount(1);
   await quick.first().tap();
-  await logAmount(page, '100');
+  // Senast använda enhet och mängd förifylls.
+  await expect(page.getByLabel('Mängd (st)')).toHaveValue('1');
+  await logAmount(page, '100', undefined, 'g');
   await expect(intake).toContainText('389');
 
   const stored = await dump(page);
@@ -143,6 +165,8 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
     expect.arrayContaining([
       expect.objectContaining({
         foodId: 'lv:2',
+        amount: 300,
+        unit: 'g',
         grams: 300,
         meal: 'frukost',
         date: isoDaysFromToday(0),
@@ -159,15 +183,18 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   await openFood(page);
   await page.getByRole('button', { name: 'Egna', exact: true }).tap();
 
-  // Eget livsmedel med portion.
+  // Eget livsmedel med en egen enhet.
   await page.getByRole('button', { name: 'Nytt livsmedel' }).tap();
   await page.getByLabel('Namn').fill('Mormors bulle');
   await page.getByLabel('Energi (kcal)').fill('380');
   await page.getByLabel('Protein (g)').fill('7');
   await page.getByLabel('Kolhydrater (g)').fill('50');
   await page.getByLabel('Fett (g)').fill('16');
-  await page.getByLabel('Portion (valfri)').fill('bulle');
-  await page.getByLabel('Portionens vikt (g)').fill('60');
+  await page.getByRole('button', { name: 'Lägg till enhet' }).tap();
+  await page.getByLabel('Enhetens namn').fill('bulle');
+  await page.getByLabel('Gram per enhet').fill('60');
+  await page.getByRole('button', { name: 'Spara enhet' }).tap();
+  await expect(page.getByTestId('unit-entry')).toHaveText(/1 bulle = 60 g/);
   await page.getByRole('button', { name: 'Spara livsmedel' }).tap();
   await expect(page.getByTestId('own-food')).toHaveCount(1);
   await expect(page.getByTestId('own-food')).toContainText('380 kcal/100 g');
@@ -175,40 +202,49 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   // Måltid med två ingredienser.
   await page.getByRole('button', { name: 'Ny måltid' }).tap();
   await page.getByLabel('Måltidens namn').fill('Frukostgröt');
+  // Ingredienser i gram eller i en enhet (standardenheten dl för mjölk ≈ 103 g).
   await searchAndPick(page, 'havregryn', 'Havregryn', 'Lägg till ingrediens');
-  await page.getByLabel('Gram Havregryn').fill('60');
+  await expect(page.getByLabel('Enhet Havregryn')).toHaveValue('dl');
+  await page.getByLabel('Enhet Havregryn').selectOption('g');
+  await page.getByLabel('Mängd Havregryn').fill('60');
   await searchAndPick(page, 'mjölk', 'Mjölk fett 3 %', 'Lägg till ingrediens');
-  await page.getByLabel('Gram Mjölk fett 3 %').fill('200');
+  await page.getByLabel('Mängd Mjölk fett 3 %').fill('2');
+  await expect(page.getByTestId('ingredient-grams').last()).toHaveText('≈ 206 g · 124 kcal');
   await expect(page.getByTestId('ingredient')).toHaveCount(2);
-  await expect(page.getByTestId('meal-total')).toHaveText('Totalt 260 g · 342 kcal');
+  // 60 g × 3,7 + 206 g × 0,6 = 222 + 123,6.
+  await expect(page.getByTestId('meal-total')).toHaveText('Totalt 266 g · 346 kcal');
   await page.getByRole('button', { name: 'Spara måltid' }).tap();
   await expect(page.getByTestId('own-meal')).toHaveCount(1);
-  await expect(page.getByTestId('own-meal')).toContainText('342 kcal');
-  await expect(page.getByTestId('own-meal')).toContainText('Havregryn 60 g, Mjölk fett 3 % 200 g');
+  await expect(page.getByTestId('own-meal')).toContainText('346 kcal');
+  await expect(page.getByTestId('own-meal')).toContainText(
+    'Havregryn 60 g, Mjölk fett 3 % 2 dl (206 g)',
+  );
 
   // Logga måltiden via snabbvalet Måltider – en portion är hela måltiden.
   await page.getByRole('button', { name: 'Dag', exact: true }).tap();
   await page.getByRole('button', { name: 'Måltider', exact: true }).tap();
   await page.getByTestId('quick-pick').filter({ hasText: 'Frukostgröt' }).tap();
-  await expect(page.getByRole('button', { name: 'Portioner' })).toHaveAttribute(
+  const units = page.getByTestId('food-log-form').getByRole('group', { name: 'Enhet' });
+  await expect(units.getByRole('button', { name: 'portion' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(page.getByLabel('Antal portioner')).toHaveValue('1');
+  await expect(page.getByLabel('Mängd (portion)')).toHaveValue('1');
+  await expect(page.getByTestId('log-preview')).toHaveText('1 portion ≈ 266 g · 346 kcal');
   await logAmount(page, '1', 'Frukost');
-  await expect(page.getByTestId('intake')).toContainText('342');
-  await expect(page.getByTestId('meal-frukost')).toContainText('1 portion (260 g)');
+  await expect(page.getByTestId('intake')).toContainText('346');
+  await expect(page.getByTestId('meal-frukost')).toContainText('1 portion (266 g)');
 
-  // Det egna livsmedlet i portioner, sedan omräknat till gram.
+  // Det egna livsmedlet i sin egna enhet, omräknat till gram och tillbaka.
   await searchAndPick(page, 'bulle', 'Mormors bulle');
-  await expect(page.getByLabel('Antal portioner')).toHaveValue('1');
-  await page.getByLabel('Antal portioner').fill('2');
-  await page.getByRole('button', { name: 'Gram', exact: true }).tap();
+  await expect(page.getByLabel('Mängd (bulle)')).toHaveValue('1');
+  await page.getByLabel('Mängd (bulle)').fill('2');
+  await chooseUnit(page, 'g');
   await expect(page.getByLabel('Mängd (g)')).toHaveValue('120');
-  await page.getByRole('button', { name: 'Portioner' }).tap();
+  await chooseUnit(page, 'bulle');
   await logAmount(page, '1,5', 'Mellanmål');
-  // 342 + 90 g × 3,8 = 342 + 342.
-  await expect(page.getByTestId('intake')).toContainText('684');
+  // 346 + 90 g × 3,8 = 346 + 342.
+  await expect(page.getByTestId('intake')).toContainText('688');
   await expect(page.getByTestId('meal-mellanmal')).toContainText('1,5 bulle (90 g)');
 
   const stored = await dump(page);
@@ -216,14 +252,97 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
     expect.objectContaining({
       name: 'Frukostgröt',
       items: [
-        expect.objectContaining({ foodId: 'lv:1', grams: 60 }),
-        expect.objectContaining({ foodId: 'lv:2', grams: 200 }),
+        expect.objectContaining({ foodId: 'lv:1', amount: 60, unit: 'g', grams: 60 }),
+        expect.objectContaining({ foodId: 'lv:2', amount: 2, unit: 'dl', grams: 206 }),
       ],
     }),
   ]);
   expect(stored.foods).toEqual([
-    expect.objectContaining({ name: 'Mormors bulle', source: 'egen', portionG: 60 }),
+    expect.objectContaining({ name: 'Mormors bulle', source: 'egen' }),
   ]);
+  expect(stored.foodUnits).toEqual([
+    expect.objectContaining({ units: [{ name: 'bulle', grams: 60, source: 'egen' }] }),
+  ]);
+  expect(errors).toEqual([]);
+});
+
+test('enheter: logga 2 ägg i st, skapa en egen enhet och logga med den', async ({ page }) => {
+  const errors = collectErrors(page);
+  await openFood(page);
+  const intake = page.getByTestId('intake');
+  const preview = page.getByTestId('log-preview');
+
+  // Standardenheten st (≈ 60 g) är förvald; snabbknappen 2 ger 120 g.
+  await searchAndPick(page, 'ägg', 'Ägg kokt');
+  await expect(page.getByLabel('Mängd (st)')).toHaveValue('1');
+  await expect(preview).toHaveText('1 st ≈ 60 g · 82 kcal');
+  await page.getByRole('button', { name: '2 st', exact: true }).tap();
+  await expect(page.getByLabel('Mängd (st)')).toHaveValue('2');
+  // 120 g × 1,36 kcal/g = 163,2.
+  await expect(preview).toHaveText('2 st ≈ 120 g · 163 kcal');
+  await page.getByRole('button', { name: '½ st', exact: true }).tap();
+  await expect(preview).toHaveText('0,5 st ≈ 30 g · 41 kcal');
+  await page.getByRole('button', { name: '2 st', exact: true }).tap();
+  await logAmount(page, '2', 'Frukost');
+  await expect(intake).toContainText('163');
+  await expect(page.getByTestId('meal-frukost')).toContainText('2 st (120 g)');
+
+  // Egen enhet direkt i loggningsvyn; senast använda (2 st) är förifyllt.
+  await searchAndPick(page, 'ägg', 'Ägg kokt');
+  await expect(page.getByLabel('Mängd (st)')).toHaveValue('2');
+  await page.getByRole('button', { name: '+ Lägg till enhet' }).tap();
+  await page.getByLabel('Enhetens namn').fill('stort ägg');
+  await page.getByLabel('Gram per enhet').fill('70');
+  await page.getByRole('button', { name: 'Spara enhet' }).tap();
+  await expect(page.getByLabel('Mängd (stort ägg)')).toHaveValue('1');
+  await expect(preview).toHaveText('1 stort ägg ≈ 70 g · 95 kcal');
+  await logAmount(page, '2', 'Lunch');
+  // 163,2 + 140 g × 1,36 = 163,2 + 190,4.
+  await expect(intake).toContainText('354');
+  await expect(page.getByTestId('meal-lunch')).toContainText('2 stort ägg (140 g)');
+
+  // Redigera enheten i livsmedlets detaljer – redan loggade poster ändras inte.
+  await searchAndPick(page, 'ägg', 'Ägg kokt');
+  await expect(page.getByLabel('Mängd (stort ägg)')).toHaveValue('2');
+  const details = page.getByTestId('food-units');
+  await details.getByText('Enheter för Ägg kokt').tap();
+  await expect(details.getByTestId('unit-entry')).toHaveText([
+    /1 st ≈ 60 g\s*Standard \(ungefärlig\)/,
+    /1 stort ägg = 70 g\s*Egen/,
+  ]);
+  await details.getByRole('button', { name: 'Redigera enheten stort ägg' }).tap();
+  await details.getByLabel('Gram per enhet').fill('75');
+  await details.getByRole('button', { name: 'Spara enhet' }).tap();
+  await expect(details.getByTestId('unit-entry').last()).toContainText('1 stort ägg = 75 g');
+  await expect(preview).toHaveText('2 stort ägg ≈ 150 g · 204 kcal');
+  await page.getByRole('button', { name: 'Avbryt' }).tap();
+  await expect(intake).toContainText('354');
+  await expect(page.getByTestId('meal-lunch')).toContainText('2 stort ägg (140 g)');
+
+  // Redigering av den gamla posten räknar med enhetens vikt när den loggades.
+  await page.getByRole('button', { name: 'Redigera Ägg kokt' }).last().tap();
+  await expect(page.getByLabel('Mängd (stort ägg)')).toHaveValue('2');
+  await expect(preview).toHaveText('2 stort ägg ≈ 140 g · 190 kcal');
+  await page.getByRole('button', { name: 'Avbryt' }).tap();
+
+  // Ta bort enheten.
+  await searchAndPick(page, 'ägg', 'Ägg kokt');
+  await details.getByText('Enheter för Ägg kokt').tap();
+  await details.getByRole('button', { name: 'Ta bort enheten stort ägg' }).tap();
+  await details.getByRole('button', { name: 'Bekräfta borttagning av stort ägg' }).tap();
+  await expect(details.getByTestId('unit-entry')).toHaveCount(1);
+  await expect(page.getByLabel('Mängd (g)')).toHaveValue('150');
+  await page.getByRole('button', { name: 'Avbryt' }).tap();
+
+  const stored = await dump(page);
+  expect(stored.foodLog).toHaveLength(2);
+  expect(stored.foodLog).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ foodId: 'lv:5', amount: 2, unit: 'st', grams: 120 }),
+      expect.objectContaining({ foodId: 'lv:5', amount: 2, unit: 'stort ägg', grams: 140 }),
+    ]),
+  );
+  expect(stored.foodUnits).toEqual([]);
   expect(errors).toEqual([]);
 });
 
@@ -264,6 +383,7 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
             product: {
               product_name: 'Testmüsli',
               brands: 'Testbolaget',
+              serving_size: '1 portion (45 g)',
               serving_quantity: 45,
               nutriments: {
                 'energy-kcal_100g': 400,
@@ -282,7 +402,8 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
   await page.getByRole('button', { name: 'Starta kameran' }).tap();
   await expect(page.getByRole('heading', { name: 'Logga: Testmüsli (Testbolaget)' })).toBeVisible();
   await expect(page.getByTestId('food-log-form')).toContainText('Open Food Facts');
-  await expect(page.getByLabel('Antal portioner')).toHaveValue('1');
+  await expect(page.getByLabel('Mängd (portion)')).toHaveValue('1');
+  await expect(page.getByTestId('log-preview')).toHaveText('1 portion ≈ 45 g · 180 kcal');
   await logAmount(page, '1', 'Frukost');
   // 45 g × 4 kcal/g.
   await expect(page.getByTestId('intake')).toContainText('180');
@@ -292,7 +413,12 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
   // Träffen är cachad lokalt: nästa skanning frågar inte Open Food Facts.
   let stored = await dump(page);
   expect(stored.foods).toEqual([
-    expect.objectContaining({ id: `off:${EAN}`, ean: EAN, source: 'openfoodfacts', portionG: 45 }),
+    expect.objectContaining({
+      id: `off:${EAN}`,
+      ean: EAN,
+      source: 'openfoodfacts',
+      units: [{ name: 'portion', grams: 45, source: 'openfoodfacts' }],
+    }),
   ]);
   await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
   await page.getByRole('button', { name: 'Starta kameran' }).tap();
@@ -356,6 +482,8 @@ test('historik och översikt: intag mot mål, 7-dagarssnitt och förklarade spä
     meal: 'lunch',
     foodId: 'lv:4',
     name: 'Potatis kokt',
+    amount: 1800 + i * 100,
+    unit: 'g',
     grams: 1800 + i * 100,
     per100,
     createdAt: Date.now() - daysAgo * 86_400_000,

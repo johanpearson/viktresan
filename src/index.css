@@ -1265,10 +1265,10 @@ a.button {
 
 .ingredient {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: 4px 8px;
+  padding: 8px 0;
   border-top: 1px solid var(--border);
 }
 
@@ -1277,19 +1277,23 @@ a.button {
 }
 
 .ingredient-name {
+  grid-column: 1 / -1;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.ingredient-grams {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.ingredient-amount {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(5rem, 1fr);
+  gap: 8px;
 }
 
-.ingredient-grams .input {
-  width: 5.5rem;
+.ingredient-amount input.input {
   text-align: right;
+}
+
+.ingredient-grams {
+  grid-column: 1 / -1;
 }
 
 .scanner-video {
@@ -2117,4 +2121,36 @@ a.button {
 
 .dose-changes li + li {
   border-top: 1px solid var(--border);
+}
+
+/* Enheter för matloggning */
+.chip-add {
+  border-style: dashed;
+  color: var(--accent);
+}
+
+.log-preview {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.unit-list {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.unit-entry .entry-main {
+  align-items: baseline;
 }

@@ -14,6 +14,7 @@ import {
   getProfile,
   findFoodByEan,
   listFavorites,
+  listCustomUnits,
   listFoodLog,
   listFoods,
   listMeals,
@@ -44,6 +45,7 @@ import {
   upsertSymptoms,
   undoLastWater,
   resetDbForTests,
+  saveCustomUnits,
   saveProfile,
   setFavorite,
   splitLegacyMeasurements,
@@ -142,12 +144,60 @@ async function createV3Database(): Promise<void> {
   db.close();
 }
 
+/** Skapar en databas med v6-schemat (före enheter) med mat i det gamla formatet. */
+async function createV6Database(data: {
+  foods: Record<string, unknown>[];
+  meals: Record<string, unknown>[];
+  foodLog: Record<string, unknown>[];
+}): Promise<void> {
+  const raw = await new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 6);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      const weights = db.createObjectStore('weights', { keyPath: 'id' });
+      weights.createIndex('by-date', 'date');
+      const photos = db.createObjectStore('photos', { keyPath: 'id' });
+      photos.createIndex('by-date', 'date');
+      db.createObjectStore('settings');
+      db.createObjectStore('profile');
+      db.createObjectStore('waist', { keyPath: 'date' });
+      db.createObjectStore('steps', { keyPath: 'date' });
+      const foods = db.createObjectStore('foods', { keyPath: 'id' });
+      foods.createIndex('by-ean', 'ean');
+      const meals = db.createObjectStore('meals', { keyPath: 'id' });
+      const foodLog = db.createObjectStore('foodLog', { keyPath: 'id' });
+      foodLog.createIndex('by-date', 'date');
+      db.createObjectStore('favorites', { keyPath: 'foodId' });
+      const water = db.createObjectStore('water', { keyPath: 'id' });
+      water.createIndex('by-date', 'date');
+      const workouts = db.createObjectStore('workouts', { keyPath: 'id' });
+      workouts.createIndex('by-date', 'date');
+      db.createObjectStore('workoutPlans', { keyPath: 'id' });
+      db.createObjectStore('medications', { keyPath: 'id' });
+      const injections = db.createObjectStore('injections', { keyPath: 'id' });
+      injections.createIndex('by-date', 'date');
+      db.createObjectStore('symptoms', { keyPath: 'date' });
+      for (const f of data.foods) foods.put(f);
+      for (const m of data.meals) meals.put(m);
+      for (const e of data.foodLog) foodLog.put(e);
+    };
+    req.onsuccess = () => {
+      resolve(req.result);
+    };
+    req.onerror = () => {
+      reject(req.error ?? new Error('open failed'));
+    };
+  });
+  raw.close();
+}
+
 describe('db', () => {
   it('skapar alla object stores', async () => {
     const db = await getDb();
     expect([...db.objectStoreNames].sort()).toEqual([
       'favorites',
       'foodLog',
+      'foodUnits',
       'foods',
       'injections',
       'meals',
@@ -380,12 +430,140 @@ describe('db', () => {
     });
     raw.close();
     const db = await getDb();
-    expect(db.version).toBe(6);
+    expect(db.version).toBe(DB_VERSION);
     expect(await listWeights()).toHaveLength(1);
     expect(await listWater()).toHaveLength(1);
     expect(await listMedications()).toEqual([]);
     expect(await listInjections()).toEqual([]);
     expect(await listSymptoms()).toEqual([]);
+  });
+
+  it('migrerar v6 → v7: portioner blir enheter, äldre loggar tolkas som gram', async () => {
+    const per100 = { kcal: 380, proteinG: 7, carbsG: 50, fatG: 16 };
+    await createV6Database({
+      foods: [
+        {
+          id: 'egen:bulle',
+          name: 'Bulle',
+          source: 'egen',
+          per100,
+          portionG: 60,
+          portionName: 'bulle',
+          createdAt: 1,
+        },
+        {
+          id: 'off:123',
+          name: 'Flingor',
+          source: 'openfoodfacts',
+          per100,
+          portionG: 30,
+          portionName: 'portion',
+          ean: '123',
+          createdAt: 2,
+        },
+        { id: 'egen:x', name: 'Utan portion', source: 'egen', per100, createdAt: 3 },
+      ],
+      meals: [
+        {
+          id: 'm',
+          name: 'Fika',
+          items: [{ foodId: 'egen:bulle', name: 'Bulle', grams: 60, per100 }],
+          createdAt: 4,
+        },
+      ],
+      foodLog: [
+        {
+          id: 'gram',
+          date: '2026-01-01',
+          meal: 'lunch',
+          foodId: 'lv:1',
+          name: 'Pasta',
+          grams: 250,
+          per100,
+          createdAt: 5,
+        },
+        {
+          id: 'portion',
+          date: '2026-01-01',
+          meal: 'mellanmal',
+          foodId: 'egen:bulle',
+          name: 'Bulle',
+          grams: 90,
+          per100,
+          portionName: 'bulle',
+          portionCount: 1.5,
+          createdAt: 6,
+        },
+      ],
+    });
+    const db = await getDb();
+    expect(db.version).toBe(DB_VERSION);
+
+    const foods = await listFoods();
+    expect(foods).toEqual([
+      { id: 'egen:bulle', name: 'Bulle', source: 'egen', per100, createdAt: 1 },
+      {
+        id: 'off:123',
+        name: 'Flingor',
+        source: 'openfoodfacts',
+        per100,
+        units: [{ name: 'portion', grams: 30, source: 'openfoodfacts' }],
+        ean: '123',
+        createdAt: 2,
+      },
+      { id: 'egen:x', name: 'Utan portion', source: 'egen', per100, createdAt: 3 },
+    ]);
+    expect(await listCustomUnits()).toEqual([
+      { foodId: 'egen:bulle', units: [{ name: 'bulle', grams: 60, source: 'egen' }], createdAt: 1 },
+    ]);
+    const log = await listFoodLog();
+    expect(log.map((e) => [e.id, e.amount, e.unit, e.grams])).toEqual([
+      ['gram', 250, 'g', 250],
+      ['portion', 1.5, 'bulle', 90],
+    ]);
+    expect(log[1]).not.toHaveProperty('portionName');
+    expect(log[1]).not.toHaveProperty('portionCount');
+    expect((await listMeals())[0]?.items).toEqual([
+      { foodId: 'egen:bulle', name: 'Bulle', amount: 60, unit: 'g', grams: 60, per100 },
+    ]);
+  });
+
+  it('egna enheter: sparas per livsmedel, tas bort med livsmedlet och påverkar inte loggen', async () => {
+    const per100 = { kcal: 140, proteinG: 12, carbsG: 0, fatG: 10 };
+    await saveCustomUnits('lv:2205', [{ name: 'st', grams: 60, source: 'egen' }], 1);
+    await putFoodLog({
+      id: 'e',
+      date: '2026-01-01',
+      meal: 'frukost',
+      foodId: 'lv:2205',
+      name: 'Ägg',
+      amount: 2,
+      unit: 'st',
+      grams: 120,
+      per100,
+      createdAt: 2,
+    });
+    // Enheten ändras senare – den loggade posten behåller sina gram.
+    await saveCustomUnits('lv:2205', [{ name: 'st', grams: 70, source: 'egen' }], 3);
+    expect(await listCustomUnits()).toEqual([
+      {
+        foodId: 'lv:2205',
+        units: [{ name: 'st', grams: 70, source: 'egen' }],
+        createdAt: 1,
+        updatedAt: 3,
+      },
+    ]);
+    expect((await listFoodLog())[0]).toMatchObject({ amount: 2, unit: 'st', grams: 120 });
+
+    await saveCustomUnits('lv:2205', []);
+    expect(await listCustomUnits()).toEqual([]);
+
+    await putFood({ id: 'egen:y', name: 'Y', source: 'egen', per100, createdAt: 4 });
+    await saveCustomUnits('egen:y', [{ name: 'burk', grams: 200, source: 'egen' }]);
+    await saveCustomUnits('maltid:m', [{ name: 'halv', grams: 150, source: 'egen' }]);
+    await deleteFood('egen:y');
+    await deleteMeal('m');
+    expect(await listCustomUnits()).toEqual([]);
   });
 
   it('GLP-1: läkemedel, injektioner och mående sparas, listas och tas bort', async () => {
@@ -474,7 +652,15 @@ describe('db', () => {
 
   it('matlogg: sparas, listas i datumordning och tas bort', async () => {
     const per100 = { kcal: 100, proteinG: 1, carbsG: 2, fatG: 3 };
-    const base = { foodId: 'lv:1', name: 'Test', grams: 100, per100, meal: 'lunch' as const };
+    const base = {
+      foodId: 'lv:1',
+      name: 'Test',
+      amount: 100,
+      unit: 'g',
+      grams: 100,
+      per100,
+      meal: 'lunch' as const,
+    };
     await putFoodLog({ ...base, id: 'b', date: '2026-01-02', createdAt: 1 });
     await putFoodLog({ ...base, id: 'a', date: '2026-01-01', createdAt: 3 });
     await putFoodLog({ ...base, id: 'c', date: '2026-01-01', createdAt: 2 });

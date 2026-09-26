@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
   findFoodByEan,
   putFood,
+  saveCustomUnits,
   setFavorite,
   type FoodLogEntry,
   type StoredFood,
@@ -20,6 +21,7 @@ import type { FoodItem } from '../lib/foodSearch.ts';
 import { formatDate } from '../lib/format.ts';
 import type { Livsmedel } from '../lib/livsmedel.ts';
 import { totalOf } from '../lib/nutrition.ts';
+import { lastUsage, type FoodUnit } from '../lib/units.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
 import { BarcodeScanner } from './BarcodeScanner.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
@@ -50,15 +52,17 @@ type Lookup =
   | { kind: 'error'; message: string };
 
 const NO_FOODS: readonly FoodItem[] = [];
+const NO_UNITS: readonly FoodUnit[] = [];
 
-/** För redigering: livsmedlet som det loggades, med portion från katalogen om den saknas. */
+/**
+ * För redigering: livsmedlet ur katalogen (med dess enheter) men med namn och
+ * värden som de loggades. Enheten posten loggades med läggs på i `FoodLogForm`.
+ */
 function itemForEntry(entry: FoodLogEntry, catalog: ReadonlyMap<string, FoodItem>): FoodItem {
   const item = entryToItem(entry);
   const known = catalog.get(entry.foodId);
-  if (item.portionG == null && known?.portionG != null) {
-    item.portionG = known.portionG;
-    item.portionName = known.portionName ?? 'portion';
-  }
+  if (known?.units) item.units = known.units;
+  else delete item.units;
   return item;
 }
 
@@ -97,6 +101,10 @@ export function FoodDay({
     [foodData.favorites, catalog, foodLog],
   );
   const favoriteIds = new Set(foodData.favorites.map((f) => f.foodId));
+  const customUnits = useMemo(
+    () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
+    [foodData.foodUnits],
+  );
 
   const entries = foodLog.filter((e) => e.date === date);
   const totals = totalOf(entries);
@@ -128,8 +136,7 @@ export function FoodDay({
         ean,
         createdAt: Date.now(),
       };
-      if (food.portionG != null) stored.portionG = food.portionG;
-      if (food.portionName != null) stored.portionName = food.portionName;
+      if (food.units) stored.units = food.units;
       await putFood(stored);
       await reloadFood();
       select({ food, editing: null });
@@ -167,10 +174,16 @@ export function FoodDay({
       <FoodLogForm
         key={`${selection.food.id}:${selection.editing?.id ?? 'ny'}`}
         food={selection.food}
+        customUnits={customUnits.get(selection.food.id) ?? NO_UNITS}
+        last={lastUsage(foodLog, selection.food.id)}
         editing={selection.editing}
         date={date}
         favorite={favoriteIds.has(selection.food.id)}
         onToggleFavorite={() => void toggleFavorite(selection.food)}
+        onUnitsChange={async (units) => {
+          await saveCustomUnits(selection.food.id, units);
+          await reloadFood();
+        }}
         onSaved={(message) => {
           setSelection(null);
           void reloadLog().then(() => {

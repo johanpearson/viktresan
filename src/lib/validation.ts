@@ -176,16 +176,12 @@ export interface FoodFields {
   protein: string;
   carbs: string;
   fat: string;
-  portionName: string;
-  portionG: string;
   ean: string;
 }
 
 export interface FoodValues {
   name: string;
   per100: Nutrients;
-  portionName?: string;
-  portionG?: number;
   ean?: string;
 }
 
@@ -195,7 +191,7 @@ function parseAmountField(text: string, max: number): number | null {
   return value != null && value >= 0 && value <= max ? value : null;
 }
 
-/** Eget livsmedel: namn och näringsvärden per 100 g, valfri portion och streckkod. */
+/** Eget livsmedel: namn och näringsvärden per 100 g och valfri streckkod. */
 export function parseFoodFields(fields: FoodFields): Parsed<FoodValues> {
   const name = fields.name.trim();
   if (name === '' || name.length > 120) return fail('Ange ett namn (högst 120 tecken).');
@@ -210,14 +206,6 @@ export function parseFoodFields(fields: FoodFields): Parsed<FoodValues> {
     return fail('Protein, kolhydrater och fett kan inte vara mer än 100 g tillsammans.');
   const value: FoodValues = { name, per100: { kcal, proteinG, carbsG, fatG } };
 
-  const portionText = fields.portionG.trim();
-  if (portionText !== '') {
-    const portionG = parseDecimal(portionText);
-    if (portionG == null || portionG <= 0 || portionG > 5000)
-      return fail('Ange portionens vikt i gram (1–5 000) eller lämna fältet tomt.');
-    value.portionG = portionG;
-    value.portionName = fields.portionName.trim() || 'portion';
-  }
   const eanText = fields.ean.trim();
   if (eanText !== '') {
     const ean = normalizeEan(eanText);
@@ -225,25 +213,6 @@ export function parseFoodFields(fields: FoodFields): Parsed<FoodValues> {
     value.ean = ean;
   }
   return { ok: true, value };
-}
-
-/** Mängd att logga: gram (1–5 000) eller antal portioner (0,1–50). */
-export function parseLogAmount(
-  text: string,
-  unit: 'g' | 'portion',
-  portionG?: number,
-): Parsed<{ grams: number; portionCount?: number }> {
-  const value = parseDecimal(text);
-  if (unit === 'portion') {
-    if (portionG == null) return fail('Livsmedlet saknar portionsstorlek – ange gram.');
-    if (value == null || value <= 0 || value > 50) return fail('Ange antal portioner (0,1–50).');
-    return {
-      ok: true,
-      value: { grams: Math.round(value * portionG * 10) / 10, portionCount: value },
-    };
-  }
-  if (value == null || value <= 0 || value > 5000) return fail('Ange mängd i gram (1–5 000).');
-  return { ok: true, value: { grams: value } };
 }
 
 function parseWholeNumber(text: string): number | null {

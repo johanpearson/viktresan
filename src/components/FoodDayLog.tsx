@@ -1,17 +1,13 @@
 import { useState } from 'react';
 import { deleteFoodLog, type FoodLogEntry } from '../db/db.ts';
-import { decimalInput, formatGrams, formatKcal } from '../lib/format.ts';
+import { formatKcal } from '../lib/format.ts';
 import { MEAL_SLOTS, scaleNutrients, totalOf } from '../lib/nutrition.ts';
+import { loggedAmountText } from '../lib/units.ts';
 
 interface FoodDayLogProps {
   entries: readonly FoodLogEntry[];
   onEdit: (entry: FoodLogEntry) => void;
   onDeleted: () => void;
-}
-
-function amountText(entry: FoodLogEntry): string {
-  if (entry.portionCount == null) return formatGrams(entry.grams);
-  return `${decimalInput(entry.portionCount)} ${entry.portionName ?? 'portion'} (${formatGrams(entry.grams)})`;
 }
 
 /** Dagens loggade mat, grupperad per måltid, med redigering och borttagning. */
@@ -54,7 +50,7 @@ export function FoodDayLog({ entries, onEdit, onDeleted }: FoodDayLogProps) {
                         {formatKcal(scaleNutrients(e.per100, e.grams).kcal)}
                       </span>
                     </div>
-                    <p className="entry-extra">{amountText(e)}</p>
+                    <p className="entry-extra">{loggedAmountText(e)}</p>
                     <div className="entry-actions">
                       <button
                         type="button"

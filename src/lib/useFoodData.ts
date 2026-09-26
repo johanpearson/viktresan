@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  listCustomUnits,
   listFavorites,
   listFoods,
   listMeals,
+  type CustomUnits,
   type Favorite,
   type SavedMeal,
   type StoredFood,
@@ -13,12 +15,14 @@ export interface FoodData {
   foods: StoredFood[];
   meals: SavedMeal[];
   favorites: Favorite[];
+  /** Användarens egna enheter per livsmedel. */
+  foodUnits: CustomUnits[];
 }
 
-const EMPTY: FoodData = { foods: [], meals: [], favorites: [] };
+const EMPTY: FoodData = { foods: [], meals: [], favorites: [], foodUnits: [] };
 
 /**
- * Egna livsmedel, cachade produkter, måltider och favoriter från IndexedDB,
+ * Egna livsmedel, cachade produkter, måltider, favoriter och egna enheter från IndexedDB,
  * samt Livsmedelsverkets databas (laddas separat – `null` tills den är klar).
  */
 export function useFoodData(): {
@@ -31,12 +35,13 @@ export function useFoodData(): {
 
   const load = useCallback(async (): Promise<FoodData> => {
     try {
-      const [foods, meals, favorites] = await Promise.all([
+      const [foods, meals, favorites, foodUnits] = await Promise.all([
         listFoods(),
         listMeals(),
         listFavorites(),
+        listCustomUnits(),
       ]);
-      return { foods, meals, favorites };
+      return { foods, meals, favorites, foodUnits };
     } catch {
       return EMPTY;
     }

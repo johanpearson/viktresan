@@ -3,6 +3,7 @@
  * Endast streckkoden skickas till Open Food Facts – inga andra uppgifter.
  */
 import type { FoodItem } from './foodSearch.ts';
+import { parseServing } from './units.ts';
 
 export const OFF_ORIGIN = 'https://world.openfoodfacts.org';
 
@@ -22,7 +23,8 @@ export function normalizeEan(input: string): string | null {
 }
 
 export function offProductUrl(ean: string): string {
-  const fields = 'code,product_name,product_name_sv,brands,nutriments,serving_quantity';
+  const fields =
+    'code,product_name,product_name_sv,brands,nutriments,serving_size,serving_quantity,serving_quantity_unit';
   return `${OFF_ORIGIN}/api/v2/product/${ean}.json?fields=${fields}`;
 }
 
@@ -41,7 +43,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 /**
  * Tolkar svaret från Open Food Facts. `null` om produkten saknas eller saknar
- * energivärde per 100 g. Makron som saknas blir 0.
+ * energivärde per 100 g. Makron som saknas blir 0. En portionsstorlek som går att
+ * tolka till gram (`serving_size`/`serving_quantity`) blir enheten "portion".
  */
 export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
   if (!isRecord(body) || body.status !== 1 || !isRecord(body.product)) return null;
@@ -69,11 +72,8 @@ export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
       fatG: num(n.fat_100g) ?? 0,
     },
   };
-  const serving = num(p.serving_quantity);
-  if (serving !== null && serving > 0 && serving <= 5000) {
-    item.portionG = serving;
-    item.portionName = 'portion';
-  }
+  const serving = parseServing(p.serving_size, p.serving_quantity, p.serving_quantity_unit);
+  if (serving !== null) item.units = [{ name: 'portion', grams: serving, source: 'openfoodfacts' }];
   return item;
 }
 

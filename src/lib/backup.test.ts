@@ -21,6 +21,7 @@ import {
   type StepsEntry,
   type SymptomEntry,
   type WaistEntry,
+  type CustomUnits,
   type WaterEntry,
   type WeightEntry,
   type Workout,
@@ -73,8 +74,6 @@ const foods: StoredFood[] = [
     name: 'Mormors gröt',
     source: 'egen',
     per100: { kcal: 90, proteinG: 3, carbsG: 15, fatG: 2 },
-    portionG: 250,
-    portionName: 'tallrik',
     createdAt: 4,
   },
   {
@@ -82,10 +81,15 @@ const foods: StoredFood[] = [
     name: 'Havregryn (Kungsörnen)',
     source: 'openfoodfacts',
     per100: oats,
+    units: [{ name: 'portion', grams: 40, source: 'openfoodfacts' }],
     ean: '7310865004703',
     createdAt: 5,
     updatedAt: 6,
   },
+];
+
+const foodUnits: CustomUnits[] = [
+  { foodId: 'egen:gröt', units: [{ name: 'tallrik', grams: 250, source: 'egen' }], createdAt: 4 },
 ];
 
 const meals: SavedMeal[] = [
@@ -93,10 +97,19 @@ const meals: SavedMeal[] = [
     id: 'meal1',
     name: 'Frukostgröt',
     items: [
-      { foodId: 'off:7310865004703', name: 'Havregryn', grams: 60, per100: oats },
+      {
+        foodId: 'off:7310865004703',
+        name: 'Havregryn',
+        amount: 60,
+        unit: 'g',
+        grams: 60,
+        per100: oats,
+      },
       {
         foodId: 'lv:1',
         name: 'Mjölk',
+        amount: 200,
+        unit: 'g',
         grams: 200,
         per100: { kcal: 60, proteinG: 3.5, carbsG: 4.8, fatG: 3 },
       },
@@ -112,10 +125,10 @@ const foodLog: FoodLogEntry[] = [
     meal: 'frukost',
     foodId: 'maltid:meal1',
     name: 'Frukostgröt',
+    amount: 1,
+    unit: 'portion',
     grams: 260,
     per100: { kcal: 131.5, proteinG: 5.7, carbsG: 17.3, fatG: 3.9 },
-    portionName: 'portion',
-    portionCount: 1,
     createdAt: 8,
   },
   {
@@ -124,6 +137,8 @@ const foodLog: FoodLogEntry[] = [
     meal: 'mellanmal',
     foodId: 'lv:2',
     name: 'Banan',
+    amount: 120,
+    unit: 'g',
     grams: 120,
     per100: { kcal: 95, proteinG: 1.1, carbsG: 21, fatG: 0.3 },
     createdAt: 9,
@@ -133,7 +148,42 @@ const foodLog: FoodLogEntry[] = [
 
 const favorites: Favorite[] = [{ foodId: 'lv:2', createdAt: 11 }];
 
-const foodData = { foods, meals, foodLog, favorites };
+const foodData = { foods, meals, foodLog, favorites, foodUnits };
+
+function st(name: string, grams: number) {
+  return { name, grams, source: 'egen' };
+}
+
+/**
+ * Samma mat i format före version 6 (portioner i stället för enheter). Uppgraderad
+ * ska den bli exakt `foodData`.
+ */
+const legacyFoodData = {
+  foods: [
+    { ...(foods[0] as StoredFood), portionG: 250, portionName: 'tallrik' },
+    { ...(foods[1] as StoredFood), units: undefined, portionG: 40 },
+  ],
+  meals: meals.map((m) => ({
+    ...m,
+    items: m.items.map((i) => ({
+      foodId: i.foodId,
+      name: i.name,
+      grams: i.grams,
+      per100: i.per100,
+    })),
+  })),
+  foodLog: [
+    {
+      ...(foodLog[0] as FoodLogEntry),
+      amount: undefined,
+      unit: undefined,
+      portionName: 'portion',
+      portionCount: 1,
+    },
+    { ...(foodLog[1] as FoodLogEntry), amount: undefined, unit: undefined },
+  ],
+  favorites,
+};
 
 const water: WaterEntry[] = [
   { id: 'v1', date: '2026-01-08', ml: 250, createdAt: 12 },
@@ -421,6 +471,7 @@ describe('backup validering', () => {
     medications: [],
     injections: [],
     symptoms: [],
+    foodUnits: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -454,6 +505,18 @@ describe('backup validering', () => {
       { ...valid, profile: { startDate: '2026-01-01' } },
       { ...valid, weights: 'nej' },
       { ...valid, steps: undefined },
+      // Version 6 kräver egna enheter, med rimliga värden.
+      { ...valid, foodUnits: undefined },
+      { ...valid, foodUnits: [{ foodId: 'lv:1', units: [st('st', 0)], createdAt: 1 }] },
+      {
+        ...valid,
+        foodUnits: [{ foodId: 'lv:1', units: [{ ...st('st', 60), source: 'x' }], createdAt: 1 }],
+      },
+      { ...valid, foodUnits: [{ foodId: 'lv:1', units: [st('', 60)], createdAt: 1 }] },
+      { ...valid, foodUnits: [foodUnits[0], foodUnits[0]] },
+      { ...valid, foodLog: [{ ...foodLog[1], amount: undefined }] },
+      { ...valid, foodLog: [{ ...foodLog[1], amount: -1 }] },
+      { ...valid, foodLog: [{ ...foodLog[1], grams: undefined }] },
       // Version 1 kräver `measurements`.
       { ...valid, version: 1 },
       {
@@ -490,6 +553,23 @@ describe('backup validering', () => {
       const err = await errorOf(readBackup(zipOf({ 'backup.json': JSON.stringify(manifest) })));
       expect(err.code, JSON.stringify(manifest)).toBe('invalid-data');
     }
+  });
+
+  it('behåller mängd, enhet och gram för loggposter och ingredienser', async () => {
+    const eggs = { ...(foodLog[1] as FoodLogEntry), id: 'egg', amount: 2, unit: 'st', grams: 120 };
+    const meal: SavedMeal = {
+      ...(meals[0] as SavedMeal),
+      items: [{ ...(meals[0]?.items[1] as SavedMeal['items'][number]), amount: 2, unit: 'dl' }],
+    };
+    const contents = await readBackup(
+      await createBackup(
+        { ...emptySnapshot(), foodLog: [eggs], meals: [meal], foodUnits },
+        { now: NOW },
+      ),
+    );
+    expect(contents.snapshot.foodLog).toEqual([eggs]);
+    expect(contents.snapshot.meals).toEqual([meal]);
+    expect(contents.snapshot.foodUnits).toEqual(foodUnits);
   });
 
   it('tar bort okända fält', async () => {
@@ -584,6 +664,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
     medications: [],
     injections: [],
     symptoms: [],
+    foodUnits: [],
     profile,
     weights: [
       { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
@@ -708,7 +789,7 @@ describe('import av version 3 (utan vatten och träning)', () => {
       waist,
       steps,
       photos: [],
-      ...foodData,
+      ...legacyFoodData,
     };
     const contents = await readBackup(zipOf({ 'backup.json': JSON.stringify(v3) }));
     expect(contents.snapshot).toEqual({
@@ -733,7 +814,7 @@ describe('import av version 4 (utan GLP-1)', () => {
       waist,
       steps,
       photos: [],
-      ...foodData,
+      ...legacyFoodData,
       ...trainingData,
     };
     const contents = await readBackup(zipOf({ 'backup.json': JSON.stringify(v4) }));
@@ -766,6 +847,7 @@ describe('validering av GLP-1', () => {
       meals: [],
       foodLog: [],
       favorites: [],
+      foodUnits: [],
       ...trainingData,
       ...glp1Data,
       ...patch,
@@ -820,6 +902,7 @@ describe('validering av vatten och träning', () => {
       meals: [],
       foodLog: [],
       favorites: [],
+      foodUnits: [],
       ...trainingData,
       ...glp1Data,
       ...patch,
@@ -915,6 +998,16 @@ describe('import slå ihop', () => {
       symptoms: [
         { date: '2026-01-07', appetite: 4, sideEffects: [], createdAt: 26, updatedAt: 42 },
       ],
+      foodUnits: [
+        // Enheten ändrad senare på den andra enheten → ersätter; nytt livsmedel läggs till.
+        {
+          foodId: 'egen:gröt',
+          units: [{ name: 'tallrik', grams: 300, source: 'egen' }],
+          createdAt: 4,
+          updatedAt: 50,
+        },
+        { foodId: 'lv:2', units: [{ name: 'st', grams: 110, source: 'egen' }], createdAt: 51 },
+      ],
     };
     await applySnapshot(imported, 'merge');
 
@@ -965,6 +1058,12 @@ describe('import slå ihop', () => {
       ['2026-01-06', 2],
       ['2026-01-07', 4],
     ]);
+    expect(after.foodUnits.map((u) => [u.foodId, u.units[0]?.grams])).toEqual([
+      ['egen:gröt', 300],
+      ['lv:2', 110],
+    ]);
+    // Loggposterna har kvar sina gram.
+    expect(after.foodLog.find((e) => e.id === 'f1')?.grams).toBe(260);
   });
 
   it('tar profilen från säkerhetskopian om det inte finns någon', async () => {
