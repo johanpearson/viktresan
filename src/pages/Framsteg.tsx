@@ -6,6 +6,7 @@ import { useHashRoute } from '../lib/useHashRoute.ts';
 import { hrefFor } from '../routes.ts';
 import { Bilder } from './Bilder.tsx';
 import { Historik } from './Historik.tsx';
+import { Veckor } from './Veckor.tsx';
 
 interface Tab extends FeatureGated {
   /** Delsökväg: "#/framsteg/<sub>". Tom = första fliken. */
@@ -16,6 +17,7 @@ interface Tab extends FeatureGated {
 
 const TABS: readonly Tab[] = [
   { sub: '', label: 'Historik', Content: Historik },
+  { sub: 'veckor', label: 'Veckor', Content: Veckor },
   { sub: 'bilder', label: 'Bilder', Content: Bilder, feature: 'bilder' },
 ];
 

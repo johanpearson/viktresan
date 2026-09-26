@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { SHORTCUTS, shortcutUrl } from './src/lib/shortcuts.ts';
 
 const BASE = '/viktresan/';
 
@@ -147,6 +148,14 @@ export default defineConfig({
           },
           { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' },
         ],
+        // Genvägar på appikonen (långt tryck). Tolkas av src/lib/shortcuts.ts.
+        shortcuts: SHORTCUTS.map((s) => ({
+          name: s.name,
+          short_name: s.shortName,
+          description: s.description,
+          url: shortcutUrl(BASE, s.id),
+          icons: [{ src: s.icon, sizes: '96x96', type: 'image/png' }],
+        })),
       },
       workbox: {
         // livsmedel.json = Livsmedelsverkets databas (se scripts/fetch-livsmedel.mjs).

@@ -67,6 +67,8 @@ export interface Profile {
   ratePerWeekKg?: number;
   /** Sedan v5 (utan schemaändring): eget vattenmål i ml. Saknas → 33 ml × trendvikten. */
   waterGoalMl?: number;
+  /** Proteinmål = faktor × målvikt (1,2–2,0 g/kg). Saknas → 1,6. Utan schemaändring. */
+  proteinFactor?: number;
 }
 
 /**
@@ -985,6 +987,7 @@ export async function listPhotoDates(): Promise<string[]> {
 export const SETTING_LAST_EXPORT = 'lastExportAt';
 export const SETTING_LOCK = 'lock';
 export const SETTING_FEATURES = 'features';
+export const SETTING_PREFERENCES = 'preferences';
 
 export async function getSetting(key: string): Promise<unknown> {
   const db = await getDb();

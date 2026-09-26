@@ -25,7 +25,7 @@ interface WeightChartProps {
 }
 
 /**
- * Viktgraf (uPlot): dagliga värden som punkter, utjämnad trend som linje och
+ * Viktgraf (uPlot): dagliga värden som svaga punkter, utjämnad trend som tydlig linje och
  * målvikten som streckad linje. Legenden visar värden för dagen under markören.
  * Markeringar (dosbyten) ritas som streckade vertikala linjer med en etikett.
  */
@@ -50,7 +50,7 @@ export function WeightChart({
       ...(goalKg != null ? [daily.map(() => goalKg)] : []),
     ];
     const accent = cssVar(el, '--accent');
-    const pointColor = cssVar(el, '--chart-point');
+    const pointColor = cssVar(el, '--chart-point-faint');
     const goalColor = cssVar(el, '--chart-goal');
     const surface = cssVar(el, '--surface');
     const markerColor = cssVar(el, '--chart-dose');
@@ -62,10 +62,11 @@ export function WeightChart({
         label: 'Daglig vikt',
         stroke: pointColor,
         paths: () => null,
-        points: { show: true, size: 8, width: 2, stroke: surface, fill: pointColor },
+        // Dagsvärden svagt: de varierar med vätska och salt. Trenden är huvudsaken.
+        points: { show: true, size: 6, width: 0, stroke: surface, fill: pointColor },
         value: fmt,
       },
-      { label: 'Trend', stroke: accent, width: 2, points: { show: false }, value: fmt },
+      { label: 'Trend', stroke: accent, width: 3.5, points: { show: false }, value: fmt },
     ];
     if (goalKg != null) {
       series.push({

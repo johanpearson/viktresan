@@ -11,10 +11,11 @@ import { RangeFilter } from './RangeFilter.tsx';
 interface IntakeHistoryProps {
   foodLog: readonly FoodLogEntry[];
   targetKcal: number | null;
+  proteinGoalG: number | null;
 }
 
 /** Mat → Historik: intag per dag mot kalorimålet och 7-dagarssnitt. */
-export function IntakeHistory({ foodLog, targetKcal }: IntakeHistoryProps) {
+export function IntakeHistory({ foodLog, targetKcal, proteinGoalG }: IntakeHistoryProps) {
   const [range, setRange] = useState<RangeId>('1m');
   const today = todayIso();
   const all = dailyIntake(foodLog);
@@ -46,6 +47,12 @@ export function IntakeHistory({ foodLog, targetKcal }: IntakeHistoryProps) {
             ? ` Det är ${formatKcal(Math.abs(week.kcal - targetKcal))} ${week.kcal > targetKcal ? 'över' : 'under'} målet.`
             : ''}
         </p>
+        {week && proteinGoalG != null && (
+          <p data-testid="protein-average">
+            Protein i snitt {formatInt(Math.round(week.proteinG))} g per loggad dag (mål{' '}
+            {formatInt(proteinGoalG)} g).
+          </p>
+        )}
         <table className="table" data-testid="intake-table">
           <thead>
             <tr>
@@ -55,6 +62,9 @@ export function IntakeHistory({ foodLog, targetKcal }: IntakeHistoryProps) {
               </th>
               <th scope="col" className="num">
                 Mot mål
+              </th>
+              <th scope="col" className="num">
+                Protein
               </th>
             </tr>
           </thead>
@@ -71,6 +81,7 @@ export function IntakeHistory({ foodLog, targetKcal }: IntakeHistoryProps) {
                       ? '–'
                       : `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${formatInt(Math.abs(diff))}`}
                   </td>
+                  <td className="num">{day ? `${formatInt(Math.round(day.proteinG))} g` : '–'}</td>
                 </tr>
               );
             })}

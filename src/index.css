@@ -23,6 +23,8 @@
   --dot-glp1: #4338ca;
   --dot-mood: #a16207;
   --chart-dose: #4338ca;
+  --ring-kcal: #c2410c;
+  --chart-point-faint: rgb(100 116 139 / 45%);
 
   --radius: 16px;
   --tap: 56px;
@@ -64,6 +66,8 @@
     --dot-glp1: #a5b4fc;
     --dot-mood: #fde047;
     --chart-dose: #a5b4fc;
+    --ring-kcal: #fb923c;
+    --chart-point-faint: rgb(148 163 184 / 40%);
   }
 }
 
@@ -2153,4 +2157,159 @@ a.button {
 
 .unit-entry .entry-main {
   align-items: baseline;
+}
+
+/* Mål-ringar: kalorier och protein (Översikt → Idag, Mat → Dag) */
+.nutrition-rings {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin: 8px 0 16px;
+}
+
+.nutrition-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+
+.nutrition-ring figcaption {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.goal-ring {
+  position: relative;
+  flex: none;
+  width: 96px;
+  height: 96px;
+}
+
+.goal-ring svg {
+  display: block;
+}
+
+.goal-ring-track {
+  stroke: var(--track);
+}
+
+.goal-ring-kcal .goal-ring-fill {
+  stroke: var(--ring-kcal);
+}
+
+.goal-ring-protein .goal-ring-fill {
+  stroke: var(--macro-protein);
+}
+
+.goal-ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.15;
+}
+
+.goal-ring-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-ring-goal {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+/* Proteinrikt livsmedel (sökträffar, favoriter) */
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--macro-protein);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 0.1em;
+}
+
+/* Översikt: trendvikt som huvudsiffra */
+.hero-sub {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+
+.hero-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* Veckosummering */
+.week-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.week-headline {
+  margin: 0 0 12px;
+}
+
+.week-rows {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.week-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.week-row dt {
+  flex: none;
+  color: var(--muted);
+}
+
+.week-row dd {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-arrow {
+  flex: none;
+  width: 1.25em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.week-list {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Genvägstoast ligger ovanför uppdateringstoasten om båda visas. */
+.toast-shortcut {
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 12px);
+}
+
+.toast + .toast-shortcut {
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 96px);
 }

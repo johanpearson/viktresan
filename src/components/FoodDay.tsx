@@ -36,6 +36,9 @@ interface FoodDayProps {
   foodData: FoodData;
   livsmedel: Livsmedel | null;
   targetKcal: number | null;
+  proteinGoalG: number | null;
+  /** `sheet`: bara snabbval, sök och formulär för idag (panelen "Logga mat"). */
+  variant?: 'page' | 'sheet';
   reloadLog: () => Promise<unknown>;
   reloadFood: () => Promise<FoodData>;
 }
@@ -72,6 +75,8 @@ export function FoodDay({
   foodData,
   livsmedel,
   targetKcal,
+  proteinGoalG,
+  variant = 'page',
   reloadLog,
   reloadFood,
 }: FoodDayProps) {
@@ -212,6 +217,7 @@ export function FoodDay({
           </h2>
           <FoodSearch
             items={searchItems}
+            markProteinRich
             loading={livsmedel === null}
             onPick={(food) => {
               select({ food, editing: null });
@@ -278,6 +284,17 @@ export function FoodDay({
     );
   }
 
+  if (variant === 'sheet') {
+    return (
+      <div ref={topRef} className="food-sheet">
+        <p className="form-ok status-line" role="status">
+          {status}
+        </p>
+        {main}
+      </div>
+    );
+  }
+
   return (
     <>
       <div ref={topRef} className="card day-picker">
@@ -294,7 +311,13 @@ export function FoodDay({
           />
         </label>
       </div>
-      <DaySummary date={date} today={today} totals={totals} targetKcal={targetKcal} />
+      <DaySummary
+        date={date}
+        today={today}
+        totals={totals}
+        targetKcal={targetKcal}
+        proteinGoalG={proteinGoalG}
+      />
       <p className="form-ok status-line" role="status">
         {status}
       </p>

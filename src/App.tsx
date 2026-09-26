@@ -1,8 +1,11 @@
 import type { ComponentType } from 'react';
 import { NavBar } from './components/NavBar.tsx';
+import { ShortcutToast } from './components/ShortcutToast.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
 import { useFeatures } from './lib/features.ts';
+import { usePreferences } from './lib/preferences.ts';
 import { useHashRoute } from './lib/useHashRoute.ts';
+import { useShortcut } from './lib/useShortcut.ts';
 import { Framsteg } from './pages/Framsteg.tsx';
 import { Installningar } from './pages/Installningar.tsx';
 import { Kalender } from './pages/Kalender.tsx';
@@ -23,8 +26,11 @@ const PAGES: Record<RouteId, ComponentType> = {
 export function App() {
   const { route } = useHashRoute();
   const features = useFeatures();
-  // Vänta in funktionsinställningen så att avstängda delar aldrig blinkar förbi.
-  if (!features.loaded) return null;
+  const preferences = usePreferences();
+  // Genvägar på appikonen (?action=…): körs när funktionsbrytarna är lästa.
+  const shortcut = useShortcut(features);
+  // Vänta in inställningarna så att avstängda delar aldrig blinkar förbi.
+  if (!features.loaded || !preferences.loaded) return null;
 
   // En avstängd sektion (t.ex. ett gammalt bokmärke till Mat) visar Översikt.
   const current = features.isEnabled(route.feature) ? route : DEFAULT_ROUTE;
@@ -36,9 +42,11 @@ export function App() {
         <span className="app-name">Viktresan</span>
       </header>
       <main className="app-main">
-        <CurrentPage key={current.id} />
+        {/* Ny nyckel när en genväg ändrat data (t.ex. +250 ml) så att sidan läser om. */}
+        <CurrentPage key={`${current.id}:${String(shortcut.dataVersion)}`} />
       </main>
       <UpdateToast />
+      <ShortcutToast state={shortcut} />
       <NavBar routes={features.filter(NAV_ROUTES)} current={current} />
     </div>
   );

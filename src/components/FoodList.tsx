@@ -1,5 +1,6 @@
 import { SOURCE_LABELS, type FoodItem } from '../lib/foodSearch.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
+import { isProteinRich } from '../lib/protein.ts';
 
 interface FoodListProps {
   items: readonly FoodItem[];
@@ -7,6 +8,8 @@ interface FoodListProps {
   /** Visas när listan är tom. */
   empty: string;
   testId?: string;
+  /** Visa etiketten "Proteinrik" (≥ 15 g protein per 100 kcal). */
+  markProteinRich?: boolean;
 }
 
 function detail(item: FoodItem): string {
@@ -18,7 +21,13 @@ function detail(item: FoodItem): string {
 }
 
 /** Lista med livsmedel att välja, t.ex. sökträffar eller snabbval. */
-export function FoodList({ items, onPick, empty, testId = 'food-option' }: FoodListProps) {
+export function FoodList({
+  items,
+  onPick,
+  empty,
+  testId = 'food-option',
+  markProteinRich = false,
+}: FoodListProps) {
   if (items.length === 0) return <p className="muted">{empty}</p>;
   return (
     <ul className="pick-list">
@@ -32,7 +41,14 @@ export function FoodList({ items, onPick, empty, testId = 'food-option' }: FoodL
               onPick(item);
             }}
           >
-            <span className="pick-name">{item.name}</span>
+            <span className="pick-name">
+              {item.name}
+              {markProteinRich && isProteinRich(item.per100) && (
+                <span className="tag" data-testid="protein-rich">
+                  Proteinrik
+                </span>
+              )}
+            </span>
             <span className="pick-detail">{detail(item)}</span>
           </button>
         </li>

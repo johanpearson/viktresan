@@ -8,6 +8,7 @@ const ROUTES = [
   ['Mat', './#/mat'],
   ['Kalender', './#/kalender'],
   ['Framsteg', './#/framsteg'],
+  ['Framsteg', './#/framsteg/veckor'],
   ['Framsteg', './#/framsteg/bilder'],
   ['Inställningar', './#/installningar'],
 ] as const;
@@ -64,6 +65,8 @@ async function seedData(page: Page) {
     weights: [
       { id: 'a', date: isoDaysFromToday(-20), weightKg: 89, createdAt: Date.now() - 20 * 864e5 },
       { id: 'b', date: isoDaysFromToday(-10), weightKg: 88, createdAt: Date.now() - 10 * 864e5 },
+      // Alltid i förra veckan, så att veckokortet visas på Översikt.
+      { id: 'd', date: isoDaysFromToday(-7), weightKg: 87.6, createdAt: Date.now() - 7 * 864e5 },
       { id: 'c', date: isoDaysFromToday(0), weightKg: 87, note: 'Bra dag', createdAt: Date.now() },
     ],
     waist: [{ date: isoDaysFromToday(0), waistCm: 94, createdAt: Date.now() }],
@@ -138,6 +141,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('./');
       await expect(page.getByTestId('backup-reminder')).toBeVisible();
       await expectNoViolations(page, 'Påminnelse');
+      // Veckokortet och kvittensen från genvägen +250 ml vatten.
+      await expect(page.getByTestId('week-card')).toBeVisible();
+      await page.goto('./?action=add-water');
+      await expect(page.getByTestId('shortcut-toast')).toBeVisible();
+      await expectNoViolations(page, 'Veckokort och genvägstoast');
+      // Mat → Logga mat (genvägen) med proteinringen.
+      await page.goto('./?action=log-food');
+      await expect(page.getByRole('dialog', { name: 'Logga mat' })).toBeVisible();
+      await expectNoViolations(page, 'Logga mat');
     });
 
     test('import-förhandsvisning och krypteringsfält saknar tillgänglighetsfel', async ({

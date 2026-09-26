@@ -8,10 +8,18 @@ interface FoodSearchProps {
   label?: string;
   /** Livsmedelsverkets data laddas fortfarande. */
   loading?: boolean;
+  /** Visa etiketten "Proteinrik" på träffarna. */
+  markProteinRich?: boolean;
 }
 
 /** Sökfält med fuzzy-sökning bland livsmedel. */
-export function FoodSearch({ items, onPick, label = 'Sök livsmedel', loading }: FoodSearchProps) {
+export function FoodSearch({
+  items,
+  onPick,
+  label = 'Sök livsmedel',
+  loading,
+  markProteinRich = false,
+}: FoodSearchProps) {
   const [query, setQuery] = useState('');
   const deferred = useDeferredValue(query);
   const index = useMemo(() => buildIndex(items), [items]);
@@ -41,6 +49,7 @@ export function FoodSearch({ items, onPick, label = 'Sök livsmedel', loading }:
           }}
           empty={loading ? 'Laddar livsmedelsdatabasen …' : 'Inga träffar.'}
           testId="search-result"
+          markProteinRich={markProteinRich}
         />
       )}
     </div>
