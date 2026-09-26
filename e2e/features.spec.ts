@@ -198,11 +198,15 @@ test('avstängda funktioner: datan ligger kvar, exporteras och syns igen', async
   await expect(page.getByTestId('calendar-value-bilder')).toHaveText(/1 bild/);
 });
 
-test('kommande funktioner kan inte slås på', async ({ page }) => {
+test('GLP-1 är av som standard och kan slås på', async ({ page }) => {
   await page.goto('./#/installningar');
-  for (const name of [/^GLP-1/]) {
-    const toggle = page.getByRole('switch', { name });
-    await expect(toggle).toBeDisabled();
-    await expect(toggle).not.toBeChecked();
-  }
+  const toggle = page.getByRole('switch', { name: /^GLP-1/ });
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).not.toBeChecked();
+  await page.goto('./#/logga');
+  await expect(page.getByTestId('log-tile-vikt')).toBeVisible();
+  await expect(page.getByTestId('log-tile-glp1')).toHaveCount(0);
+  await setFeature(page, /^GLP-1/, true);
+  await page.goto('./#/logga');
+  await expect(page.getByTestId('log-tile-glp1')).toBeVisible();
 });

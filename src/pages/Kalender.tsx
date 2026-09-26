@@ -14,6 +14,7 @@ import {
 import { DAY_MARKERS, loggedValues, type DayMarker } from '../lib/dayMarkers.ts';
 import { addDays, todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
+import { dosesBetween } from '../lib/glp1.ts';
 import { formatDate, formatShortDate } from '../lib/format.ts';
 import { useAppData } from '../lib/useAppData.ts';
 import { usePhotoDates } from '../lib/usePhotoDates.ts';
@@ -87,6 +88,7 @@ export function Kalender() {
         ...data,
         photoDates,
         workouts: workoutsBetween(data.workouts, data.workoutPlans, from, to),
+        doses: dosesBetween(data.medications, data.injections, from, to, today),
         now,
       })
     : new Map<string, DayLog>();
@@ -250,6 +252,18 @@ export function Kalender() {
             </li>
           ))}
         </ul>
+        {features.isEnabled('glp1') && (
+          <ul className="calendar-legend" aria-label="Doser">
+            <li>
+              <span className="calendar-dot dot-glp1 dose-loggad" aria-hidden="true" />
+              Dos loggad
+            </li>
+            <li>
+              <span className="calendar-dot dot-glp1 dose-planerad" aria-hidden="true" />
+              Dos planerad
+            </li>
+          </ul>
+        )}
         {showWorkouts && (
           <ul className="calendar-legend" aria-label="Träningsstatus">
             {STATUS_LEGEND.map((status) => (

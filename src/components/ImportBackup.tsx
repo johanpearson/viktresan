@@ -196,6 +196,10 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
         <dd data-testid="preview-workouts">
           {summary.workouts} + {summary.workoutPlans}
         </dd>
+        <dt>GLP-1: läkemedel, doser och dagar med mående</dt>
+        <dd data-testid="preview-glp1">
+          {summary.medications} + {summary.injections} + {summary.symptoms}
+        </dd>
         <dt>Bilder</dt>
         <dd data-testid="preview-photos">
           {summary.photos} ({formatBytes(summary.photoBytes)})

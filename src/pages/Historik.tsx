@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DoseChangeList } from '../components/DoseChangeList.tsx';
 import { Feature } from '../components/Feature.tsx';
 import { EmptyState } from '../components/Page.tsx';
 import { RangeFilter } from '../components/RangeFilter.tsx';
@@ -7,14 +8,20 @@ import { WaistHistory } from '../components/WaistHistory.tsx';
 import { WaterHistory } from '../components/WaterHistory.tsx';
 import { WeightChart } from '../components/WeightChart.tsx';
 import { todayIso } from '../lib/dates.ts';
-import { formatDate, formatKg } from '../lib/format.ts';
+import { useFeatures } from '../lib/features.ts';
+import { formatDate, formatKg, formatMg } from '../lib/format.ts';
+import { doseChanges } from '../lib/glp1.ts';
 import { dailyWeights, emaTrend, filterRange, type RangeId } from '../lib/stats.ts';
 import { useAppData } from '../lib/useAppData.ts';
 import { waterGoal } from '../lib/water.ts';
 
-/** Framsteg → Historik: viktgraf och -tabell, plus steg, midja och vatten när de är påslagna. */
+/**
+ * Framsteg → Historik: viktgraf och -tabell, plus steg, midja och vatten när de är påslagna.
+ * Med GLP-1 på markeras dosbyten i viktgrafen.
+ */
 export function Historik() {
   const { data } = useAppData();
+  const features = useFeatures();
   const [range, setRange] = useState<RangeId>('3m');
 
   if (data === null) return null;
@@ -25,6 +32,10 @@ export function Historik() {
   const daily = filterRange(allDaily, range, today);
   const trend = filterRange(emaTrend(allDaily), range, today);
   const trendByDate = new Map(trend.map((t) => [t.date, t.trendKg]));
+  const first = daily[0]?.date ?? today;
+  const changes = features.isEnabled('glp1')
+    ? doseChanges(data.injections).filter((c) => c.date >= first && c.date <= today)
+    : [];
 
   return (
     <>
@@ -35,9 +46,15 @@ export function Historik() {
         <EmptyState>Inga mätningar i vald period.</EmptyState>
       ) : (
         <div className="card chart-card">
-          <WeightChart daily={daily} trend={trend} goalKg={data.profile?.goalWeightKg ?? null} />
+          <WeightChart
+            daily={daily}
+            trend={trend}
+            goalKg={data.profile?.goalWeightKg ?? null}
+            markers={changes.map((c) => ({ date: c.date, label: formatMg(c.doseMg) }))}
+          />
         </div>
       )}
+      <DoseChangeList changes={changes} />
       <Feature id="steg">
         <StepsHistory steps={data.steps} range={range} today={today} />
       </Feature>

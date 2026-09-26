@@ -27,7 +27,7 @@ export interface FeatureInfo {
 }
 
 /** Version av den lagrade inställningen. Höj när en kommande funktion blir tillgänglig. */
-export const FLAGS_VERSION = 2;
+export const FLAGS_VERSION = 3;
 
 /** Ordningen här styr ordningen under Inställningar → Funktioner. */
 export const FEATURES: readonly FeatureInfo[] = [
@@ -71,9 +71,10 @@ export const FEATURES: readonly FeatureInfo[] = [
   {
     id: 'glp1',
     label: 'GLP-1',
-    description: 'Logga doser av GLP-1-läkemedel.',
+    description: 'Läkemedel, dostrappa och injektioner, med aptit och biverkningar.',
     defaultOn: false,
-    available: false,
+    available: true,
+    availableSince: 3,
   },
   {
     id: 'bilder',

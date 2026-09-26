@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.tsx';
@@ -35,7 +35,7 @@ async function renderAt(hash: string, off: FeatureId[] = []) {
   if (off.length > 0) {
     await setSetting(SETTING_FEATURES, {
       ...Object.fromEntries(
-        Object.keys(DEFAULT_FLAGS).map((id) => [id, !off.includes(id as FeatureId)]),
+        Object.entries(DEFAULT_FLAGS).map(([id, on]) => [id, on && !off.includes(id as FeatureId)]),
       ),
       version: FLAGS_VERSION,
     });
@@ -288,12 +288,22 @@ describe('funktionsbrytare', () => {
     expect(await screen.findByTestId('calendar-value-steg')).toHaveTextContent('8 000 steg');
   });
 
-  it('kommande funktioner visas men kan inte slås på', async () => {
+  it('GLP-1 är av som standard och ger en ruta i Logga när den slås på', async () => {
+    const user = userEvent.setup();
     await renderAt('#/installningar');
-    for (const name of [/^GLP-1/]) {
-      const toggle = await screen.findByRole('switch', { name });
-      expect(toggle).toBeDisabled();
-      expect(toggle).not.toBeChecked();
-    }
+    const toggle = await screen.findByRole('switch', { name: /^GLP-1/ });
+    expect(toggle).toBeEnabled();
+    expect(toggle).not.toBeChecked();
+    goTo('#/logga');
+    await screen.findByTestId('log-tile-vikt');
+    expect(screen.queryByTestId('log-tile-glp1')).not.toBeInTheDocument();
+
+    goTo('#/installningar');
+    await user.click(await screen.findByRole('switch', { name: /^GLP-1/ }));
+    goTo('#/logga');
+    const tile = await screen.findByTestId('log-tile-glp1');
+    await waitFor(() => {
+      expect(tile).toHaveTextContent('Lägg in läkemedel');
+    });
   });
 });

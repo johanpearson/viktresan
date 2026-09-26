@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseFoodFields,
+  parseInjectionFields,
   parseLogAmount,
+  parseMedicationFields,
   parsePhotoFields,
   parseProfile,
   parseStepsFields,
+  parseSymptomFields,
   parseWaistFields,
   parseWeightFields,
 } from './validation.ts';
@@ -210,5 +213,110 @@ describe('parseLogAmount', () => {
     });
     expect(parseLogAmount('1', 'portion')).toMatchObject({ ok: false });
     expect(parseLogAmount('0', 'portion', 40)).toMatchObject({ ok: false });
+  });
+});
+
+describe('parseMedicationFields (dostrappa)', () => {
+  const base = {
+    name: ' Wegovy ',
+    frequency: 'vecka',
+    weekday: '0',
+    time: '08:00',
+    steps: [
+      { date: '2026-10-26', dose: '0,5' },
+      { date: '2026-09-28', dose: '0.25' },
+    ],
+    endDate: '',
+  };
+
+  it('sorterar stegen på datum och tolkar decimalkomma', () => {
+    expect(parseMedicationFields(base)).toEqual({
+      ok: true,
+      value: {
+        name: 'Wegovy',
+        frequency: 'vecka',
+        weekday: 0,
+        time: '08:00',
+        steps: [
+          { date: '2026-09-28', doseMg: 0.25 },
+          { date: '2026-10-26', doseMg: 0.5 },
+        ],
+      },
+    });
+  });
+
+  it('dagligen sparar ingen veckodag; slutdatum är valfritt', () => {
+    const parsed = parseMedicationFields({ ...base, frequency: 'dag', endDate: '2026-12-31' });
+    expect(parsed.ok && parsed.value).toMatchObject({ frequency: 'dag', endDate: '2026-12-31' });
+    expect(parsed.ok && parsed.value).not.toHaveProperty('weekday');
+  });
+
+  it('kräver giltiga steg med unika datum och dos över 0', () => {
+    const errors = [
+      { ...base, steps: [] },
+      { ...base, steps: [{ date: '', dose: '0,25' }] },
+      { ...base, steps: [{ date: '2026-09-28', dose: '' }] },
+      { ...base, steps: [{ date: '2026-09-28', dose: '0' }] },
+      { ...base, steps: [{ date: '2026-09-28', dose: '101' }] },
+      {
+        ...base,
+        steps: [
+          { date: '2026-09-28', dose: '0,25' },
+          { date: '2026-09-28', dose: '0,5' },
+        ],
+      },
+      { ...base, name: '' },
+      { ...base, frequency: 'manad' },
+      { ...base, weekday: '' },
+      { ...base, time: '8' },
+      { ...base, endDate: '2026-09-01' },
+    ];
+    for (const fields of errors) {
+      expect(parseMedicationFields(fields).ok, JSON.stringify(fields)).toBe(false);
+    }
+    expect(parseMedicationFields({ ...base, steps: [{ date: '2026-09-28', dose: 'x' }] })).toEqual({
+      ok: false,
+      error: 'Ange dos i mg för steg 1 (större än 0, högst 100).',
+    });
+  });
+});
+
+describe('parseInjectionFields', () => {
+  it('dos, valfri tid och ställe', () => {
+    expect(
+      parseInjectionFields({ date: '2026-09-21', time: '', dose: '0,25', site: 'lar-hoger' }),
+    ).toEqual({ ok: true, value: { date: '2026-09-21', doseMg: 0.25, site: 'lar-hoger' } });
+    expect(parseInjectionFields({ date: '2026-09-21', time: '', dose: '', site: '' }).ok).toBe(
+      false,
+    );
+    expect(
+      parseInjectionFields({ date: '2026-09-21', time: '', dose: '1', site: 'nacke' }).ok,
+    ).toBe(false);
+  });
+});
+
+describe('parseSymptomFields', () => {
+  it('aptit och/eller biverkningar, egen text läggs till', () => {
+    expect(
+      parseSymptomFields({
+        date: '2026-09-21',
+        appetite: '2',
+        sideEffects: ['Illamående'],
+        other: ' Sura uppstötningar ',
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        date: '2026-09-21',
+        appetite: 2,
+        sideEffects: ['Illamående', 'Sura uppstötningar'],
+      },
+    });
+    expect(
+      parseSymptomFields({ date: '2026-09-21', appetite: '', sideEffects: [], other: '' }).ok,
+    ).toBe(false);
+    expect(
+      parseSymptomFields({ date: '2026-09-21', appetite: '6', sideEffects: [], other: '' }).ok,
+    ).toBe(false);
   });
 });

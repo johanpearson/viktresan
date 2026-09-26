@@ -33,6 +33,15 @@ import {
   putWorkoutPlan,
   deleteWorkout,
   deleteWorkoutPlan,
+  deleteInjection,
+  deleteMedication,
+  deleteSymptoms,
+  listInjections,
+  listMedications,
+  listSymptoms,
+  putInjection,
+  putMedication,
+  upsertSymptoms,
   undoLastWater,
   resetDbForTests,
   saveProfile,
@@ -140,11 +149,14 @@ describe('db', () => {
       'favorites',
       'foodLog',
       'foods',
+      'injections',
       'meals',
+      'medications',
       'photos',
       'profile',
       'settings',
       'steps',
+      'symptoms',
       'waist',
       'water',
       'weights',
@@ -324,12 +336,86 @@ describe('db', () => {
     });
     raw.close();
     const db = await getDb();
-    expect(db.version).toBe(5);
+    expect(db.version).toBe(DB_VERSION);
     expect(await listFoods()).toHaveLength(1);
     expect(await listWeights()).toHaveLength(1);
     expect(await listWater()).toEqual([]);
     expect(await listWorkouts()).toEqual([]);
     expect(await listWorkoutPlans()).toEqual([]);
+  });
+
+  it('migrerar v5 → v6: lägger till GLP-1-stores och behåller vatten och träning', async () => {
+    const raw = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 5);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const weights = db.createObjectStore('weights', { keyPath: 'id' });
+        weights.createIndex('by-date', 'date');
+        const photos = db.createObjectStore('photos', { keyPath: 'id' });
+        photos.createIndex('by-date', 'date');
+        db.createObjectStore('settings');
+        db.createObjectStore('profile');
+        db.createObjectStore('waist', { keyPath: 'date' });
+        db.createObjectStore('steps', { keyPath: 'date' });
+        const foods = db.createObjectStore('foods', { keyPath: 'id' });
+        foods.createIndex('by-ean', 'ean');
+        db.createObjectStore('meals', { keyPath: 'id' });
+        const foodLog = db.createObjectStore('foodLog', { keyPath: 'id' });
+        foodLog.createIndex('by-date', 'date');
+        db.createObjectStore('favorites', { keyPath: 'foodId' });
+        const water = db.createObjectStore('water', { keyPath: 'id' });
+        water.createIndex('by-date', 'date');
+        const workouts = db.createObjectStore('workouts', { keyPath: 'id' });
+        workouts.createIndex('by-date', 'date');
+        db.createObjectStore('workoutPlans', { keyPath: 'id' });
+        weights.put({ id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 });
+        water.put({ id: 'v', date: '2026-01-01', ml: 250, createdAt: 2 });
+      };
+      req.onsuccess = () => {
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        reject(req.error ?? new Error('open failed'));
+      };
+    });
+    raw.close();
+    const db = await getDb();
+    expect(db.version).toBe(6);
+    expect(await listWeights()).toHaveLength(1);
+    expect(await listWater()).toHaveLength(1);
+    expect(await listMedications()).toEqual([]);
+    expect(await listInjections()).toEqual([]);
+    expect(await listSymptoms()).toEqual([]);
+  });
+
+  it('GLP-1: läkemedel, injektioner och mående sparas, listas och tas bort', async () => {
+    await putMedication({
+      id: 'm',
+      name: 'Wegovy',
+      frequency: 'vecka',
+      weekday: 0,
+      time: '08:00',
+      steps: [{ date: '2026-09-14', doseMg: 0.25 }],
+      createdAt: 1,
+    });
+    const base = { medicationId: 'm', medicationName: 'Wegovy', doseMg: 0.25 };
+    await putInjection({ id: 'b', date: '2026-09-21', ...base, createdAt: 3 });
+    await putInjection({ id: 'a', date: '2026-09-14', ...base, site: 'buk-vanster', createdAt: 2 });
+    expect((await listInjections()).map((i) => i.id)).toEqual(['a', 'b']);
+    await upsertSymptoms('2026-09-15', { appetite: 2, sideEffects: ['Illamående'] }, 10);
+    await upsertSymptoms('2026-09-15', { sideEffects: ['Trötthet'] }, 20);
+    expect(await listSymptoms()).toEqual([
+      { date: '2026-09-15', sideEffects: ['Trötthet'], createdAt: 10, updatedAt: 20 },
+    ]);
+    expect(await getOldestEntryTime()).toBe(1);
+    // Borttaget läkemedel lämnar loggade doser kvar.
+    await deleteMedication('m');
+    expect(await listMedications()).toEqual([]);
+    expect(await listInjections()).toHaveLength(2);
+    await deleteInjection('a');
+    await deleteSymptoms('2026-09-15');
+    expect((await listInjections()).map((i) => i.id)).toEqual(['b']);
+    expect(await listSymptoms()).toEqual([]);
   });
 
   it('vatten: flera poster per dag, ångra tar bort dagens senaste', async () => {

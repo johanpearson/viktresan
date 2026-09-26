@@ -37,6 +37,10 @@ export interface SeedData {
   water?: Record<string, unknown>[];
   workouts?: Record<string, unknown>[];
   workoutPlans?: Record<string, unknown>[];
+  medications?: Record<string, unknown>[];
+  injections?: Record<string, unknown>[];
+  /** Mående; nyckel = `date`. */
+  symptoms?: Record<string, unknown>[];
 }
 
 /**
@@ -69,6 +73,9 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
         'water',
         'workouts',
         'workoutPlans',
+        'medications',
+        'injections',
+        'symptoms',
       ],
       'readwrite',
     );
@@ -87,6 +94,9 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
     for (const w of data.water ?? []) tx.objectStore('water').put(w);
     for (const w of data.workouts ?? []) tx.objectStore('workouts').put(w);
     for (const p of data.workoutPlans ?? []) tx.objectStore('workoutPlans').put(p);
+    for (const m of data.medications ?? []) tx.objectStore('medications').put(m);
+    for (const i of data.injections ?? []) tx.objectStore('injections').put(i);
+    for (const s of data.symptoms ?? []) tx.objectStore('symptoms').put(s);
     for (const [key, value] of Object.entries(data.settings ?? {})) {
       tx.objectStore('settings').put(value, key);
     }
@@ -116,6 +126,9 @@ export interface Dump {
   water: unknown[];
   workouts: unknown[];
   workoutPlans: unknown[];
+  medications: unknown[];
+  injections: unknown[];
+  symptoms: unknown[];
 }
 
 /** Läser ut all data ur IndexedDB (bilder som byte-arrayer), sorterat på id. */
@@ -167,6 +180,9 @@ export async function dump(page: Page): Promise<Dump> {
       water,
       workouts,
       workoutPlans,
+      medications,
+      injections,
+      symptoms,
     ] = await Promise.all([
       all('profile'),
       all('weights'),
@@ -182,6 +198,9 @@ export async function dump(page: Page): Promise<Dump> {
       all('water'),
       all('workouts'),
       all('workoutPlans'),
+      all('medications'),
+      all('injections'),
+      all('symptoms'),
     ]);
     db.close();
     return {
@@ -206,11 +225,14 @@ export async function dump(page: Page): Promise<Dump> {
       water: water.sort(byId),
       workouts: workouts.sort(byId),
       workoutPlans: workoutPlans.sort(byId),
+      medications: medications.sort(byId),
+      injections: injections.sort(byId),
+      symptoms,
     };
   });
 }
 
-/** Tömmer profil, mätningar (vikt, midja, steg), bilder, mat, vatten och träning – som en ny enhet. */
+/** Tömmer profil, mätningar (vikt, midja, steg), bilder, mat, vatten, träning och GLP-1 – som en ny enhet. */
 export async function wipe(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -235,6 +257,9 @@ export async function wipe(page: Page): Promise<void> {
       'water',
       'workouts',
       'workoutPlans',
+      'medications',
+      'injections',
+      'symptoms',
     ];
     const tx = db.transaction(stores, 'readwrite');
     for (const store of stores) tx.objectStore(store).clear();
@@ -261,7 +286,7 @@ export async function sendToBackground(page: Page): Promise<void> {
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type LogType = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning';
+export type LogType = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning' | 'glp1';
 
 /** Logga → trycker på rutan och väntar in panelen (bottom sheet) med formuläret. */
 export async function openLog(page: Page, type: LogType): Promise<void> {

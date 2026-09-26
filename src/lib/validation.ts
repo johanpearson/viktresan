@@ -8,6 +8,14 @@ import {
   type Sex,
 } from './energy.ts';
 import { normalizeEan } from './barcode.ts';
+import {
+  APPETITE_MAX,
+  APPETITE_MIN,
+  DOSE_FREQUENCIES,
+  isInjectionSite,
+  type DoseFrequency,
+  type InjectionSite,
+} from './glp1.ts';
 import { parseDecimal } from './format.ts';
 import type { Nutrients } from './nutrition.ts';
 import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
@@ -382,4 +390,131 @@ export function parsePlanFields(fields: PlanFields): Parsed<PlanValues> {
 export function parseDurationField(text: string): Parsed<number> {
   const min = parseDuration(text);
   return min == null ? fail('Ange längd i minuter (1–600).') : { ok: true, value: min };
+}
+
+/** Största dos som går att skriva in (mg). Ingen rimlighetsbedömning – bara skydd mot felskrivning. */
+export const DOSE_MAX_MG = 100;
+
+/** Dos i mg: större än 0 och högst 100, med komma eller punkt. */
+export function parseDose(text: string): number | null {
+  const dose = parseDecimal(text);
+  return dose == null || dose <= 0 || dose > DOSE_MAX_MG ? null : dose;
+}
+
+export interface MedicationFields {
+  name: string;
+  frequency: string;
+  /** Veckodag som text ("0"–"6"), används bara veckovis. */
+  weekday: string;
+  time: string;
+  steps: readonly { date: string; dose: string }[];
+  /** '' = tills vidare. */
+  endDate: string;
+}
+
+export interface MedicationValues {
+  name: string;
+  frequency: DoseFrequency;
+  weekday?: number;
+  time: string;
+  steps: { date: string; doseMg: number }[];
+  endDate?: string;
+}
+
+/** Läkemedel med schema och dostrappa (minst ett steg, unika datum). */
+export function parseMedicationFields(fields: MedicationFields): Parsed<MedicationValues> {
+  const name = fields.name.trim();
+  if (name === '' || name.length > 60) return fail('Ange läkemedlets namn (högst 60 tecken).');
+  const frequency = DOSE_FREQUENCIES.find((f) => f.id === fields.frequency)?.id;
+  if (!frequency) return fail('Välj hur ofta du tar dosen.');
+  const weekday = Number(fields.weekday);
+  if (frequency === 'vecka' && !(fields.weekday !== '' && weekday >= 0 && weekday <= 6))
+    return fail('Välj veckodag.');
+  if (!isTime(fields.time.trim())) return fail('Ange tid som TT:MM.');
+  if (fields.steps.length === 0) return fail('Lägg in minst ett steg i dostrappan.');
+  const steps: { date: string; doseMg: number }[] = [];
+  for (const [i, step] of fields.steps.entries()) {
+    const n = String(i + 1);
+    if (!isIsoDate(step.date)) return fail(`Ange datum för steg ${n} i dostrappan.`);
+    const doseMg = parseDose(step.dose);
+    if (doseMg == null) return fail(`Ange dos i mg för steg ${n} (större än 0, högst 100).`);
+    if (steps.some((s) => s.date === step.date))
+      return fail('Två steg i dostrappan har samma datum.');
+    steps.push({ date: step.date, doseMg });
+  }
+  steps.sort((a, b) => (a.date < b.date ? -1 : 1));
+  const endDate = fields.endDate.trim();
+  if (endDate !== '' && !isIsoDate(endDate)) return fail('Ange ett giltigt slutdatum.');
+  const start = steps[0]?.date ?? '';
+  if (endDate !== '' && endDate < start)
+    return fail('Slutdatum kan inte ligga före dostrappans första steg.');
+  const value: MedicationValues = { name, frequency, time: fields.time.trim(), steps };
+  if (frequency === 'vecka') value.weekday = weekday;
+  if (endDate !== '') value.endDate = endDate;
+  return { ok: true, value };
+}
+
+export interface InjectionFields {
+  date: string;
+  /** '' = ingen tid. */
+  time: string;
+  dose: string;
+  /** '' = ej angivet. */
+  site: string;
+}
+
+export interface InjectionValues {
+  date: string;
+  time?: string;
+  doseMg: number;
+  site?: InjectionSite;
+}
+
+export function parseInjectionFields(fields: InjectionFields): Parsed<InjectionValues> {
+  if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
+  const time = fields.time.trim();
+  if (time !== '' && !isTime(time)) return fail('Ange tid som TT:MM eller lämna fältet tomt.');
+  const doseMg = parseDose(fields.dose);
+  if (doseMg == null) return fail('Ange dos i mg (större än 0, högst 100).');
+  const value: InjectionValues = { date: fields.date, doseMg };
+  if (time !== '') value.time = time;
+  if (fields.site !== '') {
+    if (!isInjectionSite(fields.site)) return fail('Välj injektionsställe.');
+    value.site = fields.site;
+  }
+  return { ok: true, value };
+}
+
+export interface SymptomFields {
+  date: string;
+  /** '' = ej angiven. */
+  appetite: string;
+  sideEffects: readonly string[];
+  /** Egen biverkning i fritext. */
+  other: string;
+}
+
+export interface SymptomValues {
+  date: string;
+  appetite?: number;
+  sideEffects: string[];
+}
+
+/** Aptit (1–5) och/eller biverkningar – minst det ena. */
+export function parseSymptomFields(fields: SymptomFields): Parsed<SymptomValues> {
+  if (!isIsoDate(fields.date)) return fail('Ange ett giltigt datum.');
+  const appetite = Number(fields.appetite);
+  if (
+    fields.appetite !== '' &&
+    !(Number.isInteger(appetite) && appetite >= APPETITE_MIN && appetite <= APPETITE_MAX)
+  )
+    return fail('Välj aptit 1–5.');
+  const other = fields.other.trim();
+  if (other.length > 100) return fail('Skriv högst 100 tecken under Annat.');
+  const sideEffects = [...new Set([...fields.sideEffects, ...(other ? [other] : [])])];
+  if (fields.appetite === '' && sideEffects.length === 0)
+    return fail('Välj aptit eller minst en biverkning.');
+  const value: SymptomValues = { date: fields.date, sideEffects };
+  if (fields.appetite !== '') value.appetite = appetite;
+  return { ok: true, value };
 }

@@ -1,5 +1,6 @@
 /** Rena hjälpare för Kalender: månadsrutnät och vad som loggats per dag. */
 import { addDays, toDayNumber } from './dates.ts';
+import type { DoseItem } from './glp1.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { dailySteps, dailyWeights, type DatedSteps } from './stats.ts';
 import { dailyWater, type DatedWater } from './water.ts';
@@ -77,6 +78,10 @@ export interface DayLog {
   photos?: number;
   waterMl?: number;
   workouts?: DayWorkout[];
+  /** GLP-1: loggade och planerade doser. */
+  doses?: DoseItem[];
+  /** GLP-1: aptit och biverkningar. */
+  symptoms?: { appetite?: number; sideEffects: string[] };
 }
 
 export interface DayIndexInput {
@@ -88,6 +93,9 @@ export interface DayIndexInput {
   water?: readonly DatedWater[];
   /** Sparade och genererade pass (se `workoutsBetween`) för de dagar som visas. */
   workouts?: readonly WorkoutItem[];
+  /** Loggade och planerade doser (se `dosesBetween`) för de dagar som visas. */
+  doses?: readonly DoseItem[];
+  symptoms?: readonly { date: string; appetite?: number; sideEffects: string[] }[];
   /** Avgör om planerade pass är obesvarade. */
   now?: Date;
 }
@@ -115,6 +123,13 @@ export function buildDayIndex(input: DayIndexInput): Map<string, DayLog> {
   for (const item of input.workouts ?? []) {
     const entry = day(item.date);
     (entry.workouts ??= []).push({ item, status: displayStatus(item, now) });
+  }
+  for (const dose of input.doses ?? []) (day(dose.date).doses ??= []).push(dose);
+  for (const s of input.symptoms ?? []) {
+    day(s.date).symptoms =
+      s.appetite == null
+        ? { sideEffects: s.sideEffects }
+        : { appetite: s.appetite, sideEffects: s.sideEffects };
   }
   return index;
 }

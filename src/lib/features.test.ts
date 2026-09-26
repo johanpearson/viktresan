@@ -38,11 +38,13 @@ describe('parseFlags', () => {
     expect(flags).not.toHaveProperty('okand');
   });
 
-  it('kommande funktioner kan inte slås på', () => {
-    const upcoming = FEATURES.filter((f) => !f.available);
-    expect(upcoming.map((f) => f.id)).toEqual(['glp1']);
-    const flags = parseFlags(Object.fromEntries(upcoming.map((f) => [f.id, true])));
-    for (const f of upcoming) expect(flags[f.id]).toBe(false);
+  it('alla funktioner går att slå på', () => {
+    expect(FEATURES.filter((f) => !f.available)).toEqual([]);
+    const flags = parseFlags({
+      version: FLAGS_VERSION,
+      ...Object.fromEntries(FEATURES.map((f) => [f.id, true])),
+    });
+    for (const f of FEATURES) expect(flags[f.id]).toBe(true);
   });
 });
 
@@ -66,6 +68,22 @@ describe('nya funktioner', () => {
     const flags = parseFlags({ version: FLAGS_VERSION, vatten: false, traning: true });
     expect(flags.vatten).toBe(false);
     expect(flags.traning).toBe(true);
+  });
+});
+
+describe('GLP-1', () => {
+  it('är av som standard; lagrat värde från innan den gick att slå på ignoreras', () => {
+    expect(DEFAULT_FLAGS.glp1).toBe(false);
+    expect(parseFlags({ version: 2, glp1: true }).glp1).toBe(false);
+    expect(parseFlags({ version: 3, glp1: true }).glp1).toBe(true);
+  });
+
+  it('kan slås på och av', async () => {
+    await initFeatures();
+    await setFeature('glp1', true);
+    expect(parseFlags(await getSetting(SETTING_FEATURES)).glp1).toBe(true);
+    await setFeature('glp1', false);
+    expect(parseFlags(await getSetting(SETTING_FEATURES)).glp1).toBe(false);
   });
 });
 
