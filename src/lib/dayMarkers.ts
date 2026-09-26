@@ -2,6 +2,7 @@
 import type { DayLog, DayWorkout } from './calendar.ts';
 import type { FeatureGated } from './features.ts';
 import { formatCm, formatInt, formatKcal, formatKg, formatMl } from './format.ts';
+import { describeAppetite, describeDose, type DoseItem } from './glp1.ts';
 import type { DisplayStatus } from './workouts.ts';
 
 export interface DayMarker extends FeatureGated {
@@ -30,6 +31,21 @@ export function workoutSummary(workouts: readonly DayWorkout[]): string {
     const n = workouts.filter((w) => w.status === status).length;
     if (n > 0) parts.push(`${String(n)} ${STATUS_WORDS[status][n === 1 ? 0 : 1]}`);
   }
+  return parts.join(' · ');
+}
+
+/** "Wegovy 0,5 mg" (loggad) eller "Wegovy 0,5 mg planerad". */
+export function doseSummary(doses: readonly DoseItem[]): string {
+  return doses
+    .map((d) => (d.status === 'loggad' ? describeDose(d) : `${describeDose(d)} planerad`))
+    .join(' · ');
+}
+
+/** "Aptit 3 av 5 · Illamående, Trötthet". */
+export function symptomSummary(s: { appetite?: number; sideEffects: string[] }): string {
+  const parts: string[] = [];
+  if (s.appetite != null) parts.push(`Aptit ${describeAppetite(s.appetite)}`);
+  if (s.sideEffects.length > 0) parts.push(s.sideEffects.join(', '));
   return parts.join(' · ');
 }
 
@@ -70,6 +86,19 @@ export const DAY_MARKERS: readonly DayMarker[] = [
     feature: 'traning',
     value: (d) => (d.workouts?.length ? workoutSummary(d.workouts) : null),
     dots: (d) => (d.workouts ?? []).map((w) => `status-${w.status}`),
+  },
+  {
+    id: 'glp1',
+    label: 'Dos',
+    feature: 'glp1',
+    value: (d) => (d.doses?.length ? doseSummary(d.doses) : null),
+    dots: (d) => (d.doses ?? []).map((dose) => `dose-${dose.status}`),
+  },
+  {
+    id: 'maende',
+    label: 'Mående',
+    feature: 'glp1',
+    value: (d) => (d.symptoms ? symptomSummary(d.symptoms) || null : null),
   },
   {
     id: 'bilder',

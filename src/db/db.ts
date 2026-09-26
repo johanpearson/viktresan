@@ -6,11 +6,12 @@ import {
   type StoreNames,
 } from 'idb';
 import type { ActivityLevel, Sex } from '../lib/energy.ts';
+import type { DoseFrequency, InjectionSite } from '../lib/glp1.ts';
 import type { MealSlot, Nutrients } from '../lib/nutrition.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -167,6 +168,58 @@ export interface WorkoutPlan {
   updatedAt?: number;
 }
 
+/** Ett steg i dostrappan: dosen gäller från och med datumet (sedan v6). */
+export interface DoseStep {
+  date: string;
+  doseMg: number;
+}
+
+/**
+ * Ett GLP-1-läkemedel med schema och dostrappa (sedan v6). Trappan läggs in av
+ * användaren enligt förskrivarens ordination – appen föreslår aldrig doser.
+ * Schemat börjar vid trappans första steg.
+ */
+export interface Medication {
+  id: string;
+  name: string;
+  frequency: DoseFrequency;
+  /** Veckovis: 0 = måndag … 6 = söndag. */
+  weekday?: number;
+  /** Lokal tid "HH:MM". */
+  time: string;
+  /** Minst ett steg, sorterade på datum, unika datum. */
+  steps: DoseStep[];
+  /** Sista dagen med schemalagd dos (valfri). */
+  endDate?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** En loggad injektion (sedan v6). Läkemedlets namn kopieras in. */
+export interface Injection {
+  id: string;
+  date: string;
+  /** Lokal tid "HH:MM". */
+  time?: string;
+  medicationId: string;
+  medicationName: string;
+  doseMg: number;
+  site?: InjectionSite;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** Aptit och biverkningar en dag (sedan v6). Nyckel = datum, ett per dag. */
+export interface SymptomEntry {
+  date: string;
+  /** 1 = ingen aptit … 5 = stor aptit. */
+  appetite?: number;
+  /** Förval och egen text. */
+  sideEffects: string[];
+  createdAt: number;
+  updatedAt?: number;
+}
+
 /**
  * Ett progressfoto. Bilden lagras som Blob direkt i IndexedDB, komprimerad och
  * utan metadata. Vikt och mått är valfria fält (tillagda utan schemaändring).
@@ -251,6 +304,22 @@ export interface ViktresanDB extends DBSchema {
   workoutPlans: {
     key: string;
     value: WorkoutPlan;
+  };
+  /** Sedan v6. */
+  medications: {
+    key: string;
+    value: Medication;
+  };
+  /** Sedan v6. */
+  injections: {
+    key: string;
+    value: Injection;
+    indexes: { 'by-date': string };
+  };
+  /** Sedan v6. Nyckel = datum. */
+  symptoms: {
+    key: string;
+    value: SymptomEntry;
   };
 }
 
@@ -363,6 +432,13 @@ export function getDb(): Promise<Database> {
         const workouts = db.createObjectStore('workouts', { keyPath: 'id' });
         workouts.createIndex('by-date', 'date');
         db.createObjectStore('workoutPlans', { keyPath: 'id' });
+      }
+      if (oldVersion < 6) {
+        // v6: GLP-1 (läkemedel, injektioner, mående). Nya stores – befintlig data berörs inte.
+        db.createObjectStore('medications', { keyPath: 'id' });
+        const injections = db.createObjectStore('injections', { keyPath: 'id' });
+        injections.createIndex('by-date', 'date');
+        db.createObjectStore('symptoms', { keyPath: 'date' });
       }
     },
     blocking() {
@@ -604,6 +680,71 @@ export async function listWorkoutPlans(): Promise<WorkoutPlan[]> {
   return all.sort((a, b) => a.createdAt - b.createdAt);
 }
 
+export async function putMedication(medication: Medication): Promise<void> {
+  const db = await getDb();
+  await db.put('medications', medication);
+}
+
+/** Tar bort läkemedlet. Loggade injektioner ligger kvar (namnet är inkopierat). */
+export async function deleteMedication(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('medications', id);
+}
+
+export async function listMedications(): Promise<Medication[]> {
+  const db = await getDb();
+  const all = await db.getAll('medications');
+  return all.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function putInjection(injection: Injection): Promise<void> {
+  const db = await getDb();
+  await db.put('injections', injection);
+}
+
+export async function deleteInjection(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('injections', id);
+}
+
+/** Alla injektioner, äldst först (samma dag: i registreringsordning). */
+export async function listInjections(): Promise<Injection[]> {
+  const db = await getDb();
+  const all = await db.getAllFromIndex('injections', 'by-date');
+  return all.sort(byDateThenCreated);
+}
+
+/**
+ * Sparar dagens aptit och biverkningar. Finns redan en post för datumet skrivs
+ * den över (`createdAt` behålls, `updatedAt` sätts).
+ */
+export async function upsertSymptoms(
+  date: string,
+  values: { appetite?: number; sideEffects: string[] },
+  now = Date.now(),
+): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('symptoms', 'readwrite');
+  const existing = await tx.store.get(date);
+  const entry: SymptomEntry = existing
+    ? { date, sideEffects: values.sideEffects, createdAt: existing.createdAt, updatedAt: now }
+    : { date, sideEffects: values.sideEffects, createdAt: now };
+  if (values.appetite !== undefined) entry.appetite = values.appetite;
+  await tx.store.put(entry);
+  await tx.done;
+}
+
+export async function deleteSymptoms(date: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('symptoms', date);
+}
+
+/** Alla dagar med mående, äldst först. */
+export async function listSymptoms(): Promise<SymptomEntry[]> {
+  const db = await getDb();
+  return db.getAll('symptoms');
+}
+
 export async function putPhoto(photo: PhotoEntry): Promise<void> {
   const db = await getDb();
   await db.put('photos', photo);
@@ -667,6 +808,9 @@ export interface Snapshot {
   water: WaterEntry[];
   workouts: Workout[];
   workoutPlans: WorkoutPlan[];
+  medications: Medication[];
+  injections: Injection[];
+  symptoms: SymptomEntry[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -683,6 +827,9 @@ export function emptySnapshot(): Snapshot {
     water: [],
     workouts: [],
     workoutPlans: [],
+    medications: [],
+    injections: [],
+    symptoms: [],
   };
 }
 
@@ -700,6 +847,9 @@ export async function readSnapshot(): Promise<Snapshot> {
     water,
     workouts,
     workoutPlans,
+    medications,
+    injections,
+    symptoms,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -713,6 +863,9 @@ export async function readSnapshot(): Promise<Snapshot> {
     listWater(),
     listWorkouts(),
     listWorkoutPlans(),
+    listMedications(),
+    listInjections(),
+    listSymptoms(),
   ]);
   return {
     profile,
@@ -727,12 +880,15 @@ export async function readSnapshot(): Promise<Snapshot> {
     water,
     workouts,
     workoutPlans,
+    medications,
+    injections,
+    symptoms,
   };
 }
 
 /**
- * `replace`: all befintlig data (profil, vikt, midja, steg, bilder, mat, vatten, träning) ersätts.
- * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg datumet, för
+ * `replace`: all befintlig data (profil, vikt, midja, steg, bilder, mat, vatten, träning, GLP-1) ersätts.
+ * `merge`: poster läggs till; vid samma nyckel (`id`, för midja/steg/mående datumet, för
  * favoriter `foodId`) vinner den senast ändrade (`updatedAt ?? createdAt`, lika →
  * befintlig behålls). Befintlig profil behålls.
  */
@@ -751,6 +907,9 @@ const DATA_STORES = [
   'water',
   'workouts',
   'workoutPlans',
+  'medications',
+  'injections',
+  'symptoms',
 ] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
@@ -769,6 +928,9 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const water = tx.objectStore('water');
   const workouts = tx.objectStore('workouts');
   const workoutPlans = tx.objectStore('workoutPlans');
+  const medications = tx.objectStore('medications');
+  const injections = tx.objectStore('injections');
+  const symptoms = tx.objectStore('symptoms');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -784,6 +946,9 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.water.map((w) => water.put(w)),
       ...snapshot.workouts.map((w) => workouts.put(w)),
       ...snapshot.workoutPlans.map((p) => workoutPlans.put(p)),
+      ...snapshot.medications.map((m) => medications.put(m)),
+      ...snapshot.injections.map((i) => injections.put(i)),
+      ...snapshot.symptoms.map((s) => symptoms.put(s)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -830,6 +995,18 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       const existing = await workoutPlans.get(p.id);
       if (!existing || changedAt(p) > changedAt(existing)) await workoutPlans.put(p);
     }
+    for (const m of snapshot.medications) {
+      const existing = await medications.get(m.id);
+      if (!existing || changedAt(m) > changedAt(existing)) await medications.put(m);
+    }
+    for (const i of snapshot.injections) {
+      const existing = await injections.get(i.id);
+      if (!existing || changedAt(i) > changedAt(existing)) await injections.put(i);
+    }
+    for (const s of snapshot.symptoms) {
+      const existing = await symptoms.get(s.date);
+      if (!existing || changedAt(s) > changedAt(existing)) await symptoms.put(s);
+    }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);
     }
@@ -837,7 +1014,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   await tx.done;
 }
 
-/** När den äldsta posten (vikt, midja, steg, bild, matlogg, vatten, pass) skapades (ms), eller null. */
+/** När den äldsta posten (vikt, midja, steg, bild, matlogg, vatten, pass, GLP-1) skapades (ms), eller null. */
 export async function getOldestEntryTime(): Promise<number | null> {
   const db = await getDb();
   const all = await Promise.all([
@@ -849,6 +1026,9 @@ export async function getOldestEntryTime(): Promise<number | null> {
     db.getAll('water'),
     db.getAll('workouts'),
     db.getAll('workoutPlans'),
+    db.getAll('medications'),
+    db.getAll('injections'),
+    db.getAll('symptoms'),
   ]);
   let oldest: number | null = null;
   for (const { createdAt } of all.flat()) {

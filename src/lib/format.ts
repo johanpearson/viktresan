@@ -107,3 +107,15 @@ export function decimalInput(value: number): string {
 export function formatMl(value: number): string {
   return `${formatInt(Math.round(value))} ml`;
 }
+
+const mgFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 });
+
+/** 0.25 → "0,25 mg", 2.4 → "2,4 mg". */
+export function formatMg(value: number): string {
+  return `${normalizeSpaces(mgFormat.format(value))} mg`;
+}
+
+/** Tal till text med decimalkomma, upp till två decimaler (doser: "0,25"). */
+export function doseInput(value: number): string {
+  return String(Math.round(value * 100) / 100).replace('.', ',');
+}

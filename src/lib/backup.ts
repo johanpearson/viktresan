@@ -1,12 +1,13 @@
 /**
- * Säkerhetskopiering: hela databasen (profil, vikt, midja, steg, bilder, mat, vatten, träning)
- * som en zip-fil,
+ * Säkerhetskopiering: hela databasen (profil, vikt, midja, steg, bilder, mat, vatten, träning,
+ * GLP-1) som en zip-fil,
  * valfritt krypterad med lösenord (PBKDF2-SHA-256 → AES-256-GCM via Web Crypto).
  *
  * Okrypterad zip:
  *   backup.json        format, version, exportedAt, profil, weights, waist, steps, bildmetadata,
  *                      foods, meals, foodLog, favorites (sedan version 3),
- *                      water, workouts, workoutPlans (sedan version 4)
+ *                      water, workouts, workoutPlans (sedan version 4),
+ *                      medications, injections, symptoms (sedan version 5)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -19,7 +20,9 @@ import {
   splitLegacyMeasurements,
   type Favorite,
   type FoodLogEntry,
+  type Injection,
   type LegacyMeasurement,
+  type Medication,
   type MealIngredient,
   type PhotoEntry,
   type SavedMeal,
@@ -27,6 +30,7 @@ import {
   type Profile,
   type Snapshot,
   type StepsEntry,
+  type SymptomEntry,
   type WaistEntry,
   type WaterEntry,
   type WeightEntry,
@@ -35,15 +39,16 @@ import {
 } from '../db/db.ts';
 import { isIsoDate } from './dates.ts';
 import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
+import { APPETITE_MAX, APPETITE_MIN, DOSE_FREQUENCIES, isInjectionSite } from './glp1.ts';
 import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
 import { isTime } from './validation.ts';
 import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 4;
+export const BACKUP_VERSION = 5;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -91,6 +96,10 @@ export interface BackupSummary {
   water: number;
   workouts: number;
   workoutPlans: number;
+  /** GLP-1: läkemedel, injektioner och dagar med mående. */
+  medications: number;
+  injections: number;
+  symptoms: number;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -125,6 +134,9 @@ interface PlainManifest {
   water: WaterEntry[];
   workouts: Workout[];
   workoutPlans: WorkoutPlan[];
+  medications: Medication[];
+  injections: Injection[];
+  symptoms: SymptomEntry[];
 }
 
 interface EncryptedManifest {
@@ -178,6 +190,9 @@ export async function createBackup(
     water: snapshot.water,
     workouts: snapshot.workouts,
     workoutPlans: snapshot.workoutPlans,
+    medications: snapshot.medications,
+    injections: snapshot.injections,
+    symptoms: snapshot.symptoms,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -277,6 +292,8 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     ...snapshot.foodLog,
     ...snapshot.water,
     ...snapshot.workouts,
+    ...snapshot.injections,
+    ...snapshot.symptoms,
   ]
     .map((e) => e.date)
     .sort();
@@ -295,6 +312,9 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     water: snapshot.water.length,
     workouts: snapshot.workouts.length,
     workoutPlans: snapshot.workoutPlans.length,
+    medications: snapshot.medications.length,
+    injections: snapshot.injections.length,
+    symptoms: snapshot.symptoms.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -382,6 +402,8 @@ function parsePlain(
       ...(version >= 3 ? parseFoodData(manifest) : emptyFoodData()),
       // Version 1–3 saknar vatten och träning.
       ...(version >= 4 ? parseTrainingData(manifest) : emptyTrainingData()),
+      // Version 1–4 saknar GLP-1.
+      ...(version >= 5 ? parseGlp1Data(manifest) : emptyGlp1Data()),
     },
   };
 }
@@ -461,6 +483,28 @@ function parseTrainingData(manifest: Record<string, unknown>): TrainingData {
   assertUniqueKeys(result.water, (w) => w.id, 'vattenpost');
   assertUniqueKeys(result.workouts, (w) => w.id, 'pass');
   assertUniqueKeys(result.workoutPlans, (p) => p.id, 'schema');
+  return result;
+}
+
+type Glp1Data = Pick<Snapshot, 'medications' | 'injections' | 'symptoms'>;
+
+function emptyGlp1Data(): Glp1Data {
+  return { medications: [], injections: [], symptoms: [] };
+}
+
+function parseGlp1Data(manifest: Record<string, unknown>): Glp1Data {
+  const { medications, injections, symptoms } = manifest;
+  if (!Array.isArray(medications) || !Array.isArray(injections) || !Array.isArray(symptoms)) {
+    throw invalid('GLP-1-data saknas.');
+  }
+  const result: Glp1Data = {
+    medications: medications.map((m, i) => parseMedicationRecord(m, i)),
+    injections: injections.map((e, i) => parseInjectionRecord(e, i)),
+    symptoms: symptoms.map((s, i) => parseSymptomRecord(s, i)),
+  };
+  assertUniqueKeys(result.medications, (m) => m.id, 'läkemedel');
+  assertUniqueKeys(result.injections, (e) => e.id, 'injektion');
+  assertUniqueKeys(result.symptoms, (s) => s.date, 'dag med mående');
   return result;
 }
 
@@ -822,6 +866,103 @@ function parsePlanRecord(value: unknown, index: number): WorkoutPlan {
     plan.endDate = value.endDate;
   }
   return plan;
+}
+
+function isDose(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 100;
+}
+
+function parseMedicationRecord(value: unknown, index: number): Medication {
+  const bad = () => invalid(`Läkemedel nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  const frequency = isRecord(value)
+    ? DOSE_FREQUENCIES.find((f) => f.id === value.frequency)
+    : undefined;
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isName(value.name) ||
+    !frequency ||
+    typeof value.time !== 'string' ||
+    !isTime(value.time) ||
+    !Array.isArray(value.steps) ||
+    value.steps.length === 0
+  ) {
+    throw bad();
+  }
+  const steps: Medication['steps'] = [];
+  for (const step of value.steps as unknown[]) {
+    if (!isRecord(step) || !isDate(step.date) || !isDose(step.doseMg)) throw bad();
+    if (steps.some((s) => s.date === step.date)) throw bad();
+    steps.push({ date: step.date, doseMg: step.doseMg });
+  }
+  steps.sort((a, b) => (a.date < b.date ? -1 : 1));
+  const med: Medication = {
+    id: value.id,
+    name: value.name,
+    frequency: frequency.id,
+    time: value.time,
+    steps,
+    ...parseTimes(value, bad),
+  };
+  if (frequency.id === 'vecka') {
+    if (!isInt(value.weekday) || value.weekday < 0 || value.weekday > 6) throw bad();
+    med.weekday = value.weekday;
+  }
+  if (value.endDate !== undefined) {
+    if (!isDate(value.endDate) || value.endDate < (steps[0]?.date ?? '')) throw bad();
+    med.endDate = value.endDate;
+  }
+  return med;
+}
+
+function parseInjectionRecord(value: unknown, index: number): Injection {
+  const bad = () => invalid(`Injektion nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isDate(value.date) ||
+    !isId(value.medicationId) ||
+    !isName(value.medicationName) ||
+    !isDose(value.doseMg)
+  ) {
+    throw bad();
+  }
+  const injection: Injection = {
+    id: value.id,
+    date: value.date,
+    medicationId: value.medicationId,
+    medicationName: value.medicationName,
+    doseMg: value.doseMg,
+    ...parseTimes(value, bad),
+  };
+  if (value.time !== undefined) {
+    if (typeof value.time !== 'string' || !isTime(value.time)) throw bad();
+    injection.time = value.time;
+  }
+  if (value.site !== undefined) {
+    if (!isInjectionSite(value.site)) throw bad();
+    injection.site = value.site;
+  }
+  return injection;
+}
+
+function parseSymptomRecord(value: unknown, index: number): SymptomEntry {
+  const bad = () => invalid(`Mående nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  if (!isRecord(value) || !Array.isArray(value.sideEffects) || value.sideEffects.length > 50) {
+    throw bad();
+  }
+  const sideEffects: string[] = [];
+  for (const effect of value.sideEffects as unknown[]) {
+    if (!isName(effect) || sideEffects.includes(effect)) throw bad();
+    sideEffects.push(effect);
+  }
+  const entry: SymptomEntry = { ...parseDailyTimes(value, bad), sideEffects };
+  if (value.appetite !== undefined) {
+    if (!isInt(value.appetite) || value.appetite < APPETITE_MIN || value.appetite > APPETITE_MAX)
+      throw bad();
+    entry.appetite = value.appetite;
+  }
+  return entry;
 }
 
 function parsePhotoRecord(

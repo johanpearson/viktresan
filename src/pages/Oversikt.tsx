@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { BackupReminder } from '../components/BackupReminder.tsx';
 import { CaloriePlanCard } from '../components/CaloriePlanCard.tsx';
+import { DoseDayBanner } from '../components/DoseDayBanner.tsx';
 import { Feature } from '../components/Feature.tsx';
 import { MissedWorkouts } from '../components/MissedWorkouts.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
+import { NextDoseCard } from '../components/NextDoseCard.tsx';
 import { EmptyState, Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
 import { TodayCard } from '../components/TodayCard.tsx';
@@ -37,6 +39,11 @@ export function Oversikt() {
       }
     >
       {data && (
+        <Feature id="glp1">
+          <DoseDayBanner data={data} now={now} />
+        </Feature>
+      )}
+      {data && (
         <Feature id="traning">
           <MissedWorkouts data={data} now={now} onChange={reload} />
         </Feature>
@@ -50,6 +57,9 @@ export function Oversikt() {
       ) : (
         <Summary profile={data.profile} weights={data.weights} foodLog={data.foodLog}>
           <TodayCard data={data} now={now} onChange={reload} />
+          <Feature id="glp1">
+            <NextDoseCard data={data} now={now} />
+          </Feature>
           <Feature id="traning">
             <UpcomingCard data={data} now={now} onChange={reload} />
           </Feature>
@@ -63,7 +73,7 @@ interface SummaryProps {
   profile: Profile;
   weights: WeightEntry[];
   foodLog: FoodLogEntry[];
-  /** Visas direkt under dagens vikt (Idag, Kommande). */
+  /** Visas direkt under dagens vikt (Idag, Nästa dos, Kommande). */
   children?: ReactNode;
 }
 

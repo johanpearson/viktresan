@@ -11,12 +11,15 @@ import {
   saveProfile,
   type Favorite,
   type FoodLogEntry,
+  type Injection,
+  type Medication,
   type PhotoEntry,
   type Profile,
   type SavedMeal,
   type StoredFood,
   type Snapshot,
   type StepsEntry,
+  type SymptomEntry,
   type WaistEntry,
   type WaterEntry,
   type WeightEntry,
@@ -176,6 +179,60 @@ const workouts: Workout[] = [
 
 const trainingData = { water, workouts, workoutPlans };
 
+const medications: Medication[] = [
+  {
+    id: 'med1',
+    name: 'Wegovy',
+    frequency: 'vecka',
+    weekday: 0,
+    time: '08:00',
+    steps: [
+      { date: '2026-01-05', doseMg: 0.25 },
+      { date: '2026-02-02', doseMg: 0.5 },
+    ],
+    createdAt: 19,
+  },
+  {
+    id: 'med2',
+    name: 'Eget läkemedel',
+    frequency: 'dag',
+    time: '21:30',
+    steps: [{ date: '2026-01-01', doseMg: 0.6 }],
+    endDate: '2026-01-04',
+    createdAt: 20,
+    updatedAt: 21,
+  },
+];
+
+const injections: Injection[] = [
+  {
+    id: 'inj1',
+    date: '2026-01-05',
+    time: '08:10',
+    medicationId: 'med1',
+    medicationName: 'Wegovy',
+    doseMg: 0.25,
+    site: 'buk-vanster',
+    createdAt: 22,
+  },
+  {
+    id: 'inj2',
+    date: '2026-01-12',
+    medicationId: 'med1',
+    medicationName: 'Wegovy',
+    doseMg: 0.25,
+    createdAt: 23,
+    updatedAt: 24,
+  },
+];
+
+const symptoms: SymptomEntry[] = [
+  { date: '2026-01-06', appetite: 2, sideEffects: ['Illamående', 'Egen text'], createdAt: 25 },
+  { date: '2026-01-07', sideEffects: ['Trötthet'], createdAt: 26 },
+];
+
+const glp1Data = { medications, injections, symptoms };
+
 const weights: WeightEntry[] = [
   { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
   {
@@ -222,7 +279,7 @@ const photos: PhotoEntry[] = [
 
 async function seed(): Promise<void> {
   await applySnapshot(
-    { profile, weights, waist, steps, photos, ...foodData, ...trainingData },
+    { profile, weights, waist, steps, photos, ...foodData, ...trainingData, ...glp1Data },
     'replace',
   );
 }
@@ -361,6 +418,9 @@ describe('backup validering', () => {
     water: [],
     workouts: [],
     workoutPlans: [],
+    medications: [],
+    injections: [],
+    symptoms: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -441,9 +501,21 @@ describe('backup validering', () => {
         foodLog: [{ ...foodLog[1], evil: '<script>', per100: { ...foodLog[1]?.per100, x: 1 } }],
         workouts: [{ ...workouts[0], evil: '<script>' }],
         workoutPlans: [{ ...workoutPlans[0], evil: '<script>' }],
+        medications: [
+          {
+            ...medications[0],
+            evil: '<script>',
+            steps: medications[0]?.steps.map((st) => ({ ...st, x: 1 })),
+          },
+        ],
+        injections: [{ ...injections[0], evil: '<script>' }],
+        symptoms: [{ ...symptoms[0], evil: '<script>' }],
       }),
     });
     const contents = await readBackup(file);
+    expect(contents.snapshot.medications).toEqual([medications[0]]);
+    expect(contents.snapshot.injections).toEqual([injections[0]]);
+    expect(contents.snapshot.symptoms).toEqual([symptoms[0]]);
     expect(contents.snapshot.workouts).toEqual([workouts[0]]);
     expect(contents.snapshot.workoutPlans).toEqual(workoutPlans);
     expect(contents.snapshot.weights).toEqual(valid.weights);
@@ -509,6 +581,9 @@ describe('import av version 1 (kombinerade mätningar)', () => {
     water: [],
     workouts: [],
     workoutPlans: [],
+    medications: [],
+    injections: [],
+    symptoms: [],
     profile,
     weights: [
       { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
@@ -647,6 +722,89 @@ describe('import av version 3 (utan vatten och träning)', () => {
   });
 });
 
+describe('import av version 4 (utan GLP-1)', () => {
+  it('läser in vatten och träning och ger tomma GLP-1-listor', async () => {
+    const v4 = {
+      format: BACKUP_FORMAT,
+      version: 4,
+      exportedAt: NOW.toISOString(),
+      profile,
+      weights,
+      waist,
+      steps,
+      photos: [],
+      ...foodData,
+      ...trainingData,
+    };
+    const contents = await readBackup(zipOf({ 'backup.json': JSON.stringify(v4) }));
+    expect(contents.snapshot).toEqual({
+      ...emptySnapshot(),
+      profile,
+      weights,
+      waist,
+      steps,
+      ...foodData,
+      ...trainingData,
+    });
+    await applySnapshot(contents.snapshot, 'replace');
+    expect((await readSnapshot()).medications).toEqual([]);
+  });
+});
+
+describe('validering av GLP-1', () => {
+  async function manifestWith(patch: Record<string, unknown>) {
+    const base = {
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportedAt: NOW.toISOString(),
+      profile: null,
+      weights: [],
+      waist: [],
+      steps: [],
+      photos: [],
+      foods: [],
+      meals: [],
+      foodLog: [],
+      favorites: [],
+      ...trainingData,
+      ...glp1Data,
+      ...patch,
+    };
+    return errorOf(readBackup(zipOf({ 'backup.json': JSON.stringify(base) })));
+  }
+
+  it('avvisar ogiltiga poster', async () => {
+    const med = medications[0] as Medication;
+    const cases: Record<string, unknown>[] = [
+      { medications: [{ ...med, steps: [] }] },
+      { medications: [{ ...med, steps: [{ date: '2026-01-05', doseMg: 0 }] }] },
+      {
+        medications: [
+          {
+            ...med,
+            steps: [
+              { date: '2026-01-05', doseMg: 1 },
+              { date: '2026-01-05', doseMg: 2 },
+            ],
+          },
+        ],
+      },
+      { medications: [{ ...med, frequency: 'manad' }] },
+      { medications: [{ ...med, weekday: 7 }] },
+      { medications: [{ ...med, endDate: '2025-12-31' }] },
+      { injections: [{ ...injections[0], site: 'nacke' }] },
+      { injections: [{ ...injections[0], doseMg: -1 }] },
+      { injections: [injections[0], injections[0]] },
+      { symptoms: [{ date: '2026-01-06', appetite: 6, sideEffects: [], createdAt: 1 }] },
+      { symptoms: [{ date: '2026-01-06', sideEffects: [''], createdAt: 1 }] },
+    ];
+    for (const patch of cases) {
+      expect((await manifestWith(patch)).code, JSON.stringify(patch)).toBe('invalid-data');
+    }
+    expect((await manifestWith({ injections: undefined })).message).toMatch(/GLP-1/);
+  });
+});
+
 describe('validering av vatten och träning', () => {
   async function manifestWith(patch: Record<string, unknown>) {
     const base = {
@@ -663,6 +821,7 @@ describe('validering av vatten och träning', () => {
       foodLog: [],
       favorites: [],
       ...trainingData,
+      ...glp1Data,
       ...patch,
     };
     return errorOf(readBackup(zipOf({ 'backup.json': JSON.stringify(base) })));
@@ -740,6 +899,22 @@ describe('import slå ihop', () => {
         { ...(workouts[1] as Workout), status: 'genomford', updatedAt: 30 },
       ],
       workoutPlans: [{ ...(workoutPlans[0] as WorkoutPlan), id: 'plan2', weekdays: [5] }],
+      medications: [
+        // Trappan ändrad senare på den andra enheten → ersätter.
+        {
+          ...(medications[0] as Medication),
+          steps: [{ date: '2026-01-05', doseMg: 0.25 }],
+          updatedAt: 40,
+        },
+      ],
+      injections: [
+        // Äldre version av inj2 → ignoreras; ny dos läggs till.
+        { ...(injections[1] as Injection), doseMg: 1, updatedAt: 23 },
+        { ...(injections[0] as Injection), id: 'inj3', date: '2026-01-19', createdAt: 41 },
+      ],
+      symptoms: [
+        { date: '2026-01-07', appetite: 4, sideEffects: [], createdAt: 26, updatedAt: 42 },
+      ],
     };
     await applySnapshot(imported, 'merge');
 
@@ -777,6 +952,19 @@ describe('import slå ihop', () => {
       ['w2', 'genomford'],
     ]);
     expect(after.workoutPlans.map((p) => p.id)).toEqual(['plan1', 'plan2']);
+    expect(after.medications.map((m) => [m.id, m.steps.length])).toEqual([
+      ['med1', 1],
+      ['med2', 1],
+    ]);
+    expect(after.injections.map((i) => [i.id, i.doseMg])).toEqual([
+      ['inj1', 0.25],
+      ['inj2', 0.25],
+      ['inj3', 0.25],
+    ]);
+    expect(after.symptoms.map((x) => [x.date, x.appetite])).toEqual([
+      ['2026-01-06', 2],
+      ['2026-01-07', 4],
+    ]);
   });
 
   it('tar profilen från säkerhetskopian om det inte finns någon', async () => {
@@ -789,7 +977,7 @@ describe('summarizeBackup', () => {
   it('sammanfattar innehållet', async () => {
     const contents = await readBackup(
       await createBackup(
-        { profile, weights, waist, steps, photos, ...foodData, ...trainingData },
+        { profile, weights, waist, steps, photos, ...foodData, ...trainingData, ...glp1Data },
         { now: NOW },
       ),
     );
@@ -800,6 +988,9 @@ describe('summarizeBackup', () => {
       water: 2,
       workouts: 2,
       workoutPlans: 1,
+      medications: 2,
+      injections: 2,
+      symptoms: 2,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,

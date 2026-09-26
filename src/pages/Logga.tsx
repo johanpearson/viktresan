@@ -1,5 +1,6 @@
 import { useState, type ComponentType } from 'react';
 import { BottomSheet } from '../components/BottomSheet.tsx';
+import { Glp1Log } from '../components/Glp1Log.tsx';
 import { Page } from '../components/Page.tsx';
 import { StepsForm } from '../components/StepsForm.tsx';
 import { WaistLog } from '../components/WaistLog.tsx';
@@ -9,12 +10,21 @@ import { WorkoutLog } from '../components/WorkoutLog.tsx';
 import { todayIso } from '../lib/dates.ts';
 import type { FeatureGated } from '../lib/features.ts';
 import { useFeatures } from '../lib/features.ts';
-import { formatCm, formatInt, formatKg, formatMl } from '../lib/format.ts';
+import {
+  formatCm,
+  formatInt,
+  formatKg,
+  formatMg,
+  formatMl,
+  formatShortDate,
+} from '../lib/format.ts';
+import { nextDose } from '../lib/glp1.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
+import { useHashRoute } from '../lib/useHashRoute.ts';
 import { waterGoal, waterOn } from '../lib/water.ts';
 import { upcomingWorkouts, workoutsBetween } from '../lib/workouts.ts';
 
-type LogTypeId = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning';
+type LogTypeId = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning' | 'glp1';
 
 interface LogFormProps {
   data: AppData;
@@ -33,10 +43,7 @@ interface LogType extends FeatureGated {
   Form: ComponentType<LogFormProps>;
 }
 
-/**
- * Loggtyperna i rutnätet, i visningsordning. Doser (GLP-1) läggs till här när de
- * finns – funktionsbrytarna styr redan vilka som visas.
- */
+/** Loggtyperna i rutnätet, i visningsordning. Funktionsbrytarna styr vilka som visas. */
 const LOG_TYPES: readonly LogType[] = [
   {
     id: 'vikt',
@@ -106,13 +113,34 @@ const LOG_TYPES: readonly LogType[] = [
     },
     Form: ({ data, reload }) => <WorkoutLog data={data} onChange={reload} />,
   },
+  {
+    id: 'glp1',
+    label: 'GLP-1',
+    title: 'GLP-1',
+    icon: 'M14 4l6 6M17 7l-9 9-3 1 1-3 9-9M8 13l3 3M3 21l3-3',
+    feature: 'glp1',
+    summary: ({ medications, injections }) => {
+      if (medications.length === 0) return 'Lägg in läkemedel';
+      const next = nextDose(medications, injections, new Date());
+      if (!next) return 'Inget planerat';
+      const dose = next.doseMg == null ? '' : ` ${formatMg(next.doseMg)}`;
+      return next.date === todayIso()
+        ? `Idag${dose}`
+        : `Nästa ${formatShortDate(next.date)}${dose}`;
+    },
+    Form: ({ data, reload }) => <Glp1Log data={data} onChange={reload} />,
+  },
 ];
 
 export function Logga() {
   const { data, reload } = useAppData();
   const features = useFeatures();
-  const [openId, setOpenId] = useState<LogTypeId | null>(null);
+  const { sub } = useHashRoute();
   const types = features.filter(LOG_TYPES);
+  // "#/logga/glp1" öppnar panelen direkt (t.ex. från dosdagsbannern på Översikt).
+  const [openId, setOpenId] = useState<LogTypeId | null>(
+    () => types.find((t) => t.id === sub)?.id ?? null,
+  );
   const open = types.find((t) => t.id === openId);
 
   return (
@@ -155,6 +183,7 @@ export function Logga() {
           title={open.title}
           onClose={() => {
             setOpenId(null);
+            if (sub) window.history.replaceState(null, '', '#/logga');
           }}
         >
           <open.Form data={data} reload={reload} />

@@ -43,6 +43,7 @@ src/lib/calendar.ts     Månads-/veckorutnät + vad som loggats/planerats per da
 src/lib/water.ts        Vattenmål (33 ml × trendvikt, 100 ml) och summor per dag
 src/lib/workouts.ts     Träning: scheman → pass, status, obesvarade/dagens/kommande pass
 src/lib/dayMarkers.ts   Loggtyper per dag (Kalender, Översikt → Idag), med funktion
+src/lib/glp1.ts         GLP-1: schema, dostrappa, planerade/loggade doser, nästa dos, rotation, dosbyten
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
 src/lib/useAppData.ts   Hook: läser vikt, midja, steg + profil; `reload()` returnerar ny data
 src/lib/usePhotos.ts    Hook: läser bilder + skapar/frigör object URLs
@@ -74,8 +75,8 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik), Kalender (Månad | Vecka), Framsteg (Historik | Bilder),
                         Inställningar
-e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning); hjälpare i
-                        helpers.ts. training.spec.ts styr tiden med page.clock.setFixedTime.
+e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1); hjälpare i
+                        helpers.ts. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
@@ -94,16 +95,18 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   lagrade värden för en funktion från före dess `availableSince` ignoreras (de var alltid "av"). Avstängd = dold överallt, datan
   ligger kvar och exporteras. Inga spridda if-satser: listor av vyer/flikar/rutor/markörer har
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
-  `<Feature id="…">`. GLP-1 är `available: false` ("Kommer snart") tills den byggs – lägg då
-  till en post i `LOG_TYPES` (Logga) och `DAY_MARKERS`, sätt `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 5`). Object stores:
+  `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`, `FLAGS_VERSION = 3`). En ny
+  kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 6`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob + valfri vikt/mått, index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
   `foods` (v4, egna livsmedel `egen:<uuid>` + cachade Open Food Facts-träffar `off:<ean>`, index `by-ean`),
   `meals` (v4, sparade måltider med ingredienser i gram), `foodLog` (v4, matlogg, index `by-date`),
   `favorites` (v4, nyckel `foodId`), `water` (v5, en post per tillfälle, index `by-date`),
-  `workouts` (v5, pass, index `by-date`), `workoutPlans` (v5, återkommande scheman).
+  `workouts` (v5, pass, index `by-date`), `workoutPlans` (v5, återkommande scheman),
+  `medications` (v6, GLP-1-läkemedel med schema och dostrappa), `injections` (v6, loggade doser,
+  index `by-date`), `symptoms` (v6, aptit/biverkningar, nyckel = `date`, ett per dag, `upsertSymptoms`).
   Profilen har (sedan v4, valfria) `sex`, `birthYear`, `activityLevel`, `ratePerWeekKg` (standard 0,5)
   och (v5) `waterGoalMl` (eget vattenmål, sparas från Inställningar → Vattenmål).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
@@ -139,6 +142,18 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   och intensitet förifyllda. Kommande = tre nästa planerade efter idag. Kalenderns dagsvy har
   statusväljare (ändra i efterhand) och Klar. Prickar: genomfört fylld, planerat ring, obesvarat röd,
   hoppat grå fyrkant (`DayMarker.dots`).
+- **GLP-1** (`glp1.ts`, bakom brytaren `glp1`): `Medication` har namn (förval Wegovy/Ozempic/Mounjaro/
+  Saxenda + fritext), `frequency` `vecka` (med `weekday`, 0 = mån) eller `dag`, tid och en dostrappa
+  (`steps`: datum + dos i mg, inmatad av användaren). Schemat börjar vid första steget; dosen ett datum
+  = senaste steget på/före datumet. **Appen föreslår aldrig doser** – förifyllt värde kommer bara ur
+  trappan (annars senast loggade dos) och `PRESCRIBER_NOTE` visas där doser läggs in. En veckodos räknas
+  som tagen om en injektion av läkemedlet loggas inom ±3 dagar (dagsdos: samma dag). Planerade doser
+  visas från idag (`dosesBetween`); `nextDose`/`dueToday` ger "Nästa dos" och dosdagsbannern på Översikt
+  (länk till `#/logga/glp1`, som öppnar panelen direkt). Injektionsställe: `suggestSite` = oanvänt
+  ställe i rotationsordning, annars det som använts längst tillbaka. Injektioner kopierar in
+  läkemedlets namn. `doseChanges` (start + byte av dos/läkemedel) ritas som streckade linjer i
+  viktgrafen (`WeightChart` `markers`, färg `--chart-dose`) och listas i Framsteg → Historik.
+  Kalendern: romb-prick, fylld = loggad, kontur = planerad; `maende`-markören visar aptit/biverkningar.
 - **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Mat-vyn) hämtas med
   `npm run livsmedel` och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
   ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
@@ -164,13 +179,13 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 4`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 5`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     bildmetadata med `file`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
-    vatten och träning och ger tomma listor.
+    vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.
@@ -181,7 +196,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (`summarizeBackup`) och låter användaren välja läge. `applySnapshot()` skriver i **en**
   transaktion:
   - `replace`: profil, mätningar och bilder töms och ersätts.
-  - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg datum) → senast ändrad (`updatedAt ?? createdAt`) vinner,
+  - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg/mående datum) → senast ändrad (`updatedAt ?? createdAt`) vinner,
     lika → befintlig behålls. Befintlig profil behålls; saknas den tas den från filen.
 - **Påminnelse** (`BackupReminder` på Översikt): visas när det finns data och ingen export gjorts
   på 7 dagar. Utan tidigare export räknas från äldsta postens `createdAt`.

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   getProfile,
   listFoodLog,
+  listInjections,
+  listMedications,
+  listSymptoms,
   listSteps,
   listWaist,
   listWater,
@@ -9,8 +12,11 @@ import {
   listWorkoutPlans,
   listWorkouts,
   type FoodLogEntry,
+  type Injection,
+  type Medication,
   type Profile,
   type StepsEntry,
+  type SymptomEntry,
   type WaistEntry,
   type WaterEntry,
   type WeightEntry,
@@ -26,6 +32,9 @@ export interface AppData {
   water: WaterEntry[];
   workouts: Workout[];
   workoutPlans: WorkoutPlan[];
+  medications: Medication[];
+  injections: Injection[];
+  symptoms: SymptomEntry[];
   profile: Profile | null;
 }
 
@@ -37,11 +46,14 @@ const EMPTY: AppData = {
   water: [],
   workouts: [],
   workoutPlans: [],
+  medications: [],
+  injections: [],
+  symptoms: [],
   profile: null,
 };
 
 /**
- * Läser mätningar, matlogg, vatten, träning och profil från IndexedDB. `data` är `null` tills första
+ * Läser mätningar, matlogg, vatten, träning, GLP-1 och profil från IndexedDB. `data` är `null` tills första
  * läsningen är klar. `reload` hämtar på nytt efter en ändring och returnerar
  * den nya datan.
  */
@@ -50,18 +62,44 @@ export function useAppData(): { data: AppData | null; reload: () => Promise<AppD
 
   const load = useCallback(async (): Promise<AppData> => {
     try {
-      const [weights, waist, steps, foodLog, water, workouts, workoutPlans, profile] =
-        await Promise.all([
-          listWeights(),
-          listWaist(),
-          listSteps(),
-          listFoodLog(),
-          listWater(),
-          listWorkouts(),
-          listWorkoutPlans(),
-          getProfile(),
-        ]);
-      return { weights, waist, steps, foodLog, water, workouts, workoutPlans, profile };
+      const [
+        weights,
+        waist,
+        steps,
+        foodLog,
+        water,
+        workouts,
+        workoutPlans,
+        medications,
+        injections,
+        symptoms,
+        profile,
+      ] = await Promise.all([
+        listWeights(),
+        listWaist(),
+        listSteps(),
+        listFoodLog(),
+        listWater(),
+        listWorkouts(),
+        listWorkoutPlans(),
+        listMedications(),
+        listInjections(),
+        listSymptoms(),
+        getProfile(),
+      ]);
+      return {
+        weights,
+        waist,
+        steps,
+        foodLog,
+        water,
+        workouts,
+        workoutPlans,
+        medications,
+        injections,
+        symptoms,
+        profile,
+      };
     } catch {
       return EMPTY;
     }

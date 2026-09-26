@@ -235,6 +235,76 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, 'Inställningar vattenmål');
     });
 
+    test('GLP-1: Logga, Översikt, Kalender och Framsteg saknar tillgänglighetsfel', async ({
+      page,
+    }) => {
+      await page.clock.setFixedTime(new Date('2026-09-16T12:00:00'));
+      await page.goto('./');
+      await seed(page, {
+        profile: { startDate: '2026-09-01', startWeightKg: 82, heightCm: 180, goalWeightKg: 75 },
+        settings: { features: { glp1: true, version: 3 } },
+        weights: [
+          { id: 'a', date: '2026-09-02', weightKg: 82, createdAt: 1 },
+          { id: 'b', date: '2026-09-15', weightKg: 81, createdAt: 2 },
+        ],
+        medications: [
+          {
+            id: 'm',
+            name: 'Ozempic',
+            frequency: 'vecka',
+            weekday: 2,
+            time: '08:00',
+            steps: [
+              { date: '2026-09-02', doseMg: 0.25 },
+              { date: '2026-09-09', doseMg: 0.5 },
+            ],
+            createdAt: 1,
+          },
+        ],
+        injections: [
+          {
+            id: 'i1',
+            date: '2026-09-02',
+            medicationId: 'm',
+            medicationName: 'Ozempic',
+            doseMg: 0.25,
+            site: 'buk-vanster',
+            createdAt: 2,
+          },
+          {
+            id: 'i2',
+            date: '2026-09-09',
+            medicationId: 'm',
+            medicationName: 'Ozempic',
+            doseMg: 0.5,
+            createdAt: 3,
+          },
+        ],
+        symptoms: [{ date: '2026-09-16', appetite: 3, sideEffects: ['Trötthet'], createdAt: 4 }],
+      });
+      await page.reload();
+      await expect(page.getByTestId('dose-day-banner')).toBeVisible();
+      await expect(page.getByTestId('next-dose')).toBeVisible();
+      await expectNoViolations(page, 'Översikt med dosdag');
+
+      await page.goto('./#/logga');
+      await openLog(page, 'glp1');
+      const sheet = page.getByRole('dialog');
+      await expectNoViolations(page, 'Logga dos');
+      await sheet.getByRole('button', { name: 'Mående', exact: true }).tap();
+      await expectNoViolations(page, 'Logga mående');
+      await sheet.getByRole('button', { name: 'Läkemedel', exact: true }).tap();
+      await sheet.getByRole('button', { name: 'Lägg till steg' }).tap();
+      await expectNoViolations(page, 'Läkemedel och dostrappa');
+
+      await page.goto('./#/kalender');
+      await expect(page.getByTestId('calendar-value-glp1')).toBeVisible();
+      await expectNoViolations(page, 'Kalender med doser');
+      await page.goto('./#/framsteg');
+      await expect(page.getByTestId('dose-changes')).toBeVisible();
+      await expectNoViolations(page, 'Framsteg med dosbyten');
+    });
+
     test('låsskärmen saknar tillgänglighetsfel', async ({ page }) => {
       await page.goto('./');
       await seed(page, { settings: { lock: { credentialId: 'AQID', createdAt: 1 } } });
