@@ -56,7 +56,7 @@ interface FoodLogFormProps {
   onSaved: (message: string, meal: MealSlot) => void;
   /** `ingredient`: mängden och enheterna den räknades med. */
   onAdd?: (value: UnitAmount, units: FoodUnit[]) => void;
-  /** Visar "Ta bort" (vid redigering). */
+  /** Visar "Ta bort posten" längst ner (vid redigering). */
   onDelete?: () => void;
   onCancel: () => void;
 }
@@ -361,11 +361,6 @@ export function FoodLogForm({
           Avbryt
         </button>
       </div>
-      {onDelete && (
-        <button type="button" className="button button-danger" onClick={onDelete}>
-          Ta bort
-        </button>
-      )}
       <details className="plan-details" data-testid="food-units">
         <summary>Enheter för {food.name}</summary>
         <UnitList
@@ -390,6 +385,15 @@ export function FoodLogForm({
           }}
         />
       </details>
+      {onDelete && (
+        <button
+          type="button"
+          className="button button-ghost button-small button-danger-text"
+          onClick={onDelete}
+        >
+          Ta bort posten
+        </button>
+      )}
     </form>
   );
 }

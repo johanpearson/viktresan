@@ -183,9 +183,7 @@ test('analys av måltiden och "Fråga AI" med kopiera, dela och öppna', async (
   await page.getByRole('button', { name: 'Fler val för frukost' }).tap();
   await page.getByRole('button', { name: 'Analysera' }).tap();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { level: 2 })).toHaveText(
-    `Analys av frukost ${dayMonth(isoDaysFromToday(0))}`,
-  );
+  await expect(dialog).toHaveAccessibleName(`Analys av frukost ${dayMonth(isoDaysFromToday(0))}`);
   const analysis = dialog.getByTestId('analysis');
   // 60 g havregryn: 6 g fiber, 2,4 mg järn; 200 g yoghurt: 0,2 µg vitamin D.
   await expect(analysis.getByTestId('nutrients-ovrigt')).toContainText('Fiber6 g');

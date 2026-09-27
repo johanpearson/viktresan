@@ -10,6 +10,8 @@ import {
   type NutrientRow,
 } from '../lib/mealAnalysis.ts';
 import { suggestSwaps, swapCandidates } from '../lib/swaps.ts';
+import { Card } from './Card.tsx';
+import { ListRow } from './ListRow.tsx';
 
 interface MealAnalysisViewProps {
   entries: readonly FoodLogEntry[];
@@ -77,26 +79,30 @@ export function MealAnalysisView({
 
   return (
     <div className="analysis" data-testid="analysis">
-      <section aria-labelledby="analysis-key-title">
-        <h3 className="analysis-title" id="analysis-key-title">
-          Nyckeltal
-        </h3>
-        <dl className="kv kv-compact" data-testid="analysis-key-figures">
-          <dt>Andel av dagens kalorimål</dt>
-          <dd>{analysis.shareOfTarget === null ? 'Inget mål' : percent(analysis.shareOfTarget)}</dd>
-          <dt>Protein per 100 kcal</dt>
-          <dd>
-            {analysis.proteinPer100Kcal === null
-              ? '–'
-              : `${spaces(decimalFormat.format(analysis.proteinPer100Kcal))} g`}
-          </dd>
-          <dt>Fiber per 1 000 kcal</dt>
-          <dd>
-            {analysis.fiberPer1000Kcal === null
-              ? 'Okänt'
-              : `${spaces(decimalFormat.format(analysis.fiberPer1000Kcal))} g (rekommendation ca ${String(FIBER_PER_1000_KCAL_GOAL)} g)`}
-          </dd>
-        </dl>
+      <Card title="Nyckeltal">
+        <ul className="list" data-testid="analysis-key-figures">
+          <ListRow
+            primary="Andel av dagens kalorimål"
+            value={analysis.shareOfTarget === null ? 'Inget mål' : percent(analysis.shareOfTarget)}
+          />
+          <ListRow
+            primary="Protein per 100 kcal"
+            value={
+              analysis.proteinPer100Kcal === null
+                ? '–'
+                : `${spaces(decimalFormat.format(analysis.proteinPer100Kcal))} g`
+            }
+          />
+          <ListRow
+            primary="Fiber per 1 000 kcal"
+            secondary={`Rekommendation ca ${String(FIBER_PER_1000_KCAL_GOAL)} g`}
+            value={
+              analysis.fiberPer1000Kcal === null
+                ? 'Okänt'
+                : `${spaces(decimalFormat.format(analysis.fiberPer1000Kcal))} g`
+            }
+          />
+        </ul>
         {notes.length > 0 && (
           <ul className="analysis-notes">
             {notes.map((n) => (
@@ -104,12 +110,9 @@ export function MealAnalysisView({
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
-      <section aria-labelledby="analysis-swaps-title">
-        <h3 className="analysis-title" id="analysis-swaps-title">
-          Bytesförslag
-        </h3>
+      <Card title="Bytesförslag">
         {swaps.length === 0 ? (
           <p className="muted">
             Inga tydligt bättre byten hittades för det som bidrar mest med energi.
@@ -124,12 +127,9 @@ export function MealAnalysisView({
         <p className="form-note muted">
           Ungefärlig effekt för samma mängd, inom samma sorts livsmedel.
         </p>
-      </section>
+      </Card>
 
-      <section aria-labelledby="analysis-nutrients-title">
-        <h3 className="analysis-title" id="analysis-nutrients-title">
-          Näringsinnehåll
-        </h3>
+      <Card title="Näringsinnehåll">
         {GROUPS.map((group) => {
           const rows = analysis.rows.filter((r) => r.group === group.id);
           if (rows.length === 0) return null;
@@ -187,7 +187,7 @@ export function MealAnalysisView({
           Mål = ditt dagsmål för kcal och protein. RI = referensintag för en genomsnittlig vuxen
           (EU); fiber enligt de nordiska näringsrekommendationerna (NNR).
         </p>
-      </section>
+      </Card>
 
       <button type="button" className="button" onClick={onAskAi}>
         Fråga AI

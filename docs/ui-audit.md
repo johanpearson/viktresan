@@ -10,7 +10,9 @@ PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.p
 (`ui-audit/fore-*-kalender.png`, `ui-audit/fore-*-kalender-vecka.png`), Mat → Egna och Mat → Historik före PR #23
 (`ui-audit/fore-*-mat-egna.png`, `ui-audit/fore-*-mat-historik-7dagar.png`), Framsteg → Veckor och Logga före PR #24
 (`ui-audit/fore-*-framsteg-veckor.png`, `ui-audit/fore-*-logga.png`), Framsteg → Bilder och Milstolpar före PR #25
-(`ui-audit/fore-*-framsteg-bilder.png`, `ui-audit/fore-*-framsteg-bilder-galleri.png`, `ui-audit/fore-*-framsteg-milstolpar.png`).
+(`ui-audit/fore-*-framsteg-bilder.png`, `ui-audit/fore-*-framsteg-bilder-galleri.png`, `ui-audit/fore-*-framsteg-milstolpar.png`)
+och Mats redigera-, analys- och sökpanel före PR #26 (`ui-audit/fore-*-sheet-mat-redigera.png`,
+`ui-audit/fore-*-sheet-mat-analys.png`, `ui-audit/fore-*-sheet-mat-sok.png`).
 
 **Referens:** Mat → Dag (omgjord i PR #16/#17): 16 px sidmarginal, 8 px mellan kort, 12–16 px inre
 marginal, en rad per post med högerställda tabellsiffror, sekundärtext 13 px, inga knappar i listorna
@@ -68,9 +70,9 @@ vid jämförelse, **Låg** = putsning.
 | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Medel | ~~**Egna**: sektionerna är kort med en fylld primärknapp var ("Ny måltid", "Nytt livsmedel") och "Redigera"/"Ta bort"-knappar per livsmedel – följer inte Dag-flikens mönster.~~ ✅ PR #23                                                                                                                       |
 | Medel | **Historik**: tidsfilter (1 mån/3 mån/Allt) är ett stort segment (48 px) direkt under sidans lilla segment – två segmentkontroller i olika storlek ovanpå varandra. Intagsgrafen är teal i stället för Mats orange. ✅ PR #18 (orange), PR #21 (tidsfiltret är chips), PR #23 (snitt som `StatBar`, tät tabell). |
-| Medel | Redigera-panelen: kort-i-kort, och "Ta bort" är en helbreddsknapp under Spara/Avbryt (tre knappar). Ta bort bör ligga längst ner som textknapp i fel-färg, eller bara via svep.                                                                                                                                  |
-| Låg   | Analyspanelen: nyckeltalen är staplade etikett/värde-par, de skulle vara ListRow med högerställt värde.                                                                                                                                                                                                          |
-| Låg   | Sök-sheeten saknar ikon i sökfältet (Dag-fliken har en).                                                                                                                                                                                                                                                         |
+| Medel | ~~Redigera-panelen: kort-i-kort, och "Ta bort" är en helbreddsknapp under Spara/Avbryt (tre knappar). Ta bort bör ligga längst ner som textknapp i fel-färg, eller bara via svep.~~ ✅ PR #26                                                                                                                    |
+| Låg   | ~~Analyspanelen: nyckeltalen är staplade etikett/värde-par, de skulle vara ListRow med högerställt värde.~~ ✅ PR #26                                                                                                                                                                                            |
+| Låg   | ~~Sök-sheeten saknar ikon i sökfältet (Dag-fliken har en).~~ ✅ PR #26                                                                                                                                                                                                                                           |
 
 ## Kalender
 
@@ -253,6 +255,24 @@ vid jämförelse, **Låg** = putsning.
 - Nytt visuellt test `framsteg-bilder-galleri` (två tillfällen, bilder ritade med canvas i testet).
 - Designsystemet: mönstren "Galleri (Framsteg → Bilder)" och "Milstolpar" i `DESIGN.md`.
 
+## Åtgärdat: Mats redigera-, analys- och sökpanel (PR #26)
+
+- **Redigera post**: "Ta bort" är inte längre en helbreddsknapp med ram under Spara ändringar/Avbryt, utan textknappen
+  "Ta bort posten" i fel-färg längst ner i panelen (`button-ghost button-small button-danger-text`, som "Ta bort
+  mätningen" i Logga). Spara ändringar är den enda fyllda knappen; borttagningen ger samma `Toast` med Ångra som svepet.
+- **Analys**: sektionerna Nyckeltal, Bytesförslag och Näringsinnehåll är `Card` (i panelen utan ram, med linje emellan)
+  i stället för egna `h3` och `.analysis-title`. Nyckeltalen är en `ListRow` per tal med värdet högerställt i
+  tabellsiffror; fiberns rekommendation ("Rekommendation ca 12 g") är sekundärtext under etiketten i stället för att
+  stå i värdet. Värdena står i en högerkolumn, som i tabellen under, i stället
+  för på en egen rad under etiketten. `dl.kv` används inte längre i analysen.
+- **Sök-sheeten**: förstoringsglaset (`search-icon`) står i sökfältet, som i "Sök och logga mat" på Dag-fliken.
+  `.search-field` placerar ikonen och ger fältet vänstermarginal – ingen ny komponent.
+- **Rader i helskärmspaneler** (sök, analys, Fråga AI, veckosummeringen) har panelens bakgrund (`--bg`) i stället för
+  `--surface`, så att en `ListRow` inte blir ett ljust band (`.sheet-full .list-row-content`).
+- Inga nya visuella tester behövdes: `sheet-mat-redigera`, `sheet-mat-analys` och `sheet-mat-sok` fanns redan.
+- Designsystemet: "Formulär i en panel" och "Sökfält" i `DESIGN.md`.
+- **Kvar** (se nedan): radioknapparna i Inställningar (11) och jämförelsen/helskärmsvyn i Bilder (12).
+
 ## Rekommenderad ordning för resten av vyerna
 
 Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla vyer är genomgångna; kvar är paneler och
@@ -266,10 +286,9 @@ kontroller från tabellerna ovan (9–12). Ta nästa punkt utan ✅ (eller de tv
 6. ~~**Framsteg → Veckor**~~ ✅ PR #24.
 7. ~~**Logga** (rutnätet)~~ ✅ PR #24.
 8. ~~**Framsteg → Bilder och Milstolpar**~~ ✅ PR #25.
-9. **Mats redigera- och analyspanel** (nästa; Medel/Låg, se Mat): "Ta bort" som destruktiv textknapp längst ner i
-   stället för en helbreddsknapp under Spara/Avbryt; nyckeltalen i analysen som `ListRow` med värdet till höger.
-10. **Sökikon i Mats sök-sheet** (Låg, se Mat) – liten, passar ihop med 9.
-11. **Radioknappar i Inställningar** (Medel, se Inställningar): egna kontroller som switcharna (`SegmentedControl` eller
+9. ~~**Mats redigera- och analyspanel**~~ ✅ PR #26.
+10. ~~**Sökikon i Mats sök-sheet**~~ ✅ PR #26.
+11. **Radioknappar i Inställningar** (nästa; Medel, se Inställningar): egna kontroller som switcharna (`SegmentedControl` eller
     valrader) i stället för webbläsarens standard.
 12. **Jämförelsen och helskärmsvyn i Bilder** (Medel, se Framsteg): `SessionCompare` har egna knappar i kortets rubrik
     och `PhotoViewer` tar bort med bekräftelse i två steg – bör följa panelmönstret (Ta bort direkt + `Toast` med Ångra).
