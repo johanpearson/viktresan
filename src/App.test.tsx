@@ -140,7 +140,7 @@ describe('App', () => {
     );
     goTo('#/bilder');
     expect(screen.getByRole('button', { name: 'Bilder' })).toHaveAttribute('aria-pressed', 'true');
-    expect(await screen.findByRole('heading', { name: 'Fototillfällen' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Nytt fototillfälle' })).toBeInTheDocument();
   });
 
   it('Logga öppnar formuläret i en panel', async () => {
@@ -197,8 +197,15 @@ describe('funktionsbrytare', () => {
 
     goTo('#/framsteg/bilder');
     // Bilder läser sin data asynkront; vänta in Historik eller Bilder.
-    await screen.findAllByRole('heading', { level: 2 });
-    const bilderTab = screen.queryByRole('heading', { name: 'Fototillfällen' }) !== null;
+    // (Bilder utan bilder är ett tomt läge utan rubrik – knappen finns i båda lägena.)
+    await waitFor(() => {
+      expect(screen.queryByTestId('skeleton')).toBeNull();
+      expect(
+        screen.queryAllByRole('heading', { level: 2 }).length +
+          screen.queryAllByRole('button', { name: 'Nytt fototillfälle' }).length,
+      ).toBeGreaterThan(0);
+    });
+    const bilderTab = screen.queryByRole('button', { name: 'Nytt fototillfälle' }) !== null;
 
     return {
       today,

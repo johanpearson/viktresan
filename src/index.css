@@ -789,14 +789,10 @@ body {
   white-space: nowrap;
 }
 
-.gallery-hint {
-  margin: 0 0 12px;
-}
-
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1051,61 +1047,23 @@ body {
   margin-top: 16px;
 }
 
-/* Fototillfällen */
-.session-new {
-  margin-top: 12px;
-}
-
+/* Fototillfällen: en ListRow per tillfälle med bilderna i ett rutnät under (samma storlek som per vinkel). */
 .gallery-views {
-  margin-bottom: 12px;
-}
-
-.session-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.session-row + .session-row {
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-.session-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin-bottom: 8px;
-}
-
-.session-date {
-  margin: 0;
-  font-size: var(--text-md);
-}
-
-.session-weight {
-  flex: 1;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.session-note {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: var(--text-sm);
-  overflow-wrap: anywhere;
+  margin-bottom: var(--space-3);
 }
 
 .session-photos {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
   margin: 0;
-  padding: 0;
+  padding: 0 var(--space-4) var(--space-3);
   list-style: none;
+}
+
+/* Bilder per vinkel under en lista (raden "Jämför tillfällen"). */
+.card > .list + .photo-grid {
+  margin-top: var(--space-4);
 }
 
 .photo-slot {
@@ -2944,55 +2902,36 @@ a.button {
   }
 }
 
-/* Framsteg → Milstolpar */
-.milestone-list {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.milestone-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
+/* Framsteg → Milstolpar: märket är ListRows `leading`. */
 .milestone-badge {
-  flex: none;
   display: grid;
   place-items: center;
-  min-width: 52px;
-  height: 52px;
-  padding: 0 6px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--accent-contrast);
-  font-weight: 800;
-  font-size: var(--text-sm);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  white-space: nowrap;
 }
 
+/* Kommande: tonat märke (ingen streckad ram – den betyder tomt läge). */
 .milestone-badge-upcoming {
-  border: 2px dashed var(--border);
-  background: transparent;
-  color: var(--muted);
+  background: var(--track);
+  color: var(--text);
 }
 
-.milestone-body {
-  flex: 1;
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
+/* Stapeln i raden ligger där sekundärtexten annars står; "kvar" har en minsta bredd så att
+   staplarna slutar på samma ställe. */
+.milestone-progress {
+  margin-top: var(--space-2);
 }
 
-.milestone-title,
-.milestone-meta {
-  margin: 0;
-}
-
-.milestone-title {
-  font-weight: 600;
+.milestone-remaining {
+  display: inline-block;
+  min-width: 6.5em;
 }
 
 /* Mat → Dag: kompakt layout */

@@ -65,7 +65,7 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
   const second = await context.newPage();
   await second.goto('./#/framsteg/bilder');
   await expect(second.getByRole('heading', { level: 1 })).toHaveText('Framsteg');
-  await expect(second.getByRole('heading', { name: 'Fototillfällen' })).toBeVisible();
+  await expect(second.getByRole('button', { name: 'Nytt fototillfälle' })).toBeVisible();
   await second.goto('./');
   await expect(second.getByTestId('current-weight')).toHaveText('88,5 kg');
   // Ikoner och manifest finns i cachen.
