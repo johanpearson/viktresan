@@ -34,6 +34,8 @@ interface FoodDayProps {
   proteinGoalG: number | null;
   /** Öppna sök-sheeten direkt (genvägen "Logga mat", `#/mat/logga`). */
   initialPicker?: boolean;
+  /** Slå upp streckkoden i sök-sheeten direkt (`#/mat/ean/<ean>`, från Tillskott). */
+  initialEan?: string | undefined;
   onPickerClosed?: () => void;
   reloadLog: () => Promise<unknown>;
   /** Det som kan tas med i "Fråga AI" (profil, mål, GLP-1 …), `null` tills datan är läst. */
@@ -52,6 +54,8 @@ interface Picker {
   meal: MealSlot | null;
   scan: boolean;
   focus: boolean;
+  /** Streckkod att slå upp direkt (länk från Tillskott). */
+  ean?: string;
 }
 
 interface ToastState {
@@ -84,6 +88,7 @@ export function FoodDay({
   targetKcal,
   proteinGoalG,
   initialPicker = false,
+  initialEan,
   onPickerClosed,
   reloadLog,
   aiContext = null,
@@ -92,7 +97,11 @@ export function FoodDay({
   const today = todayIso();
   const [date, setDate] = useState(today);
   const [picker, setPicker] = useState<Picker | null>(() =>
-    initialPicker ? { meal: null, scan: false, focus: true } : null,
+    initialEan
+      ? { meal: null, scan: false, focus: false, ean: initialEan }
+      : initialPicker
+        ? { meal: null, scan: false, focus: true }
+        : null,
   );
   const [editing, setEditing] = useState<FoodLogEntry | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -273,6 +282,7 @@ export function FoodDay({
           source={source}
           scan={picker.scan}
           focusSearch={picker.focus}
+          ean={picker.ean}
           mode={{
             kind: 'log',
             date,

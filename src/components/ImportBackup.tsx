@@ -222,6 +222,14 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
           )}
         />
         <ListRow
+          primary="Tillskott"
+          secondary="Tillskott och dagar med tagna doser"
+          value={value(
+            `${String(summary.supplements)} + ${String(summary.supplementLog)}`,
+            'preview-supplements',
+          )}
+        />
+        <ListRow
           primary="Bilder"
           value={value(
             `${String(summary.photos)} (${formatBytes(summary.photoBytes)})`,

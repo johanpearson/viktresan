@@ -90,6 +90,88 @@ for (const colorScheme of ['light', 'dark'] as const) {
       }
     });
 
+    test('tillskott, AI-import, näring och UL-varning saknar tillgänglighetsfel', async ({
+      page,
+    }) => {
+      await page.goto('./');
+      const dose = [{ key: 'vitaminD', amount: 4000, unit: 'IE' }];
+      await seed(page, {
+        profile: {
+          startDate: isoDaysFromToday(-30),
+          startWeightKg: 90,
+          heightCm: 180,
+          goalWeightKg: 80,
+        },
+        settings: {
+          features: {
+            steg: true,
+            midja: true,
+            mat: true,
+            vatten: true,
+            traning: true,
+            glp1: false,
+            tillskott: true,
+            bilder: true,
+            version: 4,
+          },
+        },
+        supplements: [
+          {
+            id: 's1',
+            name: 'D-vitamin forte',
+            form: 'tablett',
+            amountPerDose: 1,
+            nutrients: dose,
+            schedule: 'dagligen',
+            dosesPerDay: 2,
+            createdAt: 1,
+          },
+          {
+            id: 's2',
+            name: 'Järn',
+            form: 'tablett',
+            amountPerDose: 1,
+            nutrients: [{ key: 'iron', amount: 20, unit: 'mg' }],
+            schedule: 'vid-behov',
+            dosesPerDay: 1,
+            createdAt: 1,
+          },
+        ],
+        supplementLog: [
+          {
+            id: `s1:${isoDaysFromToday(0)}`,
+            date: isoDaysFromToday(0),
+            supplementId: 's1',
+            name: 'D-vitamin forte',
+            doses: 2,
+            nutrients: dose,
+            createdAt: 2,
+          },
+        ],
+      });
+      await page.goto('./');
+      await page.reload();
+      await expect(page.getByTestId('ul-warning')).toBeVisible();
+      await expect(page.getByTestId('supplements-today')).toBeVisible();
+      await expectNoViolations(page, 'Översikt med tillskott och varning');
+      await page.goto('./#/logga/tillskott');
+      const sheet = page.getByRole('dialog', { name: 'Tillskott' });
+      await expect(sheet.getByTestId('supplement').first()).toBeVisible();
+      await expectNoViolations(page, 'Logga tillskott');
+      await sheet.getByTestId('supplement').first().tap();
+      await expect(sheet.getByTestId('supplement-form')).toBeVisible();
+      await expectNoViolations(page, 'Tillskott formulär');
+      await sheet.getByRole('button', { name: 'Avbryt' }).tap();
+      await sheet.getByRole('button', { name: /^Lägg in med AI från etikett/ }).tap();
+      await sheet.getByLabel('AI-tjänstens svar (JSON)').fill('inte json');
+      await sheet.getByRole('button', { name: 'Granska svaret' }).tap();
+      await expect(sheet.getByTestId('ai-label-error')).toBeVisible();
+      await expectNoViolations(page, 'Tillskott AI-import');
+      await page.goto('./#/mat/naring');
+      await expect(page.getByTestId('nutrition')).toBeVisible();
+      await expectNoViolations(page, 'Mat näring med tillskott');
+    });
+
     test('sidor med data saknar tillgänglighetsfel', async ({ page }) => {
       await seedData(page);
       for (const [label, path] of ROUTES) {
@@ -132,6 +214,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Avbryt' }).tap();
       await picker.getByRole('button', { name: 'Skanna streckkod' }).tap();
       await expectNoViolations(page, 'Mat skanna');
+      // Skannern är en egen modal ovanpå sök-sheeten: stäng den först.
+      await page.getByTestId('scanner').getByRole('button', { name: 'Stäng' }).tap();
+      await expect(page.getByTestId('scanner')).toHaveCount(0);
       await picker.getByRole('button', { name: 'Stäng', exact: true }).tap();
       await page.getByTestId('food-entry').first().getByRole('button').first().tap();
       await expect(page.getByRole('dialog', { name: 'Redigera post' })).toBeVisible();
@@ -147,6 +232,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Historik', exact: true }).tap();
       await expect(page.getByTestId('intake-table')).toBeVisible();
       await expectNoViolations(page, 'Mat historik');
+      await page.getByRole('button', { name: 'Näring', exact: true }).tap();
+      await expect(page.getByTestId('nutrition')).toBeVisible();
+      await expectNoViolations(page, 'Mat näring');
       // Inställningar med profilens nya fält ifyllda.
       await page.goto('./#/installningar/profil');
       await expectNoViolations(page, 'Inställningar profil');

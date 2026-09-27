@@ -6,6 +6,7 @@ import {
   parsePhotoFields,
   parseProfile,
   parseStepsFields,
+  parseSupplementFields,
   parseSymptomFields,
   parseWaistFields,
   parseWeightFields,
@@ -292,5 +293,59 @@ describe('parseSymptomFields', () => {
     expect(
       parseSymptomFields({ date: '2026-09-21', appetite: '6', sideEffects: [], other: '' }).ok,
     ).toBe(false);
+  });
+});
+
+describe('parseSupplementFields', () => {
+  const fields = {
+    name: ' D-vitamin ',
+    form: 'tablett' as const,
+    amountPerDose: '1',
+    nutrients: [{ key: 'vitaminD' as const, amount: '1000', unit: 'IE' as const }],
+    schedule: 'veckodagar' as const,
+    weekdays: [4, 0, 4],
+    dosesPerDay: '1',
+    ean: '7351 3537',
+  };
+
+  it('tolkar ett giltigt tillskott', () => {
+    expect(parseSupplementFields(fields)).toEqual({
+      ok: true,
+      value: {
+        name: 'D-vitamin',
+        form: 'tablett',
+        amountPerDose: 1,
+        nutrients: [{ key: 'vitaminD', amount: 1000, unit: 'IE' }],
+        schedule: 'veckodagar',
+        weekdays: [0, 4],
+        dosesPerDay: 1,
+        ean: '73513537',
+      },
+    });
+  });
+
+  it('avvisar saknade och felaktiga värden', () => {
+    expect(parseSupplementFields({ ...fields, name: '' }).ok).toBe(false);
+    expect(parseSupplementFields({ ...fields, amountPerDose: '0' }).ok).toBe(false);
+    expect(parseSupplementFields({ ...fields, weekdays: [] })).toEqual({
+      ok: false,
+      error: 'Välj minst en veckodag.',
+    });
+    expect(parseSupplementFields({ ...fields, dosesPerDay: '7' }).ok).toBe(false);
+    expect(parseSupplementFields({ ...fields, ean: '1234' }).ok).toBe(false);
+    expect(
+      parseSupplementFields({
+        ...fields,
+        nutrients: [{ key: 'zinc', amount: '5', unit: 'IE' }],
+      }),
+    ).toEqual({ ok: false, error: 'Fel enhet för Zink.' });
+    expect(
+      parseSupplementFields({ ...fields, nutrients: [{ key: 'zinc', amount: '', unit: 'mg' }] }),
+    ).toEqual({ ok: false, error: 'Ange mängd för Zink (större än 0).' });
+  });
+
+  it('dagligen sparar inga veckodagar', () => {
+    const result = parseSupplementFields({ ...fields, schedule: 'dagligen' });
+    expect(result.ok && result.value.weekdays).toBeUndefined();
   });
 });

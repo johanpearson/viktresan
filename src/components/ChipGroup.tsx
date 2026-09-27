@@ -19,6 +19,8 @@ interface ChipGroupProps<T extends string> {
   onToggle: (id: T) => void;
   /** Lika breda chips i ett rutnät med så många kolumner (veckodagar = 7). Annars radbryts de. */
   columns?: number;
+  /** Etiketten bara för skärmläsare (när en kortrubrik redan säger vad valen gäller). */
+  hideLabel?: boolean;
   className?: string;
 }
 
@@ -32,6 +34,7 @@ export function ChipGroup<T extends string>({
   selected,
   onToggle,
   columns,
+  hideLabel = false,
   className,
 }: ChipGroupProps<T>) {
   const labelId = useId();
@@ -40,7 +43,7 @@ export function ChipGroup<T extends string>({
     .join(' ');
   return (
     <div className="control-field">
-      <span className="field-label" id={labelId}>
+      <span className={hideLabel ? 'visually-hidden' : 'field-label'} id={labelId}>
         {label}
       </span>
       {/* React-style sätts via CSSOM och omfattas inte av CSP:ns style-src. */}

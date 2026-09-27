@@ -2,7 +2,10 @@
  * Streckkoder: validering av EAN/GTIN och uppslag i Open Food Facts.
  * Endast streckkoden skickas till Open Food Facts – inga andra uppgifter.
  */
+import type { NutrientKey } from '../data/nutrients.ts';
+import type { SupplementNutrient } from '../db/db.ts';
 import type { FoodItem } from './foodSearch.ts';
+import { convertAmount, nutrientInfo } from './nutrientUnits.ts';
 import { PACKAGE_UNIT, parsePackage, parseServing, type BaseUnit, type FoodUnit } from './units.ts';
 
 export const OFF_ORIGIN = 'https://world.openfoodfacts.org';
@@ -74,13 +77,7 @@ export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
   const kj = num(n['energy-kj_100g']) ?? num(n.energy_100g);
   const kcal = num(n['energy-kcal_100g']) ?? (kj === null ? null : kj / 4.184);
   if (kcal === null) return null;
-  const nameSv = typeof p.product_name_sv === 'string' ? p.product_name_sv.trim() : '';
-  const name = nameSv || (typeof p.product_name === 'string' ? p.product_name.trim() : '');
-  const brand = typeof p.brands === 'string' ? (p.brands.split(',')[0]?.trim() ?? '') : '';
-  const label = [name || `Produkt ${ean}`, brand && !name.includes(brand) ? `(${brand})` : '']
-    .filter(Boolean)
-    .join(' ')
-    .slice(0, 120);
+  const label = productName(ean, p);
   const item: FoodItem = {
     id: `off:${ean}`,
     name: label,
@@ -107,14 +104,16 @@ export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
   return item;
 }
 
-export type OffResult =
-  { kind: 'found'; food: FoodItem } | { kind: 'not-found' } | { kind: 'error'; message: string };
+export type OffFetch =
+  | { kind: 'found'; body: Record<string, unknown> }
+  | { kind: 'not-found' }
+  | { kind: 'error'; message: string };
 
-/** Slår upp en streckkod i Open Food Facts. `fetchFn` är injicerbar för tester. */
-export async function lookupOpenFoodFacts(
+/** Hämtar produkten ur Open Food Facts. Bara streckkoden skickas. `fetchFn` är injicerbar. */
+export async function fetchOffProduct(
   ean: string,
   fetchFn: typeof fetch = fetch,
-): Promise<OffResult> {
+): Promise<OffFetch> {
   let res: Response;
   try {
     res = await fetchFn(offProductUrl(ean), { headers: { Accept: 'application/json' } });
@@ -129,6 +128,88 @@ export async function lookupOpenFoodFacts(
   } catch {
     return { kind: 'error', message: 'Open Food Facts svarade inte som väntat.' };
   }
-  const food = parseOffProduct(ean, body);
+  if (!isRecord(body) || body.status !== 1 || !isRecord(body.product)) return { kind: 'not-found' };
+  return { kind: 'found', body };
+}
+
+export type OffResult =
+  { kind: 'found'; food: FoodItem } | { kind: 'not-found' } | { kind: 'error'; message: string };
+
+/** Slår upp en streckkod i Open Food Facts som livsmedel. `fetchFn` är injicerbar för tester. */
+export async function lookupOpenFoodFacts(
+  ean: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<OffResult> {
+  const result = await fetchOffProduct(ean, fetchFn);
+  if (result.kind !== 'found') return result;
+  const food = parseOffProduct(ean, result.body);
   return food ? { kind: 'found', food } : { kind: 'not-found' };
+}
+
+/** Produktens sida hos Open Food Facts – där man kan lägga till eller komplettera den. */
+export function offContributeUrl(ean: string): string {
+  return `${OFF_ORIGIN}/product/${ean}`;
+}
+
+/** Open Food Facts namn på näringsämnena (värden i gram per portion i `<namn>_serving`). */
+const OFF_NUTRIENTS: readonly { key: NutrientKey; names: readonly string[] }[] = [
+  { key: 'vitaminA', names: ['vitamin-a'] },
+  { key: 'vitaminD', names: ['vitamin-d'] },
+  { key: 'vitaminE', names: ['vitamin-e'] },
+  { key: 'vitaminK', names: ['vitamin-k', 'phylloquinone'] },
+  { key: 'thiamin', names: ['vitamin-b1'] },
+  { key: 'riboflavin', names: ['vitamin-b2'] },
+  { key: 'niacin', names: ['vitamin-pp', 'vitamin-b3'] },
+  { key: 'vitaminB6', names: ['vitamin-b6'] },
+  { key: 'folate', names: ['vitamin-b9', 'folates', 'folic-acid'] },
+  { key: 'vitaminB12', names: ['vitamin-b12'] },
+  { key: 'vitaminC', names: ['vitamin-c'] },
+  { key: 'calcium', names: ['calcium'] },
+  { key: 'iron', names: ['iron'] },
+  { key: 'magnesium', names: ['magnesium'] },
+  { key: 'potassium', names: ['potassium'] },
+  { key: 'phosphorus', names: ['phosphorus'] },
+  { key: 'zinc', names: ['zinc'] },
+  { key: 'selenium', names: ['selenium'] },
+  { key: 'iodine', names: ['iodine'] },
+];
+
+/** Förifyllning av ett tillskott ur Open Food Facts. */
+export interface OffSupplement {
+  name: string;
+  /** Näringsämnen per portion (= dos), i näringsämnets egen enhet. Tom om de saknas. */
+  nutrients: SupplementNutrient[];
+}
+
+function productName(ean: string, p: Record<string, unknown>): string {
+  const nameSv = typeof p.product_name_sv === 'string' ? p.product_name_sv.trim() : '';
+  const name = nameSv || (typeof p.product_name === 'string' ? p.product_name.trim() : '');
+  const brand = typeof p.brands === 'string' ? (p.brands.split(',')[0]?.trim() ?? '') : '';
+  return [name || `Produkt ${ean}`, brand && !name.includes(brand) ? `(${brand})` : '']
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 120);
+}
+
+/**
+ * Tolkar Open Food Facts svar som ett tillskott: namnet och vitaminer/mineraler per
+ * portion (`<namn>_serving`, lagrat i gram). Värden som saknas eller inte går att tolka
+ * hoppas över. `null` om produkten saknas.
+ */
+export function parseOffSupplement(ean: string, body: unknown): OffSupplement | null {
+  if (!isRecord(body) || body.status !== 1 || !isRecord(body.product)) return null;
+  const p = body.product;
+  const n = isRecord(p.nutriments) ? p.nutriments : {};
+  const nutrients: SupplementNutrient[] = [];
+  for (const { key, names } of OFF_NUTRIENTS) {
+    for (const name of names) {
+      const grams = num(n[`${name}_serving`]);
+      if (grams === null || grams <= 0) continue;
+      const amount = convertAmount(key, grams, 'g', nutrientInfo(key).unit);
+      if (amount === null) continue;
+      nutrients.push({ key, amount, unit: nutrientInfo(key).unit });
+      break;
+    }
+  }
+  return { name: productName(ean, p), nutrients };
 }

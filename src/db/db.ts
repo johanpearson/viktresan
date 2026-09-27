@@ -5,6 +5,7 @@ import {
   type IDBPTransaction,
   type StoreNames,
 } from 'idb';
+import type { NutrientKey } from '../data/nutrients.ts';
 import type { ActivityLevel, Sex } from '../lib/energy.ts';
 import type { DoseFrequency, InjectionSite } from '../lib/glp1.ts';
 import type { MealSlot, Nutrients } from '../lib/nutrition.ts';
@@ -15,11 +16,12 @@ import {
   type PhotoAngle,
   type ProfileSide,
 } from '../lib/photoSessions.ts';
+import type { AmountUnit } from '../lib/nutrientUnits.ts';
 import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 9;
+export const DB_VERSION = 10;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -151,6 +153,8 @@ export interface SavedMeal {
   id: string;
   name: string;
   items: MealIngredient[];
+  /** Valfri streckkod (t.ex. en färdig matlåda) – skanning hittar måltiden lokalt. */
+  ean?: string;
   createdAt: number;
   updatedAt?: number;
 }
@@ -334,6 +338,56 @@ export interface LegacyPhotoEntry extends Omit<PhotoEntry, 'sessionId' | 'angle'
   weightKg?: number;
 }
 
+/** Tillskottets form – det man tar en eller flera av per dos. */
+export type SupplementForm = 'tablett' | 'kapsel' | 'droppe' | 'ml' | 'brustablett';
+
+/** När tillskottet tas: varje dag, vissa veckodagar eller vid behov. */
+export type SupplementSchedule = 'dagligen' | 'veckodagar' | 'vid-behov';
+
+/**
+ * Ett näringsämne i en dos, i den enhet användaren angav (t.ex. D-vitamin i IE).
+ * Summeringen räknar om till näringsämnets egen enhet.
+ */
+export interface SupplementNutrient {
+  key: NutrientKey;
+  amount: number;
+  unit: AmountUnit;
+}
+
+/** Ett kosttillskott (sedan v10). Näringsämnena gäller en dos. */
+export interface Supplement {
+  id: string;
+  name: string;
+  form: SupplementForm;
+  /** Antal tabletter, droppar, ml … per dos. */
+  amountPerDose: number;
+  nutrients: SupplementNutrient[];
+  schedule: SupplementSchedule;
+  /** Veckodagar när `schedule` är `veckodagar`: 0 = måndag … 6 = söndag. */
+  weekdays?: number[];
+  /** Doser per dag. */
+  dosesPerDay: number;
+  ean?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * Tagna doser av ett tillskott en dag (sedan v10). Id = `<tillskott>:<datum>`, en post
+ * per tillskott och dag. Namn och näringsämnen per dos kopieras in så att historiken
+ * inte ändras om tillskottet ändras eller tas bort.
+ */
+export interface SupplementIntake {
+  id: string;
+  date: string;
+  supplementId: string;
+  name: string;
+  doses: number;
+  nutrients: SupplementNutrient[];
+  createdAt: number;
+  updatedAt?: number;
+}
+
 export interface ViktresanDB extends DBSchema {
   /** Viktmätningar. I v1–v2 innehöll storen även midja och steg (`LegacyMeasurement`). */
   weights: {
@@ -436,6 +490,18 @@ export interface ViktresanDB extends DBSchema {
   milestones: {
     key: string;
     value: MilestoneRecord;
+  };
+  /** Sedan v10. Kosttillskott. */
+  supplements: {
+    key: string;
+    value: Supplement;
+    indexes: { 'by-ean': string };
+  };
+  /** Sedan v10. Tagna tillskott, id = `<tillskott>:<datum>`. */
+  supplementLog: {
+    key: string;
+    value: SupplementIntake;
+    indexes: { 'by-date': string };
   };
 }
 
@@ -748,6 +814,13 @@ export function getDb(): Promise<Database> {
         sessions.createIndex('by-date', 'date');
         transaction.objectStore('photos').createIndex('by-session', 'sessionId');
         if (oldVersion >= 1) void migrateToV9(transaction);
+      }
+      if (oldVersion < 10) {
+        // v10: kosttillskott och tagna doser. Nya stores – befintlig data berörs inte.
+        const supplements = db.createObjectStore('supplements', { keyPath: 'id' });
+        supplements.createIndex('by-ean', 'ean');
+        const supplementLog = db.createObjectStore('supplementLog', { keyPath: 'id' });
+        supplementLog.createIndex('by-date', 'date');
       }
     },
     blocking() {
@@ -1244,6 +1317,51 @@ export async function addMilestones(records: readonly MilestoneRecord[]): Promis
   await tx.done;
 }
 
+/** Kosttillskott i namnordning. */
+export async function listSupplements(): Promise<Supplement[]> {
+  const db = await getDb();
+  const all = await db.getAll('supplements');
+  return all.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+}
+
+export async function putSupplement(supplement: Supplement): Promise<void> {
+  const db = await getDb();
+  await db.put('supplements', supplement);
+}
+
+/** Tar bort tillskottet. Redan tagna doser ligger kvar (de har egen kopia av värdena). */
+export async function deleteSupplement(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('supplements', id);
+}
+
+export async function findSupplementByEan(ean: string): Promise<Supplement | null> {
+  const db = await getDb();
+  return (await db.getFromIndex('supplements', 'by-ean', ean)) ?? null;
+}
+
+/** Sparad måltid med streckkoden, eller null. Måltider har inget index – de är få. */
+export async function findMealByEan(ean: string): Promise<SavedMeal | null> {
+  const db = await getDb();
+  return (await db.getAll('meals')).find((m) => m.ean === ean) ?? null;
+}
+
+export async function listSupplementLog(): Promise<SupplementIntake[]> {
+  const db = await getDb();
+  const all = await db.getAll('supplementLog');
+  return all.sort(byDateThenCreated);
+}
+
+export async function putSupplementIntake(intake: SupplementIntake): Promise<void> {
+  const db = await getDb();
+  await db.put('supplementLog', intake);
+}
+
+export async function deleteSupplementIntake(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('supplementLog', id);
+}
+
 /** Nycklar i `settings`-storen. */
 export const SETTING_LAST_EXPORT = 'lastExportAt';
 export const SETTING_LOCK = 'lock';
@@ -1285,6 +1403,8 @@ export interface Snapshot {
   symptoms: SymptomEntry[];
   foodUnits: CustomUnits[];
   milestones: MilestoneRecord[];
+  supplements: Supplement[];
+  supplementLog: SupplementIntake[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -1307,6 +1427,8 @@ export function emptySnapshot(): Snapshot {
     symptoms: [],
     foodUnits: [],
     milestones: [],
+    supplements: [],
+    supplementLog: [],
   };
 }
 
@@ -1330,6 +1452,8 @@ export async function readSnapshot(): Promise<Snapshot> {
     symptoms,
     foodUnits,
     milestones,
+    supplements,
+    supplementLog,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -1349,6 +1473,8 @@ export async function readSnapshot(): Promise<Snapshot> {
     listSymptoms(),
     listCustomUnits(),
     listMilestones(),
+    listSupplements(),
+    listSupplementLog(),
   ]);
   return {
     profile,
@@ -1370,6 +1496,8 @@ export async function readSnapshot(): Promise<Snapshot> {
     symptoms,
     foodUnits,
     milestones,
+    supplements,
+    supplementLog,
   };
 }
 
@@ -1400,6 +1528,8 @@ const DATA_STORES = [
   'symptoms',
   'foodUnits',
   'milestones',
+  'supplements',
+  'supplementLog',
 ] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
@@ -1424,6 +1554,8 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const symptoms = tx.objectStore('symptoms');
   const foodUnits = tx.objectStore('foodUnits');
   const milestones = tx.objectStore('milestones');
+  const supplements = tx.objectStore('supplements');
+  const supplementLog = tx.objectStore('supplementLog');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -1445,6 +1577,8 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.symptoms.map((s) => symptoms.put(s)),
       ...snapshot.foodUnits.map((u) => foodUnits.put(u)),
       ...snapshot.milestones.map((m) => milestones.put(m)),
+      ...snapshot.supplements.map((s) => supplements.put(s)),
+      ...snapshot.supplementLog.map((i) => supplementLog.put(i)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -1514,6 +1648,14 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     for (const m of snapshot.milestones) {
       if (!(await milestones.get(m.id))) await milestones.put(m);
     }
+    for (const s of snapshot.supplements) {
+      const existing = await supplements.get(s.id);
+      if (!existing || changedAt(s) > changedAt(existing)) await supplements.put(s);
+    }
+    for (const i of snapshot.supplementLog) {
+      const existing = await supplementLog.get(i.id);
+      if (!existing || changedAt(i) > changedAt(existing)) await supplementLog.put(i);
+    }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);
     }
@@ -1536,6 +1678,8 @@ export async function getOldestEntryTime(): Promise<number | null> {
     db.getAll('medications'),
     db.getAll('injections'),
     db.getAll('symptoms'),
+    db.getAll('supplements'),
+    db.getAll('supplementLog'),
   ]);
   let oldest: number | null = null;
   for (const { createdAt } of all.flat()) {

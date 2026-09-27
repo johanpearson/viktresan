@@ -3,6 +3,7 @@ import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Glp1Log } from '../components/Glp1Log.tsx';
 import { Page } from '../components/Page.tsx';
 import { StepsForm } from '../components/StepsForm.tsx';
+import { SupplementsLog } from '../components/SupplementsLog.tsx';
 import { WaistLog } from '../components/WaistLog.tsx';
 import { WaterLog } from '../components/WaterLog.tsx';
 import { WeightLog } from '../components/WeightLog.tsx';
@@ -22,13 +23,16 @@ import { nextDose } from '../lib/glp1.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
+import { supplementStatus } from '../lib/supplements.ts';
 import { upcomingWorkouts, workoutsBetween } from '../lib/workouts.ts';
 
-type LogTypeId = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning' | 'glp1';
+type LogTypeId = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning' | 'glp1' | 'tillskott';
 
 interface LogFormProps {
   data: AppData;
   reload: () => Promise<AppData>;
+  /** Resten av sökvägen, t.ex. "ean/7310…" i "#/logga/tillskott/ean/7310…". */
+  sub: string;
 }
 
 interface LogType extends FeatureGated {
@@ -131,6 +135,27 @@ const LOG_TYPES: readonly LogType[] = [
     },
     Form: ({ data, reload }) => <Glp1Log data={data} onChange={reload} />,
   },
+  {
+    id: 'tillskott',
+    label: 'Tillskott',
+    title: 'Tillskott',
+    icon: 'M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7zM7.5 10.5l6 6',
+    feature: 'tillskott',
+    summary: ({ supplements, supplementLog }) => {
+      if (supplements.length === 0) return 'Lägg in tillskott';
+      const { taken, planned } = supplementStatus(supplements, supplementLog, todayIso());
+      return planned > 0
+        ? `Idag ${String(taken)} av ${String(planned)}`
+        : `Idag ${String(taken)} tagna`;
+    },
+    Form: ({ data, reload, sub }) => (
+      <SupplementsLog
+        data={data}
+        onChange={reload}
+        initialEan={/^ean\/(\d{8,14})$/.exec(sub)?.[1]}
+      />
+    ),
+  },
 ];
 
 export function Logga() {
@@ -139,9 +164,11 @@ export function Logga() {
   const { sub } = useHashRoute();
   const types = features.filter(LOG_TYPES);
   // "#/logga/glp1" öppnar panelen direkt (t.ex. från dosdagsbannern på Översikt).
+  const [first = '', ...rest] = sub.split('/');
   const [openId, setOpenId] = useState<LogTypeId | null>(
-    () => types.find((t) => t.id === sub)?.id ?? null,
+    () => types.find((t) => t.id === first)?.id ?? null,
   );
+  const [openSub] = useState(() => rest.join('/'));
   const open = types.find((t) => t.id === openId);
 
   return (
@@ -188,7 +215,7 @@ export function Logga() {
             if (sub) window.history.replaceState(null, '', '#/logga');
           }}
         >
-          <open.Form data={data} reload={reload} />
+          <open.Form data={data} reload={reload} sub={open.id === first ? openSub : ''} />
         </BottomSheet>
       )}
     </Page>

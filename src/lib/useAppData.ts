@@ -6,6 +6,8 @@ import {
   listMedications,
   listSymptoms,
   listSteps,
+  listSupplementLog,
+  listSupplements,
   listWaist,
   listWater,
   listWeights,
@@ -16,6 +18,8 @@ import {
   type Medication,
   type Profile,
   type StepsEntry,
+  type Supplement,
+  type SupplementIntake,
   type SymptomEntry,
   type WaistEntry,
   type WaterEntry,
@@ -35,6 +39,8 @@ export interface AppData {
   medications: Medication[];
   injections: Injection[];
   symptoms: SymptomEntry[];
+  supplements: Supplement[];
+  supplementLog: SupplementIntake[];
   profile: Profile | null;
 }
 
@@ -49,11 +55,13 @@ const EMPTY: AppData = {
   medications: [],
   injections: [],
   symptoms: [],
+  supplements: [],
+  supplementLog: [],
   profile: null,
 };
 
 /**
- * Läser mätningar, matlogg, vatten, träning, GLP-1 och profil från IndexedDB. `data` är `null` tills första
+ * Läser mätningar, matlogg, vatten, träning, GLP-1, tillskott och profil från IndexedDB. `data` är `null` tills första
  * läsningen är klar. `reload` hämtar på nytt efter en ändring och returnerar
  * den nya datan.
  */
@@ -73,6 +81,8 @@ export function useAppData(): { data: AppData | null; reload: () => Promise<AppD
         medications,
         injections,
         symptoms,
+        supplements,
+        supplementLog,
         profile,
       ] = await Promise.all([
         listWeights(),
@@ -85,6 +95,8 @@ export function useAppData(): { data: AppData | null; reload: () => Promise<AppD
         listMedications(),
         listInjections(),
         listSymptoms(),
+        listSupplements(),
+        listSupplementLog(),
         getProfile(),
       ]);
       return {
@@ -98,6 +110,8 @@ export function useAppData(): { data: AppData | null; reload: () => Promise<AppD
         medications,
         injections,
         symptoms,
+        supplements,
+        supplementLog,
         profile,
       };
     } catch {

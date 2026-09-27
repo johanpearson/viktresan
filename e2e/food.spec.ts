@@ -452,11 +452,13 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
   page,
 }) => {
   const errors = collectErrors(page);
-  // Låtsaskamera och BarcodeDetector som hittar EAN direkt.
+  // Låtsaskamera och BarcodeDetector som hittar EAN direkt (tills `__ean` nollas).
   await page.addInitScript((ean) => {
+    const w = window as unknown as { __ean: string | null };
+    w.__ean = ean;
     class FakeBarcodeDetector {
       detect() {
-        return Promise.resolve([{ rawValue: ean, format: 'ean_13' }]);
+        return Promise.resolve(w.__ean ? [{ rawValue: w.__ean, format: 'ean_13' }] : []);
       }
     }
     Object.defineProperty(window, 'BarcodeDetector', { value: FakeBarcodeDetector });
@@ -500,9 +502,8 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
   });
   await openFood(page);
 
-  // Skannerikonen bredvid sökfältet öppnar sök-sheeten i skannerläget.
+  // Skannerikonen bredvid sökfältet öppnar sök-sheeten med kameravyn, som läser koden direkt.
   await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
-  await page.getByRole('button', { name: 'Starta kameran' }).tap();
   await expect(page.getByRole('heading', { name: 'Logga: Testmüsli (Testbolaget)' })).toBeVisible();
   await expect(page.getByTestId('food-log-form')).toContainText('Open Food Facts');
   await expect(page.getByLabel('Mängd (portion)')).toHaveValue('1');
@@ -524,20 +525,27 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
     }),
   ]);
   await sheet(page).getByRole('button', { name: 'Skanna streckkod' }).tap();
-  await page.getByRole('button', { name: 'Starta kameran' }).tap();
   await expect(page.getByTestId('food-log-form')).toBeVisible();
   expect(offRequests).toHaveLength(1);
   await page.getByRole('button', { name: 'Avbryt' }).tap();
 
-  // Okänd streckkod via manuell inmatning → skapa eget livsmedel med koden ifylld.
+  // Okänd streckkod via manuell inmatning → lägg in eget livsmedel med koden ifylld.
+  await page.evaluate(() => {
+    (window as unknown as { __ean: string | null }).__ean = null;
+  });
   await sheet(page).getByRole('button', { name: 'Skanna streckkod' }).tap();
+  await page.getByRole('button', { name: 'Skriv in streckkod' }).tap();
   await page.getByLabel('Streckkod (EAN)').fill('1234');
   await page.getByRole('button', { name: 'Slå upp' }).tap();
   await expect(page.getByRole('alert')).toContainText('Streckkoden är inte giltig');
   await page.getByLabel('Streckkod (EAN)').fill(UNKNOWN_EAN);
   await page.getByRole('button', { name: 'Slå upp' }).tap();
-  await expect(page.getByTestId('ean-not-found')).toContainText(UNKNOWN_EAN);
-  await page.getByRole('button', { name: 'Skapa eget livsmedel' }).tap();
+  await expect(page.getByTestId('ean-not-found')).toContainText(`Hittade inte ${UNKNOWN_EAN}`);
+  await expect(page.getByRole('link', { name: 'Bidra till Open Food Facts' })).toHaveAttribute(
+    'href',
+    `https://world.openfoodfacts.org/product/${UNKNOWN_EAN}`,
+  );
+  await page.getByRole('button', { name: 'Lägg in manuellt' }).tap();
   await expect(page.getByLabel('Streckkod (valfri)')).toHaveValue(UNKNOWN_EAN);
   await page.getByLabel('Namn').fill('Lokal knäcke');
   await page.getByLabel('Energi (kcal)').fill('350');
@@ -564,8 +572,9 @@ test('utan BarcodeDetector går det att skriva in streckkoden', async ({ page })
   await openFood(page);
   await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
   await expect(page.getByTestId('scanner-unsupported')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Starta kameran' })).toHaveCount(0);
-  await expect(page.getByLabel('Streckkod (EAN)')).toBeVisible();
+  await expect(page.getByLabel('Kamerabild för streckkodsläsning')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Välj bild' })).toHaveCount(0);
+  await expect(page.getByLabel('Streckkod (EAN)')).toBeFocused();
 });
 
 test('enheter utan gram: 33 cl läsk, 2 dl mjölk, 2 skivor bröd och 1 ägg', async ({ page }) => {
@@ -931,7 +940,6 @@ test('egen måltid: lägg till ingrediens via streckkod i sök-sheeten', async (
   await page.getByRole('button', { name: 'Lägg till ingrediens' }).tap();
   const picker = page.getByRole('dialog', { name: 'Lägg till ingrediens' });
   await picker.getByRole('button', { name: 'Skanna streckkod' }).tap();
-  await picker.getByRole('button', { name: 'Starta kameran' }).tap();
   await expect(picker.getByRole('heading', { name: 'Lägg till: Testmüsli' })).toBeVisible();
   // Enhetsvalet: portion förvald, 2 portioner.
   await expect(picker.getByLabel('Mängd (portion)')).toHaveValue('1');

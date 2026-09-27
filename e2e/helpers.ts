@@ -47,6 +47,9 @@ export interface SeedData {
   foodUnits?: Record<string, unknown>[];
   /** Uppnådda milstolpar; nyckel = `id`. */
   milestones?: Record<string, unknown>[];
+  /** Kosttillskott och tagna doser (id = `<tillskott>:<datum>`). */
+  supplements?: Record<string, unknown>[];
+  supplementLog?: Record<string, unknown>[];
 }
 
 /**
@@ -85,6 +88,8 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
         'symptoms',
         'foodUnits',
         'milestones',
+        'supplements',
+        'supplementLog',
       ],
       'readwrite',
     );
@@ -109,6 +114,8 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
     for (const s of data.symptoms ?? []) tx.objectStore('symptoms').put(s);
     for (const u of data.foodUnits ?? []) tx.objectStore('foodUnits').put(u);
     for (const m of data.milestones ?? []) tx.objectStore('milestones').put(m);
+    for (const x of data.supplements ?? []) tx.objectStore('supplements').put(x);
+    for (const x of data.supplementLog ?? []) tx.objectStore('supplementLog').put(x);
     for (const [key, value] of Object.entries(data.settings ?? {})) {
       tx.objectStore('settings').put(value, key);
     }
@@ -144,6 +151,8 @@ export interface Dump {
   symptoms: unknown[];
   foodUnits: unknown[];
   milestones: unknown[];
+  supplements: unknown[];
+  supplementLog: unknown[];
 }
 
 /** Läser ut all data ur IndexedDB (bilder som byte-arrayer), sorterat på id. */
@@ -201,6 +210,8 @@ export async function dump(page: Page): Promise<Dump> {
       symptoms,
       foodUnits,
       milestones,
+      supplements,
+      supplementLog,
     ] = await Promise.all([
       all('profile'),
       all('weights'),
@@ -222,6 +233,8 @@ export async function dump(page: Page): Promise<Dump> {
       all('symptoms'),
       all('foodUnits'),
       all('milestones'),
+      all('supplements'),
+      all('supplementLog'),
     ]);
     db.close();
     return {
@@ -252,11 +265,13 @@ export async function dump(page: Page): Promise<Dump> {
       symptoms,
       foodUnits,
       milestones: milestones.sort(byId),
+      supplements: supplements.sort(byId),
+      supplementLog: supplementLog.sort(byId),
     };
   });
 }
 
-/** Tömmer profil, mätningar (vikt, midja, steg), bilder och fototillfällen, mat (inkl. egna enheter), vatten, träning, GLP-1 och milstolpar – som en ny enhet. */
+/** Tömmer profil, mätningar (vikt, midja, steg), bilder och fototillfällen, mat (inkl. egna enheter), vatten, träning, GLP-1, milstolpar och tillskott – som en ny enhet. */
 export async function wipe(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -287,6 +302,8 @@ export async function wipe(page: Page): Promise<void> {
       'symptoms',
       'foodUnits',
       'milestones',
+      'supplements',
+      'supplementLog',
     ];
     const tx = db.transaction(stores, 'readwrite');
     for (const store of stores) tx.objectStore(store).clear();

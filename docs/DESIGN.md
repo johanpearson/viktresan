@@ -75,16 +75,17 @@ Semantiska färger – samma betydelse överallt:
 
 En färg per datatyp (ljust / mörkt tema):
 
-| Token             | Datatyp | Ljust     | Mörkt     | Syns i                                            |
-| ----------------- | ------- | --------- | --------- | ------------------------------------------------- |
-| `--data-weight`   | Vikt    | `#0f766e` | `#2dd4bf` | Viktgraf, målstapel, kalenderprick, Logga-ikon    |
-| `--data-food`     | Mat     | `#c2410c` | `#fb923c` | Kaloriring/-stapel, intagsgraf, kalenderprick     |
-| `--data-drink`    | Dryck   | `#0284c7` | `#38bdf8` | Dryckesring, dryckeshistorik, kalenderprick, ikon |
-| `--data-steps`    | Steg    | `#7c3aed` | `#c4b5fd` | Stegdiagram, kalenderprick, ikon                  |
-| `--data-training` | Träning | `#4d7c0f` | `#a3e635` | Kalenderprick, ikon                               |
-| `--data-dose`     | Dos     | `#4338ca` | `#a5b4fc` | Dosbyten i viktgrafen, kalenderromb, ikon         |
-| `--data-waist`    | Midja   | `#db2777` | `#f472b6` | Kalenderprick, ikon                               |
-| `--data-mood`     | Mående  | `#a16207` | `#fde047` | Kalenderprick                                     |
+| Token               | Datatyp   | Ljust     | Mörkt     | Syns i                                                |
+| ------------------- | --------- | --------- | --------- | ----------------------------------------------------- |
+| `--data-weight`     | Vikt      | `#0f766e` | `#2dd4bf` | Viktgraf, målstapel, kalenderprick, Logga-ikon        |
+| `--data-food`       | Mat       | `#c2410c` | `#fb923c` | Kaloriring/-stapel, intagsgraf, kalenderprick         |
+| `--data-drink`      | Dryck     | `#0284c7` | `#38bdf8` | Dryckesring, dryckeshistorik, kalenderprick, ikon     |
+| `--data-steps`      | Steg      | `#7c3aed` | `#c4b5fd` | Stegdiagram, kalenderprick, ikon                      |
+| `--data-training`   | Träning   | `#4d7c0f` | `#a3e635` | Kalenderprick, ikon                                   |
+| `--data-dose`       | Dos       | `#4338ca` | `#a5b4fc` | Dosbyten i viktgrafen, kalenderromb, ikon             |
+| `--data-waist`      | Midja     | `#db2777` | `#f472b6` | Kalenderprick, ikon                                   |
+| `--data-mood`       | Mående    | `#a16207` | `#fde047` | Kalenderprick                                         |
+| `--data-supplement` | Tillskott | `#a21caf` | `#f0abfc` | Tillskottsdelen i näringsstaplar, kalenderprick, ikon |
 
 Protein har `--macro-protein` (samma teal som vikt, men används bara i matens detaljer). I komponenter
 väljs färgen med en **ton** (`src/lib/tones.ts`): `tone="food"` → klassen `tone-food` → `--tone`, som
@@ -123,7 +124,7 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `ChipGroup`        | `ChipGroup.tsx`        | Val som chips med fältetikett: biverkningar, veckodagar, injektionsställe     |
 | `StatBar`          | `StatBar.tsx`          | "827 / 1 680 kcal" + tunn stapel i datatypens färg + metarad                  |
 | `GoalRing` (Ring)  | `GoalRing.tsx`         | Ring mot dagsmål (dryck, kalorier, protein) med `tone`                        |
-| `ProgressBar`      | `ProgressBar.tsx`      | Stapel med `tone`, `thin`, `decorative` (dold för skärmläsare)                |
+| `ProgressBar`      | `ProgressBar.tsx`      | Stapel med `tone`, `thin`, `decorative`; `segments` = uppdelad stapel         |
 | `EmptyState`       | `EmptyState.tsx`       | Tomt läge: rubrik, förklaring och **en** knapp för nästa steg                 |
 | `Toast`            | `Toast.tsx`            | Kvittens ovanför navigeringen med valfri Ångra; försvinner efter 8 s          |
 | `useUndoToast`     | `lib/useUndoToast.ts`  | Tillstånd för en Toast med Ångra efter borttagning i en lista                 |
@@ -134,6 +135,10 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `PeriodBar`        | `PeriodBar.tsx`        | ‹ Månad/vecka › – som `DateBar` men med en rubrik i mitten (Kalender)         |
 | `Disclosure`       | `Disclosure.tsx`       | Hopfälld hjälptext bakom en liten dämpad textknapp (kalenderns förklaring)    |
 | `Parts`            | `Parts.tsx`            | "6 000 steg · 827 kcal" – delarna hålls ihop, texten bryts bara vid "·"       |
+| `BarcodeScanner`   | `BarcodeScanner.tsx`   | Kameravy för streckkoder (Mat, egna måltider, Tillskott) med reserver         |
+| `BarcodeNotFound`  | `BarcodeNotFound.tsx`  | "Hittade inte [EAN]": AI från etikett / manuellt + länk till Open Food Facts  |
+| `BarcodeElsewhere` | `BarcodeElsewhere.tsx` | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit    |
+| `AiLabelImport`    | `AiLabelImport.tsx`    | Prompt (kopiera/dela) → klistra in JSON → validering, förhandsvisning         |
 
 ### Page (sidhuvud)
 
@@ -536,6 +541,11 @@ filter. Samma knapp (`ShowMore`) används för "Visa alla N obesvarade" på Öve
 
 - `StatBar`: `value`, `goal`, `unit`, `tone`, `label` (skärmläsare), `meta` ("853 kcal kvar"). `mini`
   = mindre siffra, ingen metarad och stapeln dold för skärmläsare (för kopior, t.ex. Mats sticky rad).
+  `title` sätter en rubrik till vänster på värdets rad och `display` en egen värdetext ("2,5 / 5 µg");
+  `segments` ger en uppdelad stapel (se nedan).
+- **Uppdelad stapel** (`ProgressBar segments`): delarna (`{ fraction, tone }`, andel av målet) ritas kant i kant
+  i sina datafärger och kapas tillsammans vid 100 %. Används i Mat → Näring för mat (`food`) + tillskott
+  (`supplement`) mot referensintaget, med en liten förklaring (`bar-legend`) överst i kortet.
 - `GoalRing`: 96 px, `tone`, värde i mitten och "av …" under. Tre ringar på en rad (dryck, kalorier,
   protein) med bildtext under.
 
@@ -556,6 +566,30 @@ Varje tomt läge säger vad som hamnar här och har en tydlig nästa handling.
 
 `<Toast message="Tog bort Potatis kokt." onUndo={undo} onClose={close} />` – "Ångra" är knappen, "Stäng"
 en textknapp. Används efter varje destruktiv åtgärd i listor och efter snabbval (+250 ml).
+
+### Kameravyer (CameraCapture, BarcodeScanner)
+
+Helskärm i en modal `<dialog>` med svart bakgrund (`.camera`): rubrik och "Stäng" överst, bilden i mitten, kontroller
+under. Knapparna är sekundära med vit ram. `BarcodeScanner` (`.camera.scanner`) lägger till ett sikte (`scanner-frame`),
+ett tips i bilden när den är mörk (`scanner-tip`, "Mörkt, tänd lampan?"), ficklampa och zoom bara när kameran har dem
+(`track.getCapabilities()`), tryck för fokus och en grön bock som kort bekräftelse vid träff. Reserverna "Skriv in
+streckkod" (numeriskt tangentbord) och "Välj bild" ligger alltid under bilden. Kameraströmmen stängs vid träff, Stäng,
+Esc och när appen döljs. En skanner som öppnas samtidigt med en panel renderas **efter** panelen (syskon), så att
+dess `showModal` körs sist och den hamnar överst.
+
+### Streckkodsflödet
+
+Utfallet visas i panelen under sökfältet/listan: ingen träff = `BarcodeNotFound` (`Card` med två valrader med › och
+en diskret länk `subtle-link`), träff på annat ställe = `BarcodeElsewhere` (en rad med länk). AI-importen
+(`AiLabelImport`) har numrerade steg (`steps`), "Kopiera prompt" som primärknapp tills svaret är granskat – då blir
+"Använd värdena" primär – och förhandsvisningen som `list list-flush` med värden till höger.
+
+### Tillskott
+
+Dagens tillskott är chips (`ChipGroup`, `hideLabel` när kortets rubrik redan säger det): tryck = tagen/inte tagen,
+vid behov med `hint`. "Alla tagna" är en sekundär liten knapp i kortets rubrikrad och följs av en `Toast` med Ångra.
+Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (mängd, enhet – bara D-vitamin har ett val,
+µg/IE med omräkning – och "Ta bort") och "+ Lägg till näringsämne" som en `select`.
 
 ### Skeleton
 
@@ -589,9 +623,10 @@ läser upp "Laddar …".
 | ActionSheet      | Som BottomSheet, ovanpå den öppna panelen                 | 200 / 150 ms |
 | Sidhuvud         | Rubriken krymper (`scale(0.72)`), linje under             | 200 ms       |
 | Skeleton         | Pulserar                                                  | 1,4 s        |
+| Skanner          | Träff: kameran stängs, bock + vibration, sedan stängs vyn | 600 ms       |
 
 **Haptik** (`src/lib/haptics.ts`): `haptic('success')` (12 ms) vid spara/klar – vikt, midja, steg, pass,
-dos, mat (loggad/ändrad), "Markera som klar" – och `haptic('light')` (6 ms) vid snabbval (+250 ml). Av om
+dos, mat (loggad/ändrad), "Markera som klar" och streckkodsträff – och `haptic('light')` (6 ms) vid snabbval (+250 ml) och avbockat tillskott. Av om
 **Inställningar → Visning → Vibration vid spara** är avslaget, vid `prefers-reduced-motion` och där
 `navigator.vibrate` saknas (t.ex. iOS). Inställningen lagras i `preferences.haptics` (enheten).
 

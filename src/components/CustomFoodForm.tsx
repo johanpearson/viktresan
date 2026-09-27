@@ -1,5 +1,6 @@
 import { useState, type SyntheticEvent } from 'react';
 import { newId, putFood, saveCustomUnits, type StoredFood } from '../db/db.ts';
+import type { FoodLabel } from '../lib/aiLabel.ts';
 import { decimalInput } from '../lib/format.ts';
 import { builtInUnits, type FoodUnit } from '../lib/units.ts';
 import { parseFoodFields, type FoodFields } from '../lib/validation.ts';
@@ -12,20 +13,27 @@ interface CustomFoodFormProps {
   customUnits?: readonly FoodUnit[];
   /** Förifylld streckkod (efter en skanning utan träff). */
   ean?: string;
+  /** Värden från AI-importen av etiketten – går att rätta innan sparning. */
+  prefill?: FoodLabel | undefined;
   onSaved: (food: StoredFood) => void;
   onCancel: () => void;
   /** Visar "Ta bort livsmedlet" längst ner (bara vid redigering, Mat → Egna). */
   onDelete?: () => void;
 }
 
-function fieldsFor(food: StoredFood | null, ean: string | undefined): FoodFields {
+function fieldsFor(
+  food: StoredFood | null,
+  ean: string | undefined,
+  prefill: FoodLabel | undefined,
+): FoodFields {
   const text = (v: number | undefined) => (v == null ? '' : decimalInput(v));
+  const values = food?.per100 ?? prefill;
   return {
-    name: food?.name ?? '',
-    kcal: text(food?.per100.kcal),
-    protein: text(food?.per100.proteinG),
-    carbs: text(food?.per100.carbsG),
-    fat: text(food?.per100.fatG),
+    name: food?.name ?? prefill?.name ?? '',
+    kcal: text(values?.kcal),
+    protein: text(values?.proteinG),
+    carbs: text(values?.carbsG),
+    fat: text(values?.fatG),
     ean: food?.ean ?? ean ?? '',
   };
 }
@@ -44,11 +52,12 @@ export function CustomFoodForm({
   food,
   customUnits = NO_UNITS,
   ean,
+  prefill,
   onSaved,
   onCancel,
   onDelete,
 }: CustomFoodFormProps) {
-  const [fields, setFields] = useState<FoodFields>(() => fieldsFor(food, ean));
+  const [fields, setFields] = useState<FoodFields>(() => fieldsFor(food, ean, prefill));
   const [units, setUnits] = useState<FoodUnit[]>(() => [...customUnits]);
   const [error, setError] = useState<string | null>(null);
 
