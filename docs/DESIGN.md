@@ -119,6 +119,7 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `DateBar`          | `DateBar.tsx`          | ‹ Idag › – datumrad med osynligt datumfält (Mat → Dag, formulär i paneler)    |
 | Inställningslista  | `Card` + `ListRow`     | Grupp av rader med status och › som var och en öppnar en panel                |
 | `SegmentedControl` | `SegmentedControl.tsx` | Flikar/filter med `aria-pressed`; `size="small"` i sidhuvudet                 |
+| `ChoiceList`       | `ChoiceList.tsx`       | Valrader: ett val av flera (radioknappar) med förklaring och egen markering   |
 | `StatBar`          | `StatBar.tsx`          | "827 / 1 680 kcal" + tunn stapel i datatypens färg + metarad                  |
 | `GoalRing` (Ring)  | `GoalRing.tsx`         | Ring mot dagsmål (dryck, kalorier, protein) med `tone`                        |
 | `ProgressBar`      | `ProgressBar.tsx`      | Stapel med `tone`, `thin`, `decorative` (dold för skärmläsare)                |
@@ -278,6 +279,28 @@ direkt (`#/installningar/profil`, `…/sakerhetskopia`) – länkar från andra 
 Av/på-val är **switchar** (`label.switch-row` med `.switch-text` och `input.switch[role=switch]`), inte
 kryssrutor med text efter: rubrik och förklaring till vänster, brytaren till höger på samma rad.
 
+Ett val av flera (aktivitetsnivå, profilsida, importläge) är **valrader** (`ChoiceList`), inte webbläsarens
+radioknappar – se nedan.
+
+### ChoiceList (valrader)
+
+```tsx
+<ChoiceList
+  legend="Aktivitetsnivå"
+  name="activity"
+  options={[{ id: 'latt', label: 'Lätt aktiv', description: 'Promenader dagligen …' }, …]}
+  value={level}
+  onChange={setLevel}
+/>
+```
+
+Samma form som switcharna: en rad per alternativ (minst `--tap`, linje emellan), etikett och valfri förklaring
+till vänster, markeringen till höger. Markeringen är en egen radioknapp (`choice-radio`, `appearance: none`, 24 px,
+ring i `--muted`, vald = fylld prick i `--accent`) – lika stor i ljust och mörkt tema. Under ytan är det vanliga
+`<input type="radio">` i ett `<fieldset>` med `<legend>`, så piltangenter, `getByLabel(…).check()` och skärmläsare
+fungerar. `dangerOption` färgar ett destruktivt val (Ersätt all data) i `--danger` när det är valt. Använd
+`SegmentedControl` för att byta vy/filter, `ChoiceList` för en inställning där alternativen behöver förklaras.
+
 ### ActionSheet
 
 ```tsx
@@ -358,6 +381,16 @@ Poster med bilder är `ListRow` (tryck = öppna posten) med bilderna som `childr
 kolumner, samma storlek som `photo-grid` per vinkel, `--space-2` mellanrum). Bilderna är egna knappar (helskärm), en tom
 plats är en streckad ruta "+ Profil" (ett litet tomt läge). Ingen knapp per post. Tomt galleri = `EmptyState` med
 "Nytt fototillfälle"; kort som bara beskriver innehållet (lagring) visas först när det finns något.
+
+**Jämförelsen** öppnas från raden "Jämför tillfällen" i en helskärmspanel (`BottomSheet full`, "Jämför tillfällen";
+"Stäng" avslutar): två val (från/till), `SegmentedControl` för vinkel och vy, skillnaden som **en** `ListRow` ("28
+dagar mellan tillfällena", datum under, viktskillnad till höger) och bilderna. "Första mot senaste" är en liten
+textknapp som bara visas när man valt något annat. Inga knappar i en kortrubrik.
+
+**Helskärmsvyn** (`PhotoViewer`, svart modal `<dialog>`) följer panelmönstret: bildtexten och textknappen "Stäng"
+överst, vinkeln som `SegmentedControl`, Äldre/Nyare som sekundära knappar och "Ta bort bilden" som destruktiv
+textknapp längst ner. Borttagningen sker direkt och följs av en `Toast` med Ångra i vyn (`.viewer .toast`, längst
+ner) – eller på sidan om det var den sista bilden. Ångra lägger tillbaka bilden och ett tillfälle som tömdes.
 
 ### Milstolpar
 
@@ -441,7 +474,8 @@ Stäng kvittensen (`toast.close()`) när något nytt sparas, så att bara ett st
 ### SegmentedControl
 
 `size="small"` (44 px) i sidhuvudet, `regular` (48 px) i innehållet. Högst en segmentkontroll per nivå –
-ett tidsfilter under flikarna ska vara `small` eller en rad chips.
+ett tidsfilter under flikarna ska vara `small` eller en rad chips. `value={null}` = inget alternativ valt (en bild
+utan vinkel i helskärmsvyn).
 
 ### Tidsfilter (RangeFilter)
 

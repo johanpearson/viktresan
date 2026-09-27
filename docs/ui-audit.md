@@ -11,8 +11,11 @@ PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.p
 (`ui-audit/fore-*-mat-egna.png`, `ui-audit/fore-*-mat-historik-7dagar.png`), Framsteg → Veckor och Logga före PR #24
 (`ui-audit/fore-*-framsteg-veckor.png`, `ui-audit/fore-*-logga.png`), Framsteg → Bilder och Milstolpar före PR #25
 (`ui-audit/fore-*-framsteg-bilder.png`, `ui-audit/fore-*-framsteg-bilder-galleri.png`, `ui-audit/fore-*-framsteg-milstolpar.png`)
-och Mats redigera-, analys- och sökpanel före PR #26 (`ui-audit/fore-*-sheet-mat-redigera.png`,
-`ui-audit/fore-*-sheet-mat-analys.png`, `ui-audit/fore-*-sheet-mat-sok.png`).
+Mats redigera-, analys- och sökpanel före PR #26 (`ui-audit/fore-*-sheet-mat-redigera.png`,
+`ui-audit/fore-*-sheet-mat-analys.png`, `ui-audit/fore-*-sheet-mat-sok.png`) samt radioknapparna i Inställningar och
+jämförelsen/helskärmsvyn i Bilder före PR #27 (`ui-audit/fore-*-sheet-installningar-aktivitet.png`,
+`ui-audit/fore-*-sheet-installningar-bilder.png`, `ui-audit/fore-*-sheet-installningar-import.png`,
+`ui-audit/fore-*-bilder-jamfor.png`, `ui-audit/fore-*-bilder-helskarm.png`).
 
 **Referens:** Mat → Dag (omgjord i PR #16/#17): 16 px sidmarginal, 8 px mellan kort, 12–16 px inre
 marginal, en rad per post med högerställda tabellsiffror, sekundärtext 13 px, inga knappar i listorna
@@ -93,15 +96,15 @@ vid jämförelse, **Låg** = putsning.
 | Medel | Veckor: varje vecka är ett stort kort med "Fråga AI om veckan" som knapp i varje kort; värden radbryts.                                                                                                                               | ✅ PR #24 |
 | Medel | Bilder: tomt läge och lagringskortet saknar mellanrum (korten klistras ihop).                                                                                                                                                         | ✅ PR #25 |
 | Låg   | Milstolpar: bra täthet; ikonerna i streckade cirklar är den enda platsen med streckade ramar utöver tomma lägen.                                                                                                                      | ✅ PR #25 |
-| Medel | Bilder: jämförelsen (`SessionCompare`) har egna knappar i kortets rubrik ("Första mot senaste", "Avsluta jämförelse") och helskärmsvyn (`PhotoViewer`) tar bort med bekräftelse i två steg i stället för Ångra.                       |           |
+| Medel | Bilder: jämförelsen (`SessionCompare`) har egna knappar i kortets rubrik ("Första mot senaste", "Avsluta jämförelse") och helskärmsvyn (`PhotoViewer`) tar bort med bekräftelse i två steg i stället för Ångra.                       | ✅ PR #27 |
 
 ## Inställningar
 
-| Prio  | Iakttagelse                                                                                                                                                                                                                                                                                                 | Status                                      |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Hög   | **En enda lång sida (≈ 5 000 px)** med 12 kort, var och en med egen primärknapp (Spara profil, Spara matpreferenser, Spara dryckesmål, Exportera, Välj säkerhetskopia, Begär beständig lagring, Sök efter uppdatering). Bör grupperas som en lista (ListRow med chevron) där varje grupp öppnas i en panel. | ✅ PR #20                                   |
-| Medel | Kryssrutor och radioknappar är webbläsarens standard (olika storlek i ljust/mörkt), medan resten av appen har egna kontroller.                                                                                                                                                                              | Kryssrutor ✅ (switchar), radioknappar kvar |
-| Låg   | Förklarande text i 13 px över nästan varje fält gör sidan tung att skumma.                                                                                                                                                                                                                                  | ✅ (bara i panelerna)                       |
+| Prio  | Iakttagelse                                                                                                                                                                                                                                                                                                 | Status                                  |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Hög   | **En enda lång sida (≈ 5 000 px)** med 12 kort, var och en med egen primärknapp (Spara profil, Spara matpreferenser, Spara dryckesmål, Exportera, Välj säkerhetskopia, Begär beständig lagring, Sök efter uppdatering). Bör grupperas som en lista (ListRow med chevron) där varje grupp öppnas i en panel. | ✅ PR #20                               |
+| Medel | Kryssrutor och radioknappar är webbläsarens standard (olika storlek i ljust/mörkt), medan resten av appen har egna kontroller.                                                                                                                                                                              | ✅ (switchar, PR #20; valrader, PR #27) |
+| Låg   | Förklarande text i 13 px över nästan varje fält gör sidan tung att skumma.                                                                                                                                                                                                                                  | ✅ (bara i panelerna)                   |
 
 ## Paneler (bottom sheets)
 
@@ -273,10 +276,39 @@ vid jämförelse, **Låg** = putsning.
 - Designsystemet: "Formulär i en panel" och "Sökfält" i `DESIGN.md`.
 - **Kvar** (se nedan): radioknapparna i Inställningar (11) och jämförelsen/helskärmsvyn i Bilder (12).
 
+## Åtgärdat: radioknappar och Bildernas jämförelse/helskärm (PR #27)
+
+- **Valrader i stället för radioknappar** (`ChoiceList`): aktivitetsnivån (Profil), profilsidan (Bilder) och
+  importläget (Säkerhetskopia) är rader med etikett och förklaring till vänster och en egen markering till höger – samma
+  form som switcharna. Markeringen är 24 px i båda teman (tidigare webbläsarens radioknapp, 22 px med `accent-color`,
+  inne i en inramad ruta per alternativ). Aktivitetsnivåns fyra val tar ~240 px i stället för ~265 px och har inga
+  ramar; "Ersätt all befintlig data" markeras i fel-färg när det är valt. Tangentbord och skärmläsare som förut
+  (riktiga `<input type="radio">` i ett `<fieldset>`).
+- **Förhandsvisningen av en säkerhetskopia** ligger direkt i panelen (ingen ruta med egen bakgrund och ram – kort-i-kort)
+  och värdena är `ListRow` med värdet till höger i stället för `dl` med etikett och värde på varsin rad – lika höga
+  rader, men siffrorna står i en högerkolumn och går att jämföra i en blick.
+- **Jämförelsen i en helskärmspanel** ("Jämför tillfällen", `BottomSheet full`) i stället för ett kort ovanför galleriet
+  med "Första mot senaste" som knapp i kortrubriken och "Avsluta jämförelse" längst ner. "Stäng" avslutar; "Första mot
+  senaste" är en liten textknapp som bara visas när man valt annat. Vinkel och vy är `SegmentedControl` ("Båda" i
+  stället för "Båda vinklarna", som bröts över två rader). Före/efter-raderna och meningen under är **en** `ListRow`:
+  "28 dagar mellan tillfällena", datumen under och viktskillnaden till höger – vem som är före/efter står redan under
+  bilderna. Bilderna börjar ~200 px högre upp (y ≈ 380 i stället för ≈ 580 px).
+- **Helskärmsvyn** tar bort direkt: "Ta bort bilden" är en destruktiv textknapp längst ner (tidigare en inramad knapp som
+  bytte text till "Bekräfta borttagning") och följs av en `Toast` med Ångra i vyn – bilden och ett tillfälle som
+  tömdes kommer tillbaka. "Stäng" är en textknapp i rubrikraden bredvid bildtexten i stället för en fylld knapp nere till
+  höger; kvar i verktygsraden är bara Äldre/Nyare.
+- Nya visuella tester: `sheet-installningar-aktivitet`, `sheet-installningar-bilder`, `sheet-installningar-import`,
+  `bilder-jamfor` och `bilder-helskarm` (före-bilder i `docs/ui-audit/`).
+- Designsystemet: `ChoiceList` (valrader) och `SegmentedControl` med `value={null}`; jämförelsen och helskärmsvyn under
+  "Galleri" i `DESIGN.md`.
+- **Kvar**: inga punkter från granskningen. Mindre saker som inte stod i tabellerna: `choice-group` (veckodagar,
+  injektionsställe m.m. i Logga-panelerna) och kryssrutorna i Fråga AI (`.check`) har fortfarande egna äldre stilar, och
+  helskärmspanelerna saknar skugga när innehållet scrollar under rubriken (Låg, Paneler).
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla vyer är genomgångna; kvar är paneler och
-kontroller från tabellerna ovan (9–12). Ta nästa punkt utan ✅ (eller de två närmaste om de är små).
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla vyer, paneler och kontroller från
+tabellerna ovan är genomgångna (1–12).
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
 2. ~~**Inställningar**~~ ✅ PR #20.
@@ -288,7 +320,8 @@ kontroller från tabellerna ovan (9–12). Ta nästa punkt utan ✅ (eller de tv
 8. ~~**Framsteg → Bilder och Milstolpar**~~ ✅ PR #25.
 9. ~~**Mats redigera- och analyspanel**~~ ✅ PR #26.
 10. ~~**Sökikon i Mats sök-sheet**~~ ✅ PR #26.
-11. **Radioknappar i Inställningar** (nästa; Medel, se Inställningar): egna kontroller som switcharna (`SegmentedControl` eller
-    valrader) i stället för webbläsarens standard.
-12. **Jämförelsen och helskärmsvyn i Bilder** (Medel, se Framsteg): `SessionCompare` har egna knappar i kortets rubrik
-    och `PhotoViewer` tar bort med bekräftelse i två steg – bör följa panelmönstret (Ta bort direkt + `Toast` med Ångra).
+11. ~~**Radioknappar i Inställningar**~~ ✅ PR #27 (valrader, `ChoiceList`).
+12. ~~**Jämförelsen och helskärmsvyn i Bilder**~~ ✅ PR #27.
+
+Möjliga nästa steg (inte från granskningens tabeller): valrader/chips för `choice-group` i Logga-panelerna och
+Fråga AI:s kryssrutor som switchar, skugga under rubriken i helskärmspaneler.

@@ -12,7 +12,9 @@ import {
   type SessionRow,
 } from '../lib/photoSessions.ts';
 import type { PhotoItem } from '../lib/usePhotos.ts';
+import { ListRow } from './ListRow.tsx';
 import { PhotoCompare, type CompareMode } from './PhotoCompare.tsx';
+import { SegmentedControl } from './SegmentedControl.tsx';
 
 const COMPARE_MODES: readonly { id: CompareMode; label: string }[] = [
   { id: 'side', label: 'Sida vid sida' },
@@ -22,20 +24,19 @@ const COMPARE_MODES: readonly { id: CompareMode; label: string }[] = [
 const ANGLE_OPTIONS: readonly { id: CompareAngle; label: string }[] = [
   { id: 'fram', label: ANGLE_LABELS.fram },
   { id: 'profil', label: ANGLE_LABELS.profil },
-  { id: 'bada', label: 'Båda vinklarna' },
+  { id: 'bada', label: 'Båda' },
 ];
 
 interface SessionCompareProps {
   /** Galleriets rader, nyaste tillfället först. Minst två. */
   rows: readonly SessionRow<PhotoItem>[];
-  onClose: () => void;
 }
 
 /**
- * Jämför två fototillfällen per vinkel (eller båda vinklarna under varandra), med datum,
- * vikt och skillnad. Förval: första mot senaste tillfället.
+ * Jämför två fototillfällen per vinkel (eller båda vinklarna under varandra), med dagar och
+ * viktskillnad. Förval: första mot senaste tillfället. Visas i en helskärmspanel (Stäng avslutar).
  */
-export function SessionCompare({ rows, onClose }: SessionCompareProps) {
+export function SessionCompare({ rows }: SessionCompareProps) {
   const initial = firstAndLatest(rows);
   const [fromId, setFromId] = useState(initial?.[0].id ?? '');
   const [toId, setToId] = useState(initial?.[1].id ?? '');
@@ -53,6 +54,11 @@ export function SessionCompare({ rows, onClose }: SessionCompareProps) {
   const angles: readonly CaptureAngle[] = angle === 'bada' ? CAPTURE_ANGLES : [angle];
   // Äldst först i valen.
   const options = [...rows].reverse();
+  // Snabbvalet behövs bara när man valt något annat än första mot senaste.
+  const isFirstAndLatest =
+    initial != null &&
+    ((fromId === initial[0].id && toId === initial[1].id) ||
+      (fromId === initial[1].id && toId === initial[0].id));
 
   function selectFirstAndLatest() {
     const pair = firstAndLatest(rows);
@@ -62,19 +68,7 @@ export function SessionCompare({ rows, onClose }: SessionCompareProps) {
   }
 
   return (
-    <section className="card" aria-labelledby="compare-title" data-testid="photo-compare">
-      <div className="card-header">
-        <h2 className="card-title" id="compare-title">
-          Jämförelse
-        </h2>
-        <button
-          type="button"
-          className="button button-secondary button-small"
-          onClick={selectFirstAndLatest}
-        >
-          Första mot senaste
-        </button>
-      </div>
+    <section className="compare" aria-label="Jämförelse" data-testid="photo-compare">
       <div className="field-row">
         <label className="field">
           <span className="field-label">Från tillfälle</span>
@@ -109,22 +103,22 @@ export function SessionCompare({ rows, onClose }: SessionCompareProps) {
           </select>
         </label>
       </div>
+      {!isFirstAndLatest && (
+        <button
+          type="button"
+          className="button button-ghost button-small compare-reset"
+          onClick={selectFirstAndLatest}
+        >
+          Första mot senaste
+        </button>
+      )}
 
-      <div className="segmented compare-angles" role="group" aria-label="Vinkel att jämföra">
-        {ANGLE_OPTIONS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className="segmented-button"
-            aria-pressed={option.id === angle}
-            onClick={() => {
-              setAngle(option.id);
-            }}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        label="Vinkel att jämföra"
+        options={ANGLE_OPTIONS}
+        value={angle}
+        onChange={setAngle}
+      />
 
       {!comparison || !before || !after ? (
         <p className="muted" role="status">
@@ -132,38 +126,24 @@ export function SessionCompare({ rows, onClose }: SessionCompareProps) {
         </p>
       ) : (
         <>
-          <dl className="compare-sessions" data-testid="compare-sessions">
-            <div>
-              <dt>Före</dt>
-              <dd>{formatPhotoLabel(comparison.before)}</dd>
-            </div>
-            <div>
-              <dt>Efter</dt>
-              <dd>{formatPhotoLabel(comparison.after)}</dd>
-            </div>
-          </dl>
-          <p className="compare-summary" data-testid="compare-summary">
-            {formatInt(comparison.days)} {comparison.days === 1 ? 'dag' : 'dagar'} mellan
-            tillfällena
-            {comparison.changeKg != null && (
-              <> · {formatKg(comparison.changeKg, { signed: true })}</>
-            )}
-          </p>
-          <div className="segmented segmented-2" role="group" aria-label="Jämförelsevy">
-            {COMPARE_MODES.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className="segmented-button"
-                aria-pressed={option.id === mode}
-                onClick={() => {
-                  setMode(option.id);
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <ul className="list list-flush">
+            <ListRow
+              testId="compare-summary"
+              primary={`${formatInt(comparison.days)} ${comparison.days === 1 ? 'dag' : 'dagar'} mellan tillfällena`}
+              secondary={`${formatDate(comparison.before.date)} → ${formatDate(comparison.after.date)}`}
+              value={
+                comparison.changeKg == null
+                  ? 'Ingen vikt'
+                  : formatKg(comparison.changeKg, { signed: true })
+              }
+            />
+          </ul>
+          <SegmentedControl
+            label="Jämförelsevy"
+            options={COMPARE_MODES}
+            value={mode}
+            onChange={setMode}
+          />
           {angles.map((current) => {
             const beforePhoto = photoFor(before, current);
             const afterPhoto = photoFor(after, current);
@@ -201,10 +181,6 @@ export function SessionCompare({ rows, onClose }: SessionCompareProps) {
           })}
         </>
       )}
-
-      <button type="button" className="button button-secondary compare-close" onClick={onClose}>
-        Avsluta jämförelse
-      </button>
     </section>
   );
 }
