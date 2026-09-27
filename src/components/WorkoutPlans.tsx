@@ -3,6 +3,7 @@ import { deleteWorkoutPlan, newId, putWorkoutPlan, type WorkoutPlan } from '../d
 import { todayIso } from '../lib/dates.ts';
 import { formatDate } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
 import { parsePlanFields } from '../lib/validation.ts';
 import {
   describePlan,
@@ -11,7 +12,11 @@ import {
   WEEKDAYS,
   workoutTypes,
 } from '../lib/workouts.ts';
+import { ActionSheet } from './ActionSheet.tsx';
+import { Card } from './Card.tsx';
 import { IntensityField } from './IntensityField.tsx';
+import { ListRow } from './ListRow.tsx';
+import { Toast } from './Toast.tsx';
 import { WorkoutTypeField } from './WorkoutTypeField.tsx';
 
 interface WorkoutPlansProps {
@@ -30,7 +35,8 @@ export function WorkoutPlans({ data, onChange }: WorkoutPlansProps) {
   const [endDate, setEndDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [menu, setMenu] = useState<WorkoutPlan | null>(null);
+  const toast = useUndoToast();
 
   function toggleDay(day: number) {
     setWeekdays((days) => (days.includes(day) ? days.filter((d) => d !== day) : [...days, day]));
@@ -56,54 +62,45 @@ export function WorkoutPlans({ data, onChange }: WorkoutPlansProps) {
     await onChange();
     setError(null);
     setWeekdays([]);
+    toast.close();
     setStatus(`Schemat är sparat: ${plan.type} ${describePlan(plan)}.`);
   }
 
-  async function handleDelete(plan: WorkoutPlan) {
-    if (confirmDelete !== plan.id) {
-      setConfirmDelete(plan.id);
-      return;
-    }
+  /** Tar bort schemat direkt (svep eller radmenyn) – Ångra lägger tillbaka det. */
+  async function remove(plan: WorkoutPlan) {
     await deleteWorkoutPlan(plan.id);
     await onChange();
-    setConfirmDelete(null);
-    setStatus('Schemat är borttaget. Besvarade pass ligger kvar.');
+    setStatus(null);
+    toast.show(`Tog bort schemat ${plan.type}. Besvarade pass ligger kvar.`, async () => {
+      await putWorkoutPlan(plan);
+      await onChange();
+    });
   }
 
   return (
     <>
-      <section className="card" aria-labelledby="plans-title">
-        <h2 className="card-title" id="plans-title">
-          Återkommande pass
-        </h2>
+      <Card title="Återkommande pass">
         {data.workoutPlans.length === 0 ? (
           <p className="form-note">Inga scheman ännu.</p>
         ) : (
-          <ul className="entry-list">
+          <ul className="list">
             {data.workoutPlans.map((plan) => (
-              <li key={plan.id} className="entry" data-testid="workout-plan">
-                <div className="entry-main">
-                  <span className="entry-weight">{describeWorkout(plan)}</span>
-                  <span>{describePlan(plan)}</span>
-                </div>
-                <p className="entry-extra">
-                  Från {formatDate(plan.startDate)}
-                  {plan.endDate ? ` till ${formatDate(plan.endDate)}` : ''}
-                </p>
-                <div className="entry-actions">
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    onClick={() => void handleDelete(plan)}
-                  >
-                    {confirmDelete === plan.id ? 'Bekräfta borttagning' : 'Ta bort schema'}
-                  </button>
-                </div>
-              </li>
+              <ListRow
+                key={plan.id}
+                testId="workout-plan"
+                primary={describeWorkout(plan)}
+                secondary={`${describePlan(plan)} · från ${formatDate(plan.startDate)}${
+                  plan.endDate ? ` till ${formatDate(plan.endDate)}` : ''
+                }`}
+                onClick={() => {
+                  setMenu(plan);
+                }}
+                swipeLeft={{ label: 'Ta bort', onSwipe: () => void remove(plan) }}
+              />
             ))}
           </ul>
         )}
-      </section>
+      </Card>
       <form className="card form" onSubmit={(e) => void handleSubmit(e)} noValidate>
         <h2 className="card-title">Nytt schema</h2>
         <WorkoutTypeField
@@ -194,6 +191,25 @@ export function WorkoutPlans({ data, onChange }: WorkoutPlansProps) {
           {status}
         </p>
       </form>
+      {menu && (
+        <ActionSheet
+          title={menu.type}
+          description={`${describePlan(menu)} · från ${formatDate(menu.startDate)}`}
+          actions={[{ label: 'Ta bort schema', danger: true, onSelect: () => void remove(menu) }]}
+          onClose={() => {
+            setMenu(null);
+          }}
+        />
+      )}
+      {toast.toast && (
+        <Toast
+          label="Träning"
+          testId="log-toast"
+          message={toast.toast.message}
+          onUndo={toast.onUndo}
+          onClose={toast.close}
+        />
+      )}
     </>
   );
 }

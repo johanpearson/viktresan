@@ -113,6 +113,27 @@ for (const theme of ['light', 'dark'] as const) {
       }
     });
 
+    test('paneler: Logga – historik och radmeny', async ({ page }) => {
+      await open(page, '#/logga');
+      const sheet = page.getByRole('dialog');
+      // Tryck på en viktmätning läser in den i formuläret (med "Ta bort mätningen").
+      await page.getByTestId('log-tile-vikt').tap();
+      await sheet.getByTestId('entry').nth(1).tap();
+      await expect(sheet.getByRole('heading', { name: 'Redigera vikt' })).toBeVisible();
+      await sheet.evaluate((el) => {
+        el.scrollTop = 0;
+      });
+      await shot(page, `${theme}-sheet-logga-vikt-redigera`, false);
+      await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(sheet).toBeHidden();
+      // Radmenyn (ActionSheet) för ett schema ovanpå träningspanelen.
+      await page.getByTestId('log-tile-traning').tap();
+      await sheet.getByRole('button', { name: 'Återkommande' }).tap();
+      await sheet.getByTestId('workout-plan').first().tap();
+      await expect(page.getByRole('dialog').nth(1)).toBeVisible();
+      await shot(page, `${theme}-sheet-logga-radmeny`, false);
+    });
+
     test('paneler: Mat', async ({ page }) => {
       await open(page, '#/mat');
       const sheet = page.getByRole('dialog');

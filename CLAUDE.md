@@ -96,8 +96,10 @@ src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, on
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
-                        SegmentedControl, StatBar, GoalRing, ProgressBar, EmptyState, Toast, Skeleton
+                        SegmentedControl, StatBar, GoalRing, ProgressBar, EmptyState, Toast, Skeleton,
+                        ActionSheet (radmeny ovanpå en panel), DateBar (‹ Idag ›, även i Logga-panelernas formulär)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
+src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
 src/lib/haptics.ts      haptic('success' | 'light') via navigator.vibrate (inställning + reducerad rörelse)
 src/lib/motion.ts       prefersReducedMotion()
@@ -113,7 +115,7 @@ e2e/                    Playwright-tester. visual.spec.ts + visualData.ts = visu
                         (nekad resp. canvas-ström) och skapar en v8-databas för migreringen. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript); svep görs med
-                        dispatchEvent('pointer…') och pågående måltid styrs med page.clock.setFixedTime
+                        dispatchEvent('pointer…') (`swipeLeft` i helpers.ts) och pågående måltid styrs med page.clock.setFixedTime
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
 scripts/                Engångsskript (ikongenerering inkl. genvägsikoner shortcut-*.svg, fetch-livsmedel.ts)
 public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), precachad
@@ -161,6 +163,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (`upgradeFoodData`, även för säkerhetskopior version 3–5) gör portioner till enheter: OFF-portion →
   `StoredFood.units`, eget livsmedels portion → `foodUnits`; loggar utan portion tolkas som gram. Livsmedels-id:n: `lv:<nummer>`, `egen:…`, `off:<ean>`, `maltid:<id>`.
   Midja och steg sparas med `upsertWaist`/`upsertSteps` (samma dag skrivs över, `createdAt` behålls).
+  `putWaist`/`putSymptoms` lägger tillbaka en borttagen post oförändrad (Ångra).
   Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`

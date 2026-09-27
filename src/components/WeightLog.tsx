@@ -2,9 +2,14 @@ import { useRef, useState, type SyntheticEvent } from 'react';
 import { deleteWeight, newId, putWeight, type Profile, type WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatDate, formatKg, parseDecimal, stepKg } from '../lib/format.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { parseWeightFields } from '../lib/validation.ts';
 import { haptic } from '../lib/haptics.ts';
+import { Card } from './Card.tsx';
+import { DateBar } from './DateBar.tsx';
+import { ListRow } from './ListRow.tsx';
+import { Toast } from './Toast.tsx';
 
 function kgText(value: number): string {
   return value.toFixed(1).replace('.', ',');
@@ -54,7 +59,7 @@ export function WeightLog({ weights, profile, onChange }: WeightLogProps) {
   const [form, setForm] = useState<WeightForm>(() => freshWeightForm(weights, profile));
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const toast = useUndoToast();
   const formRef = useRef<HTMLFormElement>(null);
   const editing = weights.find((w) => w.id === form.editingId) ?? null;
 
@@ -66,6 +71,13 @@ export function WeightLog({ weights, profile, onChange }: WeightLogProps) {
     const current = parseDecimal(form.weight);
     if (current == null) return;
     update({ weight: kgText(stepKg(current, delta)) });
+  }
+
+  function edit(entry: WeightEntry) {
+    setForm(weightFormFor(entry));
+    setError(null);
+    setStatus(null);
+    formRef.current?.scrollIntoView({ block: 'start' });
   }
 
   async function handleSubmit(event: SyntheticEvent) {
@@ -84,21 +96,22 @@ export function WeightLog({ weights, profile, onChange }: WeightLogProps) {
     const next = await onChange();
     setForm(freshWeightForm(next.weights, next.profile));
     setError(null);
+    toast.close();
     setStatus(
       `${editing ? 'Uppdaterade' : 'Sparade'} ${formatKg(entry.weightKg)} för ${formatDate(entry.date)}.`,
     );
   }
 
-  async function handleDelete(id: string) {
-    if (confirmDeleteId !== id) {
-      setConfirmDeleteId(id);
-      return;
-    }
-    await deleteWeight(id);
+  /** Tar bort direkt (svep eller "Ta bort" vid redigering) – Ångra lägger tillbaka mätningen. */
+  async function remove(entry: WeightEntry) {
+    await deleteWeight(entry.id);
     const next = await onChange();
-    setConfirmDeleteId(null);
-    if (form.editingId === id) setForm(freshWeightForm(next.weights, next.profile));
-    setStatus('Mätningen är borttagen.');
+    if (form.editingId === entry.id) setForm(freshWeightForm(next.weights, next.profile));
+    setStatus(null);
+    toast.show(`Tog bort ${formatKg(entry.weightKg)} ${formatDate(entry.date)}.`, async () => {
+      await putWeight(entry);
+      await onChange();
+    });
   }
 
   const newestFirst = [...weights].reverse();
@@ -106,37 +119,24 @@ export function WeightLog({ weights, profile, onChange }: WeightLogProps) {
   return (
     <>
       <form className="card form" ref={formRef} onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <h2 className="card-title">{editing ? 'Redigera vikt' : 'Dagens vikt'}</h2>
-        <label className="field">
-          <span className="field-label">Datum</span>
-          <input
-            className="input"
-            type="date"
-            value={form.date}
-            max={todayIso()}
-            onChange={(e) => {
-              update({ date: e.target.value });
-            }}
-          />
-        </label>
+        {editing && <h2 className="card-title">Redigera vikt</h2>}
+        <DateBar
+          date={form.date}
+          today={todayIso()}
+          label="Datum"
+          testId="log-date"
+          onChange={(date) => {
+            update({ date });
+          }}
+        />
         <div className="field">
           <label className="field-label" htmlFor="weight-input">
             Vikt (kg)
           </label>
-          <input
-            id="weight-input"
-            className="input big-input"
-            inputMode="decimal"
-            autoComplete="off"
-            value={form.weight}
-            onChange={(e) => {
-              update({ weight: e.target.value });
-            }}
-          />
-          <div className="nudge-row">
+          <div className="nudge-field">
             <button
               type="button"
-              className="button button-secondary"
+              className="button button-secondary button-small"
               aria-label="Minska vikten med 0,1 kg"
               onClick={() => {
                 nudge(-0.1);
@@ -144,9 +144,19 @@ export function WeightLog({ weights, profile, onChange }: WeightLogProps) {
             >
               −0,1
             </button>
+            <input
+              id="weight-input"
+              className="input big-input"
+              inputMode="decimal"
+              autoComplete="off"
+              value={form.weight}
+              onChange={(e) => {
+                update({ weight: e.target.value });
+              }}
+            />
             <button
               type="button"
-              className="button button-secondary"
+              className="button button-secondary button-small"
               aria-label="Öka vikten med 0,1 kg"
               onClick={() => {
                 nudge(0.1);
@@ -201,58 +211,50 @@ export function WeightLog({ weights, profile, onChange }: WeightLogProps) {
             </button>
           )}
         </div>
+        {editing && (
+          <button
+            type="button"
+            className="button button-ghost button-small button-danger-text"
+            onClick={() => void remove(editing)}
+          >
+            Ta bort mätningen
+          </button>
+        )}
         <p className="form-ok" role="status">
           {status}
         </p>
       </form>
 
-      <section className="card" aria-labelledby="entries-title">
-        <h2 className="card-title" id="entries-title">
-          Viktmätningar
-        </h2>
+      <Card title="Viktmätningar">
         {newestFirst.length === 0 ? (
           <p className="muted">Inga mätningar ännu.</p>
         ) : (
-          <ul className="entry-list">
+          <ul className="list">
             {newestFirst.map((w) => (
-              <li key={w.id} className="entry" data-testid="entry">
-                <div className="entry-main">
-                  <span className="entry-date">{formatDate(w.date)}</span>
-                  <span className="entry-weight">{formatKg(w.weightKg)}</span>
-                </div>
-                {w.note && <p className="entry-extra">{w.note}</p>}
-                <div className="entry-actions">
-                  <button
-                    type="button"
-                    className="button button-secondary button-small"
-                    aria-label={`Redigera ${formatDate(w.date)}`}
-                    onClick={() => {
-                      setForm(weightFormFor(w));
-                      setConfirmDeleteId(null);
-                      setError(null);
-                      formRef.current?.scrollIntoView({ block: 'start' });
-                    }}
-                  >
-                    Redigera
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    aria-label={
-                      confirmDeleteId === w.id
-                        ? `Bekräfta borttagning av ${formatDate(w.date)}`
-                        : `Ta bort ${formatDate(w.date)}`
-                    }
-                    onClick={() => void handleDelete(w.id)}
-                  >
-                    {confirmDeleteId === w.id ? 'Bekräfta' : 'Ta bort'}
-                  </button>
-                </div>
-              </li>
+              <ListRow
+                key={w.id}
+                testId="entry"
+                primary={formatDate(w.date)}
+                secondary={w.note}
+                value={formatKg(w.weightKg)}
+                onClick={() => {
+                  edit(w);
+                }}
+                swipeLeft={{ label: 'Ta bort', onSwipe: () => void remove(w) }}
+              />
             ))}
           </ul>
         )}
-      </section>
+      </Card>
+      {toast.toast && (
+        <Toast
+          label="Vikt"
+          testId="log-toast"
+          message={toast.toast.message}
+          onUndo={toast.onUndo}
+          onClose={toast.close}
+        />
+      )}
     </>
   );
 }

@@ -30,6 +30,8 @@ interface ListRowProps {
   swipeRight?: SwipeAction | undefined;
   /** Innehåll under raden (t.ex. utfällda ingredienser). Följer med vid svep. */
   children?: ReactNode;
+  /** Destruktivt val i en meny (t.ex. "Ta bort"): texten i fel-färg. */
+  danger?: boolean;
   className?: string;
   testId?: string;
 }
@@ -51,6 +53,7 @@ export function ListRow({
   swipeLeft,
   swipeRight,
   children,
+  danger = false,
   className,
   testId,
 }: ListRowProps) {
@@ -98,7 +101,9 @@ export function ListRow({
   return (
     <li
       ref={rowRef}
-      className={className ? `list-row ${className}` : 'list-row'}
+      className={['list-row', danger ? 'list-row-danger' : '', className ?? '']
+        .filter(Boolean)
+        .join(' ')}
       data-testid={testId}
       data-swiping={offset < 0 ? 'left' : offset > 0 ? 'right' : undefined}
     >

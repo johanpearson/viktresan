@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { collectErrors, dump, isoDaysFromToday, seed } from './helpers.ts';
+import { collectErrors, dump, isoDaysFromToday, seed, swipeLeft } from './helpers.ts';
 
 // Service workern skulle annars svara på livsmedel.json från sin cache, förbi page.route.
 test.use({ serviceWorkers: 'block' });
@@ -97,20 +97,6 @@ function mealToggle(page: Page, slot: string): Locator {
 }
 
 /** Sveper raden åt vänster med pekarhändelser (som ett finger på mobilen). */
-async function swipeLeft(row: Locator) {
-  const content = row.locator('.list-row-content');
-  const box = await content.boundingBox();
-  if (!box) throw new Error('Raden syns inte');
-  const y = box.y + box.height / 2;
-  const x0 = box.x + box.width - 24;
-  const init = { pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, clientY: y };
-  await content.dispatchEvent('pointerdown', { ...init, clientX: x0 });
-  for (const f of [0.1, 0.3, 0.5, 0.6]) {
-    await content.dispatchEvent('pointermove', { ...init, clientX: x0 - box.width * f });
-  }
-  await content.dispatchEvent('pointerup', { ...init, clientX: x0 - box.width * 0.6 });
-}
-
 /** Loggar en mängd i vald enhet (tryck på enhetschippet först), annars i den förvalda. */
 async function logAmount(page: Page, amount: string, meal?: string, unit?: string) {
   const form = page.getByTestId('food-log-form');

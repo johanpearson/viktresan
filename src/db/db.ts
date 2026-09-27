@@ -828,6 +828,13 @@ export async function upsertWaist(date: string, waistCm: number, now = Date.now(
   notifyChange();
 }
 
+/** Lägger tillbaka ett midjemått oförändrat (Ångra efter borttagning). */
+export async function putWaist(entry: WaistEntry): Promise<void> {
+  const db = await getDb();
+  await db.put('waist', entry);
+  notifyChange();
+}
+
 export async function deleteWaist(date: string): Promise<void> {
   const db = await getDb();
   await db.delete('waist', date);
@@ -1098,6 +1105,12 @@ export async function upsertSymptoms(
   if (values.appetite !== undefined) entry.appetite = values.appetite;
   await tx.store.put(entry);
   await tx.done;
+}
+
+/** Lägger tillbaka en dags mående oförändrat (Ångra efter borttagning). */
+export async function putSymptoms(entry: SymptomEntry): Promise<void> {
+  const db = await getDb();
+  await db.put('symptoms', entry);
 }
 
 export async function deleteSymptoms(date: string): Promise<void> {
