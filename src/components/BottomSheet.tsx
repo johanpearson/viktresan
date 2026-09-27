@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { prefersReducedMotion } from '../lib/motion.ts';
 
 interface BottomSheetProps {
@@ -23,6 +23,8 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
   const closing = useRef(false);
   // Unikt id: en panel kan öppnas ovanpå en annan (radmeny i en Logga-panel).
   const titleId = useId();
+  // Rubrikraden får en linje när innehållet scrollats under den (som sidhuvudet).
+  const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -77,6 +79,10 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
         // panelen ska inte stänga panelen.
         if (e.target === e.currentTarget) onClose();
       }}
+      onScroll={(e) => {
+        const scrolled = e.currentTarget.scrollTop > 0;
+        if (scrolled !== stuck) setStuck(scrolled);
+      }}
       onClick={(e) => {
         // Tryck på bakgrunden (utanför panelens innehåll) stänger.
         if (e.target === e.currentTarget) close();
@@ -84,7 +90,7 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
     >
       <div className="sheet-panel">
         {!full && <span className="sheet-grabber" aria-hidden="true" />}
-        <div className="sheet-header">
+        <div className="sheet-header" data-stuck={stuck}>
           <h2 className="sheet-title" id={titleId}>
             {title}
           </h2>

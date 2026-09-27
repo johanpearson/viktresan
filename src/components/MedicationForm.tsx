@@ -5,6 +5,7 @@ import { doseInput } from '../lib/format.ts';
 import { DOSE_FREQUENCIES, PRESCRIBER_NOTE, PRESET_MEDICATIONS } from '../lib/glp1.ts';
 import { parseMedicationFields } from '../lib/validation.ts';
 import { WEEKDAYS } from '../lib/workouts.ts';
+import { SegmentedControl } from './SegmentedControl.tsx';
 
 const OTHER = '__annat';
 
@@ -106,24 +107,13 @@ export function MedicationForm({ medication, onSaved, onCancel }: MedicationForm
           />
         </label>
       )}
-      <fieldset className="choice-group">
-        <legend className="field-label">Hur ofta</legend>
-        <div className="segmented">
-          {DOSE_FREQUENCIES.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className="segmented-button"
-              aria-pressed={frequency === f.id}
-              onClick={() => {
-                setFrequency(f.id);
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <SegmentedControl
+        label="Hur ofta"
+        showLabel
+        options={DOSE_FREQUENCIES}
+        value={frequency}
+        onChange={setFrequency}
+      />
       <div className="field-row">
         {frequency === 'vecka' && (
           <label className="field">

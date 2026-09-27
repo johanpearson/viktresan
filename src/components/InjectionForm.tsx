@@ -25,6 +25,7 @@ import { DateBar } from './DateBar.tsx';
 import { EmptyState } from './EmptyState.tsx';
 import { ListRow } from './ListRow.tsx';
 import { Toast } from './Toast.tsx';
+import { ChipGroup } from './ChipGroup.tsx';
 
 /** Antal injektioner som visas under formuläret. */
 const RECENT_INJECTIONS = 5;
@@ -170,29 +171,20 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
             : `Enligt din dostrappa: ${formatMg(ladderDose)}.`}{' '}
           {PRESCRIBER_NOTE}
         </p>
-        <fieldset className="choice-group">
-          <legend className="field-label">Injektionsställe</legend>
-          <div className="site-grid">
-            {INJECTION_SITES.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className="site-button"
-                aria-pressed={site === s.id}
-                data-site={s.id}
-                onClick={() => {
-                  setChosenSite(s.id);
-                }}
-              >
-                {s.label}
-                {s.id === suggestedSite && <span className="site-hint">Förslag</span>}
-              </button>
-            ))}
-          </div>
-          <p className="form-note" data-testid="site-suggestion">
-            Förslag för rotation: {siteLabel(suggestedSite).toLowerCase()}.
-          </p>
-        </fieldset>
+        <ChipGroup
+          label="Injektionsställe"
+          columns={2}
+          options={INJECTION_SITES.map((s) => ({
+            id: s.id,
+            label: s.label,
+            ...(s.id === suggestedSite ? { hint: 'Förslag' } : {}),
+          }))}
+          selected={[site]}
+          onToggle={setChosenSite}
+        />
+        <p className="form-note" data-testid="site-suggestion">
+          Förslag för rotation: {siteLabel(suggestedSite).toLowerCase()}.
+        </p>
         {error && (
           <p className="form-error" role="alert">
             {error}

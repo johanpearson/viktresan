@@ -11,6 +11,8 @@ import { Card } from './Card.tsx';
 import { DateBar } from './DateBar.tsx';
 import { ListRow } from './ListRow.tsx';
 import { Toast } from './Toast.tsx';
+import { SegmentedControl } from './SegmentedControl.tsx';
+import { ChipGroup } from './ChipGroup.tsx';
 
 /** Antal dagar som visas under formuläret. */
 const RECENT_SYMPTOMS = 5;
@@ -109,46 +111,25 @@ export function SymptomForm({ data, onChange }: SymptomFormProps) {
           onChange={changeDate}
         />
         <p className="form-note">Valfritt. Fyll i det du vill – aptit, biverkningar eller båda.</p>
-        <fieldset className="choice-group">
-          <legend className="field-label">Aptit (1 = ingen, 5 = stor)</legend>
-          <div className="segmented">
-            {APPETITE_LEVELS.map((level) => {
-              const value = String(level);
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  className="segmented-button"
-                  aria-pressed={fields.appetite === value}
-                  aria-label={`Aptit ${value}`}
-                  onClick={() => {
-                    setFields((f) => ({ ...f, appetite: f.appetite === value ? '' : value }));
-                  }}
-                >
-                  {value}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-        <fieldset className="choice-group">
-          <legend className="field-label">Biverkningar</legend>
-          <div className="chip-grid">
-            {SIDE_EFFECTS.map((effect) => (
-              <button
-                key={effect}
-                type="button"
-                className="chip"
-                aria-pressed={fields.sideEffects.includes(effect)}
-                onClick={() => {
-                  toggleEffect(effect);
-                }}
-              >
-                {effect}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <SegmentedControl
+          label="Aptit (1 = ingen, 5 = stor)"
+          showLabel
+          options={APPETITE_LEVELS.map((level) => ({
+            id: String(level),
+            label: String(level),
+            ariaLabel: `Aptit ${String(level)}`,
+          }))}
+          value={fields.appetite === '' ? null : fields.appetite}
+          onChange={(value) => {
+            setFields((f) => ({ ...f, appetite: f.appetite === value ? '' : value }));
+          }}
+        />
+        <ChipGroup
+          label="Biverkningar"
+          options={SIDE_EFFECTS.map((effect) => ({ id: effect, label: effect }))}
+          selected={fields.sideEffects}
+          onToggle={toggleEffect}
+        />
         <label className="field">
           <span className="field-label">Annat (valfri)</span>
           <input
