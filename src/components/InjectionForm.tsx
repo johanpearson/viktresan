@@ -15,9 +15,16 @@ import {
   type InjectionSite,
 } from '../lib/glp1.ts';
 import type { AppData } from '../lib/useAppData.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
 import { parseInjectionFields } from '../lib/validation.ts';
 import { localNow } from '../lib/workouts.ts';
 import { haptic } from '../lib/haptics.ts';
+import { ActionSheet } from './ActionSheet.tsx';
+import { Card } from './Card.tsx';
+import { DateBar } from './DateBar.tsx';
+import { EmptyState } from './EmptyState.tsx';
+import { ListRow } from './ListRow.tsx';
+import { Toast } from './Toast.tsx';
 
 /** Antal injektioner som visas under formuläret. */
 const RECENT_INJECTIONS = 5;
@@ -44,17 +51,17 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
   const [chosenSite, setChosenSite] = useState<InjectionSite | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [menu, setMenu] = useState<Injection | null>(null);
+  const toast = useUndoToast();
 
   if (data.medications.length === 0) {
     return (
-      <section className="card">
-        <h2 className="card-title">Logga dos</h2>
-        <p className="form-note">Lägg in ditt läkemedel och din dostrappa först.</p>
-        <button type="button" className="button" onClick={onAddMedication}>
-          Lägg in läkemedel
-        </button>
-      </section>
+      <EmptyState
+        title="Inget läkemedel ännu"
+        action={{ label: 'Lägg in läkemedel', onClick: onAddMedication }}
+      >
+        Lägg in ditt läkemedel och din dostrappa först.
+      </EmptyState>
     );
   }
 
@@ -86,19 +93,20 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
     setError(null);
     setDoseText(null);
     setChosenSite(null);
+    toast.close();
     const where = injection.site ? `, ${siteLabel(injection.site).toLowerCase()}` : '';
     setStatus(`Dosen är loggad: ${describeDose(injection)}${where}.`);
   }
 
-  async function handleDelete(injection: Injection) {
-    if (confirmDelete !== injection.id) {
-      setConfirmDelete(injection.id);
-      return;
-    }
+  /** Tar bort dosen direkt (svep eller radmenyn) – Ångra lägger tillbaka den. */
+  async function remove(injection: Injection) {
     await deleteInjection(injection.id);
     await onChange();
-    setConfirmDelete(null);
-    setStatus('Dosen är borttagen.');
+    setStatus(null);
+    toast.show(`Tog bort ${describeDose(injection)} ${formatDate(injection.date)}.`, async () => {
+      await putInjection(injection);
+      await onChange();
+    });
   }
 
   const recent = data.injections.slice(-RECENT_INJECTIONS).reverse();
@@ -106,7 +114,6 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
   return (
     <>
       <form className="card form" onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <h2 className="card-title">Logga dos</h2>
         {choices.length > 1 ? (
           <label className="field">
             <span className="field-label">Läkemedel</span>
@@ -130,19 +137,8 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
             {medication?.name}
           </p>
         )}
+        <DateBar date={date} today={today} label="Datum" testId="log-date" onChange={setDate} />
         <div className="field-row">
-          <label className="field">
-            <span className="field-label">Datum</span>
-            <input
-              className="input"
-              type="date"
-              value={date}
-              max={today}
-              onChange={(e) => {
-                setDate(e.target.value);
-              }}
-            />
-          </label>
           <label className="field">
             <span className="field-label">Tid (valfri)</span>
             <input
@@ -154,20 +150,20 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
               }}
             />
           </label>
+          <label className="field">
+            <span className="field-label">Dos (mg)</span>
+            <input
+              className="input"
+              inputMode="decimal"
+              autoComplete="off"
+              aria-describedby="injection-dose-hint"
+              value={dose}
+              onChange={(e) => {
+                setDoseText(e.target.value);
+              }}
+            />
+          </label>
         </div>
-        <label className="field">
-          <span className="field-label">Dos (mg)</span>
-          <input
-            className="input"
-            inputMode="decimal"
-            autoComplete="off"
-            aria-describedby="injection-dose-hint"
-            value={dose}
-            onChange={(e) => {
-              setDoseText(e.target.value);
-            }}
-          />
-        </label>
         <p className="form-note" id="injection-dose-hint">
           {ladderDose == null
             ? 'Ingen dos i din dostrappa för datumet.'
@@ -210,34 +206,51 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
         </p>
       </form>
       {recent.length > 0 && (
-        <section className="card" aria-labelledby="injections-title">
-          <h2 className="card-title" id="injections-title">
-            Senaste doser
-          </h2>
-          <ul className="entry-list">
+        <Card title="Senaste doser">
+          <ul className="list">
             {recent.map((i) => (
-              <li key={i.id} className="entry" data-testid="injection">
-                <div className="entry-main">
-                  <span className="entry-weight">{describeDose(i)}</span>
-                  <span>
-                    {formatDate(i.date)}
-                    {i.time ? ` ${i.time}` : ''}
-                  </span>
-                </div>
-                {i.site && <p className="entry-extra">{siteLabel(i.site)}</p>}
-                <div className="entry-actions">
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    onClick={() => void handleDelete(i)}
-                  >
-                    {confirmDelete === i.id ? 'Bekräfta borttagning' : 'Ta bort'}
-                  </button>
-                </div>
-              </li>
+              <ListRow
+                key={i.id}
+                testId="injection"
+                primary={describeDose(i)}
+                secondary={[
+                  `${formatDate(i.date)}${i.time ? ` ${i.time}` : ''}`,
+                  i.site && siteLabel(i.site),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                onClick={() => {
+                  setMenu(i);
+                }}
+                swipeLeft={{ label: 'Ta bort', onSwipe: () => void remove(i) }}
+              />
             ))}
           </ul>
-        </section>
+        </Card>
+      )}
+      {menu && (
+        <ActionSheet
+          title={describeDose(menu)}
+          description={[
+            `${formatDate(menu.date)}${menu.time ? ` ${menu.time}` : ''}`,
+            menu.site && siteLabel(menu.site),
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          actions={[{ label: 'Ta bort dosen', danger: true, onSelect: () => void remove(menu) }]}
+          onClose={() => {
+            setMenu(null);
+          }}
+        />
+      )}
+      {toast.toast && (
+        <Toast
+          label="GLP-1"
+          testId="log-toast"
+          message={toast.toast.message}
+          onUndo={toast.onUndo}
+          onClose={toast.close}
+        />
       )}
     </>
   );

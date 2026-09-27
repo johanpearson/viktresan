@@ -49,13 +49,13 @@ vid jämförelse, **Låg** = putsning.
 
 ## Logga
 
-| Prio  | Iakttagelse                                                                                                                                                                            |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Medel | Rutnätet är luftigt (130 px höga rutor, 20 px marginal) men fungerar. Alla ikoner är teal – datatypens färg borde användas så att ikonen känns igen i kalendern och graferna.          |
-| Hög   | **Panelerna (vikt, midja, steg, dryck, träning, GLP-1)** lägger formuläret i ett kort inne i panelen (kort-i-kort), och historiken under har "Redigera"/"Ta bort" som knappar per rad. |
-| Medel | "Stäng" är en inramad knapp i panelens rubrik – i Mat-sheeten är det samma knapp; en ikonknapp (×) eller textknapp vore lättare.                                                       |
-| Medel | Datumfält i paneler visar `mm/dd/yyyy` i vissa webbläsare; Mats `DateBar` (‹ Idag ›) är både kompaktare och tydligare.                                                                 |
-| Låg   | ±0,1-knapparna under vikten är lika höga som Spara och konkurrerar visuellt.                                                                                                           |
+| Prio  | Iakttagelse                                                                                                                                                                            | Status                   |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Medel | Rutnätet är luftigt (130 px höga rutor, 20 px marginal) men fungerar. Alla ikoner är teal – datatypens färg borde användas så att ikonen känns igen i kalendern och graferna.          | Ikonfärg ✅, rutnät kvar |
+| Hög   | **Panelerna (vikt, midja, steg, dryck, träning, GLP-1)** lägger formuläret i ett kort inne i panelen (kort-i-kort), och historiken under har "Redigera"/"Ta bort" som knappar per rad. | ✅ PR #19                |
+| Medel | "Stäng" är en inramad knapp i panelens rubrik – i Mat-sheeten är det samma knapp; en ikonknapp (×) eller textknapp vore lättare.                                                       | ✅ (textknapp, PR #18)   |
+| Medel | Datumfält i paneler visar `mm/dd/yyyy` i vissa webbläsare; Mats `DateBar` (‹ Idag ›) är både kompaktare och tydligare.                                                                 | ✅ PR #19                |
+| Låg   | ±0,1-knapparna under vikten är lika höga som Spara och konkurrerar visuellt.                                                                                                           | ✅ PR #19                |
 
 ## Mat (referens)
 
@@ -115,13 +115,32 @@ vid jämförelse, **Låg** = putsning.
 - Alla paneler: kort-i-kort borttaget, grabber, textknapp "Stäng", övergångar vid öppna/stäng.
 - Sticky sidhuvud som krymper, haptik vid spara/klar (kan stängas av), siffror bryts inte i veckokortet.
 
+## Åtgärdat: paneler i Logga (PR #19)
+
+- **Historik som `ListRow`** i alla paneler: viktmätningar, midjemått, dryck idag (inkl. dryck från Mat),
+  scheman, doser, läkemedel och mående. Inga Redigera/Ta bort/Bekräfta-knappar kvar. Tryck = redigera i
+  formuläret ovanför (vikt, midja, mående) eller radmeny (`ActionSheet`: dos, schema, läkemedel med
+  "Ändra"); svep vänster = ta bort. Borttagning sker direkt och följs av en `Toast` med Ångra i panelen
+  (`useUndoToast`) – bekräftelse i två steg är borta. Formulär som redigerar en post har "Ta bort …" som
+  destruktiv textknapp längst ner (samma borttagning utan svep).
+- **`DateBar`** (‹ Idag ›) i stället för datumfältet i vikt, midja, steg, dos och mående – en rad kortare
+  och inget `mm/dd/yyyy`. Planering framåt (pass, scheman) har kvar vanliga datumfält.
+- **Vikt**: −0,1 [ 86,8 ] +0,1 på en rad med små sekundära knappar; rubriken "Dagens vikt" borttagen
+  (panelrubriken + "Idag" räcker), "Redigera vikt" visas vid redigering. Panelens formulär är ~150 px
+  lägre – listan börjar på första skärmen.
+- **Dryck**: snabbvalen är chips (som på Översikt) i stället för tre fyllda knappar – Spara/Lägg till är
+  inte längre i konkurrens med tre primärknappar; "Ångra senaste" är en textknapp.
+- **Träning/GLP-1**: flikarna använder `SegmentedControl`; tomt läge för dos är `EmptyState` med knapp.
+- Designsystemet: `ActionSheet`, `useUndoToast`, `ListRow` `danger` och `.list-row-details`, `DateBar`
+  med `label`/`testId`, `.nudge-field`, `.button-danger-text`, `.sheet .toast`; `BottomSheet` kan staplas
+  (unikt rubrik-id, `close` från en övre panel stänger inte den under).
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter den här PR:en (designsystemet + Mat och Översikt) – i prioritetsordning:
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 2–8.
 
-1. **Paneler i Logga** (vikt/midja/steg/dryck/träning/GLP-1): ta bort kort-i-kort, historik som `ListRow`
-   med tryck = redigera och svep = ta bort med Ångra. Störst effekt, används dagligen.
-2. **Inställningar**: gruppera i `ListRow` + panel per grupp, en primärknapp per panel.
+1. ~~**Paneler i Logga**~~ ✅ PR #19.
+2. **Inställningar** (nästa): gruppera i `ListRow` + panel per grupp, en primärknapp per panel.
 3. **Framsteg → Historik**: begränsa listorna, en segmentkontroll, grafer i datatypsfärg.
 4. **Kalender**: kompakt förklaring (hopfällbar), dagsvyn som `ListRow`, pass utan knappar i listan.
 5. **Mat → Egna och Historik**: `ListRow`, svep för ta bort, liten segmentkontroll för tidsfilter.

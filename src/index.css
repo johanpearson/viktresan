@@ -502,13 +502,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.nudge-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-  margin-top: 8px;
-}
-
 .link-button {
   align-self: flex-start;
   min-height: 48px;
@@ -544,6 +537,14 @@ body {
   border: 2px solid var(--danger);
 }
 
+/* −0,1 [ 86,0 ] +0,1 på en rad: stegknapparna är små och sekundära bredvid fältet. */
+.nudge-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .button-small {
   width: auto;
   min-height: var(--tap-min);
@@ -556,6 +557,13 @@ body {
 .button-ghost {
   background: transparent;
   color: var(--accent);
+}
+
+/* Destruktiv textknapp längst ner i ett formulär ("Ta bort mätningen"). */
+.button-ghost.button-danger-text {
+  align-self: flex-start;
+  padding: 0;
+  color: var(--danger);
 }
 
 .form-error {
@@ -608,18 +616,6 @@ body {
   margin: 4px 0 0;
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
-}
-
-.entry-compact {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 4px 0;
-}
-
-.entry-compact .entry-main {
-  flex: 1;
 }
 
 .entry-actions {
@@ -3526,6 +3522,28 @@ a.list-row-body {
   transform: rotate(45deg);
 }
 
+/* Destruktivt val i en meny (ActionSheet). */
+.list-row-danger .list-row-primary {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Detaljer under en rad (t.ex. dostrappa): liten, dämpad tabell. */
+.list-row-details {
+  margin: calc(-1 * var(--space-1)) 0 0;
+  padding: 0 var(--space-4) var(--space-2);
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.list-row-details li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 2px 0;
+}
+
 .list-row-expand {
   flex: none;
   width: 48px;
@@ -3833,6 +3851,23 @@ a.list-row-body {
   margin: 0 auto var(--space-1);
   border-radius: var(--radius-full);
   background: var(--border);
+}
+
+/* ActionSheet: kort beskrivning ovanför valen. */
+.action-sheet-description {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* Datumraden i ett formulär: formulärets mellanrum räcker. */
+.form > .date-bar {
+  margin: calc(-1 * var(--space-2)) 0 0;
+}
+
+/* Toast i en panel (Ångra efter svep): panelen täcker navigeringen – lägg den längst ner. */
+.sheet .toast {
+  bottom: calc(env(safe-area-inset-bottom) + var(--space-3));
 }
 
 /* Toast: Ångra är knappen, Stäng en textknapp. */

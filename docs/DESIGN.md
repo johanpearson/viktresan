@@ -115,12 +115,15 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `ListRow`          | `ListRow.tsx`          | Rad: primär/sekundär text, högerställt värde, tryck, svep vänster/höger       |
 | `SectionAccordion` | `SectionAccordion.tsx` | Hopfällbar sektion med rubrik, metatext, värde och åtgärder (måltider)        |
 | `BottomSheet`      | `BottomSheet.tsx`      | Panel nerifrån (eller helskärm) som modal `<dialog>`                          |
+| `ActionSheet`      | `ActionSheet.tsx`      | Radmeny: liten panel med ett val per rad, destruktiva val i fel-färg          |
+| `DateBar`          | `DateBar.tsx`          | ‹ Idag › – datumrad med osynligt datumfält (Mat → Dag, formulär i paneler)    |
 | `SegmentedControl` | `SegmentedControl.tsx` | Flikar/filter med `aria-pressed`; `size="small"` i sidhuvudet                 |
 | `StatBar`          | `StatBar.tsx`          | "827 / 1 680 kcal" + tunn stapel i datatypens färg + metarad                  |
 | `GoalRing` (Ring)  | `GoalRing.tsx`         | Ring mot dagsmål (dryck, kalorier, protein) med `tone`                        |
 | `ProgressBar`      | `ProgressBar.tsx`      | Stapel med `tone`, `thin`, `decorative` (dold för skärmläsare)                |
 | `EmptyState`       | `EmptyState.tsx`       | Tomt läge: rubrik, förklaring och **en** knapp för nästa steg                 |
 | `Toast`            | `Toast.tsx`            | Kvittens ovanför navigeringen med valfri Ångra; försvinner efter 8 s          |
+| `useUndoToast`     | `lib/useUndoToast.ts`  | Tillstånd för en Toast med Ångra efter borttagning i en lista                 |
 | `Skeleton`         | `Skeleton.tsx`         | Platshållare medan IndexedDB läses (ingen layout som hoppar)                  |
 
 ### Page (sidhuvud)
@@ -166,7 +169,14 @@ lägger den på `top: var(--page-header-height)`. `scroll-padding-top` gör att 
 - Svep med pekarhändelser (`useSwipe`, `touch-action: pan-y`): vänster glider ut och anropar
   `swipeLeft` (ska följas av en `Toast` med Ångra), höger studsar tillbaka. Ett svep räknas aldrig som tryck.
 - `href` i stället för `onClick` ger en länk; `chevron` visar › (öppnar något); `trailing` för en extra
-  knapp (fäll ut ingredienser).
+  knapp (fäll ut ingredienser); `danger` = destruktivt val i en meny (fel-färg).
+- `children` ligger under raden och följer med vid svep. Små detaljer (dostrappa) i
+  `<ol className="list-row-details">` – dämpad text, värde till höger.
+- **Tryck på raden** öppnar det man kan göra med den: finns ett formulär (vikt, midja, mående) läses
+  posten in i formuläret ovanför; annars öppnas en `ActionSheet` (dos, schema, läkemedel). Formuläret
+  har då "Ta bort …" längst ner som destruktiv textknapp (`button button-ghost button-small
+button-danger-text`) – samma borttagning som svepet, så den nås utan svep (tangentbord,
+  skärmläsare).
 
 ### SectionAccordion
 
@@ -195,6 +205,51 @@ Tom sektion = smal rad med bara rubrik och `actions`. Innehållet glider in (200
 - Grabber överst, rubrik + textknappen "Stäng" (ghost). Esc, "Stäng" eller tryck utanför stänger.
 - `full` = helskärm (sök, analys, Fråga AI).
 - Menyer i en panel är `ListRow` med `chevron` (en rad per val) – inte en stapel knappar.
+- Paneler kan staplas: en `ActionSheet` öppnas ovanpå en panel (unikt rubrik-id per panel). Att stänga
+  den övre stänger bara den – `close` som bubblar genom React-trädet ignoreras.
+- En `Toast` i en panel (Ångra efter svep) renderas i panelen och ligger längst ner i den
+  (`.sheet .toast`), eftersom panelen täcker navigeringen.
+
+### ActionSheet
+
+```tsx
+<ActionSheet
+  title="Wegovy 0,25 mg"
+  description="16 sep 08:05 · Buk vänster"
+  actions={[{ label: 'Ta bort dosen', danger: true, onSelect: () => void remove(dose) }]}
+  onClose={() => setMenu(null)}
+/>
+```
+
+Valet stänger menyn och körs sedan. Ett destruktivt val tar bort direkt och följs av en `Toast` med
+Ångra – ingen bekräftelse i två steg.
+
+### DateBar
+
+`<DateBar date={date} today={todayIso()} label="Datum" testId="log-date" onChange={setDate} />` –
+ersätter `<input type="date">` i formulär där datumet inte får ligga i framtiden (vikt, midja, steg, dos,
+mående). Texten är "Idag", "Igår" eller datumet; ‹ › byter dag, tryck på texten öppnar systemets
+väljare. Formulär som planerar framåt (träningspass, scheman) behåller vanliga datumfält.
+
+### useUndoToast
+
+```tsx
+const toast = useUndoToast();
+async function remove(entry) {
+  await deleteWeight(entry.id);
+  await onChange();
+  toast.show(`Tog bort ${formatKg(entry.weightKg)}.`, async () => {
+    await putWeight(entry); // lägger tillbaka posten oförändrad
+    await onChange();
+  });
+}
+…
+{toast.toast && (
+  <Toast message={toast.toast.message} onUndo={toast.onUndo} onClose={toast.close} />
+)}
+```
+
+Stäng kvittensen (`toast.close()`) när något nytt sparas, så att bara ett statusmeddelande syns åt gången.
 
 ### SegmentedControl
 
@@ -236,7 +291,8 @@ läser upp "Laddar …".
 1. **Tryckytor minst 44 px** (`--tap-min`); vanliga knappar och rader 56 px (`--tap`).
 2. **En primärknapp per vy.** Fyllda knappar (`.button`) bara för den viktigaste handlingen – Spara i en
    panel, nästa steg i ett tomt läge. Övrigt: `.button-secondary` (ram), `.button-ghost` (text) eller
-   chips. Snabbval (dryck) är chips; "Klar" på ett pass är sekundär.
+   chips. Snabbval (dryck) är chips – även i Logga → Dryck; "Klar" på ett pass är sekundär. Stegknappar
+   bredvid ett fält (±0,1 kg) är små och sekundära på samma rad som fältet (`.nudge-field`).
 3. **Destruktiva åtgärder** ligger i en panel (längst ner, i fel-färg) eller som svep med Ångra – aldrig som
    knappar i listor.
 4. **Tomma lägen** har en tydlig nästa handling (`EmptyState` med `action`).
@@ -254,6 +310,7 @@ läser upp "Laddar …".
 | BottomSheet      | Glider upp 32 px + bakgrund tonas in / glider ner         | 200 / 150 ms |
 | SectionAccordion | Innehåll glider in 6 px (ingen opacitet), chevron roterar | 200 ms       |
 | ListRow          | Svepet följer fingret; släpps → glider tillbaka/ut        | 200 ms       |
+| ActionSheet      | Som BottomSheet, ovanpå den öppna panelen                 | 200 / 150 ms |
 | Sidhuvud         | Rubriken krymper (`scale(0.72)`), linje under             | 200 ms       |
 | Skeleton         | Pulserar                                                  | 1,4 s        |
 

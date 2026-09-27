@@ -1,11 +1,16 @@
 import { useState, type SyntheticEvent } from 'react';
-import { deleteSymptoms, upsertSymptoms, type SymptomEntry } from '../db/db.ts';
+import { deleteSymptoms, putSymptoms, upsertSymptoms, type SymptomEntry } from '../db/db.ts';
 import { symptomSummary } from '../lib/dayMarkers.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatDate } from '../lib/format.ts';
 import { APPETITE_MAX, APPETITE_MIN, SIDE_EFFECTS } from '../lib/glp1.ts';
 import type { AppData } from '../lib/useAppData.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
 import { parseSymptomFields } from '../lib/validation.ts';
+import { Card } from './Card.tsx';
+import { DateBar } from './DateBar.tsx';
+import { ListRow } from './ListRow.tsx';
+import { Toast } from './Toast.tsx';
 
 /** Antal dagar som visas under formuläret. */
 const RECENT_SYMPTOMS = 5;
@@ -46,7 +51,7 @@ export function SymptomForm({ data, onChange }: SymptomFormProps) {
   );
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const toast = useUndoToast();
   const existing = data.symptoms.find((s) => s.date === date);
 
   function changeDate(next: string) {
@@ -74,19 +79,21 @@ export function SymptomForm({ data, onChange }: SymptomFormProps) {
     await upsertSymptoms(day, values);
     await onChange();
     setError(null);
+    toast.close();
     setStatus(`${existing ? 'Uppdaterade' : 'Sparade'} måendet för ${formatDate(day)}.`);
   }
 
-  async function handleDelete(day: string) {
-    if (confirmDelete !== day) {
-      setConfirmDelete(day);
-      return;
-    }
-    await deleteSymptoms(day);
+  /** Tar bort dagens mående direkt (svep eller "Ta bort") – Ångra lägger tillbaka det. */
+  async function remove(entry: SymptomEntry) {
+    await deleteSymptoms(entry.date);
     await onChange();
-    setConfirmDelete(null);
-    if (day === date) setFields(fieldsFor(undefined));
-    setStatus('Måendet är borttaget.');
+    if (entry.date === date) setFields(fieldsFor(undefined));
+    setStatus(null);
+    toast.show(`Tog bort måendet ${formatDate(entry.date)}.`, async () => {
+      await putSymptoms(entry);
+      await onChange();
+      if (entry.date === date) setFields(fieldsFor(entry));
+    });
   }
 
   const recent = [...data.symptoms].slice(-RECENT_SYMPTOMS).reverse();
@@ -94,20 +101,14 @@ export function SymptomForm({ data, onChange }: SymptomFormProps) {
   return (
     <>
       <form className="card form" onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <h2 className="card-title">Mående</h2>
+        <DateBar
+          date={date}
+          today={todayIso()}
+          label="Datum"
+          testId="log-date"
+          onChange={changeDate}
+        />
         <p className="form-note">Valfritt. Fyll i det du vill – aptit, biverkningar eller båda.</p>
-        <label className="field">
-          <span className="field-label">Datum</span>
-          <input
-            className="input"
-            type="date"
-            value={date}
-            max={todayIso()}
-            onChange={(e) => {
-              changeDate(e.target.value);
-            }}
-          />
-        </label>
         <fieldset className="choice-group">
           <legend className="field-label">Aptit (1 = ingen, 5 = stor)</legend>
           <div className="segmented">
@@ -168,35 +169,45 @@ export function SymptomForm({ data, onChange }: SymptomFormProps) {
         <button type="submit" className="button">
           Spara mående
         </button>
+        {existing && (
+          <button
+            type="button"
+            className="button button-ghost button-small button-danger-text"
+            onClick={() => void remove(existing)}
+          >
+            Ta bort dagens mående
+          </button>
+        )}
         <p className="form-ok" role="status">
           {status}
         </p>
       </form>
       {recent.length > 0 && (
-        <section className="card" aria-labelledby="symptoms-title">
-          <h2 className="card-title" id="symptoms-title">
-            Senaste dagarna
-          </h2>
-          <ul className="entry-list">
+        <Card title="Senaste dagarna">
+          <ul className="list">
             {recent.map((s) => (
-              <li key={s.date} className="entry" data-testid="symptom">
-                <div className="entry-main">
-                  <span className="entry-weight">{formatDate(s.date)}</span>
-                </div>
-                <p className="entry-extra">{symptomSummary(s)}</p>
-                <div className="entry-actions">
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    onClick={() => void handleDelete(s.date)}
-                  >
-                    {confirmDelete === s.date ? 'Bekräfta borttagning' : 'Ta bort'}
-                  </button>
-                </div>
-              </li>
+              <ListRow
+                key={s.date}
+                testId="symptom"
+                primary={formatDate(s.date)}
+                secondary={symptomSummary(s)}
+                onClick={() => {
+                  changeDate(s.date);
+                }}
+                swipeLeft={{ label: 'Ta bort', onSwipe: () => void remove(s) }}
+              />
             ))}
           </ul>
-        </section>
+        </Card>
+      )}
+      {toast.toast && (
+        <Toast
+          label="Mående"
+          testId="log-toast"
+          message={toast.toast.message}
+          onUndo={toast.onUndo}
+          onClose={toast.close}
+        />
       )}
     </>
   );

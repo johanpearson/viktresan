@@ -5,6 +5,7 @@ import { formatDate, formatInt } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { parseStepsFields } from '../lib/validation.ts';
 import { haptic } from '../lib/haptics.ts';
+import { DateBar } from './DateBar.tsx';
 
 function stepsFor(steps: readonly StepsEntry[], date: string): StepsEntry | undefined {
   return steps.find((s) => s.date === date);
@@ -52,19 +53,13 @@ export function StepsForm({ steps, onChange }: StepsFormProps) {
 
   return (
     <form className="card form steps-form" onSubmit={(e) => void handleSubmit(e)} noValidate>
-      <h2 className="card-title">{date === todayIso() ? 'Dagens steg' : 'Steg'}</h2>
-      <label className="field">
-        <span className="field-label">Datum</span>
-        <input
-          className="input"
-          type="date"
-          value={date}
-          max={todayIso()}
-          onChange={(e) => {
-            changeDate(e.target.value);
-          }}
-        />
-      </label>
+      <DateBar
+        date={date}
+        today={todayIso()}
+        label="Datum"
+        testId="log-date"
+        onChange={changeDate}
+      />
       <label className="field">
         <span className="field-label">Antal steg</span>
         <input

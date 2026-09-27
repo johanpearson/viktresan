@@ -5,13 +5,22 @@ interface DateBarProps {
   date: string;
   today: string;
   onChange: (date: string) => void;
+  /** Tillgängligt namn på datumfältet. */
+  label?: string;
+  testId?: string;
 }
 
 /**
  * Kompakt datumrad: ‹ föregående dag, datumet (tryck = datumväljaren) och nästa ›.
  * Datumfältet ligger osynligt ovanpå texten så att ett tryck öppnar systemets väljare.
  */
-export function DateBar({ date, today, onChange }: DateBarProps) {
+export function DateBar({
+  date,
+  today,
+  onChange,
+  label = 'Välj dag',
+  testId = 'food-date',
+}: DateBarProps) {
   return (
     <div className="date-bar" data-testid="date-bar">
       <button
@@ -25,13 +34,13 @@ export function DateBar({ date, today, onChange }: DateBarProps) {
         <span aria-hidden="true">‹</span>
       </button>
       <label className="date-bar-label">
-        <span className="date-bar-text" data-testid="food-date">
+        <span className="date-bar-text" data-testid={testId}>
           {dayLabel(date, today)}
         </span>
         <input
           className="date-bar-input"
           type="date"
-          aria-label="Välj dag"
+          aria-label={label}
           value={date}
           max={today}
           onChange={(e) => {

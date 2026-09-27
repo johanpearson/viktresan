@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, dump, isoDaysFromToday, openLog, seed } from './helpers.ts';
+import { collectErrors, dump, isoDaysFromToday, openLog, seed, swipeLeft } from './helpers.ts';
 
 function nav(page: Page) {
   return page.getByRole('navigation', { name: 'Huvudmeny' });
@@ -150,7 +150,8 @@ test('redigera och ta bort en vikt', async ({ page }) => {
   await logWeight(page, isoDaysFromToday(-1), '80,5');
   await expect(page.getByTestId('entry')).toHaveCount(1);
 
-  await page.getByRole('button', { name: /^Redigera/ }).tap();
+  // Tryck på raden = redigera i formuläret ovanför.
+  await page.getByTestId('entry').tap();
   await expect(page.getByRole('heading', { name: 'Redigera vikt' })).toBeVisible();
   await expect(page.getByLabel('Vikt (kg)')).toHaveValue('80,5');
   await page.getByLabel('Vikt (kg)').fill('80,1');
@@ -158,10 +159,22 @@ test('redigera och ta bort en vikt', async ({ page }) => {
   await expect(page.getByTestId('entry')).toHaveCount(1);
   await expect(page.getByTestId('entry')).toContainText('80,1 kg');
 
-  await page.getByRole('button', { name: /^Ta bort/ }).tap();
-  await page.getByRole('button', { name: /^Bekräfta borttagning/ }).tap();
+  // Ta bort vid redigering → kvittens med Ångra (ingen bekräftelse).
+  await page.getByTestId('entry').tap();
+  await page.getByRole('button', { name: 'Ta bort mätningen' }).tap();
   await expect(page.getByTestId('entry')).toHaveCount(0);
   await expect(page.getByText('Inga mätningar ännu.')).toBeVisible();
+  const toast = page.getByTestId('log-toast');
+  await expect(toast).toContainText('Tog bort 80,1 kg');
+  await toast.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(page.getByTestId('entry')).toHaveCount(1);
+  await expect(page.getByTestId('entry')).toContainText('80,1 kg');
+
+  // Svep åt vänster tar också bort.
+  await swipeLeft(page.getByTestId('entry'));
+  await expect(page.getByTestId('entry')).toHaveCount(0);
+  await expect(toast).toContainText('Tog bort 80,1 kg');
+  expect((await dump(page)).weights).toEqual([]);
 });
 
 test('logga midja', async ({ page }) => {
@@ -196,6 +209,15 @@ test('logga midja', async ({ page }) => {
   await expect(entries.nth(0)).toContainText('94,5 cm');
   await expect(entries.nth(1)).toContainText('96,5 cm');
 
+  // Tryck på ett äldre mått väljer dagen; svep tar bort med Ångra.
+  await entries.nth(1).tap();
+  await expect(page.getByTestId('log-date')).not.toHaveText('Idag');
+  await expect(field).toHaveValue('96,5');
+  await swipeLeft(entries.nth(1));
+  await expect(entries).toHaveCount(1);
+  await page.getByTestId('log-toast').getByRole('button', { name: 'Ångra' }).tap();
+  await expect(entries).toHaveCount(2);
+
   const stored = await dump(page);
   expect(stored.waist).toEqual([
     expect.objectContaining({ date: isoDaysFromToday(-7), waistCm: 96.5 }),
@@ -215,7 +237,7 @@ test('logga steg och skriv över dagens steg', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('./#/logga');
   await openLog(page, 'steg');
-  await expect(page.getByRole('heading', { name: 'Dagens steg' })).toBeVisible();
+  await expect(page.getByTestId('log-date')).toHaveText('Idag');
   await expect(page.getByLabel('Datum')).toHaveValue(isoDaysFromToday(0));
   const field = page.getByLabel('Antal steg');
   await expect(field).toHaveAttribute('inputmode', 'numeric');

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { prefersReducedMotion } from '../lib/motion.ts';
 
 interface BottomSheetProps {
@@ -21,6 +21,8 @@ const CLOSE_MS = 150;
 export function BottomSheet({ title, onClose, full = false, children }: BottomSheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closing = useRef(false);
+  // Unikt id: en panel kan öppnas ovanpå en annan (radmeny i en Logga-panel).
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -69,8 +71,12 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
     <dialog
       className={full ? 'sheet sheet-full' : 'sheet'}
       ref={dialogRef}
-      aria-labelledby="sheet-title"
-      onClose={onClose}
+      aria-labelledby={titleId}
+      onClose={(e) => {
+        // React låter close bubbla genom komponentträdet: en radmeny som stängs ovanpå
+        // panelen ska inte stänga panelen.
+        if (e.target === e.currentTarget) onClose();
+      }}
       onClick={(e) => {
         // Tryck på bakgrunden (utanför panelens innehåll) stänger.
         if (e.target === e.currentTarget) close();
@@ -79,7 +85,7 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
       <div className="sheet-panel">
         {!full && <span className="sheet-grabber" aria-hidden="true" />}
         <div className="sheet-header">
-          <h2 className="sheet-title" id="sheet-title">
+          <h2 className="sheet-title" id={titleId}>
             {title}
           </h2>
           <button type="button" className="button button-ghost button-small" onClick={close}>

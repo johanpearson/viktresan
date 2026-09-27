@@ -1,10 +1,15 @@
 import { useState, type SyntheticEvent } from 'react';
-import { deleteWaist, upsertWaist, type WaistEntry } from '../db/db.ts';
+import { deleteWaist, putWaist, upsertWaist, type WaistEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatCm, formatDate } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
 import { parseWaistFields } from '../lib/validation.ts';
 import { haptic } from '../lib/haptics.ts';
+import { Card } from './Card.tsx';
+import { DateBar } from './DateBar.tsx';
+import { ListRow } from './ListRow.tsx';
+import { Toast } from './Toast.tsx';
 
 /** Antal midjemått som visas i listan under formuläret. */
 const RECENT_WAIST = 5;
@@ -29,7 +34,7 @@ export function WaistLog({ waist, onChange }: WaistLogProps) {
   const [value, setValue] = useState(() => latestWaistText(waist));
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [confirmDeleteDate, setConfirmDeleteDate] = useState<string | null>(null);
+  const toast = useUndoToast();
   const existing = waist.find((w) => w.date === date);
 
   async function handleSubmit(event: SyntheticEvent) {
@@ -44,20 +49,21 @@ export function WaistLog({ waist, onChange }: WaistLogProps) {
     const next = await onChange();
     setValue(latestWaistText(next.waist));
     setError(null);
+    toast.close();
     setStatus(
       `${existing ? 'Uppdaterade' : 'Sparade'} ${formatCm(result.value.waistCm)} för ${formatDate(result.value.date)}.`,
     );
   }
 
-  async function handleDelete(entryDate: string) {
-    if (confirmDeleteDate !== entryDate) {
-      setConfirmDeleteDate(entryDate);
-      return;
-    }
-    await deleteWaist(entryDate);
+  /** Tar bort direkt (svep eller "Ta bort" för vald dag) – Ångra lägger tillbaka måttet. */
+  async function remove(entry: WaistEntry) {
+    await deleteWaist(entry.date);
     await onChange();
-    setConfirmDeleteDate(null);
-    setStatus('Midjemåttet är borttaget.');
+    setStatus(null);
+    toast.show(`Tog bort ${formatCm(entry.waistCm)} ${formatDate(entry.date)}.`, async () => {
+      await putWaist(entry);
+      await onChange();
+    });
   }
 
   const recent = waist.slice(-RECENT_WAIST).reverse();
@@ -65,19 +71,13 @@ export function WaistLog({ waist, onChange }: WaistLogProps) {
   return (
     <>
       <form className="card form" onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <h2 className="card-title">Midjemått</h2>
-        <label className="field">
-          <span className="field-label">Datum</span>
-          <input
-            className="input"
-            type="date"
-            value={date}
-            max={todayIso()}
-            onChange={(e) => {
-              setDate(e.target.value);
-            }}
-          />
-        </label>
+        <DateBar
+          date={date}
+          today={todayIso()}
+          label="Datum"
+          testId="log-date"
+          onChange={setDate}
+        />
         <label className="field">
           <span className="field-label">Midjemått (cm)</span>
           <input
@@ -103,42 +103,52 @@ export function WaistLog({ waist, onChange }: WaistLogProps) {
         <button type="submit" className="button">
           Spara
         </button>
+        {existing && (
+          <button
+            type="button"
+            className="button button-ghost button-small button-danger-text"
+            onClick={() => void remove(existing)}
+          >
+            Ta bort måttet
+          </button>
+        )}
         <p className="form-ok" role="status">
           {status}
         </p>
       </form>
 
-      <section className="card" aria-labelledby="waist-title">
-        <h2 className="card-title" id="waist-title">
-          Senaste måtten
-        </h2>
+      <Card title="Senaste måtten">
         {recent.length === 0 ? (
           <p className="muted">Inga midjemått ännu.</p>
         ) : (
-          <ul className="entry-list">
+          <ul className="list">
             {recent.map((w) => (
-              <li key={w.date} className="entry entry-compact" data-testid="waist-entry">
-                <div className="entry-main">
-                  <span className="entry-date">{formatDate(w.date)}</span>
-                  <span className="entry-weight">{formatCm(w.waistCm)}</span>
-                </div>
-                <button
-                  type="button"
-                  className="button button-danger button-small"
-                  aria-label={
-                    confirmDeleteDate === w.date
-                      ? `Bekräfta borttagning av midjemåttet ${formatDate(w.date)}`
-                      : `Ta bort midjemåttet ${formatDate(w.date)}`
-                  }
-                  onClick={() => void handleDelete(w.date)}
-                >
-                  {confirmDeleteDate === w.date ? 'Bekräfta' : 'Ta bort'}
-                </button>
-              </li>
+              <ListRow
+                key={w.date}
+                testId="waist-entry"
+                primary={formatDate(w.date)}
+                value={formatCm(w.waistCm)}
+                onClick={() => {
+                  setDate(w.date);
+                  setValue(cmText(w.waistCm));
+                  setError(null);
+                  setStatus(null);
+                }}
+                swipeLeft={{ label: 'Ta bort', onSwipe: () => void remove(w) }}
+              />
             ))}
           </ul>
         )}
-      </section>
+      </Card>
+      {toast.toast && (
+        <Toast
+          label="Midja"
+          testId="log-toast"
+          message={toast.toast.message}
+          onUndo={toast.onUndo}
+          onClose={toast.close}
+        />
+      )}
     </>
   );
 }

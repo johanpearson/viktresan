@@ -109,6 +109,20 @@ test('lägga in läkemedel med dostrappa, logga dos och se den i kalendern', asy
     'Förslag för rotation: buk höger.',
   );
 
+  // Tryck på dosen öppnar radmenyn ovanpå panelen; Stäng där lämnar panelen öppen.
+  await doseSheet.getByTestId('injection').tap();
+  const menu = page.getByRole('dialog', { name: 'Wegovy 0,25 mg' });
+  await expect(menu).toBeVisible();
+  await menu.getByRole('button', { name: 'Stäng' }).tap();
+  await expect(menu).toBeHidden();
+  await expect(doseSheet).toBeVisible();
+  // Ta bort via radmenyn → kvittens med Ångra.
+  await doseSheet.getByTestId('injection').tap();
+  await menu.getByRole('button', { name: 'Ta bort dosen' }).tap();
+  await expect(doseSheet.getByTestId('injection')).toHaveCount(0);
+  await doseSheet.getByTestId('log-toast').getByRole('button', { name: 'Ångra' }).tap();
+  await expect(doseSheet.getByTestId('injection')).toHaveCount(1);
+
   // Mående: aptit och biverkningar.
   await doseSheet.getByRole('button', { name: 'Mående', exact: true }).tap();
   await doseSheet.getByRole('button', { name: 'Aptit 2' }).tap();

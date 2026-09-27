@@ -2,7 +2,9 @@ import { todayIso } from '../lib/dates.ts';
 import { formatMl } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
+import { Card } from './Card.tsx';
 import { DrinkGoalNote } from './DrinkGoalNote.tsx';
+import { ListRow } from './ListRow.tsx';
 import { WaterControls } from './WaterControls.tsx';
 import { WaterRing } from './WaterRing.tsx';
 
@@ -23,39 +25,35 @@ export function WaterLog({ data, onChange }: WaterLogProps) {
   const drink = drinkOn(data.water, data.foodLog, today);
   const entries = data.water.filter((w) => w.date === today).reverse();
   return (
-    <div className="card form">
-      <h2 className="card-title">Dryck idag</h2>
-      <WaterRing ml={drink.ml} goalMl={goal.ml} />
-      <DrinkGoalNote goal={goal} foodMl={drink.foodMl} />
-      <WaterControls date={today} water={data.water} onChange={onChange} custom />
-      {entries.length > 0 && (
-        <ul className="entry-list" aria-label="Dagens dryck">
-          {entries.map((e) => (
-            <li key={e.id} className="entry entry-compact" data-testid="water-entry">
-              <span className="entry-main">
-                <span>{timeFormat.format(e.createdAt)}</span>
-                <span className="entry-weight">{formatMl(e.ml)}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {drink.food.length > 0 && (
-        <>
-          <h3 className="subheading">Från Mat</h3>
-          <ul className="entry-list" aria-label="Dryck från Mat">
+    <>
+      <div className="card form">
+        <WaterRing ml={drink.ml} goalMl={goal.ml} />
+        <DrinkGoalNote goal={goal} foodMl={drink.foodMl} />
+        <WaterControls date={today} water={data.water} onChange={onChange} custom variant="chips" />
+      </div>
+      {(entries.length > 0 || drink.food.length > 0) && (
+        <Card title="Dagens dryck">
+          <ul className="list" aria-label="Dagens dryck">
+            {entries.map((e) => (
+              <ListRow
+                key={e.id}
+                testId="water-entry"
+                primary={timeFormat.format(e.createdAt)}
+                value={formatMl(e.ml)}
+              />
+            ))}
             {drink.food.map((d) => (
-              <li key={d.id} className="entry entry-compact" data-testid="drink-food-entry">
-                <span className="entry-main">
-                  <span>{d.name}</span>
-                  <span className="entry-weight">{formatMl(d.ml)}</span>
-                </span>
-              </li>
+              <ListRow
+                key={d.id}
+                testId="drink-food-entry"
+                primary={d.name}
+                secondary="Från Mat – ändras under Mat"
+                value={formatMl(d.ml)}
+              />
             ))}
           </ul>
-          <p className="form-note">Ändra eller ta bort dem under Mat.</p>
-        </>
+        </Card>
       )}
-    </div>
+    </>
   );
 }
