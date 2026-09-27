@@ -14,6 +14,8 @@ interface CustomFoodFormProps {
   ean?: string;
   onSaved: (food: StoredFood) => void;
   onCancel: () => void;
+  /** Visar "Ta bort livsmedlet" längst ner (bara vid redigering, Mat → Egna). */
+  onDelete?: () => void;
 }
 
 function fieldsFor(food: StoredFood | null, ean: string | undefined): FoodFields {
@@ -44,6 +46,7 @@ export function CustomFoodForm({
   ean,
   onSaved,
   onCancel,
+  onDelete,
 }: CustomFoodFormProps) {
   const [fields, setFields] = useState<FoodFields>(() => fieldsFor(food, ean));
   const [units, setUnits] = useState<FoodUnit[]>(() => [...customUnits]);
@@ -147,6 +150,15 @@ export function CustomFoodForm({
           Avbryt
         </button>
       </div>
+      {onDelete && (
+        <button
+          type="button"
+          className="button button-ghost button-small button-danger-text"
+          onClick={onDelete}
+        >
+          Ta bort livsmedlet
+        </button>
+      )}
     </form>
   );
 }

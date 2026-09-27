@@ -217,6 +217,38 @@ export const VISUAL_DATA: SeedData = {
       per100: GROT,
       createdAt: at(60),
     },
+    {
+      id: 'egen:bar',
+      name: 'Proteinbar choklad',
+      source: 'egen',
+      per100: per100(360, 33, 30, 12),
+      createdAt: at(30),
+    },
+  ],
+  meals: [
+    {
+      id: 'kycklinglunch',
+      name: 'Kycklinglunch',
+      items: [
+        {
+          foodId: 'lv:6',
+          name: 'Kycklingfilé stekt',
+          amount: 150,
+          unit: 'g',
+          grams: 150,
+          per100: KYCKLING,
+        },
+        {
+          foodId: 'lv:4',
+          name: 'Potatis kokt',
+          amount: 200,
+          unit: 'g',
+          grams: 200,
+          per100: POTATIS,
+        },
+      ],
+      createdAt: at(40),
+    },
   ],
   favorites: [{ foodId: 'lv:6', createdAt: at(20) }],
   foodLog,

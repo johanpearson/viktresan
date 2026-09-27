@@ -264,6 +264,32 @@ ersätter `<input type="date">` i formulär där datumet inte får ligga i framt
 mående). Texten är "Idag", "Igår" eller datumet; ‹ › byter dag, tryck på texten öppnar systemets
 väljare. Formulär som planerar framåt (träningspass, scheman) behåller vanliga datumfält.
 
+### Egna listor (Mat → Egna)
+
+`Card` med rubrik och en **sekundär** knapp i rubrikraden ("Ny måltid", "Nytt livsmedel" – `button-secondary
+button-small` via `action`), sedan en `list` med en `ListRow` per post: namn, sekundärtext (ingredienser eller
+"Per 100 g · 7 g protein") och kcal till höger. Tryck = formuläret (med "Ta bort …" som destruktiv textknapp längst
+ner), svep vänster = ta bort med `Toast` och Ångra. Ångra lägger tillbaka även favoritmarkeringen och de egna
+enheterna, som borttagningen tar med sig. Inga fyllda knappar i vyn – primärknappen är Spara i formuläret.
+
+### Nyckeltal och tät tabell
+
+```tsx
+<Card title="Senaste 7 dagarna">
+  <div className="totals-row">
+    <StatBar tone="food" … meta="658 kcal under målet" />
+    <StatBar tone="protein" … meta="Målet nått" />
+  </div>
+  <p className="form-note muted">Snitt per loggad dag · 7 av 7 dagar loggade</p>
+  <table className="table">…</table>
+</Card>
+```
+
+Snitt mot mål visas som `StatBar` (samma som Mat → Dag) i stället för meningar i löptext. Gemensam förklaring
+("Snitt per loggad dag …") är en dämpad rad under staplarna – metaraden i en `StatBar` bryts aldrig och ska vara kort.
+`.table` är en tät tabell (`--text-sm`, 8/4 px cellmarginal) för data med flera kolumner per rad (dag, intag, mot mål,
+protein; vikt och trend) – där en `ListRow` skulle tappa kolumnerna.
+
 ### PeriodBar
 
 ```tsx

@@ -219,6 +219,40 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   expect(errors).toEqual([]);
 });
 
+test('Egna: svep tar bort med Ångra, tryck redigerar och kan ta bort', async ({ page }) => {
+  const errors = collectErrors(page);
+  await openFood(page);
+  await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+  await page.getByRole('button', { name: 'Nytt livsmedel' }).tap();
+  await page.getByLabel('Namn').fill('Mormors bulle');
+  await page.getByLabel('Energi (kcal)').fill('380');
+  await page.getByRole('button', { name: 'Spara livsmedel' }).tap();
+  const toast = page.getByTestId('own-toast');
+  await expect(toast).toContainText('Sparade Mormors bulle.');
+  // Inga Redigera/Ta bort-knappar i listan.
+  const row = page.getByTestId('own-food');
+  await expect(row.getByRole('button', { name: 'Ta bort' })).toHaveCount(0);
+
+  // Svep vänster tar bort direkt; Ångra lägger tillbaka livsmedlet.
+  await swipeLeft(row);
+  await expect(row).toHaveCount(0);
+  await expect(toast).toContainText('Tog bort Mormors bulle.');
+  await toast.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(row).toHaveCount(1);
+  expect((await dump(page)).foods).toEqual([
+    expect.objectContaining({ name: 'Mormors bulle', source: 'egen' }),
+  ]);
+
+  // Tryck öppnar formuläret, som har "Ta bort livsmedlet" längst ner.
+  await row.getByRole('button').tap();
+  await expect(page.getByRole('heading', { name: 'Redigera livsmedel' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ta bort livsmedlet' }).tap();
+  await expect(row).toHaveCount(0);
+  await expect(toast).toContainText('Tog bort Mormors bulle.');
+  expect((await dump(page)).foods).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
 test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   const errors = collectErrors(page);
   await openFood(page);
@@ -240,7 +274,8 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   await expect(page.getByTestId('unit-entry').last()).toHaveText(/1 bulle = 60 g/);
   await page.getByRole('button', { name: 'Spara livsmedel' }).tap();
   await expect(page.getByTestId('own-food')).toHaveCount(1);
-  await expect(page.getByTestId('own-food')).toContainText('380 kcal/100 g');
+  await expect(page.getByTestId('own-food')).toContainText('380 kcal');
+  await expect(page.getByTestId('own-food')).toContainText('Per 100 g · 7 g protein');
 
   // Måltid med två ingredienser.
   await page.getByRole('button', { name: 'Ny måltid' }).tap();
@@ -685,9 +720,10 @@ test('historik och översikt: intag mot mål, 7-dagarssnitt och förklarade spä
   await expect(chart.locator('.u-legend')).toContainText('7-dagarssnitt');
   await expect(chart.locator('.u-legend')).toContainText('Mål');
   // (1 800 + 1 900 + 2 000 + 2 100) / 4 = 1 950.
-  await expect(page.getByTestId('intake-average')).toContainText(
-    '7-dagarssnitt: 1 950 kcal per loggad dag (4 av 7 dagar loggade).',
+  await expect(page.getByTestId('intake-average')).toHaveText(
+    'Snitt per loggad dag · 4 av 7 dagar loggade',
   );
+  await expect(page.getByTestId('intake-average-value')).toContainText('1 950');
   const rows = page.getByTestId('intake-table').locator('tbody tr');
   await expect(rows).toHaveCount(7);
   await expect(rows.nth(0)).toContainText('1 800 kcal');

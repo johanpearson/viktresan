@@ -684,15 +684,17 @@ body {
   margin: 8px 0 0;
 }
 
+/* Tät tabell (--text-sm): Mat → Historik, vikt dag för dag, midjemått. */
 .table {
   width: 100%;
   border-collapse: collapse;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .table th,
 .table td {
-  padding: 10px 4px;
+  padding: var(--space-2) var(--space-1);
   border-top: 1px solid var(--border);
   text-align: left;
 }
@@ -3101,6 +3103,16 @@ a.button {
 
 .day-summary {
   padding: var(--space-3) var(--space-4);
+}
+
+/* Nyckeltal ovanför en tät tabell i ett kort (Mat → Historik). */
+.totals-row + .form-note {
+  margin-top: var(--space-2);
+}
+
+.totals-row + .table,
+.totals-row + .form-note + .table {
+  margin-top: var(--space-3);
 }
 
 .totals-row,

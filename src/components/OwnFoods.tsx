@@ -1,11 +1,24 @@
 import { useMemo, useState } from 'react';
-import { deleteFood, deleteMeal, type SavedMeal, type StoredFood } from '../db/db.ts';
-import { formatKcal } from '../lib/format.ts';
+import {
+  deleteFood,
+  deleteMeal,
+  putFood,
+  putMeal,
+  saveCustomUnits,
+  setFavorite,
+  type SavedMeal,
+  type StoredFood,
+} from '../db/db.ts';
+import { formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
 import { loggedAmountText } from '../lib/units.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
+import { Card } from './Card.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import type { FoodSource } from './FoodPicker.tsx';
+import { ListRow } from './ListRow.tsx';
 import { MealBuilder } from './MealBuilder.tsx';
+import { Toast } from './Toast.tsx';
 
 interface OwnFoodsProps {
   /** Livsmedel, måltider och egna enheter – och det sök-sheeten behöver för ingredienser. */
@@ -16,173 +29,172 @@ interface OwnFoodsProps {
 type Editing =
   { kind: 'food'; food: StoredFood | null } | { kind: 'meal'; meal: SavedMeal | null } | null;
 
-/** Egna livsmedel och sparade måltider: skapa, redigera, ta bort. */
+/**
+ * Mat → Egna: sparade måltider och egna livsmedel som listor. Tryck = redigera,
+ * svep vänster = ta bort (med Ångra). "Ny …" är sekundärknappar i kortens rubrikrad.
+ */
 export function OwnFoods({ source, onChange }: OwnFoodsProps) {
-  const { foods, meals, foodUnits } = source.foodData;
+  const { foods, meals, favorites, foodUnits } = source.foodData;
   const [editing, setEditing] = useState<Editing>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const toast = useUndoToast();
   const own = useMemo(() => foods.filter((f) => f.source === 'egen'), [foods]);
   const customUnits = useMemo(
     () => new Map(foodUnits.map((u) => [u.foodId, u.units])),
     [foodUnits],
   );
 
-  async function remove(id: string, name: string, kind: 'food' | 'meal') {
-    if (confirmId !== id) {
-      setConfirmId(id);
-      return;
-    }
-    if (kind === 'food') await deleteFood(id);
-    else await deleteMeal(id);
-    setConfirmId(null);
+  /**
+   * Tar bort livsmedlet eller måltiden. Borttagningen tar även favoritmarkeringen och
+   * de egna enheterna – Ångra lägger tillbaka alla tre.
+   */
+  async function remove(
+    target: { kind: 'food'; food: StoredFood } | { kind: 'meal'; meal: SavedMeal },
+  ) {
+    const favoriteId = target.kind === 'food' ? target.food.id : `maltid:${target.meal.id}`;
+    const wasFavorite = favorites.find((f) => f.foodId === favoriteId);
+    const units = customUnits.get(favoriteId) ?? [];
+    const name = target.kind === 'food' ? target.food.name : target.meal.name;
+    if (target.kind === 'food') await deleteFood(target.food.id);
+    else await deleteMeal(target.meal.id);
+    setEditing(null);
     await onChange();
-    setStatus(`${name} är borttaget.`);
+    toast.show(`Tog bort ${name}.`, async () => {
+      if (target.kind === 'food') await putFood(target.food);
+      else await putMeal(target.meal);
+      if (wasFavorite) await setFavorite(favoriteId, true, wasFavorite.createdAt);
+      if (units.length > 0) await saveCustomUnits(favoriteId, units);
+      await onChange();
+    });
   }
 
   async function saved(message: string) {
     setEditing(null);
     await onChange();
-    setStatus(message);
+    toast.show(message);
   }
 
+  const toastView = toast.toast && (
+    <Toast
+      label="Egna"
+      testId="own-toast"
+      message={toast.toast.message}
+      onUndo={toast.onUndo}
+      onClose={toast.close}
+    />
+  );
+
   if (editing?.kind === 'food') {
+    const { food } = editing;
     return (
       <CustomFoodForm
-        food={editing.food}
-        customUnits={editing.food ? (customUnits.get(editing.food.id) ?? []) : []}
-        onSaved={(food) => void saved(`Sparade ${food.name}.`)}
+        food={food}
+        customUnits={food ? (customUnits.get(food.id) ?? []) : []}
+        onSaved={(next) => void saved(`Sparade ${next.name}.`)}
         onCancel={() => {
           setEditing(null);
         }}
+        {...(food ? { onDelete: () => void remove({ kind: 'food', food }) } : {})}
       />
     );
   }
   if (editing?.kind === 'meal') {
+    const { meal } = editing;
     return (
       <MealBuilder
-        meal={editing.meal}
+        meal={meal}
         source={source}
-        onSaved={(meal) => void saved(`Sparade måltiden ${meal.name}.`)}
+        onSaved={(next) => void saved(`Sparade måltiden ${next.name}.`)}
         onCancel={() => {
           setEditing(null);
         }}
+        {...(meal ? { onDelete: () => void remove({ kind: 'meal', meal }) } : {})}
       />
-    );
-  }
-
-  function deleteButton(id: string, name: string, kind: 'food' | 'meal') {
-    return (
-      <button
-        type="button"
-        className="button button-danger button-small"
-        aria-label={confirmId === id ? `Bekräfta borttagning av ${name}` : `Ta bort ${name}`}
-        onClick={() => void remove(id, name, kind)}
-      >
-        {confirmId === id ? 'Bekräfta' : 'Ta bort'}
-      </button>
     );
   }
 
   return (
     <>
-      <p className="form-ok" role="status">
-        {status}
-      </p>
-      <section className="card" aria-labelledby="meals-title">
-        <div className="card-header">
-          <h2 className="card-title" id="meals-title">
-            Måltider
-          </h2>
+      <Card
+        title="Måltider"
+        action={
           <button
             type="button"
-            className="button button-small"
+            className="button button-secondary button-small"
             onClick={() => {
+              toast.close();
               setEditing({ kind: 'meal', meal: null });
             }}
           >
             Ny måltid
           </button>
-        </div>
+        }
+      >
         {meals.length === 0 ? (
           <p className="muted">
             Spara måltider du äter ofta, t.ex. frukostgröten, så loggar du dem med ett tryck.
           </p>
         ) : (
-          <ul className="entry-list">
-            {meals.map((meal) => {
-              const kcal = totalOf(meal.items).kcal;
-              return (
-                <li key={meal.id} className="entry" data-testid="own-meal">
-                  <div className="entry-main">
-                    <span className="entry-date">{meal.name}</span>
-                    <span className="entry-weight">{formatKcal(kcal)}</span>
-                  </div>
-                  <p className="entry-extra">
-                    {meal.items.map((i) => `${i.name} ${loggedAmountText(i)}`).join(', ')}
-                  </p>
-                  <div className="entry-actions">
-                    <button
-                      type="button"
-                      className="button button-secondary button-small"
-                      aria-label={`Redigera ${meal.name}`}
-                      onClick={() => {
-                        setEditing({ kind: 'meal', meal });
-                      }}
-                    >
-                      Redigera
-                    </button>
-                    {deleteButton(meal.id, meal.name, 'meal')}
-                  </div>
-                </li>
-              );
-            })}
+          <ul className="list">
+            {meals.map((meal) => (
+              <ListRow
+                key={meal.id}
+                testId="own-meal"
+                primary={meal.name}
+                secondary={meal.items.map((i) => `${i.name} ${loggedAmountText(i)}`).join(', ')}
+                value={<span className="kcal">{formatKcal(totalOf(meal.items).kcal)}</span>}
+                onClick={() => {
+                  toast.close();
+                  setEditing({ kind: 'meal', meal });
+                }}
+                swipeLeft={{
+                  label: 'Ta bort',
+                  onSwipe: () => void remove({ kind: 'meal', meal }),
+                }}
+              />
+            ))}
           </ul>
         )}
-      </section>
-      <section className="card" aria-labelledby="own-foods-title">
-        <div className="card-header">
-          <h2 className="card-title" id="own-foods-title">
-            Egna livsmedel
-          </h2>
+      </Card>
+      <Card
+        title="Egna livsmedel"
+        action={
           <button
             type="button"
-            className="button button-small"
+            className="button button-secondary button-small"
             onClick={() => {
+              toast.close();
               setEditing({ kind: 'food', food: null });
             }}
           >
             Nytt livsmedel
           </button>
-        </div>
+        }
+      >
         {own.length === 0 ? (
           <p className="muted">Lägg till livsmedel som saknas, med värden från förpackningen.</p>
         ) : (
-          <ul className="entry-list">
+          <ul className="list">
             {own.map((food) => (
-              <li key={food.id} className="entry" data-testid="own-food">
-                <div className="entry-main">
-                  <span className="entry-date">{food.name}</span>
-                  <span className="entry-weight">{formatKcal(food.per100.kcal)}/100 g</span>
-                </div>
-                <div className="entry-actions">
-                  <button
-                    type="button"
-                    className="button button-secondary button-small"
-                    aria-label={`Redigera ${food.name}`}
-                    onClick={() => {
-                      setEditing({ kind: 'food', food });
-                    }}
-                  >
-                    Redigera
-                  </button>
-                  {deleteButton(food.id, food.name, 'food')}
-                </div>
-              </li>
+              <ListRow
+                key={food.id}
+                testId="own-food"
+                primary={food.name}
+                secondary={`Per 100 g · ${formatGrams(food.per100.proteinG)} protein`}
+                value={<span className="kcal">{formatKcal(food.per100.kcal)}</span>}
+                onClick={() => {
+                  toast.close();
+                  setEditing({ kind: 'food', food });
+                }}
+                swipeLeft={{
+                  label: 'Ta bort',
+                  onSwipe: () => void remove({ kind: 'food', food }),
+                }}
+              />
             ))}
           </ul>
         )}
-      </section>
+      </Card>
+      {toastView}
     </>
   );
 }

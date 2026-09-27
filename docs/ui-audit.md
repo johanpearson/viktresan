@@ -7,7 +7,8 @@ baslinjerna i repot visar läget _efter_ den här PR:en. Översikt före finns k
 [`ui-audit/fore-light-oversikt.png`](ui-audit/fore-light-oversikt.png) och
 [`ui-audit/fore-dark-oversikt.png`](ui-audit/fore-dark-oversikt.png); likaså Framsteg → Historik och Mat → Historik före
 PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.png`) och Kalender före PR #22
-(`ui-audit/fore-*-kalender.png`, `ui-audit/fore-*-kalender-vecka.png`).
+(`ui-audit/fore-*-kalender.png`, `ui-audit/fore-*-kalender-vecka.png`), Mat → Egna och Mat → Historik före PR #23
+(`ui-audit/fore-*-mat-egna.png`, `ui-audit/fore-*-mat-historik-7dagar.png`).
 
 **Referens:** Mat → Dag (omgjord i PR #16/#17): 16 px sidmarginal, 8 px mellan kort, 12–16 px inre
 marginal, en rad per post med högerställda tabellsiffror, sekundärtext 13 px, inga knappar i listorna
@@ -61,13 +62,13 @@ vid jämförelse, **Låg** = putsning.
 
 ## Mat (referens)
 
-| Prio  | Iakttagelse                                                                                                                                                                                                                                                            |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Medel | **Egna**: sektionerna är kort med en fylld primärknapp var ("Ny måltid", "Nytt livsmedel") och "Redigera"/"Ta bort"-knappar per livsmedel – följer inte Dag-flikens mönster.                                                                                           |
-| Medel | **Historik**: tidsfilter (1 mån/3 mån/Allt) är ett stort segment (48 px) direkt under sidans lilla segment – två segmentkontroller i olika storlek ovanpå varandra. Intagsgrafen är teal i stället för Mats orange. ✅ PR #18 (orange), PR #21 (tidsfiltret är chips). |
-| Medel | Redigera-panelen: kort-i-kort, och "Ta bort" är en helbreddsknapp under Spara/Avbryt (tre knappar). Ta bort bör ligga längst ner som textknapp i fel-färg, eller bara via svep.                                                                                        |
-| Låg   | Analyspanelen: nyckeltalen är staplade etikett/värde-par, de skulle vara ListRow med högerställt värde.                                                                                                                                                                |
-| Låg   | Sök-sheeten saknar ikon i sökfältet (Dag-fliken har en).                                                                                                                                                                                                               |
+| Prio  | Iakttagelse                                                                                                                                                                                                                                                                                                      |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medel | ~~**Egna**: sektionerna är kort med en fylld primärknapp var ("Ny måltid", "Nytt livsmedel") och "Redigera"/"Ta bort"-knappar per livsmedel – följer inte Dag-flikens mönster.~~ ✅ PR #23                                                                                                                       |
+| Medel | **Historik**: tidsfilter (1 mån/3 mån/Allt) är ett stort segment (48 px) direkt under sidans lilla segment – två segmentkontroller i olika storlek ovanpå varandra. Intagsgrafen är teal i stället för Mats orange. ✅ PR #18 (orange), PR #21 (tidsfiltret är chips), PR #23 (snitt som `StatBar`, tät tabell). |
+| Medel | Redigera-panelen: kort-i-kort, och "Ta bort" är en helbreddsknapp under Spara/Avbryt (tre knappar). Ta bort bör ligga längst ner som textknapp i fel-färg, eller bara via svep.                                                                                                                                  |
+| Låg   | Analyspanelen: nyckeltalen är staplade etikett/värde-par, de skulle vara ListRow med högerställt värde.                                                                                                                                                                                                          |
+| Låg   | Sök-sheeten saknar ikon i sökfältet (Dag-fliken har en).                                                                                                                                                                                                                                                         |
 
 ## Kalender
 
@@ -192,15 +193,31 @@ vid jämförelse, **Låg** = putsning.
 - Designsystemet: `PeriodBar`, `Disclosure`, `Parts` (även i veckokortet), `ListRow` `wrapValue` och kalenderprick som
   `leading`, mönstret "Kalender (dagsvy)" i `DESIGN.md`. `WorkoutList` har inte längre läget `manage`.
 
+## Åtgärdat: Mat → Egna och Historik (PR #23)
+
+- **Egna som listor**: måltider och egna livsmedel är `ListRow` (namn, ingredienser resp. "Per 100 g · 7 g protein",
+  kcal till höger) i `Card`. Knapparna Redigera/Ta bort och bekräftelsen i två steg är borta: tryck = formuläret,
+  svep vänster = ta bort direkt med `Toast` och Ångra (favorit och egna enheter kommer tillbaka). Formulären har "Ta
+  bort livsmedlet"/"Ta bort måltiden" som destruktiv textknapp längst ner (nås utan svep).
+- **Inga fyllda knappar i listvyn**: "Ny måltid"/"Nytt livsmedel" är sekundära. "Sparade …" är en `Toast` i stället
+  för en statusrad ovanför korten. Med testdatan (en måltid, två livsmedel) slutar innehållet på **440 px i stället
+  för 603 px** (−27 %); varje livsmedel tar 60 px i stället för 100 px.
+- **Historik**: grafen har rubriken "Intag per dag" (`Card`, som i Framsteg). Snittet de senaste 7 dagarna är två
+  `StatBar` (kcal och protein mot målen, som i Mat → Dag) i stället för två meningar i löptext; tomt läge har knappen
+  "Logga mat". Tabellen är tät (`--text-sm`, 8 px cellmarginal) – samma `.table` gör även vikt dag för dag och
+  midjemåtten i Framsteg → Historik kompaktare (2 712 px i stället för 2 814 px).
+- Designsystemet: mönstren "Egna listor" och "Nyckeltal och tät tabell" i `DESIGN.md`; `CustomFoodForm` och
+  `MealBuilder` har `onDelete`.
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 5–8.
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 6–8.
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
 2. ~~**Inställningar**~~ ✅ PR #20.
 3. ~~**Framsteg → Historik**~~ ✅ PR #21.
 4. ~~**Kalender**~~ ✅ PR #22.
-5. **Mat → Egna och Historik** (nästa): `ListRow`, svep för ta bort (tidsfiltret är redan chips, PR #21).
-6. **Framsteg → Veckor**: täta veckokort (ListRow), en "Fråga AI"-knapp i panelen i stället för per kort.
+5. ~~**Mat → Egna och Historik**~~ ✅ PR #23.
+6. **Framsteg → Veckor** (nästa): täta veckokort (ListRow), en "Fråga AI"-knapp i panelen i stället för per kort.
 7. **Logga** (rutnätet): lägre rutor (ikonerna har redan datatypsfärg).
 8. **Framsteg → Bilder och Milstolpar**: marginaler, tomt läge med knapp.
