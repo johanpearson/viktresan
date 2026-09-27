@@ -99,7 +99,8 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         SegmentedControl, StatBar, GoalRing, ProgressBar, EmptyState, Toast, Skeleton,
                         ActionSheet (radmeny ovanpå en panel), DateBar (‹ Idag ›, även i Logga-panelernas formulär),
                         StorageSettings (Inställningar → Lagring), ShowMore (+ useShowMore: 14 rader, sedan fler),
-                        RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck)
+                        RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck),
+                        PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·")
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
@@ -108,8 +109,8 @@ src/lib/motion.ts       prefersReducedMotion()
 docs/DESIGN.md          Designsystemet: tokens, komponenter, regler, mikrointeraktioner
 docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kvarvarande vyer
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
-                        (Dag | Egna | Historik som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka),
-                        Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
+                        (Dag | Egna | Historik som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
+                        dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
 e2e/                    Playwright-tester. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
                         veckokort, milstolpar, bilder, måltidsanalys); hjälpare i helpers.ts. mealAnalysis.spec.ts mockar
@@ -205,8 +206,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   genererade. Ett planerat pass vars tid passerat (utan tid: när dagen är slut) är _obesvarat_ och
   visas i "Blev passet av?" överst på Översikt (`findUnanswered`, 28 dagar bakåt). Idag visar dagens
   pass (utom obesvarade) med Klar / Hoppa över; Klar öppnar `CompleteWorkoutSheet` med planens längd
-  och intensitet förifyllda. Kommande = tre nästa planerade efter idag. Kalenderns dagsvy har
-  statusväljare (ändra i efterhand) och Klar. Prickar: genomfört fylld, planerat ring, obesvarat röd,
+  och intensitet förifyllda. Kommande = tre nästa planerade efter idag. Kalenderns dagsvy (`CalendarDay`) listar passen
+  som rader: tryck = radmeny (Klar, Hoppade över, Markera som planerad, Ta bort passet), svep vänster = ta bort med Ångra. Prickar: genomfört fylld, planerat ring, obesvarat röd,
   hoppat grå fyrkant (`DayMarker.dots`).
 - **GLP-1** (`glp1.ts`, bakom brytaren `glp1`): `Medication` har namn (förval Wegovy/Ozempic/Mounjaro/
   Saxenda + fritext), `frequency` `vecka` (med `weekday`, 0 = mån) eller `dag`, tid och en dostrappa

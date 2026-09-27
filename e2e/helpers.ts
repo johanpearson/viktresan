@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Samlar CSP-överträdelser och konsolfel så att varje test kan kräva noll. */
 export function collectErrors(page: Page): string[] {
@@ -339,4 +339,11 @@ export async function swipeLeft(row: Locator): Promise<void> {
     await content.dispatchEvent('pointermove', { ...init, clientX: x0 - box.width * f });
   }
   await content.dispatchEvent('pointerup', { ...init, clientX: x0 - box.width * 0.6 });
+}
+
+/** Fäller ut kalenderns förklaring (hopfälld som standard). */
+export async function openCalendarLegend(page: Page): Promise<void> {
+  const legend = page.getByTestId('calendar-legend');
+  await legend.locator('summary').tap();
+  await expect(legend).toHaveAttribute('open', '');
 }

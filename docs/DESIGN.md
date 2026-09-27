@@ -129,6 +129,9 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `ShowMore`         | `ShowMore.tsx`         | "Visa fler" under en begränsad lista (med `useShowMore`)                      |
 | `RangeFilter`      | `RangeFilter.tsx`      | Tidsfilter 1 mån / 3 mån / Allt som chips                                     |
 | `DailyBarChart`    | `DailyBarChart.tsx`    | Stapelgraf, ett värde per dag i datatypens färg, valfri mållinje              |
+| `PeriodBar`        | `PeriodBar.tsx`        | ‹ Månad/vecka › – som `DateBar` men med en rubrik i mitten (Kalender)         |
+| `Disclosure`       | `Disclosure.tsx`       | Hopfälld hjälptext bakom en liten dämpad textknapp (kalenderns förklaring)    |
+| `Parts`            | `Parts.tsx`            | "6 000 steg · 827 kcal" – delarna hålls ihop, texten bryts bara vid "·"       |
 
 ### Page (sidhuvud)
 
@@ -172,6 +175,9 @@ lägger den på `top: var(--page-header-height)`. `scroll-padding-top` gör att 
 - Minst 56 px hög, primärtext kortas till två rader, värdet bryts aldrig.
 - Svep med pekarhändelser (`useSwipe`, `touch-action: pan-y`): vänster glider ut och anropar
   `swipeLeft` (ska följas av en `Toast` med Ångra), höger studsar tillbaka. Ett svep räknas aldrig som tryck.
+- `wrapValue`: ett långt värde ("Aptit 2 av 5 · Illamående") får brytas (högst 65 % av raden) i stället för att
+  tränga undan rubriken – lägg det i `Parts` så att det bara bryts vid "·". `leading` kan vara en kalenderprick
+  (`calendar-dot dot-<typ>`, 10 px) så att raden känns igen från kalendern.
 - `href` i stället för `onClick` ger en länk; `chevron` visar › (öppnar något); `trailing` för en extra
   knapp (fäll ut ingredienser); `danger` = destruktivt val i en meny (fel-färg).
 - `children` ligger under raden och följer med vid svep. Små detaljer (dostrappa) i
@@ -257,6 +263,40 @@ Valet stänger menyn och körs sedan. Ett destruktivt val tar bort direkt och f�
 ersätter `<input type="date">` i formulär där datumet inte får ligga i framtiden (vikt, midja, steg, dos,
 mående). Texten är "Idag", "Igår" eller datumet; ‹ › byter dag, tryck på texten öppnar systemets
 väljare. Formulär som planerar framåt (träningspass, scheman) behåller vanliga datumfält.
+
+### PeriodBar
+
+```tsx
+<PeriodBar
+  title="September 2026"
+  titleId="calendar-period"
+  prevLabel="Föregående månad"
+  nextLabel="Nästa månad"
+  onPrev={prev}
+  onNext={next}
+/>
+```
+
+Samma ramlösa pilar (48 px, `--accent`) som `DateBar`, men mitten är en rubrik (h2, `aria-live`) i stället för ett
+datumfält. Ligger överst i kortet den styr. Inga inramade knappar för ‹ ›.
+
+### Disclosure
+
+`<Disclosure summary="Förklaring" testId="calendar-legend">…</Disclosure>` – `<details>` med en liten dämpad
+textknapp (44 px, `--text-xs`) och en chevron som vänds. För hjälp man behöver en gång men som inte ska ta plats
+varje gång. Hopfälld som standard; innehållet får inget eget kort.
+
+### Parts
+
+`<Parts text="Steg: 6 000 steg · Mat: 827 kcal" />` – varje del i `.nowrap`. Används i veckokortet, kalenderns
+veckovy och dagsvyn (med `ListRow` `wrapValue`).
+
+### Kalender (dagsvy)
+
+En `Card` med dagen som rubrik ("Torsdag 24 sep. 2026") och **en** `list`: en `ListRow` per loggtyp (prick i
+datatypens färg, värdet till höger) följt av en rad per pass (statusprick, typ · längd · intensitet, tid under,
+statusmärke till höger). Tryck på ett pass = `ActionSheet` (Klar → `CompleteWorkoutSheet`, Hoppade över,
+Markera som planerad, Ta bort passet); svep vänster = ta bort med Ångra. Inga knappar eller väljare i listan.
 
 ### useUndoToast
 

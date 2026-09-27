@@ -187,9 +187,10 @@ describe('funktionsbrytare', () => {
     await screen.findByTestId(
       off.includes('bilder') ? 'calendar-value-vikt' : 'calendar-value-bilder',
     );
-    const day = within(screen.getByTestId('calendar-day'))
-      .queryAllByRole('term')
-      .map((dt) => dt.textContent);
+    const day = Array.from(
+      screen.getByTestId('calendar-day').querySelectorAll('.list-row-primary'),
+      (el) => el.textContent,
+    );
 
     goTo('#/mat');
     const matPage = screen.getByRole('heading', { level: 1 }).textContent;

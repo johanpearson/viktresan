@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, dump, openLog, seed } from './helpers.ts';
+import { collectErrors, dump, openCalendarLegend, openLog, seed, swipeLeft } from './helpers.ts';
 
 /**
  * Tiden styrs med page.clock så att "idag" och klockslaget är kända: onsdag
@@ -95,12 +95,16 @@ test('planera ett pass, bocka av det från Översikt och se status i kalendern',
   await expect(day(page, '2026-09-18').locator('.dot-traning')).toHaveClass(/status-planerad/);
   await expect(day(page, '2026-09-14').locator('.dot-traning')).toHaveCount(0);
   const dayView = page.getByTestId('calendar-day');
-  await expect(dayView.getByTestId('workout')).toHaveAttribute('data-status', 'genomford');
+  await expect(dayView.getByTestId('workout')).toHaveClass(/status-genomford/);
   await expect(dayView.getByTestId('workout')).toContainText('Genomförd');
 
-  // Status kan ändras i efterhand från dagsvyn.
-  await dayView.getByRole('combobox', { name: /^Status: Löpning/ }).selectOption('hoppad');
-  await expect(dayView.getByTestId('workout')).toHaveAttribute('data-status', 'hoppad');
+  // Status kan ändras i efterhand från dagsvyn: tryck på passet → radmeny.
+  await dayView.getByTestId('workout').getByRole('button').tap();
+  const menu = page.getByRole('dialog', { name: 'Löpning' });
+  await expect(menu.getByRole('button', { name: 'Klar' })).toHaveCount(0);
+  await menu.getByRole('button', { name: 'Hoppade över' }).tap();
+  await expect(menu).toBeHidden();
+  await expect(dayView.getByTestId('workout')).toHaveClass(/status-hoppad/);
   await expect(day(page, WEDNESDAY).locator('.dot-traning')).toHaveClass(/status-hoppad/);
 
   const stored = await dump(page);
@@ -232,6 +236,7 @@ test('kalender: obesvarade pass markeras, dagsvyn bockar av och veckovyn fungera
 
   await page.goto('./#/kalender');
   await expect(page.getByRole('heading', { name: 'september 2026' })).toBeVisible();
+  await openCalendarLegend(page);
   const legend = page.getByRole('list', { name: 'Förklaring' });
   await expect(legend).toContainText('Dryck');
   await expect(legend).toContainText('Träning');
@@ -251,12 +256,15 @@ test('kalender: obesvarade pass markeras, dagsvyn bockar av och veckovyn fungera
   const dayView = page.getByTestId('calendar-day');
   await expect(dayView.getByTestId('calendar-value-vikt')).toContainText('81,2 kg');
   await expect(dayView.getByTestId('calendar-value-vatten')).toContainText('1 250 ml');
-  await expect(dayView.getByTestId('workout')).toHaveAttribute('data-status', 'obesvarad');
+  await expect(dayView.getByTestId('workout')).toHaveClass(/status-obesvarad/);
+  // Inga knappar per pass i dagsvyn – ett tryck på raden öppnar en radmeny.
+  await expect(dayView.getByRole('button', { name: /Klar|Ta bort/ })).toHaveCount(0);
 
-  // Snabbknappen i dagsvyn bockar av.
-  await dayView.getByRole('button', { name: /^Klar: Cykling/ }).tap();
+  // Radmenyn bockar av: "Klar" öppnar panelen för faktisk längd.
+  await dayView.getByTestId('workout').getByRole('button').tap();
+  await page.getByRole('dialog', { name: 'Cykling' }).getByRole('button', { name: 'Klar' }).tap();
   await page.getByRole('button', { name: 'Spara som genomfört' }).tap();
-  await expect(dayView.getByTestId('workout')).toHaveAttribute('data-status', 'genomford');
+  await expect(dayView.getByTestId('workout')).toHaveClass(/status-genomford/);
   await expect(tenth.locator('.dot-traning')).toHaveClass(/status-genomford/);
 
   // Framtida månader går att bläddra till (för planering).
@@ -266,6 +274,14 @@ test('kalender: obesvarade pass markeras, dagsvyn bockar av och veckovyn fungera
   await day(page, '2026-10-02').tap();
   await expect(dayView.getByRole('heading', { level: 2 })).toContainText('2 okt');
   await expect(dayView.getByTestId('workout')).toContainText('Promenad');
+
+  // Svep vänster tar bort passet; Ångra lägger tillbaka det.
+  await swipeLeft(dayView.getByTestId('workout'));
+  await expect(dayView.getByTestId('workout')).toHaveCount(0);
+  await expect(day(page, '2026-10-02').locator('.dot-traning')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(dayView.getByTestId('workout')).toContainText('Promenad');
+  await expect(day(page, '2026-10-02').locator('.dot-traning')).toHaveClass(/status-planerad/);
 
   // Veckovy: veckan med den valda dagen, måndag först.
   await page.getByRole('button', { name: 'Vecka', exact: true }).tap();
@@ -409,6 +425,7 @@ test('dryck och träning av: dolda överallt, datan ligger kvar', async ({ page 
   await expect(page.getByTestId('log-tile-vatten')).toHaveCount(0);
   await expect(page.getByTestId('log-tile-traning')).toHaveCount(0);
   await page.goto('./#/kalender');
+  await openCalendarLegend(page);
   await expect(page.getByRole('list', { name: 'Förklaring' })).not.toContainText('Dryck');
   await expect(page.getByRole('list', { name: 'Träningsstatus' })).toHaveCount(0);
   await expect(day(page, WEDNESDAY).locator('[data-marker]')).toHaveCount(0);

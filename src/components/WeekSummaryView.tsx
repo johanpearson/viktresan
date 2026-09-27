@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Parts } from './Parts.tsx';
 import { useFeatures } from '../lib/features.ts';
 import {
   WEEK_ROWS,
@@ -44,12 +44,7 @@ export function WeekSummaryView({ entry, profile }: WeekSummaryViewProps) {
                 <dd>
                   {/* Siffror och enheter bryts aldrig – bara mellan delarna ("… · 7 dagar"). */}
                   <span className="week-value">
-                    {text.split(' · ').map((part, i) => (
-                      <Fragment key={i}>
-                        {i > 0 && ' · '}
-                        <span className="nowrap">{part}</span>
-                      </Fragment>
-                    ))}
+                    <Parts text={text} />
                   </span>
                   {arrow && (
                     <span className="week-arrow" data-direction={direction}>

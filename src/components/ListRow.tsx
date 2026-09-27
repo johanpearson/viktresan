@@ -14,6 +14,11 @@ interface ListRowProps {
   secondary?: ReactNode;
   /** Högerställt värde (tabellsiffror, bryts aldrig), t.ex. "225 kcal". */
   value?: ReactNode;
+  /**
+   * Långt värde (t.ex. "Aptit 2 av 5 · Illamående") får brytas mellan delar i stället för att
+   * tränga undan texten. Håll ihop delarna med `Parts`.
+   */
+  wrapValue?: boolean;
   /** Ikon eller prick före texten. */
   leading?: ReactNode;
   /** Tryck på raden (renderas som knapp). */
@@ -45,6 +50,7 @@ export function ListRow({
   primary,
   secondary,
   value,
+  wrapValue = false,
   leading,
   onClick,
   href,
@@ -68,7 +74,11 @@ export function ListRow({
         <span className="list-row-primary">{primary}</span>
         {secondary != null && <span className="list-row-secondary">{secondary}</span>}
       </span>
-      {value != null && <span className="list-row-value">{value}</span>}
+      {value != null && (
+        <span className={wrapValue ? 'list-row-value list-row-value-wrap' : 'list-row-value'}>
+          {value}
+        </span>
+      )}
       {chevron && <span aria-hidden="true" className="list-row-chevron" />}
     </>
   );

@@ -100,7 +100,21 @@ for (const theme of ['light', 'dark'] as const) {
     test('vy: kalender-vecka', async ({ page }) => {
       await open(page, '#/kalender');
       await page.getByRole('button', { name: 'Vecka', exact: true }).tap();
+      // Förklaringen är hopfälld; här utfälld så att den också jämförs. Fälls ut utan tryck –
+      // ett tryck scrollar sidan och den sticky rubriken hamnar mitt i helsidesbilden.
+      await page.getByTestId('calendar-legend').evaluate((el) => {
+        (el as HTMLDetailsElement).open = true;
+      });
       await shot(page, `${theme}-kalender-vecka`);
+      // Radmenyn för ett pass i dagsvyn.
+      await page
+        .getByTestId('calendar-day')
+        .getByTestId('workout')
+        .first()
+        .getByRole('button')
+        .tap();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await shot(page, `${theme}-sheet-kalender-pass`, false);
     });
 
     test('paneler: Logga', async ({ page }) => {
