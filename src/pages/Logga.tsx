@@ -154,6 +154,7 @@ export function Logga() {
               className="log-tile"
               aria-haspopup="dialog"
               data-testid={`log-tile-${t.id}`}
+              data-type={t.id}
               onClick={() => {
                 setOpenId(t.id);
               }}

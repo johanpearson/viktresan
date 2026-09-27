@@ -78,7 +78,7 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
     '40',
   );
   // Nyaste veckan först: 86, 87, 88 och en tom vecka.
-  const weekRows = page.getByTestId('weekly-averages').locator('tbody tr');
+  const weekRows = page.getByTestId('week-average');
   await expect(weekRows).toHaveCount(4);
   await expect(weekRows.nth(0)).toContainText('86,0 kg');
   await expect(weekRows.nth(1)).toContainText('87,0 kg');

@@ -13,6 +13,7 @@ import {
 } from '../lib/workouts.ts';
 import { IntensityField } from './IntensityField.tsx';
 import { WorkoutTypeField } from './WorkoutTypeField.tsx';
+import { haptic } from '../lib/haptics.ts';
 
 interface WorkoutFormProps {
   data: AppData;
@@ -56,6 +57,7 @@ export function WorkoutForm({ data, onChange }: WorkoutFormProps) {
     }
     const workout: Workout = { id: newId(), ...parsed.value, createdAt: Date.now() };
     await putWorkout(workout);
+    haptic('success');
     await onChange();
     setError(null);
     setNote('');

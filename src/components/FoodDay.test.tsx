@@ -131,7 +131,7 @@ describe('Mat → Dag', () => {
     it('svep åt höger favoritmarkerar raden', async () => {
       renderDay(log);
       const row = within(header('lunch')).getByTestId('food-entry');
-      const content = row.querySelector('.food-entry-content');
+      const content = row.querySelector('.list-row-content');
       if (!content) throw new Error('saknas');
       fireEvent.pointerDown(content, { pointerId: 1, clientX: 20, clientY: 10 });
       fireEvent.pointerMove(content, { pointerId: 1, clientX: 60, clientY: 10 });

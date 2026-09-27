@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { EmptyState } from '../components/Page.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
 import { listMilestones, type MilestoneRecord } from '../db/db.ts';
 import { useCelebration } from '../lib/celebration.ts';

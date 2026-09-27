@@ -6,13 +6,14 @@ import { buildPlan } from '../lib/plan.ts';
 import { proteinGoalFor } from '../lib/protein.ts';
 import { useFeatures } from '../lib/features.ts';
 import type { AppData } from '../lib/useAppData.ts';
+import { formatMl } from '../lib/format.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
 import { todaysWorkouts, workoutsBetween } from '../lib/workouts.ts';
 import { DrinkGoalNote } from './DrinkGoalNote.tsx';
 import { Feature } from './Feature.tsx';
+import { GoalRing } from './GoalRing.tsx';
 import { NutritionRings } from './NutritionRings.tsx';
 import { WaterControls } from './WaterControls.tsx';
-import { WaterRing } from './WaterRing.tsx';
 import { WorkoutList } from './WorkoutList.tsx';
 
 /** Värden i "Idag", i ordning (kalorier och protein visas som ringar). */
@@ -24,7 +25,7 @@ interface TodayCardProps {
   onChange: () => Promise<unknown>;
 }
 
-/** Översikt → Idag: dryck (ring), kalorier och protein (ringar), steg och dagens pass. */
+/** Översikt → Idag: dryck, kalorier och protein som tre ringar, snabbval för dryck, steg och dagens pass. */
 export function TodayCard({ data, now, onChange }: TodayCardProps) {
   const features = useFeatures();
   const today = todayIso(now);
@@ -48,23 +49,35 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
       <h2 className="card-title" id="today-title">
         Idag
       </h2>
+      <div className="rings">
+        <Feature id="vatten">
+          <figure className="ring-figure">
+            <GoalRing
+              label="Dryck idag"
+              value={formatMl(drink.ml)}
+              goal={`av ${formatMl(drinkGoal.ml)}`}
+              fraction={drinkGoal.ml ? drink.ml / drinkGoal.ml : 0}
+              tone="drink"
+              testId="water-ring"
+            />
+            <figcaption>Dryck</figcaption>
+          </figure>
+        </Feature>
+        <Feature id="mat">
+          <NutritionRings
+            kcal={totals.kcal}
+            targetKcal={plan?.kind === 'plan' ? plan.plan.targetKcal : null}
+            proteinG={totals.proteinG}
+            proteinGoalG={proteinGoalFor(data.profile)}
+          />
+        </Feature>
+      </div>
       <Feature id="vatten">
-        <div className="today-water">
-          <WaterRing ml={drink.ml} goalMl={drinkGoal.ml} />
-          <WaterControls date={today} water={data.water} onChange={onChange} />
-        </div>
+        <WaterControls date={today} water={data.water} onChange={onChange} variant="chips" />
         <DrinkGoalNote goal={drinkGoal} foodMl={drink.foodMl} />
       </Feature>
-      <Feature id="mat">
-        <NutritionRings
-          kcal={totals.kcal}
-          targetKcal={plan?.kind === 'plan' ? plan.plan.targetKcal : null}
-          proteinG={totals.proteinG}
-          proteinGoalG={proteinGoalFor(data.profile)}
-        />
-      </Feature>
       {markers.length > 0 && (
-        <dl className="stats">
+        <dl className="stats stats-compact">
           {markers.map((marker) => (
             <div className="stat" key={marker.id} data-testid={`today-${marker.id}`}>
               <dt>{marker.label}</dt>

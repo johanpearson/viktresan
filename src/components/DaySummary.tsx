@@ -1,6 +1,6 @@
 import { formatGrams, formatInt, formatKcal } from '../lib/format.ts';
 import type { Nutrients } from '../lib/nutrition.ts';
-import { ProgressBar } from './ProgressBar.tsx';
+import { StatBar } from './StatBar.tsx';
 
 interface DaySummaryProps {
   totals: Nutrients;
@@ -17,7 +17,7 @@ interface DaySummaryProps {
   variant?: 'full' | 'mini';
 }
 
-/** Mat → Dag: kalorier och protein mot målen som staplar på en rad, makron som text. */
+/** Mat → Dag: kalorier och protein mot målen som StatBar på en rad, makron som text. */
 export function DaySummary({
   totals,
   targetKcal,
@@ -30,83 +30,62 @@ export function DaySummary({
   const remaining = targetKcal == null ? null : targetKcal - kcal;
   const mini = variant === 'mini';
 
-  const kcalBlock = (
-    <div className="total">
-      <p className="total-value" data-testid={mini ? undefined : 'intake'}>
-        <strong>{formatInt(kcal)}</strong>
-        {targetKcal == null ? ' kcal' : ` / ${formatInt(targetKcal)} kcal`}
-      </p>
-      {targetKcal != null &&
-        (mini ? (
-          <div className="progress progress-kcal progress-thin">
-            <div
-              className="progress-fill"
-              style={{ width: `${String(Math.round(Math.min(1, kcal / targetKcal) * 100))}%` }}
-            />
-          </div>
-        ) : (
-          <ProgressBar
-            className="progress-kcal progress-thin"
-            fraction={kcal / targetKcal}
-            label={`Kalorier ${when}`}
-            valueText={`${formatInt(kcal)} av ${formatInt(targetKcal)} kcal`}
-          />
-        ))}
-      {!mini && remaining != null && (
-        <p className="total-meta" data-testid="remaining-kcal">
-          {remaining >= 0 ? `${formatKcal(remaining)} kvar` : `${formatKcal(-remaining)} över`}
-        </p>
-      )}
-    </div>
-  );
-
-  const proteinBlock = (
-    <div className="total">
-      <p className="total-value">
-        <strong>{formatInt(protein)}</strong>
-        {proteinGoalG == null ? ' g protein' : ` / ${formatInt(proteinGoalG)} g protein`}
-      </p>
-      {proteinGoalG != null &&
-        (mini ? (
-          <div className="progress progress-protein progress-thin">
-            <div
-              className="progress-fill"
-              style={{
-                width: `${String(Math.round(Math.min(1, protein / proteinGoalG) * 100))}%`,
-              }}
-            />
-          </div>
-        ) : (
-          <ProgressBar
-            className="progress-protein progress-thin"
-            fraction={protein / proteinGoalG}
-            label={`Protein ${when}`}
-            valueText={`${formatInt(protein)} g av ${formatInt(proteinGoalG)} g`}
-          />
-        ))}
-      {!mini && proteinGoalG != null && (
-        <p className="total-meta">
-          {protein >= proteinGoalG ? 'Målet nått' : `${formatGrams(proteinGoalG - protein)} kvar`}
-        </p>
-      )}
-    </div>
+  const bars = (
+    <>
+      <StatBar
+        mini={mini}
+        tone="food"
+        value={kcal}
+        goal={targetKcal}
+        unit="kcal"
+        label={`Kalorier ${when}`}
+        valueText={
+          targetKcal == null ? undefined : `${formatInt(kcal)} av ${formatInt(targetKcal)} kcal`
+        }
+        valueTestId={mini ? undefined : 'intake'}
+        metaTestId="remaining-kcal"
+        meta={
+          remaining == null
+            ? undefined
+            : remaining >= 0
+              ? `${formatKcal(remaining)} kvar`
+              : `${formatKcal(-remaining)} över`
+        }
+      />
+      <StatBar
+        mini={mini}
+        tone="protein"
+        value={protein}
+        goal={proteinGoalG}
+        unit="g protein"
+        label={`Protein ${when}`}
+        valueText={
+          proteinGoalG == null
+            ? undefined
+            : `${formatInt(protein)} g av ${formatInt(proteinGoalG)} g`
+        }
+        meta={
+          proteinGoalG == null
+            ? undefined
+            : protein >= proteinGoalG
+              ? 'Målet nått'
+              : `${formatGrams(proteinGoalG - protein)} kvar`
+        }
+      />
+    </>
   );
 
   if (mini) {
     return (
       <div className="day-summary-mini" aria-hidden="true" data-testid="day-summary-mini">
-        {kcalBlock}
-        {proteinBlock}
+        {bars}
       </div>
     );
   }
 
   return (
     <section className="card day-summary" aria-label="Dagens summering">
-      <div className="totals-row">
-        {kcalBlock}
-        {proteinBlock}
-      </div>
+      <div className="totals-row">{bars}</div>
       <p className="macro-line" data-testid="macros">
         Protein {formatGrams(Math.round(totals.proteinG))} · Kolhydrater{' '}
         {formatGrams(Math.round(totals.carbsG))} · Fett {formatGrams(Math.round(totals.fatG))}

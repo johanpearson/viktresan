@@ -318,7 +318,10 @@ export type LogType = 'vikt' | 'midja' | 'steg' | 'vatten' | 'traning' | 'glp1';
 /** Logga → trycker på rutan och väntar in panelen (bottom sheet) med formuläret. */
 export async function openLog(page: Page, type: LogType): Promise<void> {
   const open = page.getByRole('dialog');
-  if (await open.isVisible()) await open.getByRole('button', { name: 'Stäng' }).tap();
+  // En panel som just stängts glider ut (150 ms) – vänta in den innan vi avgör om en är öppen.
+  await open.waitFor({ state: 'hidden', timeout: 500 }).catch(() => undefined);
+  if (await open.isVisible()) await open.getByRole('button', { name: 'Stäng' }).first().tap();
+  await open.waitFor({ state: 'hidden' });
   await page.getByTestId(`log-tile-${type}`).tap();
   await page.getByRole('dialog').waitFor();
 }

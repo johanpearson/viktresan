@@ -120,7 +120,7 @@ function entry(page: Page, name: string): Locator {
 
 /** Sveper raden åt höger med pekarhändelser (som ett finger på mobilen). */
 async function swipeRight(row: Locator) {
-  const content = row.locator('.food-entry-content');
+  const content = row.locator('.list-row-content');
   const box = await content.boundingBox();
   if (!box) throw new Error('Raden syns inte');
   const y = box.y + box.height / 2;

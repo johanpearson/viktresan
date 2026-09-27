@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AskAi } from '../components/AskAi.tsx';
 import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Feature } from '../components/Feature.tsx';
-import { EmptyState } from '../components/Page.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { WeekSummaryView } from '../components/WeekSummaryView.tsx';
 import { aiContextFrom, weekSubject } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';

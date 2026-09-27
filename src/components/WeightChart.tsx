@@ -49,7 +49,7 @@ export function WeightChart({
       daily.map((d) => trendByDate.get(d.date) ?? null),
       ...(goalKg != null ? [daily.map(() => goalKg)] : []),
     ];
-    const accent = cssVar(el, '--accent');
+    const accent = cssVar(el, '--data-weight');
     const pointColor = cssVar(el, '--chart-point-faint');
     const goalColor = cssVar(el, '--chart-goal');
     const surface = cssVar(el, '--surface');

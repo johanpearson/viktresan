@@ -66,3 +66,33 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  visual:
+    name: Visuella regressionstester
+    runs-on: ubuntu-latest
+    # Samma avbild som baslinjerna i e2e/__screenshots__ togs i (scripts/visual.sh):
+    # identiska typsnitt och Chromium, annars skiljer sig kantutjämningen.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:visual
+        env:
+          PLAYWRIGHT_IMAGE: '1'
+          # Fast bygginfo (maskeras ändå i skärmdumparna).
+          APP_COMMIT: visual
+          APP_BUILD_TIME: '2026-01-01T00:00:00Z'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diff
+          path: |
+            test-results
+            playwright-report
+          retention-days: 7

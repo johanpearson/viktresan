@@ -3,6 +3,7 @@ import { entryCountText, loggedMealIngredients, mealSections } from '../lib/food
 import { formatKcal } from '../lib/format.ts';
 import type { MealSlot } from '../lib/nutrition.ts';
 import { FoodEntryRow } from './FoodEntryRow.tsx';
+import { SectionAccordion } from './SectionAccordion.tsx';
 
 interface MealSectionsProps {
   entries: readonly FoodLogEntry[];
@@ -22,7 +23,7 @@ interface MealSectionsProps {
 }
 
 /**
- * Dagens mat per måltid som hopfällbara kort: namn, kcal och antal poster i
+ * Dagens mat per måltid som `SectionAccordion`: namn, kcal och antal poster i
  * rubriken, ⋯ för fler val och + för att lägga till. Tomma måltider är en smal
  * rad med bara +.
  */
@@ -44,84 +45,72 @@ export function MealSections({
         Dagens mat
       </h2>
       {mealSections(entries).map((section) => {
-        const expanded = section.count > 0 && open.has(section.slot);
-        const listId = `meal-list-${section.slot}`;
+        const name = section.label.toLowerCase();
         return (
-          <div
+          <SectionAccordion
             key={section.slot}
-            className={section.count === 0 ? 'meal-card meal-card-empty' : 'meal-card'}
-            data-testid={`meal-${section.slot}`}
-            data-expanded={expanded ? 'true' : 'false'}
-          >
-            <div className="meal-card-header">
-              {section.count === 0 ? (
-                <h3 className="meal-heading meal-heading-empty">{section.label}</h3>
-              ) : (
-                <h3 className="meal-heading">
+            id={`meal-${section.slot}`}
+            testId={`meal-${section.slot}`}
+            title={section.label}
+            meta={entryCountText(section.count)}
+            value={
+              <span className="kcal" data-testid="meal-kcal">
+                {formatKcal(section.totals.kcal)}
+              </span>
+            }
+            empty={section.count === 0}
+            expanded={open.has(section.slot)}
+            onToggle={() => {
+              onToggle(section.slot);
+            }}
+            actions={
+              <>
+                {section.count > 0 && (
                   <button
                     type="button"
-                    className="meal-toggle"
-                    aria-expanded={expanded}
-                    aria-controls={listId}
+                    className="icon-button accordion-action"
+                    aria-label={`Fler val för ${name}`}
+                    aria-haspopup="dialog"
                     onClick={() => {
-                      onToggle(section.slot);
+                      onMenu(section.slot);
                     }}
                   >
-                    <span className="meal-name">{section.label}</span>
-                    <span className="meal-count">{entryCountText(section.count)}</span>
-                    <span className="kcal meal-kcal" data-testid="meal-kcal">
-                      {formatKcal(section.totals.kcal)}
-                    </span>
-                    <span aria-hidden="true" className="chevron" />
+                    <span aria-hidden="true">⋯</span>
                   </button>
-                </h3>
-              )}
-              {section.count > 0 && (
+                )}
                 <button
                   type="button"
-                  className="meal-menu"
-                  aria-label={`Fler val för ${section.label.toLowerCase()}`}
-                  aria-haspopup="dialog"
+                  className="icon-button accordion-action accordion-add"
+                  aria-label={`Lägg till i ${name}`}
                   onClick={() => {
-                    onMenu(section.slot);
+                    onAdd(section.slot);
                   }}
                 >
-                  <span aria-hidden="true">⋯</span>
+                  <span aria-hidden="true">+</span>
                 </button>
-              )}
-              <button
-                type="button"
-                className="meal-add"
-                aria-label={`Lägg till i ${section.label.toLowerCase()}`}
-                onClick={() => {
-                  onAdd(section.slot);
-                }}
-              >
-                <span aria-hidden="true">+</span>
-              </button>
-            </div>
-            {expanded && (
-              <ul className="food-entries" id={listId}>
-                {section.entries.map((entry) => (
-                  <FoodEntryRow
-                    key={entry.id}
-                    entry={entry}
-                    ingredients={loggedMealIngredients(entry, meals)}
-                    favorite={favoriteIds.has(entry.foodId)}
-                    onEdit={() => {
-                      onEdit(entry);
-                    }}
-                    onDelete={() => {
-                      onDelete(entry);
-                    }}
-                    onToggleFavorite={() => {
-                      onToggleFavorite(entry);
-                    }}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
+              </>
+            }
+          >
+            <ul className="list">
+              {section.entries.map((entry) => (
+                <FoodEntryRow
+                  key={entry.id}
+                  entry={entry}
+                  ingredients={loggedMealIngredients(entry, meals)}
+                  favorite={favoriteIds.has(entry.foodId)}
+                  onEdit={() => {
+                    onEdit(entry);
+                  }}
+                  onDelete={() => {
+                    onDelete(entry);
+                  }}
+                  onToggleFavorite={() => {
+                    onToggleFavorite(entry);
+                  }}
+                />
+              ))}
+            </ul>
+          </SectionAccordion>
         );
       })}
     </section>

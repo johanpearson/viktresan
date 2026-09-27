@@ -6,8 +6,12 @@ import { Feature } from '../components/Feature.tsx';
 import { MissedWorkouts } from '../components/MissedWorkouts.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
 import { NextDoseCard } from '../components/NextDoseCard.tsx';
-import { EmptyState, Page } from '../components/Page.tsx';
+import { Card } from '../components/Card.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
+import { ListRow } from '../components/ListRow.tsx';
+import { Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
+import { Skeleton } from '../components/Skeleton.tsx';
 import { TodayCard } from '../components/TodayCard.tsx';
 import { UpcomingCard } from '../components/UpcomingCard.tsx';
 import { WeekSummaryCard } from '../components/WeekSummaryCard.tsx';
@@ -40,6 +44,7 @@ export function Oversikt() {
         </a>
       }
     >
+      {data === null && <Skeleton hero cards={3} />}
       {data && (
         <Feature id="glp1">
           <DoseDayBanner data={data} now={now} />
@@ -50,15 +55,22 @@ export function Oversikt() {
           <MissedWorkouts data={data} now={now} onChange={reload} />
         </Feature>
       )}
-      {data && <WeekSummaryCard data={data} now={now} />}
       <BackupReminder />
       {data === null ? null : data.profile === null ? (
-        <EmptyState>
-          Börja med att fylla i din profil under <a href="#/installningar">Inställningar</a>{' '}
-          (kugghjulet) – startvikt, längd och mål.
+        <EmptyState
+          title="Välkommen till Viktresan"
+          action={{ label: 'Fyll i profilen', href: '#/installningar' }}
+        >
+          Börja med startvikt, längd och mål – sedan fylls Översikt med trend, dagens intag och
+          prognos.
         </EmptyState>
       ) : (
-        <Summary profile={data.profile} weights={data.weights} foodLog={data.foodLog}>
+        <Summary
+          profile={data.profile}
+          weights={data.weights}
+          foodLog={data.foodLog}
+          week={<WeekSummaryCard data={data} now={now} />}
+        >
           <TodayCard data={data} now={now} onChange={reload} />
           <Feature id="glp1">
             <NextDoseCard data={data} now={now} />
@@ -76,11 +88,16 @@ interface SummaryProps {
   profile: Profile;
   weights: WeightEntry[];
   foodLog: FoodLogEntry[];
-  /** Visas direkt under dagens vikt (Idag, Nästa dos, Kommande). */
+  /** Förra veckans summering (visas efter Idag). */
+  week?: ReactNode;
+  /** Visas direkt under huvudsiffran (Idag, Nästa dos, Kommande). */
   children?: ReactNode;
 }
 
-function Summary({ profile, weights, foodLog, children }: SummaryProps) {
+/** Så många veckor visas i "Snitt per vecka" (resten finns under Framsteg). */
+const WEEKS_SHOWN = 4;
+
+function Summary({ profile, weights, foodLog, week, children }: SummaryProps) {
   const today = todayIso();
   const daily = dailyWeights(weights);
   const latest = daily[daily.length - 1];
@@ -98,42 +115,61 @@ function Summary({ profile, weights, foodLog, children }: SummaryProps) {
   });
   const plan = buildPlan(profile, weights, foodLog, today);
   const { prefs } = usePreferences();
+  const trendHero = prefs.trendHero && latest !== undefined && trendKg != null;
 
   return (
     <>
-      {prefs.trendHero && latest && trendKg != null ? (
-        <div className="card hero" data-testid="hero">
-          <p className="hero-label">Trendvikt</p>
-          <p className="hero-value" data-testid="trend-weight">
-            {formatKg(trendKg)}
-          </p>
-          <p className="hero-sub">
-            Dagsvikt <span data-testid="current-weight">{formatKg(currentKg)}</span>
-            <span className="muted"> · {formatDate(latest.date)}</span>
-          </p>
-          <p className="hero-note" data-testid="trend-note">
-            Dagsvikten varierar normalt med vätska och salt – trenden visar den verkliga riktningen.
+      {/* Huvudkortet: vikten, vägen mot målet, nyckeltal och prognos. */}
+      <section className="card hero" data-testid="hero" aria-label="Vikt och mål">
+        {trendHero ? (
+          <>
+            <p className="hero-label">Trendvikt</p>
+            <p className="hero-value" data-testid="trend-weight">
+              {formatKg(trendKg)}
+            </p>
+            <p className="hero-sub">
+              Dagsvikt{' '}
+              <span className="num" data-testid="current-weight">
+                {formatKg(currentKg)}
+              </span>
+              <span className="muted"> · {formatDate(latest.date)}</span>
+            </p>
+            <p className="hero-note" data-testid="trend-note">
+              Dagsvikten varierar normalt med vätska och salt – trenden visar den verkliga
+              riktningen.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="hero-label">Nuvarande vikt</p>
+            <p className="hero-value" data-testid="current-weight">
+              {formatKg(currentKg)}
+            </p>
+            <p className="hero-note">
+              {latest
+                ? `Senast loggad ${formatDate(latest.date)}`
+                : 'Startvikt – ingen mätning ännu'}
+              {trendKg != null && daily.length > 1 ? ` · Trend ${formatKg(trendKg)}` : ''}
+            </p>
+          </>
+        )}
+        <div className="hero-progress">
+          <ProgressBar
+            thin
+            tone="weight"
+            fraction={progress.fraction}
+            label="Framsteg mot målvikten"
+          />
+          <p className="progress-caption">
+            <span className="num">{Math.round(progress.fraction * 100)} %</span> av vägen från{' '}
+            <span className="num">{formatKg(profile.startWeightKg)}</span> till{' '}
+            <span className="num">{formatKg(profile.goalWeightKg)}</span>
+            {profile.goalDate ? ` till ${formatDate(profile.goalDate)}` : ''}
           </p>
         </div>
-      ) : (
-        <div className="card hero" data-testid="hero">
-          <p className="hero-label">Nuvarande vikt</p>
-          <p className="hero-value" data-testid="current-weight">
-            {formatKg(currentKg)}
-          </p>
-          <p className="muted hero-meta">
-            {latest ? `Senast loggad ${formatDate(latest.date)}` : 'Startvikt – ingen mätning ännu'}
-            {trendKg != null && daily.length > 1 ? ` · Trend ${formatKg(trendKg)}` : ''}
-          </p>
-        </div>
-      )}
-
-      {children}
-
-      <div className="card">
-        <dl className="stats">
+        <dl className="stats stats-compact">
           <div className="stat">
-            <dt>Total förändring</dt>
+            <dt>Förändring</dt>
             <dd data-testid="total-change">{formatKg(progress.changeKg, { signed: true })}</dd>
           </div>
           <div className="stat">
@@ -145,64 +181,45 @@ function Summary({ profile, weights, foodLog, children }: SummaryProps) {
           <div className="stat">
             <dt>BMI</dt>
             <dd data-testid="bmi">
-              {bmiValue == null ? '–' : `${formatBmi(bmiValue)} (${bmiCategory(bmiValue)})`}
-            </dd>
-          </div>
-          <div className="stat">
-            <dt>Mål</dt>
-            <dd>
-              {formatKg(profile.goalWeightKg)}
-              {profile.goalDate ? ` till ${formatDate(profile.goalDate)}` : ''}
+              {bmiValue == null ? (
+                '–'
+              ) : (
+                <>
+                  <span className="num">{formatBmi(bmiValue)}</span>{' '}
+                  <span className="stat-sub">({bmiCategory(bmiValue)})</span>
+                </>
+              )}
             </dd>
           </div>
         </dl>
-        <ProgressBar fraction={progress.fraction} label="Framsteg mot målvikten" />
-        <p className="progress-caption">
-          {Math.round(progress.fraction * 100)} % av vägen från {formatKg(profile.startWeightKg)}{' '}
-          till {formatKg(profile.goalWeightKg)}
+        <p className="hero-forecast" data-testid="forecast">
+          {forecastText(forecast, progress.reached)}
         </p>
-      </div>
+      </section>
+
+      {children}
+      {week}
 
       <Feature id="mat">
         <CaloriePlanCard profile={profile} result={plan} />
       </Feature>
 
-      <section className="card" aria-labelledby="weeks-title">
-        <h2 className="card-title" id="weeks-title">
-          Snitt per vecka
-        </h2>
-        <table className="table" data-testid="weekly-averages">
-          <thead>
-            <tr>
-              <th scope="col">Vecka</th>
-              <th scope="col" className="num">
-                Snitt
-              </th>
-              <th scope="col" className="num">
-                Dagar
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...weeks].reverse().map((w) => (
-              <tr key={w.from}>
-                <td>
-                  {formatShortDate(w.from)} – {formatShortDate(w.to)}
-                </td>
-                <td className="num">{w.averageKg == null ? '–' : formatKg(w.averageKg)}</td>
-                <td className="num">{w.days}</td>
-              </tr>
+      <Card title="Snitt per vecka">
+        <ul className="list" data-testid="weekly-averages">
+          {[...weeks]
+            .reverse()
+            .slice(0, WEEKS_SHOWN)
+            .map((w) => (
+              <ListRow
+                key={w.from}
+                testId="week-average"
+                primary={`${formatShortDate(w.from)} – ${formatShortDate(w.to)}`}
+                secondary={w.days === 1 ? '1 dag' : `${String(w.days)} dagar`}
+                value={w.averageKg == null ? '–' : formatKg(w.averageKg)}
+              />
             ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="card" aria-labelledby="forecast-title">
-        <h2 className="card-title" id="forecast-title">
-          Prognos
-        </h2>
-        <p data-testid="forecast">{forecastText(forecast, progress.reached)}</p>
-      </section>
+        </ul>
+      </Card>
     </>
   );
 }

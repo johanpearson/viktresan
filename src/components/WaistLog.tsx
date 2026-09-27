@@ -4,6 +4,7 @@ import { todayIso } from '../lib/dates.ts';
 import { formatCm, formatDate } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { parseWaistFields } from '../lib/validation.ts';
+import { haptic } from '../lib/haptics.ts';
 
 /** Antal midjemått som visas i listan under formuläret. */
 const RECENT_WAIST = 5;
@@ -39,6 +40,7 @@ export function WaistLog({ waist, onChange }: WaistLogProps) {
       return;
     }
     await upsertWaist(result.value.date, result.value.waistCm);
+    haptic('success');
     const next = await onChange();
     setValue(latestWaistText(next.waist));
     setError(null);

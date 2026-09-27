@@ -4,6 +4,7 @@ import { todayIso } from '../lib/dates.ts';
 import { formatDate, formatInt } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { parseStepsFields } from '../lib/validation.ts';
+import { haptic } from '../lib/haptics.ts';
 
 function stepsFor(steps: readonly StepsEntry[], date: string): StepsEntry | undefined {
   return steps.find((s) => s.date === date);
@@ -40,6 +41,7 @@ export function StepsForm({ steps, onChange }: StepsFormProps) {
       return;
     }
     await upsertSteps(result.value.date, result.value.steps);
+    haptic('success');
     await onChange();
     setValue(String(result.value.steps));
     setError(null);

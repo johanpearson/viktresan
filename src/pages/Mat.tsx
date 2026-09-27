@@ -3,6 +3,8 @@ import { FoodDay } from '../components/FoodDay.tsx';
 import { IntakeHistory } from '../components/IntakeHistory.tsx';
 import { OwnFoods } from '../components/OwnFoods.tsx';
 import { Page } from '../components/Page.tsx';
+import { SegmentedControl } from '../components/SegmentedControl.tsx';
+import { Skeleton } from '../components/Skeleton.tsx';
 import { aiContextFrom } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';
 import { buildPlan } from '../lib/plan.ts';
@@ -42,25 +44,19 @@ export function Mat() {
       : null;
 
   const tabs = (
-    <div className="segmented segmented-small page-tabs" role="group" aria-label="Visa">
-      {TABS.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          className="segmented-button"
-          aria-pressed={t.id === tab}
-          onClick={() => {
-            setTab(t.id);
-          }}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      label="Visa"
+      size="small"
+      className="page-tabs"
+      options={TABS}
+      value={tab}
+      onChange={setTab}
+    />
   );
 
   return (
     <Page title="Mat" action={tabs}>
+      {!source && <Skeleton cards={2} lines={2} />}
       {source && data && tab === 'dag' && (
         <FoodDay
           source={source}

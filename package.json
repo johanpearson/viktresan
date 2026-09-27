@@ -15,7 +15,9 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project='Pixel 7'",
+    "test:visual": "sh scripts/visual.sh",
+    "test:visual:update": "sh scripts/visual.sh --update-snapshots",
     "icons": "node scripts/generate-icons.mjs",
     "livsmedel": "node scripts/fetch-livsmedel.ts"
   },

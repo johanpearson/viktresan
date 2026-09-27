@@ -19,7 +19,7 @@ export function DoseDayBanner({ data, now }: DoseDayBannerProps) {
         {due.map((d) => `${describeDose(d)} kl. ${d.time ?? ''}`.trim()).join(', ')}{' '}
         {due.length === 1 ? 'är inte loggad' : 'är inte loggade'} än.
       </p>
-      <a className="button button-small" href="#/logga/glp1">
+      <a className="button button-secondary button-small" href="#/logga/glp1">
         Logga dos
       </a>
     </aside>
