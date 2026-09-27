@@ -266,7 +266,8 @@ test('Fråga AI om veckan under Framsteg → Veckor', async ({ page }) => {
   const lastWeek = LOG.map((e) => ({ ...e, id: `v${e.id}`, date: monday }));
   await seed(page, { profile: PROFILE, foodLog: lastWeek });
   await page.goto('./#/framsteg/veckor');
-  await page.getByRole('button', { name: 'Fråga AI om veckan' }).first().tap();
+  await page.getByTestId('week').first().getByRole('button').tap();
+  await page.getByRole('button', { name: 'Fråga AI om veckan' }).tap();
   const prompt = page.getByTestId('ai-prompt');
   await expect(prompt).toHaveValue(/min mat veckan/);
   await expect(prompt).toHaveValue(/1 loggad dag/);

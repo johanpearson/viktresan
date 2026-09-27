@@ -1777,13 +1777,14 @@ a.button {
 }
 
 .log-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
   width: 100%;
-  min-height: 128px;
-  padding: 16px;
+  min-height: var(--tap);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -1800,7 +1801,6 @@ a.button {
 
 .log-tile-icon {
   color: var(--accent);
-  margin-bottom: auto;
 }
 
 /* Ikonen i datatypens färg – samma som i kalendern och graferna. */
@@ -1833,7 +1833,9 @@ a.button {
   font-weight: 700;
 }
 
+/* Status under ikon + namn, över hela rutans bredd. */
 .log-tile-summary {
+  grid-column: 1 / -1;
   color: var(--muted);
   font-size: var(--text-xs);
 }
@@ -2148,6 +2150,8 @@ a.button {
 
 /* Kalender: veckovy */
 .week-list {
+  display: grid;
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2741,14 +2745,6 @@ a.button {
   width: 1.25em;
   color: var(--muted);
   text-align: center;
-}
-
-.week-list {
-  display: grid;
-  gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 /* Genvägstoast ligger ovanför uppdateringstoasten om båda visas. */

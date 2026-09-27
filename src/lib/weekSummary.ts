@@ -303,7 +303,17 @@ export function weekLoggedText(summary: WeekSummary): string {
   return `Du loggade något ${String(days)} av 7 dagar.`;
 }
 
+/** "Vecka 38" */
+export function weekName(summary: WeekSummary): string {
+  return `Vecka ${String(isoWeekNumber(summary.from))}`;
+}
+
+/** "15 sep.–21 sep." */
+export function weekRange(summary: WeekSummary): string {
+  return `${formatShortDate(summary.from)}–${formatShortDate(summary.to)}`;
+}
+
 /** "Vecka 38 · 15 sep.–21 sep." */
 export function weekTitle(summary: WeekSummary): string {
-  return `Vecka ${String(isoWeekNumber(summary.from))} · ${formatShortDate(summary.from)}–${formatShortDate(summary.to)}`;
+  return `${weekName(summary)} · ${weekRange(summary)}`;
 }

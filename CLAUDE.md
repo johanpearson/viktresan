@@ -234,7 +234,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   tjock, dagsvärden som svaga punkter (`--chart-point-faint`).
 - **Veckosummering** (`weekSummary.ts`, veckor mån–sön): `WeekSummaryCard` på Översikt visar förra veckan
   från veckans första öppning tills den stängs (`preferences.weekCardDismissed` = måndagen); alla avslutade
-  veckor med data under Framsteg → Veckor (`pastWeeks`). Trend = EMA vid veckans slut − dagen före veckan
+  veckor med data under Framsteg → Veckor (`pastWeeks`; en `ListRow` per vecka, tryck = summeringen och "Fråga AI" i en panel). Trend = EMA vid veckans slut − dagen före veckan
   (kräver vägning i veckan); snitt räknas över loggade dagar. Rader har `feature` och filtreras. Texter är
   sakliga och uppmuntrande, aldrig skuldbeläggande; uppgång (bort från målet) beskrivs neutralt.
 - **Milstolpar** (`milestones.ts`, id:n `kg-1`, `kg-5`/`kg-10`/…, `procent-5|10`, `bmi-overvikt|normalvikt`,
