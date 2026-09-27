@@ -2596,7 +2596,7 @@ a.button {
 
 .dose-next {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
@@ -3353,10 +3353,10 @@ a.button {
   animation: accordion-in var(--duration-base) var(--ease-out);
 }
 
+/* Bara rörelse, ingen opacitet – texten har full kontrast från första bildrutan. */
 @keyframes accordion-in {
   from {
-    opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-6px);
   }
 }
 
@@ -3904,6 +3904,18 @@ a.list-row-body {
 
 .stats-compact .stat dd {
   font-size: var(--text-md);
+}
+
+.stats-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: var(--space-3);
+}
+
+/* Kort där de kompakta nyckeltalen är första blocket: ingen linje ovanför. */
+.card-title + .stats-compact {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .stat-sub {

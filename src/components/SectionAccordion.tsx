@@ -22,7 +22,7 @@ interface SectionAccordionProps {
 
 /**
  * Hopfällbar sektion (kort) med rubrik, metatext, värde och chevron. Innehållet
- * renderas bara när sektionen är utfälld och tonar in (150–200 ms, av vid
+ * renderas bara när sektionen är utfälld och glider in (200 ms, av vid
  * prefers-reduced-motion).
  */
 export function SectionAccordion({

@@ -5,23 +5,26 @@ på enheten i IndexedDB. Publiceras på GitHub Pages under `/viktresan/`.
 
 ## Kommandon
 
-| Kommando            | Vad det gör                                                     |
-| ------------------- | --------------------------------------------------------------- |
-| `npm run dev`       | Dev-server (http://localhost:5173/viktresan/). Ingen CSP i dev. |
-| `npm run build`     | Typecheck (`tsc -b`) + produktionsbygge till `dist/` inkl. SW.  |
-| `npm run preview`   | Serverar `dist/` på http://localhost:4173/viktresan/.           |
-| `npm run lint`      | ESLint (typmedveten, strict) + Prettier-kontroll.               |
-| `npm run format`    | Formaterar allt med Prettier.                                   |
-| `npm run typecheck` | TypeScript utan emit.                                           |
-| `npm test`          | Vitest (jsdom + fake-indexeddb).                                |
-| `npm run test:e2e`  | Playwright, Pixel 7-emulering, mot produktionsbygget.           |
-| `npm run icons`     | Regenererar PNG-ikoner i `public/` från SVG-källorna.           |
-| `npm run livsmedel` | Hämtar Livsmedelsverkets databas → `public/livsmedel.json`.     |
+| Kommando                     | Vad det gör                                                     |
+| ---------------------------- | --------------------------------------------------------------- |
+| `npm run dev`                | Dev-server (http://localhost:5173/viktresan/). Ingen CSP i dev. |
+| `npm run build`              | Typecheck (`tsc -b`) + produktionsbygge till `dist/` inkl. SW.  |
+| `npm run preview`            | Serverar `dist/` på http://localhost:4173/viktresan/.           |
+| `npm run lint`               | ESLint (typmedveten, strict) + Prettier-kontroll.               |
+| `npm run format`             | Formaterar allt med Prettier.                                   |
+| `npm run typecheck`          | TypeScript utan emit.                                           |
+| `npm test`                   | Vitest (jsdom + fake-indexeddb).                                |
+| `npm run test:e2e`           | Playwright, Pixel 7-emulering, mot produktionsbygget.           |
+| `npm run test:visual`        | Visuella regressionstester i Playwrights Docker-avbild.         |
+| `npm run test:visual:update` | Nya baslinjer (`e2e/__screenshots__/`) – granska och committa.  |
+| `npm run icons`              | Regenererar PNG-ikoner i `public/` från SVG-källorna.           |
+| `npm run livsmedel`          | Hämtar Livsmedelsverkets databas → `public/livsmedel.json`.     |
 
 Lighthouse CI lokalt (efter `npm run build`):
 `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npx --yes @lhci/cli@0.13.0 autorun`.
 
-Kör `npm run lint && npm run typecheck && npm test && npm run test:e2e` innan push.
+Kör `npm run lint && npm run typecheck && npm test && npm run test:e2e` innan push, och
+`npm run test:visual` vid UI-ändringar (kräver Docker; i molnmiljön: starta `dockerd` först).
 
 Lokalt utan nedladdade Playwright-browsers: sätt `PW_CHROMIUM_PATH` till en Chromium-binär
 (t.ex. `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). Kör aldrig `playwright install`
@@ -91,11 +94,20 @@ src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
 src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
-                        ImportBackup, BackupReminder, LockGate, LockSettings …)
+                        ImportBackup, BackupReminder, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
+                        Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
+                        SegmentedControl, StatBar, GoalRing, ProgressBar, EmptyState, Toast, Skeleton
+src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
+src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
+src/lib/haptics.ts      haptic('success' | 'light') via navigator.vibrate (inställning + reducerad rörelse)
+src/lib/motion.ts       prefersReducedMotion()
+docs/DESIGN.md          Designsystemet: tokens, komponenter, regler, mikrointeraktioner
+docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kvarvarande vyer
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka),
                         Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
-e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
+e2e/                    Playwright-tester. visual.spec.ts + visualData.ts = visuella regressionstester (egen
+                        Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
                         veckokort, milstolpar, bilder, måltidsanalys); hjälpare i helpers.ts. mealAnalysis.spec.ts mockar
                         clipboard, navigator.share och window.open (addInitScript). photos.spec.ts mockar getUserMedia
                         (nekad resp. canvas-ström) och skapar en v8-databas för migreringen. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
@@ -153,7 +165,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
-  `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI"). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -279,7 +291,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `BarcodeDetector` + kamera, annars manuell EAN. Okända koder slås upp i Open Food Facts
   (enda externa anropet, bara streckkoden skickas) och cachas i `foods`.
 - **Grafer**: uPlot (`WeightChart`, `StepsChart`, `IntakeChart`). Färger läses från CSS-variabler
-  (`--accent`, `--chart-point`, `--chart-goal`).
+  (`--data-weight`/`--data-steps`/`--data-food`, `--chart-point`, `--chart-goal`, `--chart-dose`).
 - **PWA**: `vite-plugin-pwa` i `generateSW`-läge, `registerType: 'prompt'`, `injectRegister: false`,
   `clientsClaim: true`. `pwaUpdate.ts` registrerar `sw.js` (bundlad kod, `updateViaCache: 'none'`)
   och söker uppdateringar vid start och vid `visibilitychange` (högst var 30:e minut) samt via
@@ -365,8 +377,12 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   kommentarer gärna svenska. Datum lagras som `YYYY-MM-DD`, vikt i kg (`weightKg`).
 - TypeScript strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`. Inga `any`.
 - Importera med filändelse (`./App.tsx`), named exports, en komponent per fil.
-- Mobile-first CSS i `src/index.css` med CSS-variabler; ljust/mörkt tema följer
-  `prefers-color-scheme`. Tryckytor minst 48 px (`--tap` = 56 px).
+- Mobile-first CSS i `src/index.css` med tokens (docs/DESIGN.md): `--space-1…6` (4/8/12/16/24/32),
+  fem textstorlekar `--text-xs…xl`, `--radius-*`, `--shadow-*`, semantiska `--success/--warning/--danger`
+  och en färg per datatyp `--data-weight|food|drink|steps|training|dose|waist|mood` (grafer, kalender,
+  ikoner, ringar). Ljust/mörkt tema följer `prefers-color-scheme`. Tryckytor minst 44 px (`--tap-min`),
+  standard 56 px (`--tap`). En primärknapp per vy, inga Redigera/Ta bort-knappar i listor (tryck/svep +
+  Toast med Ångra), inget kort-i-kort, inga radbrytningar i siffror (`.num`/`.nowrap`).
 - Tillgänglighet: semantiska element, `aria-current` i navigeringen, fokus flyttas till
   sidrubriken vid sidbyte.
 - Tester: enhetstester bredvid koden (`*.test.ts[x]`), e2e i `e2e/`. Testnamn på svenska.
@@ -377,6 +393,9 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Lighthouse CI (`@lhci/cli@0.13.0` = Lighthouse 11, den sista med PWA-kategorin) med krav på
   installerbar PWA (`installable-manifest`, `categories:pwa`) och tillgänglighet ≥ 0,9. Rapporten
   sparas som artefakt (`target: filesystem` – inget laddas upp till tredje part).
+- `visual` (PR): `npm run test:visual` i containern `mcr.microsoft.com/playwright:v1.63.0-noble` (samma
+  avbild som baslinjerna togs i); skillnaderna laddas upp som artefakt vid fel. `test:e2e` kör bara
+  projektet `Pixel 7`.
 - Playwright-kvalitetstester: `e2e/a11y.spec.ts` (axe, WCAG 2.2 AA + best practice, ljust och
   mörkt tema), `e2e/offline.spec.ts` (flygplansläge efter första laddningen, även ny flik), och
   `Page.getInstallabilityErrors` via CDP i `e2e/app.spec.ts`.

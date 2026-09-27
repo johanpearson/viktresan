@@ -4,6 +4,7 @@ import { todayIso } from '../lib/dates.ts';
 import { formatDate, formatKg, parseDecimal, stepKg } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { parseWeightFields } from '../lib/validation.ts';
+import { haptic } from '../lib/haptics.ts';
 
 function kgText(value: number): string {
   return value.toFixed(1).replace('.', ',');
@@ -79,6 +80,7 @@ export function WeightLog({ weights, profile, onChange }: WeightLogProps) {
       ? { id: editing.id, createdAt: editing.createdAt, updatedAt: now, ...result.value }
       : { id: newId(), createdAt: now, ...result.value };
     await putWeight(entry);
+    haptic('success');
     const next = await onChange();
     setForm(freshWeightForm(next.weights, next.profile));
     setError(null);

@@ -4,6 +4,7 @@ import { formatDate } from '../lib/format.ts';
 import { parseDurationField } from '../lib/validation.ts';
 import { answerWorkout, INTENSITIES, type Intensity, type WorkoutItem } from '../lib/workouts.ts';
 import { BottomSheet } from './BottomSheet.tsx';
+import { haptic } from '../lib/haptics.ts';
 
 interface CompleteWorkoutSheetProps {
   item: WorkoutItem;
@@ -30,6 +31,7 @@ export function CompleteWorkoutSheet({ item, onSaved, onClose }: CompleteWorkout
       await putWorkout(
         answerWorkout(item, { status: 'genomford', durationMin: parsed.value, intensity }),
       );
+      haptic('success');
       await onSaved();
       onClose();
     } finally {

@@ -37,7 +37,7 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
       <h2 className="card-title" id="plan-title">
         Kalorimål
       </h2>
-      <dl className="stats">
+      <dl className="stats stats-compact stats-2">
         <div className="stat">
           <dt>Dagens kalorimål</dt>
           <dd data-testid="calorie-target">{formatKcal(plan.targetKcal)}</dd>

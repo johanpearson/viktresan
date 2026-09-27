@@ -17,6 +17,7 @@ import {
 import type { AppData } from '../lib/useAppData.ts';
 import { parseInjectionFields } from '../lib/validation.ts';
 import { localNow } from '../lib/workouts.ts';
+import { haptic } from '../lib/haptics.ts';
 
 /** Antal injektioner som visas under formuläret. */
 const RECENT_INJECTIONS = 5;
@@ -80,6 +81,7 @@ export function InjectionForm({ data, onChange, onAddMedication }: InjectionForm
       createdAt: Date.now(),
     };
     await putInjection(injection);
+    haptic('success');
     await onChange();
     setError(null);
     setDoseText(null);

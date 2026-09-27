@@ -55,9 +55,9 @@ export function NextDoseCard({ data, now }: NextDoseCardProps) {
         </>
       )}
       {data.medications.length > 0 && (
-        <dl className="kv">
+        <dl className="stats stats-compact stats-2">
           {last && (
-            <div>
+            <div className="stat">
               <dt>Senaste dos</dt>
               <dd data-testid="last-dose">
                 {formatDate(last.date)} · {describeDose(last)}
@@ -65,7 +65,7 @@ export function NextDoseCard({ data, now }: NextDoseCardProps) {
               </dd>
             </div>
           )}
-          <div>
+          <div className="stat">
             <dt>Förslag på ställe</dt>
             <dd data-testid="next-site">{siteLabel(suggestSite(data.injections))}</dd>
           </div>
