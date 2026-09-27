@@ -148,7 +148,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByTestId('intake-table')).toBeVisible();
       await expectNoViolations(page, 'Mat historik');
       // Inställningar med profilens nya fält ifyllda.
-      await page.goto('./#/installningar');
+      await page.goto('./#/installningar/profil');
       await expectNoViolations(page, 'Inställningar profil');
       // Påminnelsen om säkerhetskopia.
       await page.goto('./');
@@ -169,7 +169,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       page,
     }) => {
       await seedData(page);
-      await page.goto('./#/installningar');
+      await page.goto('./#/installningar/sakerhetskopia');
       await page.getByLabel('Kryptera med lösenord').check();
       await expectNoViolations(page, 'Kryptering');
 
@@ -257,7 +257,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('./#/framsteg');
       await expect(page.getByTestId('water-history')).toBeVisible();
       await expectNoViolations(page, 'Framsteg vatten');
-      await page.goto('./#/installningar');
+      await page.goto('./#/installningar/dryck');
       await expect(page.getByTestId('water-goal-standard')).toBeVisible();
       await expectNoViolations(page, 'Inställningar vattenmål');
     });

@@ -21,7 +21,7 @@ async function addPlatformAuthenticator(page: Page): Promise<{ client: CDPSessio
 const lockedHeading = (page: Page) => page.getByRole('heading', { name: 'Viktresan är låst' });
 
 test('låset är av som standard', async ({ page }) => {
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/las');
   await addPlatformAuthenticator(page);
   await page.reload();
   await expect(page.getByRole('switch', { name: /Lås appen med fingeravtryck/ })).not.toBeChecked();
@@ -31,7 +31,7 @@ test('låset är av som standard', async ({ page }) => {
 
 test('lås med fingeravtryck: låses i bakgrunden och vid start', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/las');
   const { client, id } = await addPlatformAuthenticator(page);
   await page.reload();
 
@@ -83,7 +83,7 @@ test('utan plattformsautentiserare kan låset inte slås på', async ({ page }) 
       value: () => Promise.resolve(false),
     });
   });
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/las');
   await expect(page.getByTestId('lock-unsupported')).toBeVisible();
   await expect(page.getByRole('switch', { name: /Lås appen/ })).toHaveCount(0);
 });

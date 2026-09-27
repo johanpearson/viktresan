@@ -26,7 +26,7 @@ export function LivsmedelSource() {
   }, []);
 
   return (
-    <p className="form-note muted about-source" data-testid="livsmedel-source">
+    <p className="form-note muted" data-testid="livsmedel-source">
       {sourceText(livsmedel)}
     </p>
   );

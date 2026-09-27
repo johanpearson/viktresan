@@ -50,7 +50,7 @@ function nav(page: Page) {
 }
 
 async function setFeature(page: Page, name: RegExp, on: boolean) {
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/funktioner');
   const toggle = page.getByRole('switch', { name });
   await toggle.setChecked(on);
   await expect(toggle).toBeChecked({ checked: on });
@@ -186,6 +186,7 @@ test('avstängda funktioner: datan ligger kvar, exporteras och syns igen', async
   expect(stored.photos).toHaveLength(1);
 
   // Säkerhetskopian innehåller allt.
+  await page.goto('./#/installningar/sakerhetskopia');
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Exportera säkerhetskopia' }).tap();
   await page.getByLabel('Välj säkerhetskopia').setInputFiles(await (await download).path());
@@ -207,7 +208,7 @@ test('avstängda funktioner: datan ligger kvar, exporteras och syns igen', async
 });
 
 test('GLP-1 är av som standard och kan slås på', async ({ page }) => {
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/funktioner');
   const toggle = page.getByRole('switch', { name: /^GLP-1/ });
   await expect(toggle).toBeEnabled();
   await expect(toggle).not.toBeChecked();

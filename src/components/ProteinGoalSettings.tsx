@@ -29,10 +29,7 @@ export function ProteinGoalSettings({ data, onChange }: ProteinGoalSettingsProps
   const goal = profile ? proteinGoalG(profile.goalWeightKg, factor) : null;
 
   return (
-    <section className="card form" aria-labelledby="protein-goal-title">
-      <h2 className="card-title" id="protein-goal-title">
-        Proteinmål
-      </h2>
+    <div className="form">
       {!profile ? (
         <p className="form-note">Fyll i profilen först – målet räknas från din målvikt.</p>
       ) : (
@@ -61,6 +58,6 @@ export function ProteinGoalSettings({ data, onChange }: ProteinGoalSettingsProps
           </p>
         </>
       )}
-    </section>
+    </div>
   );
 }

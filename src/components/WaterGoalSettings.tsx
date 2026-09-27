@@ -49,15 +49,7 @@ export function WaterGoalSettings({ data, onChange }: WaterGoalSettingsProps) {
   }
 
   return (
-    <form
-      className="card form"
-      aria-labelledby="water-goal-title"
-      onSubmit={(e) => void handleSubmit(e)}
-      noValidate
-    >
-      <h2 className="card-title" id="water-goal-title">
-        Dryckesmål
-      </h2>
+    <form className="form" onSubmit={(e) => void handleSubmit(e)} noValidate>
       {!profile ? (
         <p className="form-note">Fyll i profilen först – målet sparas i profilen.</p>
       ) : (

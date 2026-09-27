@@ -59,7 +59,7 @@ export function Oversikt() {
       {data === null ? null : data.profile === null ? (
         <EmptyState
           title="Välkommen till Viktresan"
-          action={{ label: 'Fyll i profilen', href: '#/installningar' }}
+          action={{ label: 'Fyll i profilen', href: '#/installningar/profil' }}
         >
           Börja med startvikt, längd och mål – sedan fylls Översikt med trend, dagens intag och
           prognos.

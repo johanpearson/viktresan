@@ -30,6 +30,7 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
   await nav.getByRole('link', { name: 'Översikt' }).tap();
   await page.getByLabel('Inställningar').tap();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inställningar');
+  await page.getByTestId('settings-profil').getByRole('button').tap();
   await page.getByLabel('Startdatum').fill(isoDaysFromToday(-7));
   await page.getByLabel('Startvikt (kg)').fill('90');
   await page.getByLabel('Längd (cm)').fill('180');

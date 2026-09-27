@@ -40,7 +40,7 @@ test('kugghjulet på Översikt öppnar Inställningar', async ({ page }) => {
 
 test('bottennavigeringen är solid och döljer inget innehåll', async ({ page }) => {
   await page.goto('./#/installningar');
-  await expect(page.getByRole('button', { name: 'Sök efter uppdatering' })).toBeVisible();
+  await expect(page.getByTestId('app-footer')).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Huvudmeny' });
 
   // Helt ogenomskinlig bakgrund.
@@ -171,7 +171,7 @@ test('service workern registreras och appen fungerar offline', async ({ page, co
 });
 
 test('Inställningar visar lagringsstatus', async ({ page }) => {
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/lagring');
   const status = page.getByTestId('persistence-status');
   await expect(status).not.toHaveAttribute('data-state', 'loading');
   await expect(status).toHaveText(/beständig/i);

@@ -30,10 +30,7 @@ export function FoodPreferencesSettings({ data, onChange }: FoodPreferencesSetti
   }
 
   return (
-    <section className="card form" aria-labelledby="food-preferences-title">
-      <h2 className="card-title" id="food-preferences-title">
-        Matpreferenser
-      </h2>
+    <>
       {!profile ? (
         <p className="form-note">Fyll i profilen först.</p>
       ) : (
@@ -63,6 +60,6 @@ export function FoodPreferencesSettings({ data, onChange }: FoodPreferencesSetti
           </p>
         </form>
       )}
-    </section>
+    </>
   );
 }

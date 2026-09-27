@@ -3596,10 +3596,6 @@ a.list-row-body {
   margin-top: 0;
 }
 
-.about-source {
-  margin: 0 0 16px;
-}
-
 /* Mat → Dag: datumraden med menyn (⋯) för hela dagen. */
 .food-day-head {
   display: flex;
@@ -3617,12 +3613,14 @@ a.list-row-body {
   font-size: var(--text-lg);
 }
 
-/* Menyer i en bottom sheet: ListRow per val, kant i kant. */
-.action-list {
+/* Menyer och listor direkt i en bottom sheet (utan Card): ListRow kant i kant. */
+.action-list,
+.list-flush {
   margin: 0 calc(-1 * var(--space-4));
 }
 
-.action-list > .list-row:first-child {
+.action-list > .list-row:first-child,
+.list-flush > .list-row:first-child {
   border-top: 0;
 }
 

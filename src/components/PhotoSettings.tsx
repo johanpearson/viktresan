@@ -5,10 +5,7 @@ import { setPreference, usePreferences } from '../lib/preferences.ts';
 export function PhotoSettings() {
   const { prefs } = usePreferences();
   return (
-    <section className="card" aria-labelledby="photo-settings-title">
-      <h2 className="card-title" id="photo-settings-title">
-        Bilder
-      </h2>
+    <div className="form">
       <fieldset className="choice-group">
         <legend className="field-label">Profilbilder tas från</legend>
         {PROFILE_SIDES.map((side) => (
@@ -28,6 +25,6 @@ export function PhotoSettings() {
         Ta profilbilderna från samma sida varje gång så blir de lätta att jämföra. Guiden och
         kamerans spökbild följer valet.
       </p>
-    </section>
+    </div>
   );
 }

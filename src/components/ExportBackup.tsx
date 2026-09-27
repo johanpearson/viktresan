@@ -74,20 +74,21 @@ export function ExportBackup({ status, onExported }: ExportBackupProps) {
   return (
     <form className="form" onSubmit={(e) => void handleSubmit(e)} noValidate>
       <h3 className="subheading">Exportera</h3>
-      <dl className="kv kv-compact">
-        <dt>Senaste export</dt>
-        <dd data-testid="last-export">{lastExportText(status)}</dd>
-      </dl>
-      <label className="check">
+      <p className="form-note">
+        Senaste export: <span data-testid="last-export">{lastExportText(status)}</span>
+      </p>
+      <label className="switch-row">
+        <span className="switch-label">Kryptera med lösenord</span>
         <input
           type="checkbox"
+          role="switch"
+          className="switch"
           checked={encrypt}
           onChange={(e) => {
             setEncrypt(e.target.checked);
             setError(null);
           }}
         />
-        <span>Kryptera med lösenord</span>
       </label>
       {encrypt && (
         <>

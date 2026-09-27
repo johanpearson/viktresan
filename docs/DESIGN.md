@@ -117,6 +117,7 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `BottomSheet`      | `BottomSheet.tsx`      | Panel nerifrån (eller helskärm) som modal `<dialog>`                          |
 | `ActionSheet`      | `ActionSheet.tsx`      | Radmeny: liten panel med ett val per rad, destruktiva val i fel-färg          |
 | `DateBar`          | `DateBar.tsx`          | ‹ Idag › – datumrad med osynligt datumfält (Mat → Dag, formulär i paneler)    |
+| Inställningslista  | `Card` + `ListRow`     | Grupp av rader med status och › som var och en öppnar en panel                |
 | `SegmentedControl` | `SegmentedControl.tsx` | Flikar/filter med `aria-pressed`; `size="small"` i sidhuvudet                 |
 | `StatBar`          | `StatBar.tsx`          | "827 / 1 680 kcal" + tunn stapel i datatypens färg + metarad                  |
 | `GoalRing` (Ring)  | `GoalRing.tsx`         | Ring mot dagsmål (dryck, kalorier, protein) med `tone`                        |
@@ -205,10 +206,33 @@ Tom sektion = smal rad med bara rubrik och `actions`. Innehållet glider in (200
 - Grabber överst, rubrik + textknappen "Stäng" (ghost). Esc, "Stäng" eller tryck utanför stänger.
 - `full` = helskärm (sök, analys, Fråga AI).
 - Menyer i en panel är `ListRow` med `chevron` (en rad per val) – inte en stapel knappar.
+- En lista direkt i en panel (utan `Card`) har klassen `list list-flush`: raderna går kant i kant och
+  första raden saknar linje (samma som `action-list` i menyer). Används för värden som "Version 0.1.0"
+  i Om appen – etikett till vänster, värde till höger, i stället för `dl` med etikett och värde på
+  varsin rad.
 - Paneler kan staplas: en `ActionSheet` öppnas ovanpå en panel (unikt rubrik-id per panel). Att stänga
   den övre stänger bara den – `close` som bubblar genom React-trädet ignoreras.
 - En `Toast` i en panel (Ångra efter svep) renderas i panelen och ligger längst ner i den
   (`.sheet .toast`), eftersom panelen täcker navigeringen.
+
+### Inställningslista (lista → panel)
+
+```tsx
+<Card title="Appen">
+  <ul className="list">
+    <ListRow primary="Lås" secondary="Fingeravtryck eller skärmlås" value="Av" chevron onClick={…} />
+  </ul>
+</Card>
+{open && <BottomSheet title="Lås" onClose={close}><LockSettings /></BottomSheet>}
+```
+
+Inställningar är grupper (`Card` med rubrik) av `ListRow` med `chevron`. Varje rad visar en kort status
+(`value`: "7 av 7", "Av", "1 600 ml"; `secondary`: vad raden gäller) och öppnar sin grupp i en
+`BottomSheet`. Panelen har högst **en** primärknapp (Spara …, Exportera). En delsökväg öppnar panelen
+direkt (`#/installningar/profil`, `…/sakerhetskopia`) – länkar från andra vyer går dit.
+
+Av/på-val är **switchar** (`label.switch-row` med `.switch-text` och `input.switch[role=switch]`), inte
+kryssrutor med text efter: rubrik och förklaring till vänster, brytaren till höger på samma rad.
 
 ### ActionSheet
 
