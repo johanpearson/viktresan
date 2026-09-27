@@ -98,7 +98,8 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
                         SegmentedControl, StatBar, GoalRing, ProgressBar, EmptyState, Toast, Skeleton,
                         ActionSheet (radmeny ovanpå en panel), DateBar (‹ Idag ›, även i Logga-panelernas formulär),
-                        StorageSettings (Inställningar → Lagring)
+                        StorageSettings (Inställningar → Lagring), ShowMore (+ useShowMore: 14 rader, sedan fler),
+                        RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar

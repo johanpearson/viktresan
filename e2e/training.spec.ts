@@ -349,8 +349,11 @@ test('dryck: logga, ångra, ring på Översikt, historik, eget mål och träning
   await page.goto('./#/framsteg');
   const history = page.getByTestId('water-history');
   await expect(history.getByRole('heading', { name: 'Dryck' })).toBeVisible();
-  await expect(history.getByTestId('water-day')).toHaveCount(1);
-  await expect(history.getByTestId('water-day')).toContainText('900 ml');
+  await expect(history.getByRole('img', { name: /dryck per dag/ })).toHaveAttribute(
+    'data-bars',
+    '1',
+  );
+  await expect(history.getByTestId('water-summary')).toContainText('Snitt 900 ml');
 
   // Inställningar: standardmålet förklaras, eget mål och +500 ml på träningsdagar.
   await page.goto('./#/installningar/dryck');

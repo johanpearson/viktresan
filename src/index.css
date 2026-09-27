@@ -2329,6 +2329,20 @@ a.button {
   padding: 0;
 }
 
+/* Tidsfilter (RangeFilter): chips under flikarna, lättare än en segmentkontroll. */
+.range-filter {
+  margin-block: var(--space-3);
+}
+
+.range-filter:first-child {
+  margin-top: 0;
+}
+
+.range-filter .chip {
+  min-height: var(--tap-min);
+  font-size: var(--text-sm);
+}
+
 .weekday-picker {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -2465,34 +2479,6 @@ a.button {
   align-self: flex-start;
 }
 
-.water-days {
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.water-day {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-1) var(--space-3);
-  padding: 8px 0;
-  border-top: 1px solid var(--border);
-}
-
-.water-day .progress {
-  grid-column: 1 / -1;
-  height: 8px;
-}
-
-.water-day .progress-fill {
-  background: var(--data-drink);
-}
-
-.water-day-ml {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 /* GLP-1 */
 .chip-grid {
   display: flex;
@@ -2594,23 +2580,6 @@ a.button {
   margin: 0;
   font-size: var(--text-md);
   font-weight: 700;
-}
-
-.dose-changes {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dose-changes li {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 8px 0;
-}
-
-.dose-changes li + li {
-  border-top: 1px solid var(--border);
 }
 
 /* Enheter för matloggning */

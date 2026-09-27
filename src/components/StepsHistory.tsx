@@ -1,6 +1,7 @@
 import type { StepsEntry } from '../db/db.ts';
 import { formatInt } from '../lib/format.ts';
 import { dailySteps, filterRange, type RangeId } from '../lib/stats.ts';
+import { Card } from './Card.tsx';
 import { StepsChart } from './StepsChart.tsx';
 
 interface StepsHistoryProps {
@@ -16,10 +17,7 @@ export function StepsHistory({ steps, range, today }: StepsHistoryProps) {
   const average = days.length > 0 ? days.reduce((s, d) => s + d.steps, 0) / days.length : null;
 
   return (
-    <section className="card chart-card" aria-labelledby="steps-history-title">
-      <h2 className="card-title" id="steps-history-title">
-        Steg
-      </h2>
+    <Card title="Steg" className="chart-card">
       {all.length === 0 ? (
         <p className="muted">Inga steg loggade ännu.</p>
       ) : days.length === 0 ? (
@@ -34,6 +32,6 @@ export function StepsHistory({ steps, range, today }: StepsHistoryProps) {
           )}
         </>
       )}
-    </section>
+    </Card>
   );
 }
