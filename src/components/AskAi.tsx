@@ -11,6 +11,7 @@ import {
   type AiService,
   type AiSubject,
 } from '../lib/aiPrompt.ts';
+import { copyText, shareText } from '../lib/clipboard.ts';
 import { useFeatures } from '../lib/features.ts';
 import { setPreference, usePreferences } from '../lib/preferences.ts';
 import { Toast } from './Toast.tsx';
@@ -27,23 +28,6 @@ function missingHint(id: AiOption, context: AiContext): string | null {
   }
   if (id === 'glp1' && context.glp1 === null) return 'Ingen aktiv behandling inlagd.';
   return null;
-}
-
-/** Kopierar text; reserv med markering + execCommand när Clipboard API saknas. */
-async function copyText(text: string, fallback: HTMLTextAreaElement | null): Promise<boolean> {
-  try {
-    // Clipboard API finns bara i säkra sammanhang (https, localhost).
-    if ('clipboard' in navigator) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    // Prova reserven nedan.
-  }
-  if (!fallback) return false;
-  fallback.select();
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- reserv för äldre webbläsare
-  return document.execCommand('copy');
 }
 
 /**
@@ -82,16 +66,7 @@ export function AskAi({ subject, context }: AskAiProps) {
   }
 
   async function share() {
-    if (typeof navigator.share !== 'function') {
-      await copy();
-      return;
-    }
-    try {
-      await navigator.share({ text: prompt });
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      await copy();
-    }
+    if ((await shareText(prompt)) === 'unavailable') await copy();
   }
 
   async function open(service: AiService, label: string) {

@@ -1,4 +1,6 @@
 /** Validering av formulärinmatning. Returnerar värdet eller ett felmeddelande på svenska. */
+import type { NutrientKey } from '../data/nutrients.ts';
+import type { SupplementForm, SupplementNutrient, SupplementSchedule } from '../db/db.ts';
 import { isIsoDate } from './dates.ts';
 import {
   ACTIVITY_LEVELS,
@@ -17,6 +19,8 @@ import {
   type InjectionSite,
 } from './glp1.ts';
 import { parseDecimal } from './format.ts';
+import { isUnitAllowed, nutrientInfo, type AmountUnit } from './nutrientUnits.ts';
+import { DOSES_PER_DAY_MAX } from './supplements.ts';
 import type { Nutrients } from './nutrition.ts';
 import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity, type WorkoutStatus } from './workouts.ts';
@@ -499,3 +503,74 @@ export function parseSymptomFields(fields: SymptomFields): Parsed<SymptomValues>
 
 /** Längsta tillåtna matpreferenser (Inställningar → Matpreferenser). */
 export const FOOD_PREFERENCES_MAX = 1000;
+
+export interface SupplementNutrientField {
+  key: NutrientKey;
+  amount: string;
+  unit: AmountUnit;
+}
+
+export interface SupplementFields {
+  name: string;
+  form: SupplementForm;
+  amountPerDose: string;
+  nutrients: SupplementNutrientField[];
+  schedule: SupplementSchedule;
+  weekdays: number[];
+  dosesPerDay: string;
+  ean: string;
+}
+
+export interface SupplementValues {
+  name: string;
+  form: SupplementForm;
+  amountPerDose: number;
+  nutrients: SupplementNutrient[];
+  schedule: SupplementSchedule;
+  weekdays?: number[];
+  dosesPerDay: number;
+  ean?: string;
+}
+
+/** Tillskott: namn, form, mängd per dos, näringsämnen per dos, schema och valfri streckkod. */
+export function parseSupplementFields(fields: SupplementFields): Parsed<SupplementValues> {
+  const name = fields.name.trim();
+  if (name === '' || name.length > 120) return fail('Ange ett namn (högst 120 tecken).');
+  const amountPerDose = parseDecimal(fields.amountPerDose);
+  if (amountPerDose == null || amountPerDose <= 0 || amountPerDose > 100) {
+    return fail('Ange mängd per dos (större än 0).');
+  }
+  const nutrients: SupplementNutrient[] = [];
+  for (const n of fields.nutrients) {
+    const amount = parseDecimal(n.amount);
+    const label = nutrientInfo(n.key).label;
+    if (amount == null || amount <= 0 || amount >= 100_000) {
+      return fail(`Ange mängd för ${label} (större än 0).`);
+    }
+    if (!isUnitAllowed(n.key, n.unit)) return fail(`Fel enhet för ${label}.`);
+    nutrients.push({ key: n.key, amount, unit: n.unit });
+  }
+  const dosesPerDay = parseWholeNumber(fields.dosesPerDay);
+  if (dosesPerDay == null || dosesPerDay < 1 || dosesPerDay > DOSES_PER_DAY_MAX) {
+    return fail(`Ange antal doser per dag (1–${String(DOSES_PER_DAY_MAX)}).`);
+  }
+  const value: SupplementValues = {
+    name,
+    form: fields.form,
+    amountPerDose,
+    nutrients,
+    schedule: fields.schedule,
+    dosesPerDay,
+  };
+  if (fields.schedule === 'veckodagar') {
+    if (fields.weekdays.length === 0) return fail('Välj minst en veckodag.');
+    value.weekdays = [...new Set(fields.weekdays)].sort((a, b) => a - b);
+  }
+  const eanText = fields.ean.trim();
+  if (eanText !== '') {
+    const ean = normalizeEan(eanText);
+    if (!ean) return fail('Streckkoden är inte giltig (8 eller 13 siffror).');
+    value.ean = ean;
+  }
+  return { ok: true, value };
+}

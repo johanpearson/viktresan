@@ -82,8 +82,16 @@ src/lib/foodSearch.ts   FoodItem + fuzzy-sökning (å/ä/ö-vikning, Damerau-Lev
 src/lib/foodCatalog.ts  Lagrat → FoodItem, snabbval (senaste, favoriter)
 src/lib/livsmedel.ts    Laddar/tolkar public/livsmedel.json (format i livsmedelFormat.ts)
 src/lib/livsmedelImport.ts  Ren omvandling av Livsmedelsverkets API-svar (används av skriptet)
-src/lib/barcode.ts      EAN-validering + Open Food Facts-uppslag (injicerbar fetch)
+src/lib/barcode.ts      EAN-validering + Open Food Facts-uppslag (injicerbar fetch), tillskott per portion, bidragslänk
 src/lib/barcodeDetector.ts  Typning/fabrik för BarcodeDetector
+src/lib/barcodeLookup.ts  Uppslag av en skannad kod: lokalt (livsmedel, måltider, tillskott) före OFF, korsträff Mat/Tillskott
+src/lib/scanner.ts      Skannerns kameralogik: ljusnivå (luma, hysteres), ficklampa/zoom/fokus ur capabilities
+src/lib/aiLabel.ts      "Lägg in med AI från etikett": prompter och JSON-validering (tillskott per dos, livsmedel per 100 g)
+src/lib/clipboard.ts    copyText (med execCommand-reserv) och shareText (Web Share)
+src/lib/supplements.ts  Tillskott: former, scheman, dagens tillskott, tagna doser (intakeFor), mängder per ämne
+src/lib/nutrientUnits.ts  Enheter för vitaminer/mineraler: g/mg/µg och IE (D-vitamin, 1 µg = 40 IE), tillåtna ämnen
+src/lib/micronutrients.ts  Näringssummering: mat + tillskott per ämne och dag, 7-dagarssnitt, UL-varningar med bidrag
+src/data/upperLimits.ts EFSA:s övre gränsvärden (UL) för vuxna med källa; `appliesTo` total eller bara tillskott
 src/lib/useFoodData.ts  Hook: egna livsmedel, måltider, favoriter + Livsmedelsverkets data
 src/lib/format.ts       Svensk formatering/tolkning av kg, heltal, datum
 src/lib/validation.ts   Validering av profil- och mätningsformulär
@@ -110,9 +118,10 @@ src/lib/motion.ts       prefersReducedMotion()
 docs/DESIGN.md          Designsystemet: tokens, komponenter, regler, mikrointeraktioner
 docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kvarvarande vyer
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
-                        (Dag | Egna | Historik som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
+                        (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
                         dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
-e2e/                    Playwright-tester. visual.spec.ts + visualData.ts = visuella regressionstester (egen
+e2e/                    Playwright-tester. supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
+                        BarcodeDetector (kod via `window.__ean`) och OFF. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
                         veckokort, milstolpar, bilder, måltidsanalys); hjälpare i helpers.ts. mealAnalysis.spec.ts mockar
                         clipboard, navigator.share och window.open (addInitScript). photos.spec.ts mockar getUserMedia
@@ -135,13 +144,13 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
 - **Funktionsbrytare** (`features.ts`, Inställningar → Funktioner): steg, midja, mat, vatten,
-  träning, glp1, bilder. Lagras i `settings` under `features` med `version` (`FLAGS_VERSION`);
+  träning, glp1, tillskott, bilder. Lagras i `settings` under `features` med `version` (`FLAGS_VERSION`);
   lagrade värden för en funktion från före dess `availableSince` ignoreras (de var alltid "av"). Avstängd = dold överallt, datan
   ligger kvar och exporteras. Inga spridda if-satser: listor av vyer/flikar/rutor/markörer har
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
-  `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`, `FLAGS_VERSION = 3`). En ny
+  `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`); Tillskott också (`availableSince: 4`, `FLAGS_VERSION = 4`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 9`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 10`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
@@ -154,7 +163,11 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `medications` (v6, GLP-1-läkemedel med schema och dostrappa), `injections` (v6, loggade doser,
   index `by-date`), `symptoms` (v6, aptit/biverkningar, nyckel = `date`, ett per dag, `upsertSymptoms`),
   `foodUnits` (v7, användarens egna enheter per livsmedel, nyckel = `foodId`, alla källor, `saveCustomUnits`),
-  `milestones` (v8, uppnådda milstolpar `{ id, date, createdAt }`, nyckel = milstolpens id, `addMilestones` skriver aldrig över).
+  `milestones` (v8, uppnådda milstolpar `{ id, date, createdAt }`, nyckel = milstolpens id, `addMilestones` skriver aldrig över),
+  `supplements` (v10, tillskott: namn, `form`, `amountPerDose`, `nutrients` per dos `{ key, amount, unit }` i angiven enhet,
+  `schedule` `dagligen`/`veckodagar` (+ `weekdays`)/`vid-behov`, `dosesPerDay`, valfri `ean`; index `by-ean`),
+  `supplementLog` (v10, tagna doser, id = `<tillskott>:<datum>`, en per tillskott och dag, namn och ämnen kopieras in;
+  index `by-date`). `SavedMeal` har sedan v10 en valfri `ean` (ingen schemaändring – skanning hittar måltiden).
   Migreringen v8 → v9 (`groupLegacyPhotos`, även för säkerhetskopior version 1–7) grupperar befintliga bilder i ett
   tillfälle per datum (id `migrerad:<datum>`, samma på alla enheter), vinkel `okand`; bildens vikt flyttas till tillfället
   (senast registrerade vinner). `putPhotoSession` flyttar bildernas `date` med tillfället; `deletePhoto` tar bort ett tomt tillfälle.
@@ -248,6 +261,33 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   små = `MilestoneToast` (popover högst upp, läggs i öppen panel så den går att trycka bort). prefers-reduced-motion
   → ingen animation/konfetti. "Mål nått" erbjuder nytt mål eller takt 0. `bild-30` länkar till
   `#/framsteg/bilder/jamfor` (första och senaste bilden jämförs). Framsteg → Milstolpar: uppnådda + tre närmaste.
+- **Streckkodsskanner** (`BarcodeScanner`, gemensam för Mat, egna måltider och Tillskott): modal kameravy med
+  getUserMedia (bakre kamera, `facingMode: environment`, 1920×1080 ideal) och BarcodeDetector var 150:e ms. Ficklampa
+  (`applyConstraints({ advanced: [{ torch }] })`) och zoom visas bara när `getCapabilities()` har dem; tryck för fokus
+  (`pointsOfInterest`/`single-shot`) när det stöds. Ljusnivån mäts var 700:e ms på en 32×24-bild (`scanner.ts`) → "Mörkt,
+  tänd lampan?". Träff: strömmen stoppas, `haptic('success')`, bock i 600 ms, sedan `onEan`. Reserver: "Skriv in
+  streckkod" (numeriskt, EAN-8/13-validering) och "Välj bild" (BarcodeDetector på `createImageBitmap`). Strömmen stoppas
+  alltid när vyn stängs eller appen döljs. Uppslag (`barcodeLookup.ts`): lokalt först (egna/cachade livsmedel, måltider
+  med `ean`, tillskott med `ean` – bara påslagna funktioner), sedan Open Food Facts. En kod som finns på det andra stället
+  ger `BarcodeElsewhere` med länk (`#/logga/tillskott/ean/<kod>` resp. `#/mat/ean/<kod>`, som slår upp koden direkt).
+  Ingen träff → `BarcodeNotFound`: "Lägg in med AI från etikett" / "Lägg in manuellt" (EAN förifylld och sparad) och
+  länken "Bidra till Open Food Facts" (`/product/<ean>`).
+- **Tillskott** (`supplements.ts`, bakom brytaren `tillskott`, av som standard): Logga → Tillskott (`SupplementsLog`):
+  dagens chips, "Lägg till" (skanna, AI från etikett, manuellt) och "Mina tillskott" (tryck = formulär, svep = ta bort
+  med Ångra). `SupplementForm`: namn, enhet (tablett, kapsel, droppe, ml, brustablett), mängd per dos, näringsämnen ur
+  `SUPPLEMENT_NUTRIENTS` (vitaminer och mineraler i `NUTRIENTS`) med egen enhet; D-vitamin i µg eller IE med omräkning.
+  Förifylls från Open Food Facts (`parseOffSupplement`: `<ämne>_serving` i gram → ämnets enhet) när värdena finns.
+  AI-import (`aiLabel.ts`, `AiLabelImport`): prompten ber om ENDAST JSON `{ namn, enhet, mangdPerDos, naringsamnen:
+[{ amne, mangd, enhet }] }`; svaret valideras (kodblock tolereras, okända ämnen hoppas över med varning, fel enhet och
+  saknade fält ger fel), förhandsvisas och förs in i formuläret för rättning. Mat har samma import per 100 g
+  (`parseFoodLabel` → `CustomFoodForm prefill`). Översikt: `SupplementsToday` (chips + "Alla tagna" med Ångra) efter Idag.
+  Kalendern: markören `tillskott` ("2 av 3 tagna", bara dagar med något taget).
+- **Näring** (Mat → Näring, `#/mat/naring`, `NutritionView`, `micronutrients.ts`): vitaminer och mineraler per dag eller
+  snitt 7 dagar (per loggad dag), uppdelat på mat (Livsmedelsverkets värden via `partsOf`, även ingredienser i måltider)
+  och tagna tillskott, som uppdelad `StatBar` mot RI. UL-varning (`UpperLimitWarnings`, `upperLimits.ts`) när mat +
+  tillskott (eller bara tillskott för folsyra, magnesium, niacin) överstiger EFSA:s gräns, med de största bidragen; samma
+  varning (kortare) överst på Översikt samma dag (`TodayUpperLimits`, läser livsmedel.json bara om något ätits). Notis om
+  att egna/OFF-livsmedel saknar vitamindata och att totalen kan vara i underkant.
 - **Enheter** (`units.ts`): användaren väljer enhet och mängd – gram per enhet anges inte i normalfallet.
   Varje livsmedel får en kategori (`foodProfile`): regel i `src/data/units.ts` (bara `lv:`) → namnmönster
   (`CATEGORY_RULES`, normaliserat namn, klassas på delen före "m."/"i"/"u." …, provas även från senare ord
@@ -330,16 +370,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 8`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 9`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
     har portioner i stället för enheter och uppgraderas med `upgradeFoodData`; version 1–6 saknar milstolpar
     (tom lista – efter importen markeras passerade milstolpar utan firande); version 1–7 saknar fototillfällen och
-    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"). En bild vars `sessionId` saknas bland tillfällena avvisas.
+    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor). En bild vars `sessionId` saknas bland tillfällena avvisas.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.

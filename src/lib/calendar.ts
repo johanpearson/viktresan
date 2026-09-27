@@ -1,9 +1,11 @@
 /** Rena hjälpare för Kalender: månadsrutnät och vad som loggats per dag. */
+import type { Supplement, SupplementIntake } from '../db/db.ts';
 import { addDays, toDayNumber } from './dates.ts';
 import type { DoseItem } from './glp1.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { dailySteps, dailyWeights, type DatedSteps } from './stats.ts';
 import { dailyWater, drinkEntries, type DatedWater, type DrinkFoodEntry } from './water.ts';
+import { supplementStatus } from './supplements.ts';
 import { displayStatus, type DisplayStatus, type WorkoutItem } from './workouts.ts';
 
 /** Månad som "YYYY-MM". */
@@ -82,6 +84,8 @@ export interface DayLog {
   doses?: DoseItem[];
   /** GLP-1: aptit och biverkningar. */
   symptoms?: { appetite?: number; sideEffects: string[] };
+  /** Tillskott: tagna och planerade (bara dagar med något taget). */
+  supplements?: { taken: number; planned: number };
 }
 
 export interface DayIndexInput {
@@ -97,6 +101,8 @@ export interface DayIndexInput {
   /** Loggade och planerade doser (se `dosesBetween`) för de dagar som visas. */
   doses?: readonly DoseItem[];
   symptoms?: readonly { date: string; appetite?: number; sideEffects: string[] }[];
+  supplements?: readonly Supplement[];
+  supplementLog?: readonly SupplementIntake[];
   /** Avgör om planerade pass är obesvarade. */
   now?: Date;
 }
@@ -133,6 +139,11 @@ export function buildDayIndex(input: DayIndexInput): Map<string, DayLog> {
       s.appetite == null
         ? { sideEffects: s.sideEffects }
         : { appetite: s.appetite, sideEffects: s.sideEffects };
+  }
+  const supplements = input.supplements ?? [];
+  const supplementLog = input.supplementLog ?? [];
+  for (const date of new Set(supplementLog.map((e) => e.date))) {
+    day(date).supplements = supplementStatus(supplements, supplementLog, date);
   }
   return index;
 }

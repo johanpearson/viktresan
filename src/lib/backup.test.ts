@@ -14,6 +14,8 @@ import {
   type Injection,
   type Medication,
   type MilestoneRecord,
+  type Supplement,
+  type SupplementIntake,
   type PhotoEntry,
   type PhotoSession,
   type Profile,
@@ -291,6 +293,48 @@ const milestones: MilestoneRecord[] = [
 ];
 const milestoneData = { milestones };
 
+const supplements: Supplement[] = [
+  {
+    id: 's1',
+    name: 'D-vitamin',
+    form: 'tablett',
+    amountPerDose: 1,
+    nutrients: [{ key: 'vitaminD', amount: 1000, unit: 'IE' }],
+    schedule: 'dagligen',
+    dosesPerDay: 1,
+    ean: '4006381333931',
+    createdAt: 80,
+  },
+  {
+    id: 's2',
+    name: 'Magnesium',
+    form: 'brustablett',
+    amountPerDose: 1,
+    nutrients: [
+      { key: 'magnesium', amount: 300, unit: 'mg' },
+      { key: 'zinc', amount: 5, unit: 'mg' },
+    ],
+    schedule: 'veckodagar',
+    weekdays: [0, 3],
+    dosesPerDay: 2,
+    createdAt: 81,
+    updatedAt: 82,
+  },
+];
+
+const supplementLog: SupplementIntake[] = [
+  {
+    id: 's1:2026-01-06',
+    date: '2026-01-06',
+    supplementId: 's1',
+    name: 'D-vitamin',
+    doses: 1,
+    nutrients: [{ key: 'vitaminD', amount: 1000, unit: 'IE' }],
+    createdAt: 83,
+  },
+];
+const supplementData = { supplements, supplementLog };
+
 const weights: WeightEntry[] = [
   { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
   {
@@ -354,6 +398,7 @@ async function seed(): Promise<void> {
       ...trainingData,
       ...glp1Data,
       ...milestoneData,
+      ...supplementData,
     },
     'replace',
   );
@@ -499,6 +544,8 @@ describe('backup validering', () => {
     symptoms: [],
     milestones: [],
     foodUnits: [],
+    supplements: [],
+    supplementLog: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -549,6 +596,24 @@ describe('backup validering', () => {
       { ...valid, milestones: [{ id: 'kg-1', date: 'igår', createdAt: 1 }] },
       { ...valid, milestones: [{ id: '<script>', date: '2026-01-01', createdAt: 1 }] },
       { ...valid, milestones: [milestones[0], milestones[0]] },
+      // Version 9 kräver tillskott, med giltiga former, scheman, näringsämnen och enheter.
+      { ...valid, supplements: undefined },
+      { ...valid, supplementLog: undefined },
+      { ...valid, supplements: [{ ...supplements[0], form: 'spruta' }] },
+      { ...valid, supplements: [{ ...supplements[0], schedule: 'ibland' }] },
+      { ...valid, supplements: [{ ...supplements[0], schedule: 'veckodagar', weekdays: [] }] },
+      { ...valid, supplements: [{ ...supplements[0], dosesPerDay: 0 }] },
+      { ...valid, supplements: [{ ...supplements[0], ean: '1234' }] },
+      {
+        ...valid,
+        supplements: [{ ...supplements[0], nutrients: [{ key: 'zinc', amount: 5, unit: 'IE' }] }],
+      },
+      {
+        ...valid,
+        supplements: [{ ...supplements[0], nutrients: [{ key: 'omega3', amount: 5, unit: 'mg' }] }],
+      },
+      { ...valid, supplements: [supplements[0], supplements[0]] },
+      { ...valid, supplementLog: [{ ...supplementLog[0], doses: 0 }] },
       // Version 1 kräver `measurements`.
       { ...valid, version: 1 },
       {
@@ -750,6 +815,8 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   const expected: Omit<Snapshot, 'photos'> = {
     photoSessions: [{ id: 'migrerad:2026-01-01', date: '2026-01-01', createdAt: 10 }],
     milestones: [],
+    supplements: [],
+    supplementLog: [],
     foods: [],
     meals: [],
     foodLog: [],
@@ -1091,6 +1158,8 @@ describe('validering av GLP-1', () => {
       favorites: [],
       foodUnits: [],
       milestones: [],
+      supplements: [],
+      supplementLog: [],
       ...trainingData,
       ...glp1Data,
       ...patch,
@@ -1148,6 +1217,8 @@ describe('validering av vatten och träning', () => {
       favorites: [],
       foodUnits: [],
       milestones: [],
+      supplements: [],
+      supplementLog: [],
       ...trainingData,
       ...glp1Data,
       ...patch,
@@ -1278,6 +1349,12 @@ describe('import slå ihop', () => {
         { id: 'kg-1', date: '2026-01-20', createdAt: 70 },
         { id: 'pass-1', date: '2026-01-07', createdAt: 71 },
       ],
+      supplements: [
+        // Äldre version → ignoreras; nytt tillskott läggs till.
+        { ...supplements[0], name: 'Gammalt namn', createdAt: 1 } as Supplement,
+        { ...supplements[0], id: 's3', name: 'Järn', ean: '73513537' } as Supplement,
+      ],
+      supplementLog: [],
     };
     await applySnapshot(imported, 'merge');
 
@@ -1346,6 +1423,12 @@ describe('import slå ihop', () => {
       ['kg-1', '2026-01-08'],
       ['dagar-7', '2026-01-15'],
     ]);
+    expect(after.supplements.map((x) => [x.id, x.name])).toEqual([
+      ['s1', 'D-vitamin'],
+      ['s3', 'Järn'],
+      ['s2', 'Magnesium'],
+    ]);
+    expect(after.supplementLog).toEqual(supplementLog);
     // Loggposterna har kvar sina gram.
     expect(after.foodLog.find((e) => e.id === 'f1')?.grams).toBe(260);
   });
@@ -1371,6 +1454,7 @@ describe('summarizeBackup', () => {
           ...trainingData,
           ...glp1Data,
           ...milestoneData,
+          ...supplementData,
         },
         { now: NOW },
       ),
@@ -1386,6 +1470,8 @@ describe('summarizeBackup', () => {
       injections: 2,
       symptoms: 2,
       milestones: 2,
+      supplements: 2,
+      supplementLog: 1,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,

@@ -27,6 +27,7 @@ describe('parseFlags', () => {
       vatten: true,
       traning: true,
       glp1: false,
+      tillskott: false,
       bilder: true,
     });
   });

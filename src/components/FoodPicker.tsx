@@ -1,13 +1,17 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   findFoodByEan,
+  findMealByEan,
+  findSupplementByEan,
   putFood,
   saveCustomUnits,
   setFavorite,
   type FoodLogEntry,
   type StoredFood,
 } from '../db/db.ts';
-import { lookupOpenFoodFacts } from '../lib/barcode.ts';
+import type { FoodLabel } from '../lib/aiLabel.ts';
+import { lookupBarcode } from '../lib/barcodeLookup.ts';
+import { useFeatures } from '../lib/features.ts';
 import {
   buildCatalog,
   favoriteFoods,
@@ -20,6 +24,9 @@ import type { Livsmedel } from '../lib/livsmedel.ts';
 import { mealLabel, type MealSlot } from '../lib/nutrition.ts';
 import { lastUsage, type FoodUnit } from '../lib/units.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
+import { AiLabelImport } from './AiLabelImport.tsx';
+import { BarcodeElsewhere } from './BarcodeElsewhere.tsx';
+import { BarcodeNotFound } from './BarcodeNotFound.tsx';
 import { BarcodeScanner } from './BarcodeScanner.tsx';
 import { BottomSheet } from './BottomSheet.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
@@ -59,6 +66,8 @@ interface FoodPickerProps {
   scan?: boolean;
   /** Fokusera sökfältet när sheeten öppnas. */
   focusSearch?: boolean;
+  /** Slå upp streckkoden direkt (länk från Tillskott: "Logga under Mat"). */
+  ean?: string | undefined;
   onClose: () => void;
 }
 
@@ -68,7 +77,15 @@ type Lookup =
   | { kind: 'idle' }
   | { kind: 'busy'; ean: string }
   | { kind: 'not-found'; ean: string }
+  | { kind: 'elsewhere'; ean: string; name: string }
+  | { kind: 'ai'; ean: string }
   | { kind: 'error'; message: string };
+
+/** Ett nytt eget livsmedel: streckkod och ev. värden från AI-importen. */
+interface Creating {
+  ean: string;
+  prefill?: FoodLabel;
+}
 
 const NO_FOODS: readonly FoodItem[] = [];
 const NO_UNITS: readonly FoodUnit[] = [];
@@ -83,8 +100,10 @@ export function FoodPicker({
   mode,
   scan = false,
   focusSearch = false,
+  ean: initialEan,
   onClose,
 }: FoodPickerProps) {
+  const features = useFeatures();
   const { foodData, livsmedel, foodLog, reloadFood } = source;
   const forLog = mode.kind === 'log';
   const [query, setQuery] = useState('');
@@ -92,7 +111,7 @@ export function FoodPicker({
   const [selected, setSelected] = useState<FoodItem | null>(null);
   const [scanning, setScanning] = useState(scan);
   const [lookup, setLookup] = useState<Lookup>({ kind: 'idle' });
-  const [creatingEan, setCreatingEan] = useState<string | null>(null);
+  const [creating, setCreating] = useState<Creating | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -134,8 +153,8 @@ export function FoodPicker({
     chosenTab ?? (recent.length === 0 && favorites.length > 0 ? 'favoriter' : 'senaste');
 
   useEffect(() => {
-    if (focusSearch && !scan) searchRef.current?.focus();
-  }, [focusSearch, scan]);
+    if (focusSearch && !scan && !initialEan) searchRef.current?.focus();
+  }, [focusSearch, scan, initialEan]);
 
   function pick(food: FoodItem) {
     setSelected(food);
@@ -146,35 +165,68 @@ export function FoodPicker({
   }
 
   async function handleEan(ean: string) {
+    setScanning(false);
     setLookup({ kind: 'busy', ean });
-    const local = await findFoodByEan(ean);
-    if (local) {
-      pick(storedToItem(local));
-      return;
-    }
-    const result = await lookupOpenFoodFacts(ean);
-    if (result.kind === 'found') {
-      // Cacha träffen lokalt så att nästa skanning fungerar offline.
-      const { food } = result;
-      const stored: StoredFood = {
-        id: food.id,
-        name: food.name,
-        source: 'openfoodfacts',
-        per100: food.per100,
-        ean,
-        createdAt: Date.now(),
-      };
-      if (food.units) stored.units = food.units;
-      if (food.per100Unit === 'ml') stored.per100Unit = 'ml';
-      await putFood(stored);
-      await reloadFood();
-      pick(food);
-    } else if (result.kind === 'not-found') {
-      setLookup({ kind: 'not-found', ean });
-    } else {
-      setLookup({ kind: 'error', message: result.message });
+    const result = await lookupBarcode(ean, {
+      context: 'mat',
+      local: { food: findFoodByEan, meal: findMealByEan, supplement: findSupplementByEan },
+      supplementsEnabled: features.isEnabled('tillskott'),
+      foodEnabled: true,
+    });
+    switch (result.kind) {
+      case 'food':
+        pick(storedToItem(result.food));
+        return;
+      case 'meal':
+        if (forLog) pick(mealToItem(result.meal));
+        else {
+          setLookup({
+            kind: 'error',
+            message: `Streckkoden hör till måltiden ${result.meal.name} – en måltid kan inte vara en ingrediens.`,
+          });
+        }
+        return;
+      case 'off-food': {
+        // Cacha träffen lokalt så att nästa skanning fungerar offline.
+        const { food } = result;
+        const stored: StoredFood = {
+          id: food.id,
+          name: food.name,
+          source: 'openfoodfacts',
+          per100: food.per100,
+          ean,
+          createdAt: Date.now(),
+        };
+        if (food.units) stored.units = food.units;
+        if (food.per100Unit === 'ml') stored.per100Unit = 'ml';
+        await putFood(stored);
+        await reloadFood();
+        pick(food);
+        return;
+      }
+      case 'elsewhere':
+        setLookup({ kind: 'elsewhere', ean, name: result.name });
+        return;
+      case 'not-found':
+        setLookup({ kind: 'not-found', ean });
+        return;
+      case 'error':
+        setLookup({ kind: 'error', message: result.message });
+        return;
+      case 'supplement':
+      case 'off-supplement':
+        // Ges bara i Tillskott.
+        setLookup({ kind: 'not-found', ean });
     }
   }
+
+  // En streckkod i adressen (från Tillskott) slås upp direkt.
+  const lookedUp = useRef(false);
+  useEffect(() => {
+    if (!initialEan || lookedUp.current) return;
+    lookedUp.current = true;
+    void handleEan(initialEan);
+  });
 
   async function toggleFavorite(food: FoodItem) {
     await setFavorite(food.id, !favoriteIds.has(food.id));
@@ -189,19 +241,35 @@ export function FoodPicker({
         : 'Logga mat';
 
   let body;
-  if (creatingEan !== null) {
+  if (creating !== null) {
     body = (
       <CustomFoodForm
         food={null}
-        ean={creatingEan}
+        ean={creating.ean}
+        prefill={creating.prefill}
         onSaved={(food) => {
-          setCreatingEan(null);
+          setCreating(null);
           void reloadFood().then(() => {
             pick(storedToItem(food));
           });
         }}
         onCancel={() => {
-          setCreatingEan(null);
+          setCreating(null);
+        }}
+      />
+    );
+  } else if (lookup.kind === 'ai') {
+    const { ean } = lookup;
+    body = (
+      <AiLabelImport
+        kind="livsmedel"
+        ean={ean}
+        onUse={(prefill) => {
+          setCreating({ ean, prefill });
+          setLookup({ kind: 'idle' });
+        }}
+        onCancel={() => {
+          setLookup({ kind: 'not-found', ean });
         }}
       />
     );
@@ -269,9 +337,9 @@ export function FoodPicker({
             type="button"
             className="icon-button scan-button"
             aria-label="Skanna streckkod"
-            aria-pressed={scanning}
+            aria-haspopup="dialog"
             onClick={() => {
-              setScanning((s) => !s);
+              setScanning(true);
               setLookup({ kind: 'idle' });
             }}
           >
@@ -281,16 +349,6 @@ export function FoodPicker({
         <p className="form-ok status-line" role="status">
           {status}
         </p>
-        {scanning && (
-          <BarcodeScanner
-            busy={lookup.kind === 'busy'}
-            onEan={(ean) => void handleEan(ean)}
-            onClose={() => {
-              setScanning(false);
-              setLookup({ kind: 'idle' });
-            }}
-          />
-        )}
         {lookup.kind === 'busy' && (
           <p className="card" role="status">
             Slår upp {lookup.ean} …
@@ -302,22 +360,25 @@ export function FoodPicker({
           </p>
         )}
         {lookup.kind === 'not-found' && (
-          <div className="card form" data-testid="ean-not-found">
-            <p className="form-note">
-              Streckkoden {lookup.ean} finns inte i Open Food Facts. Du kan lägga till produkten
-              själv med värdena från förpackningen.
-            </p>
-            <button
-              type="button"
-              className="button"
-              onClick={() => {
-                setCreatingEan(lookup.ean);
-                setLookup({ kind: 'idle' });
-              }}
-            >
-              Skapa eget livsmedel
-            </button>
-          </div>
+          <BarcodeNotFound
+            ean={lookup.ean}
+            kind="livsmedel"
+            onAi={() => {
+              setLookup({ kind: 'ai', ean: lookup.ean });
+            }}
+            onManual={() => {
+              setCreating({ ean: lookup.ean });
+              setLookup({ kind: 'idle' });
+            }}
+          />
+        )}
+        {lookup.kind === 'elsewhere' && (
+          <BarcodeElsewhere
+            ean={lookup.ean}
+            target="tillskott"
+            name={lookup.name}
+            href={`#/logga/tillskott/ean/${lookup.ean}`}
+          />
         )}
         {deferred.trim() !== '' ? (
           <FoodList
@@ -328,7 +389,7 @@ export function FoodPicker({
             markProteinRich
           />
         ) : (
-          !scanning && (
+          lookup.kind === 'idle' && (
             <>
               <div className="segmented segmented-small" role="group" aria-label="Snabbval">
                 {tabs.map((t) => (
@@ -380,8 +441,19 @@ export function FoodPicker({
   }
 
   return (
-    <BottomSheet title={title} full onClose={onClose}>
-      <div className="food-picker">{body}</div>
-    </BottomSheet>
+    <>
+      <BottomSheet title={title} full onClose={onClose}>
+        <div className="food-picker">{body}</div>
+      </BottomSheet>
+      {/* Efter panelen: dess showModal körs först, så att skannern hamnar överst. */}
+      {scanning && (
+        <BarcodeScanner
+          onEan={(ean) => void handleEan(ean)}
+          onClose={() => {
+            setScanning(false);
+          }}
+        />
+      )}
+    </>
   );
 }

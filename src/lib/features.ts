@@ -9,7 +9,8 @@
 import { useSyncExternalStore } from 'react';
 import { SETTING_FEATURES, getSetting, setSetting } from '../db/db.ts';
 
-export type FeatureId = 'steg' | 'midja' | 'mat' | 'vatten' | 'traning' | 'glp1' | 'bilder';
+export type FeatureId =
+  'steg' | 'midja' | 'mat' | 'vatten' | 'traning' | 'glp1' | 'tillskott' | 'bilder';
 
 export interface FeatureInfo {
   id: FeatureId;
@@ -27,7 +28,7 @@ export interface FeatureInfo {
 }
 
 /** Version av den lagrade inställningen. Höj när en kommande funktion blir tillgänglig. */
-export const FLAGS_VERSION = 3;
+export const FLAGS_VERSION = 4;
 
 /** Ordningen här styr ordningen under Inställningar → Funktioner. */
 export const FEATURES: readonly FeatureInfo[] = [
@@ -75,6 +76,14 @@ export const FEATURES: readonly FeatureInfo[] = [
     defaultOn: false,
     available: true,
     availableSince: 3,
+  },
+  {
+    id: 'tillskott',
+    label: 'Tillskott',
+    description: 'Vitaminer och mineraler med schema, avbockning och näringssummering.',
+    defaultOn: false,
+    available: true,
+    availableSince: 4,
   },
   {
     id: 'bilder',

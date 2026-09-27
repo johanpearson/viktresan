@@ -13,7 +13,8 @@
  *                      milestones (sedan version 7; äldre filer ger en tom lista och
  *                      passerade milstolpar markeras efter importen utan firande),
  *                      photoSessions + tillfälle/vinkel på bilderna (sedan version 8; äldre
- *                      bilder grupperas per datum med vinkel "ej angiven", som i migreringen)
+ *                      bilder grupperas per datum med vinkel "ej angiven", som i migreringen),
+ *                      supplements, supplementLog + valfri `ean` på måltider (sedan version 9)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -46,6 +47,11 @@ import {
   type Profile,
   type Snapshot,
   type StepsEntry,
+  type Supplement,
+  type SupplementForm,
+  type SupplementIntake,
+  type SupplementNutrient,
+  type SupplementSchedule,
   type SymptomEntry,
   type WaistEntry,
   type WaterEntry,
@@ -53,7 +59,11 @@ import {
   type Workout,
   type WorkoutPlan,
 } from '../db/db.ts';
+import { isNutrientKey } from '../data/nutrients.ts';
 import { isIsoDate } from './dates.ts';
+import { normalizeEan } from './barcode.ts';
+import { isUnitAllowed, parseAmountUnit } from './nutrientUnits.ts';
+import { SUPPLEMENT_FORMS, SUPPLEMENT_SCHEDULES, DOSES_PER_DAY_MAX } from './supplements.ts';
 import { isPhotoAngle, isProfileSide } from './photoSessions.ts';
 import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
 import { APPETITE_MAX, APPETITE_MIN, DOSE_FREQUENCIES, isInjectionSite } from './glp1.ts';
@@ -65,9 +75,9 @@ import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './wate
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 8;
+export const BACKUP_VERSION = 9;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -123,6 +133,9 @@ export interface BackupSummary {
   symptoms: number;
   /** Uppnådda milstolpar. */
   milestones: number;
+  /** Kosttillskott och dagar med tagna tillskott. */
+  supplements: number;
+  supplementLog: number;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -163,6 +176,8 @@ interface PlainManifest {
   symptoms: SymptomEntry[];
   foodUnits: CustomUnits[];
   milestones: MilestoneRecord[];
+  supplements: Supplement[];
+  supplementLog: SupplementIntake[];
 }
 
 interface EncryptedManifest {
@@ -222,6 +237,8 @@ export async function createBackup(
     symptoms: snapshot.symptoms,
     foodUnits: snapshot.foodUnits,
     milestones: snapshot.milestones,
+    supplements: snapshot.supplements,
+    supplementLog: snapshot.supplementLog,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -323,6 +340,7 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     ...snapshot.workouts,
     ...snapshot.injections,
     ...snapshot.symptoms,
+    ...snapshot.supplementLog,
   ]
     .map((e) => e.date)
     .sort();
@@ -346,6 +364,8 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     injections: snapshot.injections.length,
     symptoms: snapshot.symptoms.length,
     milestones: snapshot.milestones.length,
+    supplements: snapshot.supplements.length,
+    supplementLog: snapshot.supplementLog.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -438,6 +458,8 @@ function parsePlain(
       ...(version >= 5 ? parseGlp1Data(manifest) : emptyGlp1Data()),
       // Version 1–6 saknar milstolpar.
       milestones: version >= 7 ? parseMilestones(manifest) : [],
+      // Version 1–8 saknar tillskott.
+      ...(version >= 9 ? parseSupplementData(manifest) : { supplements: [], supplementLog: [] }),
     },
   };
 }
@@ -597,6 +619,22 @@ function parseMilestones(manifest: Record<string, unknown>): MilestoneRecord[] {
   if (!Array.isArray(milestones)) throw invalid('Milstolpar saknas.');
   const result = milestones.map((m, i) => parseMilestoneRecord(m, i));
   assertUniqueKeys(result, (m) => m.id, 'milstolpe');
+  return result;
+}
+
+function parseSupplementData(
+  manifest: Record<string, unknown>,
+): Pick<Snapshot, 'supplements' | 'supplementLog'> {
+  const { supplements, supplementLog } = manifest;
+  if (!Array.isArray(supplements) || !Array.isArray(supplementLog)) {
+    throw invalid('Tillskott saknas.');
+  }
+  const result = {
+    supplements: supplements.map((s, i) => parseSupplementRecord(s, i)),
+    supplementLog: supplementLog.map((e, i) => parseSupplementIntakeRecord(e, i)),
+  };
+  assertUniqueKeys(result.supplements, (s) => s.id, 'tillskott');
+  assertUniqueKeys(result.supplementLog, (e) => e.id, 'tagen dos av tillskott');
   return result;
 }
 
@@ -876,10 +914,97 @@ function parseMealRecord(value: unknown, index: number): LegacySavedMeal {
   if (!isRecord(value) || !isId(value.id) || !isName(value.name) || !Array.isArray(value.items)) {
     throw bad();
   }
-  return {
+  const meal: LegacySavedMeal = {
     id: value.id,
     name: value.name,
     items: value.items.map((item) => parseIngredient(item, bad)),
+    ...parseTimes(value, bad),
+  };
+  if (value.ean !== undefined) meal.ean = parseEan(value.ean, bad);
+  return meal;
+}
+
+function parseEan(value: unknown, bad: () => BackupError): string {
+  const ean = typeof value === 'string' ? normalizeEan(value) : null;
+  if (ean === null) throw bad();
+  return ean;
+}
+
+function parseSupplementNutrients(value: unknown, bad: () => BackupError): SupplementNutrient[] {
+  if (!Array.isArray(value) || value.length > 50) throw bad();
+  const result: SupplementNutrient[] = [];
+  for (const n of value as unknown[]) {
+    if (!isRecord(n) || !isNutrientKey(n.key) || !isAmount(n.amount)) throw bad();
+    const unit = typeof n.unit === 'string' ? parseAmountUnit(n.unit) : null;
+    if (unit === null || !isUnitAllowed(n.key, unit)) {
+      throw bad();
+    }
+    if (result.some((r) => r.key === n.key)) throw bad();
+    result.push({ key: n.key, amount: n.amount, unit });
+  }
+  return result;
+}
+
+function parseSupplementRecord(value: unknown, index: number): Supplement {
+  const bad = () => invalid(`Tillskott nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isName(value.name) ||
+    !SUPPLEMENT_FORMS.some((f) => f.id === value.form) ||
+    !isPositive(value.amountPerDose) ||
+    !SUPPLEMENT_SCHEDULES.some((s) => s.id === value.schedule) ||
+    !isInt(value.dosesPerDay) ||
+    value.dosesPerDay < 1 ||
+    value.dosesPerDay > DOSES_PER_DAY_MAX
+  ) {
+    throw bad();
+  }
+  const supplement: Supplement = {
+    id: value.id,
+    name: value.name,
+    form: value.form as SupplementForm,
+    amountPerDose: value.amountPerDose,
+    nutrients: parseSupplementNutrients(value.nutrients, bad),
+    schedule: value.schedule as SupplementSchedule,
+    dosesPerDay: value.dosesPerDay,
+    ...parseTimes(value, bad),
+  };
+  if (value.weekdays !== undefined) {
+    if (
+      !Array.isArray(value.weekdays) ||
+      !(value.weekdays as unknown[]).every((d) => isInt(d) && d >= 0 && d <= 6)
+    ) {
+      throw bad();
+    }
+    supplement.weekdays = [...new Set(value.weekdays as number[])].sort();
+  }
+  if (supplement.schedule === 'veckodagar' && !supplement.weekdays?.length) throw bad();
+  if (value.ean !== undefined) supplement.ean = parseEan(value.ean, bad);
+  return supplement;
+}
+
+function parseSupplementIntakeRecord(value: unknown, index: number): SupplementIntake {
+  const bad = () => invalid(`Tagen dos nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    !isDate(value.date) ||
+    !isId(value.supplementId) ||
+    !isName(value.name) ||
+    !isInt(value.doses) ||
+    value.doses < 1 ||
+    value.doses > DOSES_PER_DAY_MAX
+  ) {
+    throw bad();
+  }
+  return {
+    id: value.id,
+    date: value.date,
+    supplementId: value.supplementId,
+    name: value.name,
+    doses: value.doses,
+    nutrients: parseSupplementNutrients(value.nutrients, bad),
     ...parseTimes(value, bad),
   };
 }

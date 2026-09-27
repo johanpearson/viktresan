@@ -12,6 +12,8 @@ import { ListRow } from '../components/ListRow.tsx';
 import { Page } from '../components/Page.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
+import { SupplementsToday } from '../components/SupplementsToday.tsx';
+import { TodayUpperLimits } from '../components/TodayUpperLimits.tsx';
 import { TodayCard } from '../components/TodayCard.tsx';
 import { UpcomingCard } from '../components/UpcomingCard.tsx';
 import { WeekSummaryCard } from '../components/WeekSummaryCard.tsx';
@@ -55,6 +57,7 @@ export function Oversikt() {
           <MissedWorkouts data={data} now={now} onChange={reload} />
         </Feature>
       )}
+      {data && <TodayUpperLimits data={data} today={todayIso(now)} />}
       <BackupReminder />
       {data === null ? null : data.profile === null ? (
         <EmptyState
@@ -72,6 +75,14 @@ export function Oversikt() {
           week={<WeekSummaryCard data={data} now={now} />}
         >
           <TodayCard data={data} now={now} onChange={reload} />
+          <Feature id="tillskott">
+            <SupplementsToday
+              supplements={data.supplements}
+              log={data.supplementLog}
+              date={todayIso(now)}
+              onChange={reload}
+            />
+          </Feature>
           <Feature id="glp1">
             <NextDoseCard data={data} now={now} />
           </Feature>

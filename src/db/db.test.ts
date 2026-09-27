@@ -13,6 +13,13 @@ import {
   deleteWeight,
   getDb,
   getOldestEntryTime,
+  findMealByEan,
+  findSupplementByEan,
+  listSupplementLog,
+  listSupplements,
+  putSupplement,
+  putSupplementIntake,
+  deleteSupplement,
   getProfile,
   findFoodByEan,
   listFavorites,
@@ -221,6 +228,8 @@ describe('db', () => {
       'profile',
       'settings',
       'steps',
+      'supplementLog',
+      'supplements',
       'symptoms',
       'waist',
       'water',
@@ -599,6 +608,70 @@ describe('db', () => {
     expect(db.version).toBe(DB_VERSION);
     expect(await listWeights()).toHaveLength(1);
     expect(await listMilestones()).toEqual([]);
+  });
+
+  it('tillskott: hittas på streckkod, tagna doser ligger kvar när tillskottet tas bort', async () => {
+    await putSupplement({
+      id: 's1',
+      name: 'Zink',
+      form: 'tablett',
+      amountPerDose: 1,
+      nutrients: [{ key: 'zinc', amount: 15, unit: 'mg' }],
+      schedule: 'dagligen',
+      dosesPerDay: 1,
+      ean: '73513537',
+      createdAt: 1,
+    });
+    await putSupplementIntake({
+      id: 's1:2026-01-02',
+      date: '2026-01-02',
+      supplementId: 's1',
+      name: 'Zink',
+      doses: 1,
+      nutrients: [{ key: 'zinc', amount: 15, unit: 'mg' }],
+      createdAt: 2,
+    });
+    expect((await findSupplementByEan('73513537'))?.name).toBe('Zink');
+    expect(await findSupplementByEan('4006381333931')).toBeNull();
+    await deleteSupplement('s1');
+    expect(await listSupplements()).toEqual([]);
+    expect(await listSupplementLog()).toHaveLength(1);
+  });
+
+  it('måltider hittas på streckkod', async () => {
+    await putMeal({ id: 'm1', name: 'Matlåda', items: [], ean: '73513537', createdAt: 1 });
+    expect((await findMealByEan('73513537'))?.name).toBe('Matlåda');
+    expect(await findMealByEan('12345670')).toBeNull();
+  });
+
+  it('migrerar v9 → v10: lägger till tillskott och behåller data', async () => {
+    await createV6Database({ foods: [], meals: [], foodLog: [] });
+    const raw = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 9);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        db.createObjectStore('foodUnits', { keyPath: 'foodId' });
+        db.createObjectStore('milestones', { keyPath: 'id' });
+        const sessions = db.createObjectStore('photoSessions', { keyPath: 'id' });
+        sessions.createIndex('by-date', 'date');
+        req.transaction?.objectStore('photos').createIndex('by-session', 'sessionId');
+        req.transaction
+          ?.objectStore('weights')
+          .put({ id: 'a', date: '2026-01-01', weightKg: 90, createdAt: 1 });
+      };
+      req.onsuccess = () => {
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        reject(req.error ?? new Error('open failed'));
+      };
+    });
+    raw.close();
+    const db = await getDb();
+    expect(db.version).toBe(DB_VERSION);
+    expect(await listWeights()).toHaveLength(1);
+    expect(await listSupplements()).toEqual([]);
+    expect(await listSupplementLog()).toEqual([]);
   });
 
   it('milstolpar sparas en gång – en sparad skrivs aldrig över', async () => {

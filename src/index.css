@@ -64,6 +64,7 @@
   --data-dose: #4338ca;
   --data-waist: #db2777;
   --data-mood: #a16207;
+  --data-supplement: #a21caf;
 
   /* Makron (bara i matens detaljer) */
   --macro-protein: #0f766e;
@@ -118,6 +119,7 @@
     --data-dose: #a5b4fc;
     --data-waist: #f472b6;
     --data-mood: #fde047;
+    --data-supplement: #f0abfc;
 
     --macro-protein: #2dd4bf;
     --macro-carbs: #fbbf24;
@@ -1656,25 +1658,6 @@ a.button {
   grid-column: 1 / -1;
 }
 
-.scanner-video {
-  width: 100%;
-  max-height: 50vh;
-  border-radius: var(--radius-md);
-  background: #000;
-  object-fit: cover;
-}
-
-.scan-manual {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: var(--space-2);
-}
-
-.scan-manual .button {
-  width: auto;
-}
-
 .plan-notes {
   margin: 16px 0 0;
   padding-left: 20px;
@@ -1769,6 +1752,10 @@ a.button {
 
 .log-tile[data-type='glp1'] .log-tile-icon {
   color: var(--data-dose);
+}
+
+.log-tile[data-type='tillskott'] .log-tile-icon {
+  color: var(--data-supplement);
 }
 
 .log-tile-label {
@@ -2086,6 +2073,10 @@ a.button {
 .dot-glp1.dose-planerad {
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--dot-glp1);
+}
+
+.dot-tillskott {
+  background: var(--data-supplement);
 }
 
 .dot-maende {
@@ -3311,6 +3302,11 @@ a.button {
   margin-top: calc(-1 * var(--space-2));
 }
 
+/* En lista efter en förklarande rad börjar under den i stället för att dras upp. */
+.card > p + .list {
+  margin-top: var(--space-1);
+}
+
 /* Syns bakom raden medan den sveps: vänster = ta bort, höger = t.ex. favorit. */
 .list-row-action {
   position: absolute;
@@ -3664,6 +3660,10 @@ a.list-row-body {
   --tone: var(--data-dose);
 }
 
+.tone-supplement {
+  --tone: var(--data-supplement);
+}
+
 /* Ett Card i ett Card ritas som en grupp utan egen ram (inget kort-i-kort). */
 .card-group + .card-group {
   margin-top: var(--space-4);
@@ -3930,4 +3930,297 @@ a.list-row-body {
 
 .disclosure-body {
   padding: 0 var(--space-2) var(--space-3);
+}
+
+/* ------------------------------------------------------------------ */
+/* Streckkodsskanner (kameravyn, samma bas som .camera)                */
+/* ------------------------------------------------------------------ */
+
+.scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+}
+
+.scanner .scanner-close {
+  color: #fff;
+}
+
+.scanner-stage {
+  min-height: 280px;
+}
+
+.scanner-video {
+  object-fit: cover;
+  touch-action: manipulation;
+}
+
+/* Siktet: en ram i mitten där streckkoden ska ligga. */
+.scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  width: 80%;
+  aspect-ratio: 2 / 1;
+  transform: translateY(-50%);
+  border: 2px solid rgb(255 255 255 / 0.9);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.scanner-focus {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border: 2px solid #fde047;
+  border-radius: var(--radius-full);
+  pointer-events: none;
+}
+
+.scanner-tip {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: rgb(0 0 0 / 0.75);
+  color: #fff;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.scanner-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.scanner-tools .button {
+  flex: none;
+  width: auto;
+}
+
+.scanner-zoom-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: #cbd5e1;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.scanner .camera-actions .button {
+  font-size: var(--text-md);
+}
+
+.scanner-found {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  font-size: var(--text-lg);
+}
+
+.scanner-found p {
+  margin: 0;
+}
+
+.scanner-found-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-full);
+  background: var(--success);
+  color: #fff;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.scanner-manual {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.scanner-manual .field-label {
+  color: #fff;
+}
+
+.scanner-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgb(248 113 113 / 0.2);
+  color: #fecaca;
+  font-size: var(--text-sm);
+}
+
+/* Diskret textlänk (t.ex. "Bidra till Open Food Facts"). */
+.subtle-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tillskott                                                           */
+/* ------------------------------------------------------------------ */
+
+.nutrient-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.nutrient-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.nutrient-field-amount {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.nutrient-field-static {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--muted);
+}
+
+.nutrient-field-hint {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.supplements-today-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.supplements-today-footer .button {
+  width: auto;
+}
+
+.card-title-meta {
+  margin-left: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.list-row-note {
+  display: block;
+  margin-top: var(--space-1);
+}
+
+.steps {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.steps li + li {
+  margin-top: var(--space-1);
+}
+
+/* ------------------------------------------------------------------ */
+/* Näringssummering                                                    */
+/* ------------------------------------------------------------------ */
+
+.nutrition {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.nutrient-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat-bar-titled {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.stat-bar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.stat-bar-titled strong {
+  font-size: var(--text-md);
+}
+
+/* Uppdelad stapel: delarna ligger kant i kant, bara ytterkanterna är rundade (.progress klipper). */
+.progress:has(.progress-segment) {
+  display: flex;
+}
+
+.progress-segment {
+  flex: none;
+  border-radius: 0;
+}
+
+.bar-legend {
+  display: flex;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.bar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.bar-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--tone);
+}
+
+.nutrient-field .button {
+  min-height: var(--tap);
 }

@@ -101,6 +101,17 @@ export const DAY_MARKERS: readonly DayMarker[] = [
     value: (d) => (d.symptoms ? symptomSummary(d.symptoms) || null : null),
   },
   {
+    id: 'tillskott',
+    label: 'Tillskott',
+    feature: 'tillskott',
+    value: (d) =>
+      d.supplements
+        ? d.supplements.planned > 0
+          ? `${String(d.supplements.taken)} av ${String(d.supplements.planned)} tagna`
+          : `${String(d.supplements.taken)} tagna`
+        : null,
+  },
+  {
     id: 'bilder',
     label: 'Bilder',
     feature: 'bilder',

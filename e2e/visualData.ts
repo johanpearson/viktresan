@@ -14,14 +14,16 @@ export const LIVSMEDEL = {
   source: 'Testdatabas',
   license: 'CC BY 4.0',
   retrieved: '2026-09-01',
+  // Vitaminer och mineraler (åttonde kolumnen) för näringssummeringen.
+  extra: ['vitaminD', 'vitaminB12', 'vitaminC', 'calcium', 'iron', 'zinc'],
   foods: [
-    [1, 'Havregryn', 370, 13, 59, 7],
-    [2, 'Mjölk fett 3 %', 60, 3.5, 4.8, 3],
-    [3, 'Banan', 95, 1.1, 21, 0.3],
-    [4, 'Potatis kokt', 80, 2, 17, 0.1],
-    [5, 'Ägg kokt', 136, 12.1, 0, 9.8],
-    [6, 'Kycklingfilé stekt', 150, 30, 0, 3],
-    [7, 'Kvarg naturell', 63, 11, 3.5, 0.2],
+    [1, 'Havregryn', 370, 13, 59, 7, '', [0, 0, 0, 50, 4, 3]],
+    [2, 'Mjölk fett 3 %', 60, 3.5, 4.8, 3, '', [0.5, 0.4, 1, 120, 0, 0.4]],
+    [3, 'Banan', 95, 1.1, 21, 0.3, '', [0, 0, 9, 5, 0.3, 0.2]],
+    [4, 'Potatis kokt', 80, 2, 17, 0.1, '', [0, 0, 10, 5, 0.4, 0.3]],
+    [5, 'Ägg kokt', 136, 12.1, 0, 9.8, '', [2, 1.2, 0, 50, 1.8, 1.2]],
+    [6, 'Kycklingfilé stekt', 150, 30, 0, 3, '', [0.2, 0.4, 0, 10, 0.6, 1]],
+    [7, 'Kvarg naturell', 63, 11, 3.5, 0.2, '', [0, 0.6, 0, 90, 0, 0.5]],
   ],
 };
 
@@ -194,6 +196,57 @@ const injections = [7, 14, 21, 28, 35, 42, 49].map((days) => ({
   createdAt: at(days),
 }));
 
+const D_VITAMIN = [{ key: 'vitaminD', amount: 4000, unit: 'IE' }];
+
+/** Tre tillskott: dagligt (taget idag), torsdagar/måndagar (inte taget) och vid behov. */
+const supplements = [
+  {
+    id: 's-d',
+    name: 'D-vitamin forte',
+    form: 'tablett',
+    amountPerDose: 1,
+    nutrients: D_VITAMIN,
+    schedule: 'dagligen',
+    dosesPerDay: 1,
+    ean: '73513537',
+    createdAt: at(30),
+  },
+  {
+    id: 's-mg',
+    name: 'Magnesium + zink',
+    form: 'brustablett',
+    amountPerDose: 1,
+    nutrients: [
+      { key: 'magnesium', amount: 300, unit: 'mg' },
+      { key: 'zinc', amount: 5, unit: 'mg' },
+    ],
+    schedule: 'veckodagar',
+    weekdays: [0, 3],
+    dosesPerDay: 1,
+    createdAt: at(30),
+  },
+  {
+    id: 's-fe',
+    name: 'Järn',
+    form: 'tablett',
+    amountPerDose: 1,
+    nutrients: [{ key: 'iron', amount: 20, unit: 'mg' }],
+    schedule: 'vid-behov',
+    dosesPerDay: 1,
+    createdAt: at(30),
+  },
+];
+
+const supplementLog = Array.from({ length: 7 }, (_, days) => ({
+  id: `s-d:${daysAgo(days)}`,
+  date: daysAgo(days),
+  supplementId: 's-d',
+  name: 'D-vitamin forte',
+  doses: 1,
+  nutrients: D_VITAMIN,
+  createdAt: at(days),
+}));
+
 export const VISUAL_DATA: SeedData = {
   profile: {
     startDate: daysAgo(60),
@@ -258,6 +311,8 @@ export const VISUAL_DATA: SeedData = {
   medications,
   injections,
   symptoms: [{ date: daysAgo(1), appetite: 2, sideEffects: ['Illamående'], createdAt: at(1) }],
+  supplements,
+  supplementLog,
   settings: {
     // Alla funktioner på (GLP-1 är annars av som standard).
     features: {
@@ -267,8 +322,9 @@ export const VISUAL_DATA: SeedData = {
       vatten: true,
       traning: true,
       glp1: true,
+      tillskott: true,
       bilder: true,
-      version: 3,
+      version: 4,
     },
     lastExportAt: at(2),
   },

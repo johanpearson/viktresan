@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   lookupOpenFoodFacts,
   normalizeEan,
+  offContributeUrl,
+  parseOffSupplement,
   offBaseUnit,
   offProductUrl,
   parseOffProduct,
@@ -183,5 +185,45 @@ describe('lookupOpenFoodFacts', () => {
     expect(await lookupOpenFoodFacts(ean, respond(500, {}))).toMatchObject({ kind: 'error' });
     const garbage = vi.fn<typeof fetch>(() => Promise.resolve(new Response('<html>')));
     expect(await lookupOpenFoodFacts(ean, garbage)).toMatchObject({ kind: 'error' });
+  });
+});
+
+describe('parseOffSupplement', () => {
+  it('tolkar vitaminer och mineraler per portion (gram → näringsämnets enhet)', () => {
+    expect(
+      parseOffSupplement('73513537', {
+        status: 1,
+        product: {
+          product_name: 'Magnesium + Zink',
+          brands: 'Testbolaget',
+          nutriments: {
+            magnesium_serving: '0.3',
+            zinc_serving: 0.005,
+            'vitamin-b9_serving': 0.0002,
+            iron_serving: -1,
+            iron_100g: 0.1,
+          },
+        },
+      }),
+    ).toEqual({
+      name: 'Magnesium + Zink (Testbolaget)',
+      nutrients: [
+        { key: 'folate', amount: 200, unit: 'µg' },
+        { key: 'magnesium', amount: 300, unit: 'mg' },
+        { key: 'zinc', amount: 5, unit: 'mg' },
+      ],
+    });
+  });
+
+  it('saknade värden ger bara namnet; saknad produkt ger null', () => {
+    expect(parseOffSupplement('73513537', { status: 1, product: { product_name: 'X' } })).toEqual({
+      name: 'X',
+      nutrients: [],
+    });
+    expect(parseOffSupplement('73513537', { status: 0 })).toBeNull();
+  });
+
+  it('länk för att bidra till Open Food Facts', () => {
+    expect(offContributeUrl('73513537')).toBe('https://world.openfoodfacts.org/product/73513537');
   });
 });

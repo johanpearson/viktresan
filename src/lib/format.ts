@@ -127,3 +127,17 @@ export function formatMg(value: number): string {
 export function doseInput(value: number): string {
   return String(Math.round(value * 100) / 100).replace('.', ',');
 }
+
+const nutrientFormat = new Intl.NumberFormat('sv-SE', { maximumSignificantDigits: 3 });
+
+/** Mängd av ett näringsämne utan enhet: 0.0254 → "0,0254", 25 → "25", 1234 → "1 234". */
+export function formatNutrientValue(value: number): string {
+  return value >= 100
+    ? formatInt(Math.round(value))
+    : normalizeSpaces(nutrientFormat.format(value));
+}
+
+/** Mängd av ett näringsämne med enhet: "25 µg", "1 000 IE". */
+export function formatNutrient(value: number, unit: string): string {
+  return `${formatNutrientValue(value)} ${unit}`;
+}

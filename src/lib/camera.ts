@@ -7,10 +7,19 @@ export function cameraSupported(): boolean {
   return typeof devices?.getUserMedia === 'function';
 }
 
-/** Text när kameran inte gick att öppna (nekad, saknas eller upptagen). */
-export function cameraErrorMessage(error: unknown): string {
+/**
+ * Text när kameran inte gick att öppna (nekad, saknas eller upptagen). `scanner` ger
+ * streckkodsskannerns reserver (skriv in koden, välj bild) i stället för kameraappen.
+ */
+export function cameraErrorMessage(error: unknown, purpose: 'photo' | 'scanner' = 'photo'): string {
   const name = error instanceof DOMException ? error.name : '';
-  if (name === 'NotAllowedError' || name === 'SecurityError') {
+  const denied = name === 'NotAllowedError' || name === 'SecurityError';
+  if (purpose === 'scanner') {
+    return denied
+      ? 'Appen fick inte använda kameran. Skriv in streckkoden eller välj en bild.'
+      : 'Kameran gick inte att öppna. Skriv in streckkoden eller välj en bild.';
+  }
+  if (denied) {
     return 'Appen fick inte använda kameran. Ta bilden med kameraappen eller välj en från galleriet.';
   }
   return 'Kameran gick inte att öppna. Ta bilden med kameraappen eller välj en från galleriet.';

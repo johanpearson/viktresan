@@ -139,6 +139,7 @@ const VIEWS: readonly { name: string; hash: string; heading: string }[] = [
   { name: 'oversikt', hash: '', heading: 'Översikt' },
   { name: 'logga', hash: '#/logga', heading: 'Logga' },
   { name: 'mat-dag', hash: '#/mat', heading: 'Mat' },
+  { name: 'mat-naring', hash: '#/mat/naring', heading: 'Mat' },
   { name: 'kalender', hash: '#/kalender', heading: 'Kalender' },
   { name: 'framsteg-historik', hash: '#/framsteg', heading: 'Framsteg' },
   { name: 'framsteg-veckor', hash: '#/framsteg/veckor', heading: 'Framsteg' },
@@ -147,7 +148,7 @@ const VIEWS: readonly { name: string; hash: string; heading: string }[] = [
   { name: 'installningar', hash: '#/installningar', heading: 'Inställningar' },
 ];
 
-const LOG_TILES = ['vikt', 'midja', 'steg', 'vatten', 'traning', 'glp1'] as const;
+const LOG_TILES = ['vikt', 'midja', 'steg', 'vatten', 'traning', 'glp1', 'tillskott'] as const;
 
 for (const theme of ['light', 'dark'] as const) {
   test.describe(`${theme === 'light' ? 'ljust' : 'mörkt'} tema`, () => {
@@ -323,6 +324,87 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(sheet).toHaveAccessibleName(/Analys av lunch/);
       await shot(page, `${theme}-sheet-mat-analys`, false);
       await close();
+    });
+
+    test('paneler: Tillskott, skanner, ingen träff och AI-import', async ({ page }) => {
+      // Låtsaskamera med ficklampa och zoom; en mörk, stillastående bild (deterministisk).
+      await page.addInitScript(() => {
+        class FakeBarcodeDetector {
+          detect() {
+            return Promise.resolve([]);
+          }
+        }
+        Object.defineProperty(window, 'BarcodeDetector', { value: FakeBarcodeDetector });
+        Object.defineProperty(navigator, 'mediaDevices', {
+          value: {
+            getUserMedia: () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = 320;
+              canvas.height = 240;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, 320, 240);
+              }
+              const stream = canvas.captureStream(5);
+              const track = stream.getVideoTracks()[0];
+              if (track) {
+                track.getCapabilities = () =>
+                  ({
+                    torch: true,
+                    zoom: { min: 1, max: 4, step: 0.5 },
+                  }) as unknown as MediaTrackCapabilities;
+                track.applyConstraints = () => Promise.resolve();
+              }
+              return Promise.resolve(stream);
+            },
+          },
+        });
+      });
+      await page.route('https://world.openfoodfacts.org/**', (route) =>
+        route.fulfill({
+          status: 404,
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          json: { status: 0 },
+        }),
+      );
+      await open(page, '#/logga/tillskott');
+      const sheet = page.getByRole('dialog', { name: 'Tillskott' });
+      await expect(sheet).toBeVisible();
+      await sheet.getByTestId('supplement').filter({ hasText: 'Magnesium' }).tap();
+      await expect(sheet.getByTestId('supplement-form')).toBeVisible();
+      await shot(page, `${theme}-sheet-tillskott-formular`, false);
+      await sheet.getByRole('button', { name: 'Avbryt' }).tap();
+
+      await sheet.getByRole('button', { name: /^Skanna streckkod/ }).tap();
+      const scanner = page.getByTestId('scanner');
+      await expect(scanner.getByTestId('scanner-dark')).toBeVisible();
+      await shot(page, `${theme}-skanner`, false);
+      await scanner.getByRole('button', { name: 'Skriv in streckkod' }).tap();
+      await scanner.getByLabel('Streckkod (EAN)').fill('4006381333931');
+      await shot(page, `${theme}-skanner-manuell`, false);
+      await scanner.getByRole('button', { name: 'Slå upp' }).tap();
+      await expect(sheet.getByTestId('ean-not-found')).toBeVisible();
+      await sheet.evaluate((el) => {
+        el.scrollTop = 0;
+      });
+      await shot(page, `${theme}-sheet-tillskott-hittade-inte`, false);
+      await sheet
+        .getByTestId('ean-not-found')
+        .getByRole('button', { name: /^Lägg in med AI/ })
+        .tap();
+      await expect(sheet.getByTestId('ai-label')).toBeVisible();
+      await sheet
+        .getByLabel('AI-tjänstens svar (JSON)')
+        .fill(
+          '{"namn":"Multi Vuxen","enhet":"tablett","mangdPerDos":1,"naringsamnen":[{"amne":"vitaminD","mangd":10,"enhet":"µg"},{"amne":"zinc","mangd":10,"enhet":"mg"}]}',
+        );
+      await sheet.getByRole('button', { name: 'Granska svaret' }).tap();
+      await expect(sheet.getByTestId('ai-label-preview')).toBeVisible();
+      await sheet.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      await shot(page, `${theme}-sheet-tillskott-ai`, false);
     });
 
     test('paneler: Inställningar', async ({ page }) => {
