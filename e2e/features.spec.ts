@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, dump, isoDaysFromToday, seed } from './helpers.ts';
+import { collectErrors, dump, isoDaysFromToday, openCalendarLegend, seed } from './helpers.ts';
 
 /** Lite av allt, idag, så att varje vy har något att visa. */
 const DATA = {
@@ -82,11 +82,12 @@ async function observe(page: Page) {
 
   await page.goto('./#/kalender');
   await expect(page.getByTestId('calendar-value-vikt')).toBeVisible();
+  await openCalendarLegend(page);
   const legend = await page
     .getByRole('list', { name: 'Förklaring' })
     .locator('li')
     .allTextContents();
-  const day = await page.getByTestId('calendar-day').locator('dt').allTextContents();
+  const day = await page.getByTestId('calendar-day').locator('.list-row-primary').allTextContents();
 
   return { navLabels, todayLabels, calorieCard, rings, tiles, tabs, sections, legend, day };
 }

@@ -6,7 +6,8 @@ datum (torsdag 2026-09-24 12:30, `e2e/visualData.ts`). Skärmdumparna finns i `e
 baslinjerna i repot visar läget _efter_ den här PR:en. Översikt före finns kvar som jämförelse:
 [`ui-audit/fore-light-oversikt.png`](ui-audit/fore-light-oversikt.png) och
 [`ui-audit/fore-dark-oversikt.png`](ui-audit/fore-dark-oversikt.png); likaså Framsteg → Historik och Mat → Historik före
-PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.png`).
+PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.png`) och Kalender före PR #22
+(`ui-audit/fore-*-kalender.png`, `ui-audit/fore-*-kalender-vecka.png`).
 
 **Referens:** Mat → Dag (omgjord i PR #16/#17): 16 px sidmarginal, 8 px mellan kort, 12–16 px inre
 marginal, en rad per post med högerställda tabellsiffror, sekundärtext 13 px, inga knappar i listorna
@@ -70,12 +71,13 @@ vid jämförelse, **Låg** = putsning.
 
 ## Kalender
 
-| Prio  | Iakttagelse                                                                                                                                             |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hög   | Förklaringen (legend) har 14 poster i tre grupper och tar lika mycket plats som månaden. Prickarnas färger följer inte resten av appen (se tvärgående). |
-| Medel | Dagsvyn: etikett och värde på varsin rad ("Vikt ↵ 86,8 kg") → dubbelt så lång lista som behövs. Status-väljaren + "Ta bort" per pass.                   |
-| Medel | ‹ › för månad är inramade 48 px-knappar; Mats datumrad använder ramlösa pilar.                                                                          |
-| Låg   | Segmentet Månad/Vecka är stort (48 px) jämfört med Mats lilla segment.                                                                                  |
+| Prio  | Iakttagelse                                                                                                                                             | Status    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| Hög   | Förklaringen (legend) har 14 poster i tre grupper och tar lika mycket plats som månaden. Prickarnas färger följer inte resten av appen (se tvärgående). | ✅ PR #22 |
+| Medel | Dagsvyn: etikett och värde på varsin rad ("Vikt ↵ 86,8 kg") → dubbelt så lång lista som behövs. Status-väljaren + "Ta bort" per pass.                   | ✅ PR #22 |
+| Medel | ‹ › för månad är inramade 48 px-knappar; Mats datumrad använder ramlösa pilar.                                                                          | ✅ PR #22 |
+| Låg   | Segmentet Månad/Vecka är stort (48 px) jämfört med Mats lilla segment.                                                                                  | ✅ PR #22 |
+| Låg   | Veckovyn bryter värden mitt i siffror ("6 000 ↵ steg", "1 ↵ 092 kcal").                                                                                 | ✅ PR #22 |
 
 ## Framsteg
 
@@ -171,15 +173,34 @@ vid jämförelse, **Låg** = putsning.
 - Designsystemet: `DailyBarChart` (steg använder den också), `ShowMore`/`useShowMore`, mönstret "Tidsfilter" (chips) och
   svenska datum på tidsaxeln i `DESIGN.md`.
 
+## Åtgärdat: Kalender (PR #22)
+
+- **Månad/Vecka i sidhuvudet** (`SegmentedControl size="small"`, som Mat) i stället för ett 48 px-segment över
+  kortet – en rad mindre.
+- **‹ › utan ram** (`PeriodBar`, samma pilar som `DateBar`); månaden skrivs "September 2026".
+- **Förklaringen är hopfälld** (`Disclosure` "Förklaring"): 14 poster i tre grupper tog ~110 px under varje månad.
+  Dagsvyn visar nu samma prick framför varje rad, så förklaringen behövs sällan.
+- **Dagsvyn som lista**: en `ListRow` per loggtyp med prick i datatypens färg och värdet till höger (i stället för
+  `dl` med etikett och värde på varsin rad), rubrik med veckodag ("Torsdag 24 sep. 2026"). Långa värden (mående,
+  dos) bryts bara vid "·" (`wrapValue` + `Parts`).
+- **Pass utan knappar**: passet är en rad (statusprick, typ · längd · intensitet, tid, statusmärke). Tryck = radmeny
+  (`ActionSheet`: Klar, Hoppade över, Markera som planerad, Ta bort passet); svep vänster = ta bort med `Toast` och
+  Ångra. Statusväljaren, "Klar"-knappen och "Ta bort" med bekräftelse i två steg är borta.
+- **Veckovyn**: sammanfattningen bryts bara mellan delar (`Parts`), aldrig i "6 000 steg".
+- Med testdatan är månadsvyn **1 121 px i stället för 1 493 px** (−25 %); veckovyn 1 566 px mot 1 813 px trots att
+  förklaringen är utfälld i skärmdumpen.
+- Designsystemet: `PeriodBar`, `Disclosure`, `Parts` (även i veckokortet), `ListRow` `wrapValue` och kalenderprick som
+  `leading`, mönstret "Kalender (dagsvy)" i `DESIGN.md`. `WorkoutList` har inte längre läget `manage`.
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 4–8.
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 5–8.
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
 2. ~~**Inställningar**~~ ✅ PR #20.
 3. ~~**Framsteg → Historik**~~ ✅ PR #21.
-4. **Kalender** (nästa): kompakt förklaring (hopfällbar), dagsvyn som `ListRow`, pass utan knappar i listan.
-5. **Mat → Egna och Historik**: `ListRow`, svep för ta bort (tidsfiltret är redan chips, PR #21).
+4. ~~**Kalender**~~ ✅ PR #22.
+5. **Mat → Egna och Historik** (nästa): `ListRow`, svep för ta bort (tidsfiltret är redan chips, PR #21).
 6. **Framsteg → Veckor**: täta veckokort (ListRow), en "Fråga AI"-knapp i panelen i stället för per kort.
 7. **Logga** (rutnätet): lägre rutor (ikonerna har redan datatypsfärg).
 8. **Framsteg → Bilder och Milstolpar**: marginaler, tomt läge med knapp.

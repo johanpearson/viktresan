@@ -1,6 +1,10 @@
 import { useState } from 'react';
+import { CalendarDay } from '../components/CalendarDay.tsx';
+import { Disclosure } from '../components/Disclosure.tsx';
 import { Page } from '../components/Page.tsx';
-import { WorkoutList } from '../components/WorkoutList.tsx';
+import { Parts } from '../components/Parts.tsx';
+import { PeriodBar } from '../components/PeriodBar.tsx';
+import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import {
   buildDayIndex,
   formatMonth,
@@ -34,10 +38,19 @@ const STATUS_LEGEND: readonly DisplayStatus[] = ['genomford', 'hoppad', 'obesvar
 
 type View = 'manad' | 'vecka';
 
+const VIEWS: readonly { id: View; label: string }[] = [
+  { id: 'manad', label: 'Månad' },
+  { id: 'vecka', label: 'Vecka' },
+];
+
 const weekdayFormat = new Intl.DateTimeFormat('sv-SE', { weekday: 'long', timeZone: 'UTC' });
 
 function weekdayName(iso: string): string {
   return weekdayFormat.format(new Date(`${iso}T12:00:00Z`));
+}
+
+function capitalize(text: string): string {
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }
 
 function min(a: string, b: string): string {
@@ -114,60 +127,39 @@ export function Kalender() {
   const showWorkouts = features.isEnabled('traning');
   const selectedWorkouts = showWorkouts ? (selectedDay?.workouts ?? []).map((w) => w.item) : [];
 
+  const periodTitle =
+    view === 'manad'
+      ? capitalize(formatMonth(month))
+      : `${formatShortDate(range.from)} – ${formatShortDate(range.to)}`;
+
+  const tabs = (
+    <SegmentedControl
+      label="Vy"
+      size="small"
+      className="page-tabs"
+      options={VIEWS}
+      value={view}
+      onChange={setView}
+    />
+  );
+
   return (
-    <Page title="Kalender">
-      <div className="segmented" role="group" aria-label="Vy">
-        <button
-          type="button"
-          className="segmented-button"
-          aria-pressed={view === 'manad'}
-          onClick={() => {
-            setView('manad');
-          }}
-        >
-          Månad
-        </button>
-        <button
-          type="button"
-          className="segmented-button"
-          aria-pressed={view === 'vecka'}
-          onClick={() => {
-            setView('vecka');
-          }}
-        >
-          Vecka
-        </button>
-      </div>
+    <Page title="Kalender" action={tabs}>
       <section className="card calendar" aria-labelledby="calendar-period">
-        <div className="calendar-header">
-          <button
-            type="button"
-            className="button button-secondary button-small calendar-nav"
-            aria-label={view === 'manad' ? 'Föregående månad' : 'Föregående vecka'}
-            onClick={() => {
-              if (view === 'manad') setMonth((m) => shiftMonth(m, -1));
-              else select(addDays(selected, -7));
-            }}
-          >
-            ‹
-          </button>
-          <h2 className="card-title calendar-title" id="calendar-period" aria-live="polite">
-            {view === 'manad'
-              ? formatMonth(month)
-              : `${formatShortDate(range.from)} – ${formatShortDate(range.to)}`}
-          </h2>
-          <button
-            type="button"
-            className="button button-secondary button-small calendar-nav"
-            aria-label={view === 'manad' ? 'Nästa månad' : 'Nästa vecka'}
-            onClick={() => {
-              if (view === 'manad') setMonth((m) => shiftMonth(m, 1));
-              else select(addDays(selected, 7));
-            }}
-          >
-            ›
-          </button>
-        </div>
+        <PeriodBar
+          title={periodTitle}
+          titleId="calendar-period"
+          prevLabel={view === 'manad' ? 'Föregående månad' : 'Föregående vecka'}
+          nextLabel={view === 'manad' ? 'Nästa månad' : 'Nästa vecka'}
+          onPrev={() => {
+            if (view === 'manad') setMonth((m) => shiftMonth(m, -1));
+            else select(addDays(selected, -7));
+          }}
+          onNext={() => {
+            if (view === 'manad') setMonth((m) => shiftMonth(m, 1));
+            else select(addDays(selected, 7));
+          }}
+        />
         {view === 'manad' ? (
           <table className="calendar-grid" data-testid="calendar">
             <thead>
@@ -233,9 +225,13 @@ export function Kalender() {
                     <span className="week-day-body" aria-hidden="true">
                       <Dots markers={markers} day={days.get(date)} />
                       <span className="week-day-summary">
-                        {logged.length === 0
-                          ? '–'
-                          : logged.map((l) => `${l.marker.label}: ${l.value}`).join(' · ')}
+                        {logged.length === 0 ? (
+                          '–'
+                        ) : (
+                          <Parts
+                            text={logged.map((l) => `${l.marker.label}: ${l.value}`).join(' · ')}
+                          />
+                        )}
                       </span>
                     </span>
                   </button>
@@ -244,69 +240,50 @@ export function Kalender() {
             })}
           </ul>
         )}
-        <ul className="calendar-legend" aria-label="Förklaring">
-          {markers.map((m) => (
-            <li key={m.id}>
-              <span className={`calendar-dot dot-${m.id}`} aria-hidden="true" />
-              {m.label}
-            </li>
-          ))}
-        </ul>
-        {features.isEnabled('glp1') && (
-          <ul className="calendar-legend" aria-label="Doser">
-            <li>
-              <span className="calendar-dot dot-glp1 dose-loggad" aria-hidden="true" />
-              Dos loggad
-            </li>
-            <li>
-              <span className="calendar-dot dot-glp1 dose-planerad" aria-hidden="true" />
-              Dos planerad
-            </li>
-          </ul>
-        )}
-        {showWorkouts && (
-          <ul className="calendar-legend" aria-label="Träningsstatus">
-            {STATUS_LEGEND.map((status) => (
-              <li key={status}>
-                <span className={`calendar-dot dot-traning status-${status}`} aria-hidden="true" />
-                {DISPLAY_STATUS_LABELS[status]}
+        <Disclosure summary="Förklaring" testId="calendar-legend">
+          <ul className="calendar-legend" aria-label="Förklaring">
+            {markers.map((m) => (
+              <li key={m.id}>
+                <span className={`calendar-dot dot-${m.id}`} aria-hidden="true" />
+                {m.label}
               </li>
             ))}
           </ul>
-        )}
+          {features.isEnabled('glp1') && (
+            <ul className="calendar-legend" aria-label="Doser">
+              <li>
+                <span className="calendar-dot dot-glp1 dose-loggad" aria-hidden="true" />
+                Dos loggad
+              </li>
+              <li>
+                <span className="calendar-dot dot-glp1 dose-planerad" aria-hidden="true" />
+                Dos planerad
+              </li>
+            </ul>
+          )}
+          {showWorkouts && (
+            <ul className="calendar-legend" aria-label="Träningsstatus">
+              {STATUS_LEGEND.map((status) => (
+                <li key={status}>
+                  <span
+                    className={`calendar-dot dot-traning status-${status}`}
+                    aria-hidden="true"
+                  />
+                  {DISPLAY_STATUS_LABELS[status]}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Disclosure>
       </section>
 
-      <section className="card" aria-labelledby="calendar-day-title" data-testid="calendar-day">
-        <h2 className="card-title" id="calendar-day-title">
-          {formatDate(selected)}
-        </h2>
-        {selectedLog.length === 0 && selectedWorkouts.length === 0 ? (
-          <p className="muted">Inget loggat den här dagen.</p>
-        ) : (
-          selectedLog.length > 0 && (
-            <dl className="kv">
-              {selectedLog.map(({ marker, value }) => (
-                <div key={marker.id} data-testid={`calendar-value-${marker.id}`}>
-                  <dt>{marker.label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-          )
-        )}
-        {selectedWorkouts.length > 0 && (
-          <>
-            <h3 className="subheading">Träning</h3>
-            <WorkoutList
-              items={selectedWorkouts}
-              mode="manage"
-              now={now}
-              onChange={reload}
-              label="Dagens pass"
-            />
-          </>
-        )}
-      </section>
+      <CalendarDay
+        date={selected}
+        logged={selectedLog}
+        workouts={selectedWorkouts}
+        now={now}
+        onChange={reload}
+      />
     </Page>
   );
 }

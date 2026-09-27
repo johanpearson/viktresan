@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { isoDaysFromToday, openLog, seed } from './helpers.ts';
+import { isoDaysFromToday, openCalendarLegend, openLog, seed } from './helpers.ts';
 
 const ROUTES = [
   ['Översikt', './'],
@@ -248,7 +248,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
       // Kalender: månad med pass i olika status, dagsvy och veckovy.
       await page.goto('./#/kalender');
       await expect(page.getByTestId('calendar-day').getByTestId('workout')).toHaveCount(2);
+      await openCalendarLegend(page);
       await expectNoViolations(page, 'Kalender månad');
+      // Radmenyn för ett pass.
+      await page
+        .getByTestId('calendar-day')
+        .getByTestId('workout')
+        .first()
+        .getByRole('button')
+        .tap();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await expectNoViolations(page, 'Kalender radmeny');
+      await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(page.getByRole('dialog')).toBeHidden();
       await page.getByRole('button', { name: 'Vecka', exact: true }).tap();
       await expect(page.getByTestId('calendar-week')).toBeVisible();
       await expectNoViolations(page, 'Kalender vecka');
