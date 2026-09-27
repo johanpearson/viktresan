@@ -23,6 +23,8 @@ interface MealBuilderProps {
   source: FoodSource;
   onSaved: (meal: SavedMeal) => void;
   onCancel: () => void;
+  /** Visar "Ta bort måltiden" längst ner (bara vid redigering). */
+  onDelete?: () => void;
 }
 
 interface Row {
@@ -37,7 +39,7 @@ interface Row {
 }
 
 /** Sparad måltid: flera ingredienser, var och en i gram eller en enhet. */
-export function MealBuilder({ meal, source, onSaved, onCancel }: MealBuilderProps) {
+export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealBuilderProps) {
   const { foodData, livsmedel } = source;
   const catalog = useMemo(
     () => buildCatalog(livsmedel?.foods ?? [], foodData.foods.map(storedToItem)),
@@ -257,6 +259,15 @@ export function MealBuilder({ meal, source, onSaved, onCancel }: MealBuilderProp
             Avbryt
           </button>
         </div>
+        {onDelete && (
+          <button
+            type="button"
+            className="button button-ghost button-small button-danger-text"
+            onClick={onDelete}
+          >
+            Ta bort måltiden
+          </button>
+        )}
       </form>
       {picking && (
         <FoodPicker
