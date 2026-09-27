@@ -251,6 +251,7 @@ export function FoodPicker({
         <div className="search-bar">
           <label className="search-field">
             <span className="visually-hidden">Sök livsmedel</span>
+            <span aria-hidden="true" className="search-icon" />
             <input
               ref={searchRef}
               className="input"

@@ -3126,8 +3126,24 @@ a.button {
   gap: var(--space-2);
 }
 
+/* Sökfält med förstoringsglas till vänster (Mats sök-sheet), samma ikon som "Sök och logga mat". */
 .search-field {
+  position: relative;
   flex: 1;
+  color: var(--muted);
+}
+
+.search-field > .search-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-4);
+  margin: 0;
+  transform: translateY(-65%);
+  pointer-events: none;
+}
+
+.search-field > .input {
+  padding-left: calc(var(--space-4) + 14px + var(--space-3));
 }
 
 .search-open {
@@ -3505,6 +3521,11 @@ a.list-row-body {
   padding-top: calc(env(safe-area-inset-top) + 12px);
 }
 
+/* Helskärmspaneler har sidans bakgrund: rader (ListRow) följer den i stället för att bli ljusa band. */
+.sheet-full .list-row-content {
+  background: var(--bg);
+}
+
 .food-picker {
   display: flex;
   flex-direction: column;
@@ -3548,26 +3569,25 @@ a.list-row-body {
   margin-bottom: 12px;
 }
 
-/* Måltidsanalys */
+/* Måltidsanalys: sektionerna är Card (i panelen utan ram, linje emellan). */
 .analysis {
-  display: grid;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
-.analysis-title {
-  margin: 0 0 8px;
-  font-size: var(--text-md);
+.analysis > .button {
+  margin-top: var(--space-5);
 }
 
 .analysis-notes,
 .analysis-swaps {
-  margin: 8px 0 0;
-  padding-left: 20px;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
 }
 
 .analysis-swaps li + li,
 .analysis-notes li + li {
-  margin-top: 6px;
+  margin-top: var(--space-2);
 }
 
 .analysis-table {

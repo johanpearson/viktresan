@@ -170,7 +170,7 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
 
   // Ta bort havregrynen i redigeringen.
   await openEntry(page, 'Havregryn');
-  await page.getByRole('dialog').getByRole('button', { name: 'Ta bort' }).tap();
+  await page.getByRole('dialog').getByRole('button', { name: 'Ta bort posten' }).tap();
   await expect(page.getByTestId('food-toast')).toContainText('Tog bort Havregryn.');
   await expect(intake).toContainText('180');
   await expect(breakfast.getByTestId('food-entry')).toHaveCount(1);

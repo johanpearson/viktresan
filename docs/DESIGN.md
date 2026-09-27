@@ -213,7 +213,8 @@ Tom sektion = smal rad med bara rubrik och `actions`. Innehållet glider in (200
   (150 ms). Stängningen har en timer som reserv så att panelen alltid stängs, även om animationens
   tidslinje står still.
 - Grabber överst, rubrik + textknappen "Stäng" (ghost). Esc, "Stäng" eller tryck utanför stänger.
-- `full` = helskärm (sök, analys, Fråga AI).
+- `full` = helskärm (sök, analys, Fråga AI). Helskärmspanelen har sidans bakgrund (`--bg`); en `ListRow` i den
+  följer den bakgrunden i stället för att ritas som ett ljust band.
 - Menyer i en panel är `ListRow` med `chevron` (en rad per val) – inte en stapel knappar.
 - En lista direkt i en panel (utan `Card`) har klassen `list list-flush`: raderna går kant i kant och
   första raden saknar linje (samma som `action-list` i menyer). Används för värden som "Version 0.1.0"
@@ -223,6 +224,40 @@ Tom sektion = smal rad med bara rubrik och `actions`. Innehållet glider in (200
   den övre stänger bara den – `close` som bubblar genom React-trädet ignoreras.
 - En `Toast` i en panel (Ångra efter svep) renderas i panelen och ligger längst ner i den
   (`.sheet .toast`), eftersom panelen täcker navigeringen.
+
+### Formulär i en panel
+
+```tsx
+<div className="button-row">
+  <button type="submit" className="button">Spara ändringar</button>
+  <button type="button" className="button button-secondary" onClick={cancel}>Avbryt</button>
+</div>
+<details className="plan-details">…</details>
+<button type="button" className="button button-ghost button-small button-danger-text" onClick={remove}>
+  Ta bort posten
+</button>
+```
+
+En fylld knapp (Spara …), eventuellt Avbryt som sekundär bredvid. "Ta bort …" är **sist** i panelen som destruktiv
+textknapp – aldrig en helbreddsknapp med ram under Spara – och tar bort direkt med en `Toast` och Ångra (samma som
+svepet). Gäller Logga-panelerna, Mat → Egna och Mats "Redigera post".
+
+**Värden i en panel** (analysens nyckeltal, Om appen, Lagring) är `ListRow` med etiketten till vänster och värdet
+till höger – ett förbehåll eller en rekommendation som `secondary` under etiketten, inte i värdet. Sektioner i en
+helskärmspanel (Nyckeltal, Bytesförslag, Näringsinnehåll) är `Card`: i panelen utan ram, med en linje emellan.
+
+### Sökfält
+
+```tsx
+<label className="search-field">
+  <span className="visually-hidden">Sök livsmedel</span>
+  <span aria-hidden="true" className="search-icon" />
+  <input className="input" type="search" placeholder="Sök livsmedel" />
+</label>
+```
+
+Förstoringsglaset (`search-icon`, ritat i CSS) står till vänster i fältet, i `--muted` – samma ikon som knappen
+"Sök och logga mat" (`search-open`) som öppnar sök-sheeten. Streckkodsknappen ligger bredvid i `search-bar`.
 
 ### Inställningslista (lista → panel)
 
