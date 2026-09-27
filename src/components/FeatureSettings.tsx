@@ -4,10 +4,7 @@ import { FEATURES, setFeature, useFeatures } from '../lib/features.ts';
 export function FeatureSettings() {
   const { flags } = useFeatures();
   return (
-    <section className="card" aria-labelledby="features-title">
-      <h2 className="card-title" id="features-title">
-        Funktioner
-      </h2>
+    <>
       <p className="form-note">
         Stäng av det du inte använder. Datan ligger kvar och följer med i säkerhetskopian.
       </p>
@@ -34,6 +31,6 @@ export function FeatureSettings() {
           </li>
         ))}
       </ul>
-    </section>
+    </>
   );
 }

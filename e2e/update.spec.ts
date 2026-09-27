@@ -69,7 +69,7 @@ test('ny version: toast, Uppdatera tar över och laddar om', async ({ page, cont
   expect(await askVersion(page)).toBe('v1');
   await deployNewVersion(context, baseURL);
 
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/om');
   await page.getByRole('button', { name: 'Sök efter uppdatering' }).tap();
   await expect(page.getByTestId('update-check-result')).toHaveText(/Ny version finns/);
   const toast = page.getByTestId('update-toast');
@@ -81,7 +81,8 @@ test('ny version: toast, Uppdatera tar över och laddar om', async ({ page, cont
     sessionStorage.setItem('fore-uppdatering', '1');
     Object.assign(window, { foreUppdatering: true });
   });
-  await toast.getByRole('button', { name: 'Uppdatera' }).tap();
+  // Kvittensen ligger under panelen; panelen har en egen knapp.
+  await page.getByRole('dialog').getByRole('button', { name: 'Uppdatera nu' }).tap();
   // Sidan laddas om (fönstervariabeln försvinner, sessionen finns kvar).
   await page.waitForFunction(() => !('foreUppdatering' in window));
   expect(await page.evaluate(() => sessionStorage.getItem('fore-uppdatering'))).toBe('1');
@@ -131,7 +132,7 @@ test('en väntande version visas direkt vid nästa start', async ({ page, contex
 });
 
 test('Om appen visar version, commit och byggtid samt sidfot', async ({ page }) => {
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/om');
   await expect(page.getByTestId('app-version')).toHaveText(/^\d+\.\d+\.\d+$/);
   await expect(page.getByTestId('app-commit')).toHaveText(/^([0-9a-f]{7}|dev)$/);
   await expect(page.getByTestId('app-build-time').locator('time')).toHaveAttribute(

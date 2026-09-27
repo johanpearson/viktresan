@@ -64,8 +64,8 @@ export function Milstolpar() {
               'Du har nått alla milstolpar som finns just nu. Starkt!'
             ) : (
               <>
-                Fyll i din profil under <a href="#/installningar">Inställningar</a> så visas fler
-                milstolpar här.
+                Fyll i din profil under <a href="#/installningar/profil">Inställningar</a> så visas
+                fler milstolpar här.
               </>
             )}
           </p>

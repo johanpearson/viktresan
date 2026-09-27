@@ -301,7 +301,7 @@ describe('funktionsbrytare', () => {
   it('brytaren i Inställningar ändrar vyerna direkt, datan ligger kvar', async () => {
     const user = userEvent.setup();
     await seedToday();
-    await renderAt('#/installningar');
+    await renderAt('#/installningar/funktioner');
     const mat = await screen.findByRole('switch', { name: /^Mat/ });
     expect(mat).toBeChecked();
     await user.click(mat);
@@ -313,7 +313,7 @@ describe('funktionsbrytare', () => {
     goTo('#/kalender');
     expect(await screen.findByTestId('calendar-day')).not.toHaveTextContent('8 000 steg');
 
-    goTo('#/installningar');
+    goTo('#/installningar/funktioner');
     await user.click(await screen.findByRole('switch', { name: /^Steg/ }));
     goTo('#/kalender');
     expect(await screen.findByTestId('calendar-value-steg')).toHaveTextContent('8 000 steg');
@@ -321,7 +321,7 @@ describe('funktionsbrytare', () => {
 
   it('GLP-1 är av som standard och ger en ruta i Logga när den slås på', async () => {
     const user = userEvent.setup();
-    await renderAt('#/installningar');
+    await renderAt('#/installningar/funktioner');
     const toggle = await screen.findByRole('switch', { name: /^GLP-1/ });
     expect(toggle).toBeEnabled();
     expect(toggle).not.toBeChecked();
@@ -329,7 +329,7 @@ describe('funktionsbrytare', () => {
     await screen.findByTestId('log-tile-vikt');
     expect(screen.queryByTestId('log-tile-glp1')).not.toBeInTheDocument();
 
-    goTo('#/installningar');
+    goTo('#/installningar/funktioner');
     await user.click(await screen.findByRole('switch', { name: /^GLP-1/ }));
     goTo('#/logga');
     const tile = await screen.findByTestId('log-tile-glp1');

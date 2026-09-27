@@ -92,8 +92,8 @@ export function DaySummary({
       </p>
       {targetKcal == null && (
         <p className="form-note muted">
-          Fyll i kön, födelseår och aktivitetsnivå under <a href="#/installningar">Inställningar</a>{' '}
-          så räknas ett kalorimål ut.
+          Fyll i kön, födelseår och aktivitetsnivå under{' '}
+          <a href="#/installningar/profil">Inställningar</a> så räknas ett kalorimål ut.
         </p>
       )}
     </section>

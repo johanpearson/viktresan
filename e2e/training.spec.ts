@@ -353,7 +353,7 @@ test('dryck: logga, ångra, ring på Översikt, historik, eget mål och träning
   await expect(history.getByTestId('water-day')).toContainText('900 ml');
 
   // Inställningar: standardmålet förklaras, eget mål och +500 ml på träningsdagar.
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/dryck');
   await expect(page.getByTestId('water-goal-standard')).toHaveText(
     'Standard för kvinnor: 1 600 ml per dag.',
   );
@@ -363,6 +363,8 @@ test('dryck: logga, ångra, ring på Översikt, historik, eget mål och träning
   await page.getByRole('button', { name: 'Spara dryckesmål' }).tap();
   await expect(page.getByText('Dryckesmålet är 2 000 ml per dag.')).toBeVisible();
   // Profilen kan sparas utan att målet eller tillägget försvinner.
+  await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await page.getByTestId('settings-profil').getByRole('button').tap();
   await page.getByRole('button', { name: 'Spara profil' }).tap();
   await expect(page.getByText('Profilen är sparad.')).toBeVisible();
 
@@ -389,10 +391,10 @@ test('dryck och träning av: dolda överallt, datan ligger kvar', async ({ page 
     ],
   });
   await expect(page.getByTestId('missed-workouts')).toBeVisible();
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/funktioner');
   await page.getByRole('switch', { name: /^Dryck/ }).setChecked(false);
   await page.getByRole('switch', { name: /^Träning/ }).setChecked(false);
-  await expect(page.getByRole('heading', { name: 'Dryckesmål' })).toHaveCount(0);
+  await expect(page.getByTestId('settings-dryck')).toHaveCount(0);
 
   await page.goto('./');
   await expect(page.getByTestId('today-card')).toBeVisible();

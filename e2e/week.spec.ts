@@ -160,7 +160,7 @@ test('trendvikt som huvudsiffra, dagsvikt under och inställning för att stäng
   await expect(page.getByTestId('current-weight')).toHaveText('85,0 kg');
   await expect(page.getByTestId('trend-note')).toContainText('vätska och salt');
 
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/visning');
   const toggle = page.getByRole('switch', { name: /Visa trendvikt som huvudsiffra/ });
   await expect(toggle).toBeChecked();
   await toggle.tap();

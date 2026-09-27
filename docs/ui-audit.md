@@ -88,11 +88,11 @@ vid jämförelse, **Låg** = putsning.
 
 ## Inställningar
 
-| Prio  | Iakttagelse                                                                                                                                                                                                                                                                                                 |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hög   | **En enda lång sida (≈ 5 000 px)** med 12 kort, var och en med egen primärknapp (Spara profil, Spara matpreferenser, Spara dryckesmål, Exportera, Välj säkerhetskopia, Begär beständig lagring, Sök efter uppdatering). Bör grupperas som en lista (ListRow med chevron) där varje grupp öppnas i en panel. |
-| Medel | Kryssrutor och radioknappar är webbläsarens standard (olika storlek i ljust/mörkt), medan resten av appen har egna kontroller.                                                                                                                                                                              |
-| Låg   | Förklarande text i 13 px över nästan varje fält gör sidan tung att skumma.                                                                                                                                                                                                                                  |
+| Prio  | Iakttagelse                                                                                                                                                                                                                                                                                                 | Status                                      |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Hög   | **En enda lång sida (≈ 5 000 px)** med 12 kort, var och en med egen primärknapp (Spara profil, Spara matpreferenser, Spara dryckesmål, Exportera, Välj säkerhetskopia, Begär beständig lagring, Sök efter uppdatering). Bör grupperas som en lista (ListRow med chevron) där varje grupp öppnas i en panel. | ✅ PR #20                                   |
+| Medel | Kryssrutor och radioknappar är webbläsarens standard (olika storlek i ljust/mörkt), medan resten av appen har egna kontroller.                                                                                                                                                                              | Kryssrutor ✅ (switchar), radioknappar kvar |
+| Låg   | Förklarande text i 13 px över nästan varje fält gör sidan tung att skumma.                                                                                                                                                                                                                                  | ✅ (bara i panelerna)                       |
 
 ## Paneler (bottom sheets)
 
@@ -135,13 +135,30 @@ vid jämförelse, **Låg** = putsning.
   med `label`/`testId`, `.nudge-field`, `.button-danger-text`, `.sheet .toast`; `BottomSheet` kan staplas
   (unikt rubrik-id, `close` från en övre panel stänger inte den under).
 
+## Åtgärdat: Inställningar (PR #20)
+
+- **Lista → panel**: sidan är tre grupper (Profil och mål, Appen, Data) med en `ListRow` per inställning –
+  rubrik, kort förklaring, status till höger ("Mål 80,0 kg", "128 g", "7 av 7", "Av", "Senast för 2 dagar
+  sedan") och ›. Varje rad öppnar sin grupp i en `BottomSheet`. Sidan är ~1 000 px i stället för ~5 000 px
+  och har inga knappar alls; varje panel har högst en primärknapp.
+- **Delsökvägar** öppnar en panel direkt: `#/installningar/profil`, `…/sakerhetskopia`, `…/funktioner` osv.
+  "Fyll i profilen" (Översikt, Milstolpar, kalorimålet), "Sätt ett nytt mål" (mål nått) och påminnelsen om
+  säkerhetskopia länkar dit.
+- **Kontroller**: "Kryptera med lösenord" och "Lås appen med fingeravtryck" är switchar som i Funktioner och
+  Visning (i stället för kryssrutor med text efter).
+- **Om appen och Lagring**: version, commit, byggtid och använt utrymme som `ListRow` med värdet till höger
+  (i stället för `dl` med etikett och värde på varsin rad). Lagring är en egen komponent (`StorageSettings`).
+- **Om appen → Sök efter uppdatering**: finns en ny version blir knappen "Uppdatera nu" i panelen – kvittensen
+  längst ner ligger under den modala panelen och gick inte att nå.
+- Designsystemet: mönstret "Inställningslista" och `list-flush` (lista direkt i en panel) i `DESIGN.md`.
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 2–8.
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 3–8.
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
-2. **Inställningar** (nästa): gruppera i `ListRow` + panel per grupp, en primärknapp per panel.
-3. **Framsteg → Historik**: begränsa listorna, en segmentkontroll, grafer i datatypsfärg.
+2. ~~**Inställningar**~~ ✅ PR #20.
+3. **Framsteg → Historik** (nästa): begränsa listorna, en segmentkontroll, grafer i datatypsfärg.
 4. **Kalender**: kompakt förklaring (hopfällbar), dagsvyn som `ListRow`, pass utan knappar i listan.
 5. **Mat → Egna och Historik**: `ListRow`, svep för ta bort, liten segmentkontroll för tidsfilter.
 6. **Framsteg → Veckor**: täta veckokort (ListRow), en "Fråga AI"-knapp i panelen i stället för per kort.

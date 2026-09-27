@@ -28,12 +28,14 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   // Profil – via kugghjulet på Översikt.
   await page.goto('./');
   await page.getByLabel('Inställningar').tap();
+  await page.getByTestId('settings-profil').getByRole('button').tap();
   await page.getByLabel('Startdatum').fill(isoDaysFromToday(-21));
   await page.getByLabel('Startvikt (kg)').fill('90');
   await page.getByLabel('Längd (cm)').fill('180');
   await page.getByLabel('Målvikt (kg)').fill('80');
   await page.getByRole('button', { name: 'Spara profil' }).tap();
   await expect(page.getByText('Profilen är sparad.')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
 
   // Logga: Vikt är förvalt och förifyllt med startvikten, sedan med senast loggade värde.
   await nav(page).getByRole('link', { name: 'Logga' }).tap();

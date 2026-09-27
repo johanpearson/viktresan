@@ -696,7 +696,7 @@ test('historik och översikt: intag mot mål, 7-dagarssnitt och förklarade spä
 });
 
 test('profilen: nya fält för kalorimålet', async ({ page }) => {
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/profil');
   await page.getByLabel('Startdatum').fill(isoDaysFromToday(-7));
   await page.getByLabel('Startvikt (kg)').fill('90');
   await page.getByLabel('Längd (cm)').fill('180');

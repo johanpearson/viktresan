@@ -17,8 +17,8 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
           Kalorimål
         </h2>
         <p className="muted" data-testid="plan-missing">
-          Fyll i kön, födelseår och aktivitetsnivå under <a href="#/installningar">Inställningar</a>{' '}
-          så räknas ett dagligt kalorimål ut.
+          Fyll i kön, födelseår och aktivitetsnivå under{' '}
+          <a href="#/installningar/profil">Inställningar</a> så räknas ett dagligt kalorimål ut.
         </p>
       </section>
     );

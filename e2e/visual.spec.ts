@@ -21,14 +21,16 @@ test.use({
   timezoneId: 'Europe/Stockholm',
 });
 
-// Bygg-info och lagringsstatus skiljer sig mellan byggen och maskiner.
-function masks(page: Page): Locator[] {
+// Bygg-info och lagringsstatus skiljer sig mellan byggen och maskiner. I en panel maskas
+// bara panelens innehåll – masker ritas annars ovanpå panelen för element bakom den.
+function masks(scope: Page | Locator): Locator[] {
   return [
-    page.getByTestId('app-version'),
-    page.getByTestId('app-commit'),
-    page.getByTestId('app-build-time'),
-    page.getByTestId('persistence-status'),
-    page.getByTestId('storage-usage'),
+    scope.getByTestId('app-version'),
+    scope.getByTestId('app-commit'),
+    scope.getByTestId('app-build-time'),
+    scope.getByTestId('persistence-status'),
+    scope.getByTestId('persistence-summary'),
+    scope.getByTestId('storage-usage'),
   ];
 }
 
@@ -53,7 +55,7 @@ async function shot(page: Page, name: string, fullPage = true) {
   }, fullPage);
   await expect(page).toHaveScreenshot(`${name}.png`, {
     fullPage,
-    mask: masks(page),
+    mask: masks(fullPage ? page : page.getByRole('dialog').last()),
     // Liten marginal för kantutjämning; layoutändringar ger betydligt större skillnader.
     maxDiffPixelRatio: 0.002,
   });
@@ -160,6 +162,18 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(sheet).toHaveAccessibleName(/Analys av lunch/);
       await shot(page, `${theme}-sheet-mat-analys`, false);
       await close();
+    });
+
+    test('paneler: Inställningar', async ({ page }) => {
+      await open(page, '#/installningar');
+      const sheet = page.getByRole('dialog');
+      for (const id of ['profil', 'funktioner', 'sakerhetskopia'] as const) {
+        await page.getByTestId(`settings-${id}`).getByRole('button').tap();
+        await expect(sheet).toBeVisible();
+        await shot(page, `${theme}-sheet-installningar-${id}`, false);
+        await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+        await expect(sheet).toBeHidden();
+      }
     });
 
     test('paneler: Översikt och Framsteg', async ({ page }) => {

@@ -24,7 +24,7 @@ export function GoalReachedActions() {
     <div className="celebration-actions">
       <p className="celebration-question">Vad vill du göra nu?</p>
       <div className="button-row">
-        <a className="button" href="#/installningar">
+        <a className="button" href="#/installningar/profil">
           Sätt ett nytt mål
         </a>
         <button

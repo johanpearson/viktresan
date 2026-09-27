@@ -230,7 +230,7 @@ test('dosbyten syns som markeringar i viktgrafen', async ({ page }) => {
   await expect(changes.nth(1)).toContainText('Start: Mounjaro 2,5 mg');
 
   // Med GLP-1 avstängd försvinner markeringarna – datan ligger kvar.
-  await page.goto('./#/installningar');
+  await page.goto('./#/installningar/funktioner');
   await page.getByRole('switch', { name: /^GLP-1/ }).setChecked(false);
   await page.goto('./#/framsteg');
   await expect(page.getByRole('img', { name: /^Viktgraf/ })).toHaveAttribute('data-markers', '0');

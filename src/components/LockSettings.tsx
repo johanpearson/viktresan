@@ -39,30 +39,29 @@ export function LockSettings() {
   }
 
   return (
-    <section className="card" aria-labelledby="lock-title">
-      <h2 className="card-title" id="lock-title">
-        Lås
-      </h2>
+    <div className="form">
       {supported === false && !enabled ? (
         <p className="form-note" data-testid="lock-unsupported">
           Den här enheten eller webbläsaren saknar stöd för upplåsning med fingeravtryck.
         </p>
       ) : (
-        <div className="form">
-          <label className="check">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={enabled}
-              disabled={busy || supported === null}
-              onChange={(e) => void toggle(e.target.checked)}
-            />
-            <span>
-              Lås appen med fingeravtryck
-              <span className="check-hint">
+        <>
+          <label className="switch-row">
+            <span className="switch-text">
+              <span className="switch-label">Lås appen med fingeravtryck</span>
+              <span className="switch-description" id="lock-desc">
                 Appen låses när du lämnar den och öppnas med fingeravtryck, ansikte eller skärmlås.
               </span>
             </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch"
+              checked={enabled}
+              disabled={busy || supported === null}
+              aria-describedby="lock-desc"
+              onChange={(e) => void toggle(e.target.checked)}
+            />
           </label>
           {enabled && (
             <button type="button" className="button button-secondary" onClick={lockNow}>
@@ -74,13 +73,13 @@ export function LockSettings() {
               {error}
             </p>
           )}
-        </div>
+        </>
       )}
       <p className="muted form-note">
         Låset skyddar mot nyfikna blickar men krypterar inte datan på enheten. Tappar du bort
         fingeravtrycket (t.ex. efter byte av skärmlås) kan du bara komma åt appen genom att rensa
         webbplatsdatan – exportera därför en säkerhetskopia först.
       </p>
-    </section>
+    </div>
   );
 }

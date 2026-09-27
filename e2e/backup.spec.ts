@@ -153,8 +153,8 @@ const DATA = {
 };
 
 async function openSettings(page: Page) {
-  await page.goto('./#/installningar');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inställningar');
+  await page.goto('./#/installningar/sakerhetskopia');
+  await expect(page.getByRole('dialog', { name: 'Säkerhetskopia' })).toBeVisible();
 }
 
 async function exportBackup(page: Page, password?: string): Promise<Buffer> {
@@ -239,6 +239,8 @@ test('export → import ger identisk data', async ({ page }) => {
   const after = await dump(page);
   expect({ ...after, settings: {} }).toEqual({ ...before, settings: {} });
   // Profilformuläret visar den importerade profilen direkt.
+  await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await page.getByTestId('settings-profil').getByRole('button').tap();
   await expect(page.getByLabel('Startvikt (kg)')).toHaveValue('90');
   expect(errors).toEqual([]);
 });
