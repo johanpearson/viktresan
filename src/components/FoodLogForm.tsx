@@ -37,17 +37,34 @@ interface FoodLogFormProps {
   food: FoodItem;
   /** Användarens egna enheter för livsmedlet. */
   customUnits: readonly FoodUnit[];
+  /**
+   * `log` sparar en post i matloggen; `ingredient` lämnar tillbaka mängd och
+   * enhet (ingrediens i en egen måltid) utan måltidsval.
+   */
+  purpose?: 'log' | 'ingredient';
   /** Senast använda enhet och mängd (förifylls för nya poster). */
   last: Usage | null;
   /** Posten som redigeras, annars loggas en ny. */
   editing: FoodLogEntry | null;
   date: string;
+  /** Förvald måltid för nya poster, annars efter klockslaget. */
+  defaultMeal?: MealSlot | null;
   favorite: boolean;
   onToggleFavorite: () => void;
   /** Sparar livsmedlets egna enheter och laddar om. */
   onUnitsChange: (units: FoodUnit[]) => Promise<void>;
-  onSaved: (message: string) => void;
+  onSaved: (message: string, meal: MealSlot) => void;
+  /** `ingredient`: mängden och enheterna den räknades med. */
+  onAdd?: (value: UnitAmount, units: FoodUnit[]) => void;
+  /** Visar "Ta bort" (vid redigering). */
+  onDelete?: () => void;
   onCancel: () => void;
+}
+
+interface UnitAmount {
+  amount: number;
+  unit: string;
+  grams: number;
 }
 
 /**
@@ -57,13 +74,17 @@ interface FoodLogFormProps {
 export function FoodLogForm({
   food,
   customUnits,
+  purpose = 'log',
   last,
   editing,
   date,
+  defaultMeal = null,
   favorite,
   onToggleFavorite,
   onUnitsChange,
   onSaved,
+  onAdd,
+  onDelete,
   onCancel,
 }: FoodLogFormProps) {
   const builtIn = builtInUnits(food);
@@ -78,7 +99,7 @@ export function FoodLogForm({
   const [unit, setUnit] = useState(usage.unit);
   const [amount, setAmount] = useState(() => decimalInput(usage.amount));
   const [meal, setMeal] = useState<MealSlot>(
-    () => editing?.meal ?? defaultMealSlot(new Date().getHours()),
+    () => editing?.meal ?? defaultMeal ?? defaultMealSlot(new Date().getHours()),
   );
   const [adjusting, setAdjusting] = useState(false);
   const [adjustGrams, setAdjustGrams] = useState('');
@@ -123,6 +144,10 @@ export function FoodLogForm({
       setError(result.error);
       return;
     }
+    if (purpose === 'ingredient') {
+      onAdd?.(result.value, units);
+      return;
+    }
     const now = Date.now();
     const entry: FoodLogEntry = {
       id: editing?.id ?? newId(),
@@ -139,6 +164,7 @@ export function FoodLogForm({
     await putFoodLog(entry);
     onSaved(
       `${editing ? 'Uppdaterade' : 'Loggade'} ${food.name} (${loggedAmountText(entry)}) till ${mealLabel(meal).toLowerCase()}.`,
+      meal,
     );
   }
 
@@ -154,7 +180,7 @@ export function FoodLogForm({
     >
       <div className="card-header">
         <h2 className="card-title" id="log-food-title">
-          {editing ? 'Redigera' : 'Logga'}: {food.name}
+          {editing ? 'Redigera' : purpose === 'ingredient' ? 'Lägg till' : 'Logga'}: {food.name}
         </h2>
         <button
           type="button"
@@ -182,23 +208,25 @@ export function FoodLogForm({
             }}
           />
         </label>
-        <label className="field">
-          <span className="field-label">Måltid</span>
-          <select
-            className="input"
-            value={meal}
-            onChange={(e) => {
-              const slot = MEAL_SLOTS.find((m) => m.id === e.target.value);
-              if (slot) setMeal(slot.id);
-            }}
-          >
-            {MEAL_SLOTS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {purpose === 'log' && (
+          <label className="field">
+            <span className="field-label">Måltid</span>
+            <select
+              className="input"
+              value={meal}
+              onChange={(e) => {
+                const slot = MEAL_SLOTS.find((m) => m.id === e.target.value);
+                if (slot) setMeal(slot.id);
+              }}
+            >
+              {MEAL_SLOTS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <div className="chip-grid" role="group" aria-label="Enhet">
         {[...units.map((u) => u.name), GRAM].map((name) => (
@@ -327,12 +355,17 @@ export function FoodLogForm({
       )}
       <div className="button-row">
         <button type="submit" className="button">
-          {editing ? 'Spara ändringar' : 'Logga'}
+          {editing ? 'Spara ändringar' : purpose === 'ingredient' ? 'Lägg till' : 'Logga'}
         </button>
         <button type="button" className="button button-secondary" onClick={onCancel}>
           Avbryt
         </button>
       </div>
+      {onDelete && (
+        <button type="button" className="button button-danger" onClick={onDelete}>
+          Ta bort
+        </button>
+      )}
       <details className="plan-details" data-testid="food-units">
         <summary>Enheter för {food.name}</summary>
         <UnitList

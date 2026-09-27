@@ -124,10 +124,9 @@ test('genvägen Logga mat öppnar sök, med proteinrik-etikett', async ({ page }
     'aria-valuetext',
     '22 g av 128 g',
   );
-  await expect(page.getByRole('progressbar', { name: 'Kalorier idag' })).toHaveAttribute(
-    'aria-valuetext',
-    /^130 /,
-  );
+  // Profilen saknar underlag för ett kalorimål: bara intaget visas, utan stapel.
+  await expect(page.getByTestId('intake')).toHaveText('130 kcal');
+  await expect(page.getByRole('progressbar', { name: 'Kalorier idag' })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

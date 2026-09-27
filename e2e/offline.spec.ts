@@ -48,7 +48,11 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
 
   // Mat: livsmedelsdatabasen och egna livsmedel fungerar offline.
   await page.goto('./#/mat');
-  await expect(page.getByTestId('livsmedel-source')).not.toContainText('Laddar');
+  await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
+  const picker = page.getByRole('dialog', { name: 'Logga mat' });
+  await picker.getByLabel('Sök livsmedel').fill('mjölk');
+  await expect(picker.getByTestId('search-result').first()).toBeVisible();
+  await picker.getByRole('button', { name: 'Stäng', exact: true }).tap();
   await page.getByRole('button', { name: 'Egna', exact: true }).tap();
   await page.getByRole('button', { name: 'Nytt livsmedel' }).tap();
   await page.getByLabel('Namn').fill('Offlinebulle');

@@ -117,14 +117,26 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('./#/kalender');
       await expect(page.getByTestId('calendar-value-vikt')).toBeVisible();
       await expectNoViolations(page, 'Kalender');
-      // Mat: loggformulär, egna livsmedel, måltid och historik.
+      // Mat: dagsvyn med måltider, sök-sheeten, loggformulär, redigering, egna och historik.
       await page.goto('./#/mat');
-      await page.getByTestId('quick-pick').first().tap();
+      const breakfast = page.getByTestId('meal-frukost').getByRole('heading').getByRole('button');
+      if ((await breakfast.getAttribute('aria-expanded')) === 'false') await breakfast.tap();
+      await expect(page.getByTestId('food-entry').first()).toBeVisible();
+      await expectNoViolations(page, 'Mat dag');
+      await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
+      const picker = page.getByRole('dialog', { name: 'Logga mat' });
+      await expectNoViolations(page, 'Mat sök');
+      await picker.getByTestId('quick-pick').first().tap();
       await expect(page.getByTestId('food-log-form')).toBeVisible();
       await expectNoViolations(page, 'Mat loggformulär');
       await page.getByRole('button', { name: 'Avbryt' }).tap();
-      await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
+      await picker.getByRole('button', { name: 'Skanna streckkod' }).tap();
       await expectNoViolations(page, 'Mat skanna');
+      await picker.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await page.getByTestId('food-entry').first().getByRole('button').first().tap();
+      await expect(page.getByRole('dialog', { name: 'Redigera post' })).toBeVisible();
+      await expectNoViolations(page, 'Mat redigera post');
+      await page.getByRole('button', { name: 'Avbryt' }).tap();
       await page.getByRole('button', { name: 'Egna', exact: true }).tap();
       await expectNoViolations(page, 'Mat egna');
       await page.getByRole('button', { name: 'Ny måltid' }).tap();

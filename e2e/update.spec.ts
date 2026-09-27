@@ -139,4 +139,8 @@ test('Om appen visar version, commit och byggtid samt sidfot', async ({ page }) 
     /^\d{4}-\d{2}-\d{2}T/,
   );
   await expect(page.getByTestId('app-footer')).toHaveText(/^Viktresan \d+\.\d+\.\d+ \(\S+\)$/);
+  // Källan för näringsvärdena i Mat (flyttad från Mat-vyn).
+  await expect(page.getByTestId('livsmedel-source')).toContainText(
+    'Näringsvärden i Mat: Livsmedelsverkets livsmedelsdatabas (CC BY 4.0',
+  );
 });

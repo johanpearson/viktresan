@@ -113,7 +113,8 @@ test('inga förfrågningar till andra origins', async ({ page, baseURL }) => {
   await page.waitForLoadState('networkidle');
   // Mat-vyn och sökningen använder bara den lokala livsmedelsdatabasen.
   await page.goto('./#/mat');
-  await page.getByLabel('Sök livsmedel').fill('mjölk');
+  await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
+  await page.getByRole('dialog').getByLabel('Sök livsmedel').fill('mjölk');
   await page.waitForLoadState('networkidle');
   expect(external).toEqual([]);
 });

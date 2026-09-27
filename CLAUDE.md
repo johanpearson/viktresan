@@ -65,6 +65,7 @@ src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
 src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
 src/lib/planText.ts     Sakliga förklaringar (spärrar, måldatum, TDEE-källa)
 src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-dagarssnitt, måltider
+src/lib/foodDay.ts      Mat → Dag: sektioner per måltid (summa, antal), pågående måltid, ingredienser i loggad måltid, datumetikett
 src/lib/units.ts        Enheter: volym via densitet, kategori (foodProfile), relevanta enheter, gissningar, förval, OFF-portion/förpackning
 src/data/units.ts       Kuraterad tabell per livsmedel (Livsmedelsverket): styckvikter, egen densitet/kategori (ungefärliga)
 src/data/foodCategories.ts  Kategorier: densitet, relevanta enheter, gissade styckvikter; namnmönster + Livsmedelsverkets grupper
@@ -86,13 +87,14 @@ src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, on
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …)
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
-                        (Dag | Egna | Historik; `#/mat/logga` = panelen Logga mat), Kalender (Månad | Vecka),
+                        (Dag | Egna | Historik som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka),
                         Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
 e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
                         veckokort, milstolpar, bilder); hjälpare i helpers.ts. photos.spec.ts mockar getUserMedia
                         (nekad resp. canvas-ström) och skapar en v8-databas för migreringen. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
-                        Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript)
+                        Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript); svep görs med
+                        dispatchEvent('pointer…') och pågående måltid styrs med page.clock.setFixedTime
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
 scripts/                Engångsskript (ikongenerering inkl. genvägsikoner shortcut-*.svg, fetch-livsmedel.ts)
 public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), precachad
@@ -234,7 +236,20 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Open Food Facts: värden per 100 ml (`nutrition_data_per` = 100ml, eller förpackning i ml) →
   `per100Unit: 'ml'` på livsmedel, loggpost och ingrediens; mängden räknas då direkt i ml (densitet 1).
   `product_quantity`/`product_quantity_unit` (reserv `quantity`) → enheten "förpackning" (t.ex. 33 cl).
-- **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Mat-vyn) hämtas med
+- **Mat → Dag** (`FoodDay`): datumrad (‹ › + osynligt datumfält över texten), `DaySummary` med kcal- och
+  proteinstapel på en rad och makron som text; när summeringen scrollats bort (IntersectionObserver) visas en
+  aria-dold minirad i den sticky toppen ovanför sökfältet. Sökfältet ("Sök och logga mat") och skannerikonen öppnar
+  `FoodPicker` – helskärms-sheet med sök, flikarna Senaste/Favoriter/Måltider, streckkod (Open Food Facts, cache,
+  "Skapa eget livsmedel") och sedan `FoodLogForm`. Samma `FoodPicker` (`mode.kind = 'ingredient'`, utan måltidsval
+  och utan måltider i listorna) lägger till ingredienser i `MealBuilder`. Dagens mat (`MealSections`): ett
+  hopfällbart kort per måltid (namn, antal poster, kcal, + som öppnar sheeten förvald till måltiden); pågående
+  måltid (`currentMealSlot`, samma klockslag som `defaultMealSlot`) är utfälld vid start, en måltid man loggar i
+  fälls ut; tomma måltider är en smal rad med bara +. Rader (`FoodEntryRow`): tryck = redigera i bottom sheet
+  (mängd, enhet, måltid, Ta bort), svep vänster (pekarhändelser, `touch-action: pan-y`) = ta bort; båda ger
+  `FoodToast` med Ångra (lägger tillbaka posten oförändrad). En loggad sparad måltid kan fällas ut till
+  ingredienserna (`loggedMealIngredients`, skalade efter loggad mängd). Kcal-värden: klassen `kcal`
+  (`nowrap`, `tabular-nums`).
+- **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Inställningar → Om appen, `LivsmedelSource`) hämtas med
   `npm run livsmedel` (inkl. livsmedelsgrupp när API:t har den – `pickGroup`, förlåtande tolkning) och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
   ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
   `BarcodeDetector` + kamera, annars manuell EAN. Okända koder slås upp i Open Food Facts

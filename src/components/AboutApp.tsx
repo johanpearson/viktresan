@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { checkForUpdate, type UpdateCheckResult } from '../lib/pwaUpdate.ts';
 import { BUILD_INFO, formatBuildTime } from '../lib/version.ts';
+import { Feature } from './Feature.tsx';
+import { LivsmedelSource } from './LivsmedelSource.tsx';
 
 const RESULT_TEXT: Record<UpdateCheckResult, string> = {
   available: 'Ny version finns – tryck Uppdatera i rutan längst ner.',
@@ -9,7 +11,10 @@ const RESULT_TEXT: Record<UpdateCheckResult, string> = {
   unsupported: 'Uppdateringar hanteras inte i den här webbläsaren.',
 };
 
-/** Inställningar → Om appen: version, commit, byggtid och manuell uppdateringskontroll. */
+/**
+ * Inställningar → Om appen: version, commit, byggtid, manuell uppdateringskontroll
+ * och källan för näringsvärdena i Mat.
+ */
 export function AboutApp() {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<UpdateCheckResult | null>(null);
@@ -39,6 +44,9 @@ export function AboutApp() {
           <time dateTime={BUILD_INFO.buildTime}>{formatBuildTime(BUILD_INFO.buildTime)}</time>
         </dd>
       </dl>
+      <Feature id="mat">
+        <LivsmedelSource />
+      </Feature>
       <button
         type="button"
         className="button button-secondary"

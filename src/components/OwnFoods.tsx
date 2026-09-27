@@ -1,24 +1,15 @@
 import { useMemo, useState } from 'react';
-import {
-  deleteFood,
-  deleteMeal,
-  type CustomUnits,
-  type SavedMeal,
-  type StoredFood,
-} from '../db/db.ts';
-import type { FoodItem } from '../lib/foodSearch.ts';
+import { deleteFood, deleteMeal, type SavedMeal, type StoredFood } from '../db/db.ts';
 import { formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
 import { loggedAmountText } from '../lib/units.ts';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
+import type { FoodSource } from './FoodPicker.tsx';
 import { MealBuilder } from './MealBuilder.tsx';
 
 interface OwnFoodsProps {
-  foods: readonly StoredFood[];
-  meals: readonly SavedMeal[];
-  foodUnits: readonly CustomUnits[];
-  searchItems: readonly FoodItem[];
-  loading: boolean;
+  /** Livsmedel, måltider och egna enheter – och det sök-sheeten behöver för ingredienser. */
+  source: FoodSource;
   onChange: () => Promise<unknown>;
 }
 
@@ -26,14 +17,8 @@ type Editing =
   { kind: 'food'; food: StoredFood | null } | { kind: 'meal'; meal: SavedMeal | null } | null;
 
 /** Egna livsmedel och sparade måltider: skapa, redigera, ta bort. */
-export function OwnFoods({
-  foods,
-  meals,
-  foodUnits,
-  searchItems,
-  loading,
-  onChange,
-}: OwnFoodsProps) {
+export function OwnFoods({ source, onChange }: OwnFoodsProps) {
+  const { foods, meals, foodUnits } = source.foodData;
   const [editing, setEditing] = useState<Editing>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -77,9 +62,7 @@ export function OwnFoods({
     return (
       <MealBuilder
         meal={editing.meal}
-        searchItems={searchItems}
-        customUnits={customUnits}
-        loading={loading}
+        source={source}
         onSaved={(meal) => void saved(`Sparade måltiden ${meal.name}.`)}
         onCancel={() => {
           setEditing(null);

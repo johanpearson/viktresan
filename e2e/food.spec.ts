@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { collectErrors, dump, isoDaysFromToday, seed } from './helpers.ts';
 
 // Service workern skulle annars svara på livsmedel.json från sin cache, förbi page.route.
@@ -54,12 +54,61 @@ async function openFood(page: Page, profile: Record<string, unknown> = PROFILE) 
   await seed(page, { profile });
   await page.goto('./#/mat');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mat');
-  await expect(page.getByTestId('livsmedel-source')).toContainText('Testdatabas');
+  await expect(page.getByRole('button', { name: 'Sök och logga mat' })).toBeVisible();
 }
 
-async function searchAndPick(page: Page, query: string, name: string, label = 'Sök livsmedel') {
-  await page.getByLabel(label).fill(query);
-  await page.getByTestId('search-result').filter({ hasText: name }).first().tap();
+/** Sök-sheeten (helskärm). */
+function sheet(page: Page): Locator {
+  return page.getByRole('dialog');
+}
+
+/**
+ * Söker och väljer ett livsmedel i sök-sheeten. Är den inte öppen öppnas den med
+ * sökfältet i Mat → Dag, eller med "Lägg till ingrediens" (`ingredient`) i en måltid.
+ */
+async function searchAndPick(page: Page, query: string, name: string, ingredient = false) {
+  if (!(await sheet(page).isVisible())) {
+    await page
+      .getByRole('button', { name: ingredient ? 'Lägg till ingrediens' : 'Sök och logga mat' })
+      .tap();
+  }
+  await sheet(page).getByLabel('Sök livsmedel').fill(query);
+  await sheet(page).getByTestId('search-result').filter({ hasText: name }).first().tap();
+}
+
+async function closeSheet(page: Page) {
+  await sheet(page).getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await expect(sheet(page)).toHaveCount(0);
+}
+
+/** Posten i dagens mat (måltiden ska vara utfälld). */
+function entry(page: Page, name: string): Locator {
+  return page.getByTestId('food-entry').filter({ hasText: name });
+}
+
+async function openEntry(page: Page, name: string, which: 'first' | 'last' = 'first') {
+  await entry(page, name)[which]().getByRole('button').first().tap();
+  await expect(page.getByRole('dialog', { name: 'Redigera post' })).toBeVisible();
+}
+
+/** Måltidens rubrikknapp (fäll ut/ihop). */
+function mealToggle(page: Page, slot: string): Locator {
+  return page.getByTestId(`meal-${slot}`).getByRole('heading').getByRole('button');
+}
+
+/** Sveper raden åt vänster med pekarhändelser (som ett finger på mobilen). */
+async function swipeLeft(row: Locator) {
+  const content = row.locator('.food-entry-content');
+  const box = await content.boundingBox();
+  if (!box) throw new Error('Raden syns inte');
+  const y = box.y + box.height / 2;
+  const x0 = box.x + box.width - 24;
+  const init = { pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, clientY: y };
+  await content.dispatchEvent('pointerdown', { ...init, clientX: x0 });
+  for (const f of [0.1, 0.3, 0.5, 0.6]) {
+    await content.dispatchEvent('pointermove', { ...init, clientX: x0 - box.width * f });
+  }
+  await content.dispatchEvent('pointerup', { ...init, clientX: x0 - box.width * 0.6 });
 }
 
 /** Loggar en mängd i vald enhet (tryck på enhetschippet först), annars i den förvalda. */
@@ -109,31 +158,34 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   await expect(page.getByTestId('remaining-kcal')).toHaveText(
     `${kcalText(target - 342)} kcal kvar`,
   );
-  await expect(page.getByRole('progressbar', { name: 'Intag av kalorimålet' })).toHaveAttribute(
+  await expect(page.getByRole('progressbar', { name: 'Kalorier idag' })).toHaveAttribute(
     'aria-valuenow',
     String(Math.round((342 / target) * 100)),
   );
   // Makron: protein 7,8 + 7 g, kolhydrater 35,4 + 9,6 g, fett 4,2 + 6 g.
-  const macros = page.getByTestId('macros');
-  await expect(macros).toContainText('Protein15 g');
-  await expect(macros).toContainText('Kolhydrater45 g');
-  await expect(macros).toContainText('Fett10 g');
+  await expect(page.getByTestId('macros')).toHaveText(
+    'Protein 15 g · Kolhydrater 45 g · Fett 10 g',
+  );
+  await closeSheet(page);
 
   const breakfast = page.getByTestId('meal-frukost');
   await expect(breakfast.getByTestId('food-entry')).toHaveCount(2);
+  await expect(breakfast.getByRole('heading')).toContainText('2 poster');
   await expect(breakfast.getByRole('heading')).toContainText('342 kcal');
 
-  // Redigera mjölken till 300 g.
-  await page.getByRole('button', { name: 'Redigera Mjölk fett 3 %' }).tap();
+  // Redigera mjölken till 300 g: tryck på raden öppnar redigeringen.
+  await openEntry(page, 'Mjölk fett 3 %');
   await expect(page.getByRole('heading', { name: 'Redigera: Mjölk fett 3 %' })).toBeVisible();
   await expect(page.getByLabel('Mängd (g)')).toHaveValue('200');
   await page.getByLabel('Mängd (g)').fill('300');
   await page.getByRole('button', { name: 'Spara ändringar' }).tap();
+  await expect(page.getByTestId('food-toast')).toContainText('Uppdaterade Mjölk fett 3 % (300 g)');
   await expect(intake).toContainText('402');
 
-  // Ta bort havregrynen.
-  await page.getByRole('button', { name: 'Ta bort Havregryn' }).tap();
-  await page.getByRole('button', { name: 'Bekräfta borttagning av Havregryn' }).tap();
+  // Ta bort havregrynen i redigeringen.
+  await openEntry(page, 'Havregryn');
+  await page.getByRole('dialog').getByRole('button', { name: 'Ta bort' }).tap();
+  await expect(page.getByTestId('food-toast')).toContainText('Tog bort Havregryn.');
   await expect(intake).toContainText('180');
   await expect(breakfast.getByTestId('food-entry')).toHaveCount(1);
 
@@ -150,8 +202,8 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   await expect(page.getByTestId('meal-mellanmal')).toContainText('Banan');
   await expect(intake).toContainText('294');
 
-  // Snabbval: senaste (nyast först) och favoriter.
-  const quick = page.getByTestId('quick-pick');
+  // Snabbval i sök-sheeten: senaste (nyast först) och favoriter.
+  const quick = sheet(page).getByTestId('quick-pick');
   await expect(quick.first()).toContainText('Banan');
   await expect(quick).toHaveCount(2);
   await page.getByRole('button', { name: 'Favoriter', exact: true }).tap();
@@ -207,12 +259,21 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   // Måltid med två ingredienser.
   await page.getByRole('button', { name: 'Ny måltid' }).tap();
   await page.getByLabel('Måltidens namn').fill('Frukostgröt');
-  // Ingredienser i gram eller i en enhet (standardenheten dl för mjölk ≈ 103 g).
-  await searchAndPick(page, 'havregryn', 'Havregryn', 'Lägg till ingrediens');
-  await expect(page.getByLabel('Enhet Havregryn')).toHaveValue('dl');
-  await page.getByLabel('Enhet Havregryn').selectOption('g');
-  await page.getByLabel('Mängd Havregryn').fill('60');
-  await searchAndPick(page, 'mjölk', 'Mjölk fett 3 %', 'Lägg till ingrediens');
+  // Ingredienser läggs till med sök-sheeten, i gram eller en enhet
+  // (standardenheten dl för mjölk ≈ 103 g).
+  await searchAndPick(page, 'havregryn', 'Havregryn', true);
+  await expect(page.getByRole('heading', { name: 'Lägg till: Havregryn' })).toBeVisible();
+  await expect(page.getByLabel('Mängd (dl)')).toHaveValue('1');
+  await expect(sheet(page).getByLabel('Måltid')).toHaveCount(0);
+  await chooseUnit(page, 'g');
+  await page.getByLabel('Mängd (g)').fill('60');
+  await sheet(page).getByRole('button', { name: 'Lägg till', exact: true }).tap();
+  await expect(sheet(page)).toHaveCount(0);
+  await expect(page.getByLabel('Enhet Havregryn')).toHaveValue('g');
+  await expect(page.getByLabel('Mängd Havregryn')).toHaveValue('60');
+  await searchAndPick(page, 'mjölk', 'Mjölk fett 3 %', true);
+  await sheet(page).getByRole('button', { name: 'Lägg till', exact: true }).tap();
+  await expect(page.getByLabel('Enhet Mjölk fett 3 %')).toHaveValue('dl');
   await page.getByLabel('Mängd Mjölk fett 3 %').fill('2');
   await expect(page.getByTestId('ingredient-grams').last()).toHaveText('≈ 206 g · 124 kcal');
   await expect(page.getByTestId('ingredient')).toHaveCount(2);
@@ -227,8 +288,9 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
 
   // Logga måltiden via snabbvalet Måltider – en portion är hela måltiden.
   await page.getByRole('button', { name: 'Dag', exact: true }).tap();
-  await page.getByRole('button', { name: 'Måltider', exact: true }).tap();
-  await page.getByTestId('quick-pick').filter({ hasText: 'Frukostgröt' }).tap();
+  await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
+  await sheet(page).getByRole('button', { name: 'Måltider', exact: true }).tap();
+  await sheet(page).getByTestId('quick-pick').filter({ hasText: 'Frukostgröt' }).tap();
   const units = page.getByTestId('food-log-form').getByRole('group', { name: 'Enhet' });
   await expect(units.getByRole('button', { name: 'portion' })).toHaveAttribute(
     'aria-pressed',
@@ -239,6 +301,17 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   await logAmount(page, '1', 'Frukost');
   await expect(page.getByTestId('intake')).toContainText('346');
   await expect(page.getByTestId('meal-frukost')).toContainText('1 portion (266 g)');
+  // En loggad måltid kan fällas ut till ingredienserna.
+  await closeSheet(page);
+  await entry(page, 'Frukostgröt')
+    .getByRole('button', { name: 'Ingredienser i Frukostgröt' })
+    .tap();
+  await expect(entry(page, 'Frukostgröt').getByTestId('meal-ingredients')).toContainText(
+    'Havregryn · 60 g',
+  );
+  await expect(entry(page, 'Frukostgröt').getByTestId('meal-ingredients')).toContainText(
+    'Mjölk fett 3 % · 206 g',
+  );
 
   // Det egna livsmedlet i sin egna enhet, omräknat till gram och tillbaka.
   await searchAndPick(page, 'bulle', 'Mormors bulle');
@@ -326,10 +399,12 @@ test('enheter: logga 2 ägg i st, skapa en egen enhet och logga med den', async 
   await expect(page.getByTestId('meal-lunch')).toContainText('2 stort ägg (140 g)');
 
   // Redigering av den gamla posten räknar med enhetens vikt när den loggades.
-  await page.getByRole('button', { name: 'Redigera Ägg kokt' }).last().tap();
+  await closeSheet(page);
+  await openEntry(page, 'Ägg kokt', 'last');
   await expect(page.getByLabel('Mängd (stort ägg)')).toHaveValue('2');
   await expect(preview).toHaveText('2 stort ägg ≈ 140 g · 190 kcal');
   await page.getByRole('button', { name: 'Avbryt' }).tap();
+  await expect(sheet(page)).toHaveCount(0);
 
   // Ta bort enheten.
   await searchAndPick(page, 'ägg', 'Ägg kokt');
@@ -404,6 +479,7 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
   });
   await openFood(page);
 
+  // Skannerikonen bredvid sökfältet öppnar sök-sheeten i skannerläget.
   await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
   await page.getByRole('button', { name: 'Starta kameran' }).tap();
   await expect(page.getByRole('heading', { name: 'Logga: Testmüsli (Testbolaget)' })).toBeVisible();
@@ -426,14 +502,14 @@ test('skanna streckkod: slå upp i Open Food Facts, cacha och skapa okänd produ
       units: [{ name: 'portion', grams: 45, source: 'openfoodfacts' }],
     }),
   ]);
-  await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
+  await sheet(page).getByRole('button', { name: 'Skanna streckkod' }).tap();
   await page.getByRole('button', { name: 'Starta kameran' }).tap();
   await expect(page.getByTestId('food-log-form')).toBeVisible();
   expect(offRequests).toHaveLength(1);
   await page.getByRole('button', { name: 'Avbryt' }).tap();
 
   // Okänd streckkod via manuell inmatning → skapa eget livsmedel med koden ifylld.
-  await page.getByRole('button', { name: 'Skanna streckkod' }).tap();
+  await sheet(page).getByRole('button', { name: 'Skanna streckkod' }).tap();
   await page.getByLabel('Streckkod (EAN)').fill('1234');
   await page.getByRole('button', { name: 'Slå upp' }).tap();
   await expect(page.getByRole('alert')).toContainText('Streckkoden är inte giltig');
@@ -697,5 +773,234 @@ test('dryck: ett glas vatten och 2 dl mjölk i Mat räknas i dagens dryckessumma
   const data = await dump(page);
   expect(data.water).toHaveLength(1);
   expect(data.foodLog).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
+/** Idag vid klockslaget (lokal tid) – styr vilken måltid som är pågående. */
+function todayAt(hour: number, minute = 0): Date {
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+test('måltider: logga i två, fäll ihop och ut, redigera i sheet, svep bort och ångra', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await page.clock.setFixedTime(todayAt(12, 30));
+  await openFood(page);
+  const intake = page.getByTestId('intake');
+
+  // Tomma måltider är smala rader med bara +.
+  for (const slot of ['frukost', 'lunch', 'middag', 'mellanmal']) {
+    await expect(page.getByTestId(`meal-${slot}`).getByRole('heading')).not.toContainText('kcal');
+  }
+
+  // + i frukost öppnar sök-sheeten förvald till frukost.
+  await page.getByRole('button', { name: 'Lägg till i frukost' }).tap();
+  await expect(page.getByRole('dialog', { name: 'Lägg till i frukost' })).toBeVisible();
+  await searchAndPick(page, 'havregryn', 'Havregryn');
+  await expect(sheet(page).getByLabel('Måltid')).toHaveValue('frukost');
+  await logAmount(page, '60', undefined, 'g');
+  await closeSheet(page);
+
+  // + i lunch: ett ägg (st förvald).
+  await page.getByRole('button', { name: 'Lägg till i lunch' }).tap();
+  await searchAndPick(page, 'ägg', 'Ägg kokt');
+  await expect(sheet(page).getByLabel('Måltid')).toHaveValue('lunch');
+  await logAmount(page, '1');
+  await closeSheet(page);
+  await expect(intake).toContainText('304');
+
+  // Rubrikerna: namn, antal poster och kcal (utan radbrytning).
+  await expect(mealToggle(page, 'frukost')).toHaveText(/Frukost\s*1 post\s*222 kcal/);
+  await expect(mealToggle(page, 'lunch')).toHaveText(/Lunch\s*1 post\s*82 kcal/);
+  const kcalBox = await page.getByTestId('meal-frukost').getByTestId('meal-kcal').boundingBox();
+  expect(kcalBox?.height).toBeLessThan(30);
+
+  // Fäll ihop och ut.
+  await mealToggle(page, 'frukost').tap();
+  await expect(mealToggle(page, 'frukost')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('meal-frukost').getByTestId('food-entry')).toHaveCount(0);
+  await mealToggle(page, 'frukost').tap();
+  await expect(page.getByTestId('meal-frukost').getByTestId('food-entry')).toHaveCount(1);
+
+  // Efter omladdning är bara pågående måltid (lunch kl. 12.30) utfälld.
+  await page.reload();
+  await expect(mealToggle(page, 'lunch')).toHaveAttribute('aria-expanded', 'true');
+  await expect(mealToggle(page, 'frukost')).toHaveAttribute('aria-expanded', 'false');
+
+  // Redigera ägget i sheeten: 2 st och flytta till middag.
+  await openEntry(page, 'Ägg kokt');
+  const edit = page.getByRole('dialog', { name: 'Redigera post' });
+  await edit.getByLabel('Mängd (st)').fill('2');
+  await edit.getByLabel('Måltid').selectOption({ label: 'Middag' });
+  await edit.getByRole('button', { name: 'Spara ändringar' }).tap();
+  await expect(edit).toHaveCount(0);
+  await expect(page.getByTestId('meal-middag')).toContainText('2 st (120 g)');
+  await expect(page.getByTestId('meal-lunch').getByRole('heading')).not.toContainText('kcal');
+  await expect(intake).toContainText('385');
+
+  // Svep bort havregrynen och ångra.
+  await mealToggle(page, 'frukost').tap();
+  await swipeLeft(entry(page, 'Havregryn'));
+  const toast = page.getByTestId('food-toast');
+  await expect(toast).toContainText('Tog bort Havregryn.');
+  await expect(intake).toContainText('163');
+  expect((await dump(page)).foodLog).toHaveLength(1);
+  await toast.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(intake).toContainText('385');
+  await expect(entry(page, 'Havregryn')).toHaveCount(1);
+  const stored = await dump(page);
+  expect(stored.foodLog).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ foodId: 'lv:1', meal: 'frukost', grams: 60 }),
+      expect.objectContaining({ foodId: 'lv:5', meal: 'middag', amount: 2, unit: 'st' }),
+    ]),
+  );
+  expect(errors).toEqual([]);
+});
+
+test('egen måltid: lägg till ingrediens via streckkod i sök-sheeten', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.addInitScript((ean) => {
+    class FakeBarcodeDetector {
+      detect() {
+        return Promise.resolve([{ rawValue: ean, format: 'ean_13' }]);
+      }
+    }
+    Object.defineProperty(window, 'BarcodeDetector', { value: FakeBarcodeDetector });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: {
+        getUserMedia: () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 64;
+          canvas.height = 64;
+          canvas.getContext('2d')?.fillRect(0, 0, 64, 64);
+          return Promise.resolve(canvas.captureStream());
+        },
+      },
+    });
+  }, EAN);
+  await page.route('https://world.openfoodfacts.org/**', (route) =>
+    route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      json: {
+        status: 1,
+        product: {
+          product_name: 'Testmüsli',
+          serving_size: '1 portion (45 g)',
+          serving_quantity: 45,
+          nutriments: {
+            'energy-kcal_100g': 400,
+            proteins_100g: 10,
+            carbohydrates_100g: 60,
+            fat_100g: 12,
+          },
+        },
+      },
+    }),
+  );
+  await openFood(page);
+  await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+  await page.getByRole('button', { name: 'Ny måltid' }).tap();
+  await page.getByLabel('Måltidens namn').fill('Müslifrukost');
+
+  await page.getByRole('button', { name: 'Lägg till ingrediens' }).tap();
+  const picker = page.getByRole('dialog', { name: 'Lägg till ingrediens' });
+  await picker.getByRole('button', { name: 'Skanna streckkod' }).tap();
+  await picker.getByRole('button', { name: 'Starta kameran' }).tap();
+  await expect(picker.getByRole('heading', { name: 'Lägg till: Testmüsli' })).toBeVisible();
+  // Enhetsvalet: portion förvald, 2 portioner.
+  await expect(picker.getByLabel('Mängd (portion)')).toHaveValue('1');
+  await picker.getByLabel('Mängd (portion)').fill('2');
+  await expect(picker.getByTestId('log-preview')).toHaveText('2 portion ≈ 90 g · 360 kcal');
+  await picker.getByRole('button', { name: 'Lägg till', exact: true }).tap();
+  await expect(picker).toHaveCount(0);
+
+  await expect(page.getByLabel('Enhet Testmüsli')).toHaveValue('portion');
+  await expect(page.getByLabel('Mängd Testmüsli')).toHaveValue('2');
+  await expect(page.getByTestId('meal-total')).toHaveText('Totalt 90 g · 360 kcal');
+  await page.getByRole('button', { name: 'Spara måltid' }).tap();
+  await expect(page.getByTestId('own-meal')).toContainText('360 kcal');
+
+  const stored = await dump(page);
+  expect(stored.meals).toEqual([
+    expect.objectContaining({
+      name: 'Müslifrukost',
+      items: [
+        expect.objectContaining({ foodId: `off:${EAN}`, amount: 2, unit: 'portion', grams: 90 }),
+      ],
+    }),
+  ]);
+  // Produkten är cachad för nästa skanning.
+  expect(stored.foods).toEqual([expect.objectContaining({ id: `off:${EAN}` })]);
+  expect(errors).toEqual([]);
+});
+
+test('dagsvyn med 15 poster ryms inom en skärmhöjds scroll när måltiderna är ihopfällda', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await page.clock.setFixedTime(todayAt(15));
+  const meals = ['frukost', 'lunch', 'middag', 'mellanmal'];
+  const foodLog = Array.from({ length: 15 }, (_, i) => ({
+    id: `f${String(i)}`,
+    date: isoDaysFromToday(0),
+    meal: meals[i % 4],
+    foodId: `egen:${String(i)}`,
+    name: `Livsmedel nummer ${String(i + 1)} med ett ganska långt namn som kan brytas`,
+    amount: 100,
+    unit: 'g',
+    grams: 100,
+    per100: { kcal: 150, proteinG: 8, carbsG: 15, fatG: 5 },
+    createdAt: Date.now() - (15 - i) * 60_000,
+  }));
+  await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  await page.goto('./');
+  await seed(page, { profile: PROFILE, foodLog });
+  await page.goto('./#/mat');
+  await expect(page.getByTestId('intake')).toContainText('2 250');
+
+  // Kl. 15 pågår mellanmålet: utfällt, med sina tre poster.
+  await expect(mealToggle(page, 'mellanmal')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('food-entry')).toHaveCount(3);
+  await expect(mealToggle(page, 'frukost')).toHaveText(/4 poster\s*600 kcal/);
+
+  // Långa namn: högst två rader.
+  const nameBox = await page
+    .getByTestId('food-entry')
+    .first()
+    .locator('.food-entry-name')
+    .boundingBox();
+  const lineHeight = await page
+    .getByTestId('food-entry')
+    .first()
+    .locator('.food-entry-name')
+    .evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  expect(nameBox?.height).toBeLessThanOrEqual(lineHeight * 2 + 1);
+
+  // Vid scroll krymper summeringen till en sticky rad ovanför sökfältet.
+  for (const slot of meals) {
+    if ((await mealToggle(page, slot).getAttribute('aria-expanded')) === 'false') {
+      await mealToggle(page, slot).tap();
+    }
+  }
+  await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  await expect(page.getByTestId('day-summary-mini')).toBeVisible();
+  const search = await page.getByRole('button', { name: 'Sök och logga mat' }).boundingBox();
+  expect(search?.y).toBeGreaterThanOrEqual(0);
+  expect(search?.y).toBeLessThan(150);
+
+  // Alla ihopfällda: högst en skärmhöjd att scrolla.
+  for (const slot of meals) await mealToggle(page, slot).tap();
+  await expect(page.getByTestId('food-entry')).toHaveCount(0);
+  const { scrollHeight, viewport } = await page.evaluate(() => ({
+    scrollHeight: document.documentElement.scrollHeight,
+    viewport: window.innerHeight,
+  }));
+  expect(scrollHeight - viewport).toBeLessThanOrEqual(viewport);
   expect(errors).toEqual([]);
 });

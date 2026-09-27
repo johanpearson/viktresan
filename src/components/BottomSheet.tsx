@@ -3,6 +3,8 @@ import { useEffect, useRef, type ReactNode } from 'react';
 interface BottomSheetProps {
   title: string;
   onClose: () => void;
+  /** Helskärm (t.ex. sök i Mat) i stället för en panel nerifrån. */
+  full?: boolean;
   children: ReactNode;
 }
 
@@ -10,7 +12,7 @@ interface BottomSheetProps {
  * Panel som glider upp nerifrån, som modal <dialog>: fokus stannar i panelen och
  * Esc, "Stäng" eller ett tryck utanför stänger den.
  */
-export function BottomSheet({ title, onClose, children }: BottomSheetProps) {
+export function BottomSheet({ title, onClose, full = false, children }: BottomSheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export function BottomSheet({ title, onClose, children }: BottomSheetProps) {
 
   return (
     <dialog
-      className="sheet"
+      className={full ? 'sheet sheet-full' : 'sheet'}
       ref={dialogRef}
       aria-labelledby="sheet-title"
       onClose={onClose}
