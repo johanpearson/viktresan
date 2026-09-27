@@ -10,24 +10,33 @@ interface MealSectionsProps {
   meals: readonly SavedMeal[];
   /** Utfällda måltider (styrs av Mat → Dag). */
   open: ReadonlySet<MealSlot>;
+  /** Favoritmarkerade livsmedel (id). */
+  favoriteIds: ReadonlySet<string>;
   onToggle: (slot: MealSlot) => void;
   onAdd: (slot: MealSlot) => void;
+  /** Menyn (⋯) för en måltid med poster: spara som egen måltid, analysera. */
+  onMenu: (slot: MealSlot) => void;
   onEdit: (entry: FoodLogEntry) => void;
   onDelete: (entry: FoodLogEntry) => void;
+  onToggleFavorite: (entry: FoodLogEntry) => void;
 }
 
 /**
  * Dagens mat per måltid som hopfällbara kort: namn, kcal och antal poster i
- * rubriken, + för att lägga till. Tomma måltider är en smal rad med bara +.
+ * rubriken, ⋯ för fler val och + för att lägga till. Tomma måltider är en smal
+ * rad med bara +.
  */
 export function MealSections({
   entries,
   meals,
   open,
+  favoriteIds,
   onToggle,
   onAdd,
+  onMenu,
   onEdit,
   onDelete,
+  onToggleFavorite,
 }: MealSectionsProps) {
   return (
     <section className="meal-sections" aria-labelledby="day-log-title">
@@ -67,6 +76,19 @@ export function MealSections({
                   </button>
                 </h3>
               )}
+              {section.count > 0 && (
+                <button
+                  type="button"
+                  className="meal-menu"
+                  aria-label={`Fler val för ${section.label.toLowerCase()}`}
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    onMenu(section.slot);
+                  }}
+                >
+                  <span aria-hidden="true">⋯</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="meal-add"
@@ -85,11 +107,15 @@ export function MealSections({
                     key={entry.id}
                     entry={entry}
                     ingredients={loggedMealIngredients(entry, meals)}
+                    favorite={favoriteIds.has(entry.foodId)}
                     onEdit={() => {
                       onEdit(entry);
                     }}
                     onDelete={() => {
                       onDelete(entry);
+                    }}
+                    onToggleFavorite={() => {
+                      onToggleFavorite(entry);
                     }}
                   />
                 ))}

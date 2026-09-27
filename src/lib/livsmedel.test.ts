@@ -37,6 +37,24 @@ describe('parseLivsmedel', () => {
     expect(result.foods.map((f) => f.group)).toEqual(['Drycker', undefined, undefined]);
   });
 
+  it('läser övriga näringsämnen i ordningen i `extra`', () => {
+    const result = parseLivsmedel({
+      format: LIVSMEDEL_FORMAT,
+      extra: ['fiberG', 'okänt', 'vitaminC'],
+      foods: [
+        [1, 'Apelsin', 50, 0.8, 10.4, 0.2, '', [2.1, 9, 51]],
+        [2, 'Läsk', 36, 0, 8.8, 0, 'Drycker', [null, 1, -3]],
+        [3, 'Havregryn', 370, 13, 59, 7],
+      ],
+    });
+    expect(result.foods.map((f) => f.extra)).toEqual([
+      { fiberG: 2.1, vitaminC: 51 },
+      undefined,
+      undefined,
+    ]);
+    expect(result.foods[1]?.group).toBe('Drycker');
+  });
+
   it('hoppar över ogiltiga rader', () => {
     const result = parseLivsmedel({
       format: LIVSMEDEL_FORMAT,

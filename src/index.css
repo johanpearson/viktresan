@@ -3164,6 +3164,25 @@ a.button {
   transform: rotate(-135deg);
 }
 
+.meal-menu {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.meal-menu:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
 .meal-add {
   flex: none;
   width: 48px;
@@ -3203,8 +3222,29 @@ a.button {
   visibility: hidden;
 }
 
-.food-entry[data-swiping] .food-entry-delete {
+.food-entry[data-swiping='left'] .food-entry-delete {
   visibility: visible;
+}
+
+/* Syns bakom raden medan den sveps åt höger (växlar favorit). */
+.food-entry-favorite {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 16px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+  visibility: hidden;
+}
+
+.food-entry[data-swiping='right'] .food-entry-favorite {
+  visibility: visible;
+}
+
+.food-entry-star {
+  color: var(--chart-goal);
 }
 
 .food-entry-content {
@@ -3305,4 +3345,122 @@ a.button {
 
 .about-source {
   margin: 0 0 16px;
+}
+
+/* Mat → Dag: datumraden med menyn (⋯) för hela dagen. */
+.food-day-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.food-day-head .date-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-menu {
+  color: var(--muted);
+  font-size: 1.4rem;
+}
+
+/* Menyer i en bottom sheet: en knapp per rad. */
+.action-list {
+  display: grid;
+  gap: 12px;
+}
+
+.back-button {
+  justify-self: start;
+  margin-bottom: 12px;
+}
+
+/* Måltidsanalys */
+.analysis {
+  display: grid;
+  gap: 20px;
+}
+
+.analysis-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.analysis-notes,
+.analysis-swaps {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.analysis-swaps li + li,
+.analysis-notes li + li {
+  margin-top: 6px;
+}
+
+.analysis-table {
+  width: 100%;
+  margin-bottom: 12px;
+  border-collapse: collapse;
+  /* Samma kolumnbredder i alla tabeller. */
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-table caption {
+  padding: 8px 0 4px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.analysis-table th,
+.analysis-table td {
+  padding: 6px 4px;
+  border-top: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.analysis-table thead th:first-child {
+  width: 34%;
+}
+
+.analysis-table thead th:nth-child(2) {
+  width: 28%;
+}
+
+.analysis-table th:first-child {
+  text-align: left;
+  white-space: normal;
+  font-weight: 400;
+}
+
+.analysis-table thead th {
+  border-top: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.analysis-table abbr {
+  text-decoration: none;
+}
+
+/* Fråga AI */
+.ask-ai {
+  display: grid;
+  gap: 12px;
+}
+
+.ask-ai .button-row {
+  flex-wrap: wrap;
+}
+
+.ask-ai .button-row .button {
+  flex: 1 1 140px;
+}
+
+.ai-preview {
+  min-height: 12em;
+  font-size: 0.9rem;
+  line-height: 1.4;
 }

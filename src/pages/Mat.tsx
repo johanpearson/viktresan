@@ -3,6 +3,7 @@ import { FoodDay } from '../components/FoodDay.tsx';
 import { IntakeHistory } from '../components/IntakeHistory.tsx';
 import { OwnFoods } from '../components/OwnFoods.tsx';
 import { Page } from '../components/Page.tsx';
+import { aiContextFrom } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';
 import { buildPlan } from '../lib/plan.ts';
 import { proteinGoalFor } from '../lib/protein.ts';
@@ -70,6 +71,7 @@ export function Mat() {
             if (sub) window.history.replaceState(null, '', '#/mat');
           }}
           reloadLog={reload}
+          aiContext={aiContextFrom(data, todayIso())}
         />
       )}
       {source && tab === 'egna' && <OwnFoods source={source} onChange={food.reload} />}

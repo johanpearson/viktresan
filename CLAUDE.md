@@ -65,7 +65,13 @@ src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
 src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
 src/lib/planText.ts     Sakliga förklaringar (spärrar, måldatum, TDEE-källa)
 src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-dagarssnitt, måltider
-src/lib/foodDay.ts      Mat → Dag: sektioner per måltid (summa, antal), pågående måltid, ingredienser i loggad måltid, datumetikett
+src/lib/foodDay.ts      Mat → Dag: sektioner per måltid (summa, antal), pågående måltid, ingredienser i loggad måltid, datumetikett,
+                        spara som egen måltid (savedMealName, entriesToMealItems)
+src/lib/mealAnalysis.ts Lokal analys: summor (makron, fiber, socker, salt, vitaminer, mineraler) i % av dagsmål/RI, nyckeltal
+src/lib/swaps.ts        Bytesförslag: samma kategori, klart bättre protein/kcal eller fiber, aldrig mer energi
+src/lib/aiPrompt.ts     "Fråga AI": kryssrutor (AI_OPTIONS), underlag (aiContextFrom), promptbyggare, ChatGPT-/Claude-länkar
+src/lib/aiPromptTemplate.ts  Promptmallen på svenska ({{amne}}, {{amneKort}}, {{underlag}}, {{kalorigolv}}) – redigera här
+src/data/nutrients.ts   Övriga näringsämnen: nyckel, enhet, RI (EU 1169/2011; fiber NNR), EuroFIR-kod/namn för importen
 src/lib/units.ts        Enheter: volym via densitet, kategori (foodProfile), relevanta enheter, gissningar, förval, OFF-portion/förpackning
 src/data/units.ts       Kuraterad tabell per livsmedel (Livsmedelsverket): styckvikter, egen densitet/kategori (ungefärliga)
 src/data/foodCategories.ts  Kategorier: densitet, relevanta enheter, gissade styckvikter; namnmönster + Livsmedelsverkets grupper
@@ -90,7 +96,8 @@ src/pages/              En komponent per sektion: Översikt, Logga (rutnät → 
                         (Dag | Egna | Historik som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka),
                         Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
 e2e/                    Playwright-tester (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
-                        veckokort, milstolpar, bilder); hjälpare i helpers.ts. photos.spec.ts mockar getUserMedia
+                        veckokort, milstolpar, bilder, måltidsanalys); hjälpare i helpers.ts. mealAnalysis.spec.ts mockar
+                        clipboard, navigator.share och window.open (addInitScript). photos.spec.ts mockar getUserMedia
                         (nekad resp. canvas-ström) och skapar en v8-databas för migreringen. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript); svep görs med
@@ -134,7 +141,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (0 = håll vikten/viktstabilisering: kalorimål = TDEE, spärren `maintenance`)
   och (v5) `waterGoalMl` (eget dryckesmål, sparas från Inställningar → Dryckesmål), `waterTrainingBonus`
   (+500 ml på träningsdagar, utan schemaändring) samt `proteinFactor`
-  (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian).
+  (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian) och `foodPreferences`
+  (Inställningar → Matpreferenser, fritext ≤ 1 000 tecken, bara för "Fråga AI"; ingen schemaändring).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
   är det som räknas, så en senare ändrad enhet påverkar inte historiken. Migreringen v6 → v7
@@ -145,7 +153,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
-  `ghostEnabled`, `ghostOpacity`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI"). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -249,7 +257,23 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `FoodToast` med Ångra (lägger tillbaka posten oförändrad). En loggad sparad måltid kan fällas ut till
   ingredienserna (`loggedMealIngredients`, skalade efter loggad mängd). Kcal-värden: klassen `kcal`
   (`nowrap`, `tabular-nums`).
-- **Livsmedel**: Livsmedelsverkets databas (CC BY 4.0 – källan visas i Inställningar → Om appen, `LivsmedelSource`) hämtas med
+  Svep höger på en rad växlar favorit (stjärna på raden och i redigerings-sheeten). Måltidskortets ⋯ (och ⋯ bredvid
+  datumraden för hela dagen) öppnar en meny: "Spara som egen måltid" (`SaveMealForm`, namn "Frukost 26 sep", posterna
+  med mängd och enhet – loggade måltider delas upp i ingredienser i gram; syns direkt under Måltider i sök-sheeten) och
+  "Analysera" (`MealAnalysisView`).
+- **Analys** (`mealAnalysis.ts`, `swaps.ts`, ingen AI, offline): energi och makron ur loggposterna; fiber, socker, salt,
+  vitaminer och mineraler slås upp i Livsmedelsverkets data per `lv:`-id (även ingredienser i sparade måltider) –
+  egna/OFF-livsmedel saknar dem (`coverage`, markeras med *). % av dagsmål (kcal, protein) och av RI. Nyckeltal:
+  protein/100 kcal, fiber/1 000 kcal, andel av kalorimålet. Bytesförslag för de tre poster med mest energi: samma
+  kategori (`foodProfile`, inte `ovrigt`/`sas`/`kryddor`/`maltid`), protein/100 kcal +3 g och ×1,3 eller fiber/100 kcal
+  +1 g och ×1,5, energi för samma mängd högst +5 % och minst 40 %.
+- **Fråga AI** (`AskAi`, `aiPrompt.ts`): kryssrutor (ålder/kön, längd/trendvikt, mål/takt, kcal-/proteinmål, dagens
+  intag hittills – bara måltid, innehåll, matpreferenser, GLP-1 – av som standard och bara när funktionen är på),
+  förhandsvisning, Dela (Web Share, `text`), Kopiera (toast), Öppna i ChatGPT/Claude (`?q=` om adressen ≤ 6 000 tecken,
+  annars kopiera + startsidan). Appen gör inga anrop själv. Finns för måltid, dag och vecka (Framsteg → Veckor).
+- **Livsmedel**: `livsmedel.json` har valfri sjunde kolumn (grupp, `""` = ingen) och åttonde (övriga näringsämnen i
+  ordningen i filens `extra`, `null` = saknas; `pickExtraNutrients` matchar EuroFIR-kod eller namn och räknar om enheten).
+  Livsmedelsverkets databas (CC BY 4.0 – källan visas i Inställningar → Om appen, `LivsmedelSource`) hämtas med
   `npm run livsmedel` (inkl. livsmedelsgrupp när API:t har den – `pickGroup`, förlåtande tolkning) och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
   ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
   `BarcodeDetector` + kamera, annars manuell EAN. Okända koder slås upp i Open Food Facts

@@ -1,6 +1,7 @@
 /**
  * Livsmedel från olika källor i ett gemensamt format, och fuzzy-sökning på svenska.
  */
+import type { ExtraNutrients } from '../data/nutrients.ts';
 import type { Nutrients } from './nutrition.ts';
 import type { BaseUnit, FoodUnit } from './units.ts';
 
@@ -22,6 +23,8 @@ export interface FoodItem {
   per100Unit?: BaseUnit;
   /** Livsmedelsverkets livsmedelsgrupp, när den finns i datan. */
   group?: string;
+  /** Fiber, socker, vitaminer och mineraler per 100 g (Livsmedelsverket), när de finns. */
+  extra?: ExtraNutrients;
   units?: FoodUnit[];
   ean?: string;
 }

@@ -82,6 +82,11 @@ export interface Profile {
   waterTrainingBonus?: boolean;
   /** Proteinmål = faktor × målvikt (1,2–2,0 g/kg). Saknas → 1,6. Utan schemaändring. */
   proteinFactor?: number;
+  /**
+   * Matpreferenser i fritext (gillar/ogillar, budget, tid) – tas med i "Fråga AI"
+   * om användaren vill. Utan schemaändring.
+   */
+  foodPreferences?: string;
 }
 
 /**

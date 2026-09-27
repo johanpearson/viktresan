@@ -6,6 +6,12 @@
  * Licens: CC BY 4.0. Källan ska anges som "Livsmedelsverkets livsmedelsdatabas"
  * med version/datum – det görs i filen och i appen.
  */
+import {
+  NUTRIENTS,
+  NUTRIENT_KEYS,
+  type ExtraNutrients,
+  type NutrientUnit,
+} from '../data/nutrients.ts';
 import { LIVSMEDEL_FORMAT, type CompactFood, type LivsmedelFile } from './livsmedelFormat.ts';
 
 export const LIVSMEDEL_SOURCE = 'Livsmedelsverkets livsmedelsdatabas';
@@ -155,6 +161,58 @@ export function pickNutrients(
   };
 }
 
+/** Faktor till gram för enheterna i API:t. */
+const UNIT_GRAMS: Readonly<Record<string, number>> = {
+  g: 1,
+  mg: 1e-3,
+  µg: 1e-6,
+  μg: 1e-6,
+  ug: 1e-6,
+  mikrogram: 1e-6,
+};
+
+function valueIn(entry: Record<string, unknown>, unit: NutrientUnit): number | null {
+  const value = toNumber(entry.varde);
+  if (value === null || value < 0) return null;
+  const from =
+    typeof entry.enhet === 'string' ? UNIT_GRAMS[entry.enhet.trim().toLowerCase()] : undefined;
+  const to = UNIT_GRAMS[unit];
+  // Okänd enhet i svaret: anta att värdet redan är i appens enhet.
+  if (from === undefined || to === undefined) return value;
+  return (value * from) / to;
+}
+
+/** Tre värdesiffror räcker – håller filen liten. */
+function roundSignificant(n: number): number {
+  if (n === 0) return 0;
+  return Number(n.toPrecision(3));
+}
+
+/**
+ * Fiber, socker, salt, vitaminer och mineraler per 100 g ur ett livsmedels
+ * näringsvärden (se `src/data/nutrients.ts`). Matchar på EuroFIR-kod, annars
+ * namn, och räknar om till appens enhet. Saknade värden utelämnas.
+ */
+export function pickExtraNutrients(body: unknown): ExtraNutrients {
+  const list: unknown = Array.isArray(body) ? body : isRecord(body) ? body.naringsvarden : null;
+  const extra: ExtraNutrients = {};
+  if (!Array.isArray(list)) return extra;
+  const values = list.filter(isRecord);
+  for (const info of NUTRIENTS) {
+    const entry =
+      values.find((v) => typeof v.euroFIRkod === 'string' && v.euroFIRkod.trim() === info.code) ??
+      info.names
+        .map((name) =>
+          values.find((v) => typeof v.namn === 'string' && v.namn.trim().toLowerCase() === name),
+        )
+        .find((v) => v !== undefined);
+    if (!entry) continue;
+    const value = valueIn(entry, info.unit);
+    if (value !== null) extra[info.key] = roundSignificant(value);
+  }
+  return extra;
+}
+
 export function toCompactFile(
   rows: readonly {
     nummer: number;
@@ -164,27 +222,36 @@ export function toCompactFile(
     carbsG: number;
     fatG: number;
     grupp?: string;
+    extra?: ExtraNutrients;
   }[],
   retrieved: string,
 ): LivsmedelFile {
+  // Bara näringsämnen som finns för något livsmedel får en kolumn.
+  const keys = NUTRIENT_KEYS.filter((k) => rows.some((r) => r.extra?.[k] !== undefined));
   const foods: CompactFood[] = [...rows]
     .sort((a, b) => a.namn.localeCompare(b.namn, 'sv'))
     .map((r): CompactFood => {
       const row: CompactFood = [r.nummer, r.namn, r.kcal, r.proteinG, r.carbsG, r.fatG];
+      const values = keys.map((k) => r.extra?.[k] ?? null);
+      if (values.some((v) => v !== null)) return [...row, r.grupp ?? '', values];
       return r.grupp ? [...row, r.grupp] : row;
     });
-  return {
+  const file: LivsmedelFile = {
     format: LIVSMEDEL_FORMAT,
     source: LIVSMEDEL_SOURCE,
     license: LIVSMEDEL_LICENSE,
     retrieved,
     foods,
   };
+  if (keys.length > 0) file.extra = keys;
+  return file;
 }
 
 /** En rad per livsmedel – kompakt men läsbar i diffar. */
 export function serializeCompactFile(file: LivsmedelFile): string {
-  const head = JSON.stringify({ ...file, foods: [] }).replace(/"foods":\[\]\}$/, '"foods":[');
-  const rows = file.foods.map((f) => JSON.stringify(f)).join(',\n');
+  // `foods` sist så att raderna kan skrivas en per rad.
+  const { foods, ...meta } = file;
+  const head = JSON.stringify({ ...meta, foods: [] }).replace(/"foods":\[\]\}$/, '"foods":[');
+  const rows = foods.map((f) => JSON.stringify(f)).join(',\n');
   return `${head}\n${rows}\n]}\n`;
 }

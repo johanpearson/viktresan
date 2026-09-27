@@ -1,7 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FoodLogEntry } from '../db/db.ts';
+import { listFavorites, listMeals, resetDbForTests, type FoodLogEntry } from '../db/db.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
 import { FoodDay } from './FoodDay.tsx';
 
@@ -98,5 +98,63 @@ describe('Mat → Dag', () => {
       'aria-expanded',
       'false',
     );
+  });
+
+  describe('meny, favoriter och analys', () => {
+    beforeEach(async () => {
+      await resetDbForTests();
+    });
+
+    it('sparar en måltid som egen måltid med förifyllt namn', async () => {
+      const user = userEvent.setup();
+      renderDay(log);
+      await user.click(screen.getByRole('button', { name: 'Fler val för frukost' }));
+      await user.click(screen.getByRole('button', { name: 'Spara som egen måltid' }));
+      const name = screen.getByRole('textbox', { name: 'Namn' });
+      expect(name).toHaveValue('Frukost 27 sep');
+      await user.clear(name);
+      await user.type(name, 'Min frukost');
+      await user.click(screen.getByRole('button', { name: 'Spara måltid' }));
+      await waitFor(async () => {
+        const meals = await listMeals();
+        expect(meals.map((m) => m.name)).toEqual(['Min frukost']);
+        expect(meals[0]?.items.map((i) => [i.name, i.amount, i.unit])).toEqual([
+          ['Mat a', 200, 'g'],
+          ['Mat b', 150, 'g'],
+        ]);
+      });
+      expect(await screen.findByTestId('food-toast')).toHaveTextContent(
+        'Sparade Min frukost under Måltider.',
+      );
+    });
+
+    it('svep åt höger favoritmarkerar raden', async () => {
+      renderDay(log);
+      const row = within(header('lunch')).getByTestId('food-entry');
+      const content = row.querySelector('.food-entry-content');
+      if (!content) throw new Error('saknas');
+      fireEvent.pointerDown(content, { pointerId: 1, clientX: 20, clientY: 10 });
+      fireEvent.pointerMove(content, { pointerId: 1, clientX: 60, clientY: 10 });
+      fireEvent.pointerMove(content, { pointerId: 1, clientX: 200, clientY: 10 });
+      fireEvent.pointerUp(content, { pointerId: 1, clientX: 200, clientY: 10 });
+      await waitFor(async () => {
+        expect((await listFavorites()).map((f) => f.foodId)).toEqual(['egen:c']);
+      });
+      expect(await screen.findByTestId('food-toast')).toHaveTextContent(
+        'La till Mat c som favorit.',
+      );
+    });
+
+    it('analyserar dagen med nyckeltal', async () => {
+      const user = userEvent.setup();
+      renderDay(log);
+      await user.click(screen.getByRole('button', { name: 'Fler val för dagen' }));
+      await user.click(screen.getByRole('button', { name: 'Analysera' }));
+      const figures = await screen.findByTestId('analysis-key-figures');
+      // 800 kcal av 2 000, 10 g protein per 100 kcal.
+      expect(figures).toHaveTextContent('Andel av dagens kalorimål40 %');
+      expect(figures).toHaveTextContent('Protein per 100 kcal10 g');
+      expect(screen.getByRole('button', { name: 'Fråga AI' })).toBeInTheDocument();
+    });
   });
 });

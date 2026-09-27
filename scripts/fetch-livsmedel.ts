@@ -1,6 +1,7 @@
 // Hämtar Livsmedelsverkets livsmedelsdatabas och skriver public/livsmedel.json
-// (namn, kcal, protein, kolhydrater, fett per 100 g och livsmedelsgrupp när API:t
-// har den – gruppen styr vilka enheter appen visar). Körs manuellt:
+// (namn, kcal, protein, kolhydrater, fett per 100 g, fiber, socker, salt, vitaminer
+// och mineraler för måltidsanalysen, och livsmedelsgrupp när API:t har den – gruppen
+// styr vilka enheter appen visar). Körs manuellt:
 //   npm run livsmedel
 // Resultatet checkas in och precachas av service workern – appen gör aldrig
 // egna anrop till Livsmedelsverket.
@@ -9,8 +10,10 @@
 // källan anges i filen och i appen.
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import type { ExtraNutrients } from '../src/data/nutrients.ts';
 import {
   parseFoodList,
+  pickExtraNutrients,
   pickGroup,
   pickNutrients,
   serializeCompactFile,
@@ -91,6 +94,7 @@ const rows: {
   carbsG: number;
   fatG: number;
   grupp?: string;
+  extra?: ExtraNutrients;
 }[] = [];
 let skipped = 0;
 let next = 0;
@@ -98,15 +102,20 @@ async function worker() {
   while (next < foods.length) {
     const food = foods[next++];
     if (!food) break;
-    const nutrients = pickNutrients(
-      await getJson(`${API}/livsmedel/${String(food.nummer)}/naringsvarden?sprak=1`),
-    );
+    const body = await getJson(`${API}/livsmedel/${String(food.nummer)}/naringsvarden?sprak=1`);
+    const nutrients = pickNutrients(body);
+    const extra = pickExtraNutrients(body);
     if (fetchGroups) {
       const grupp = await fetchGroup(food.nummer);
       if (grupp !== null) food.grupp = grupp;
     }
-    if (nutrients) rows.push({ ...food, ...nutrients });
-    else skipped++;
+    if (nutrients) {
+      rows.push(
+        Object.keys(extra).length > 0
+          ? { ...food, ...nutrients, extra }
+          : { ...food, ...nutrients },
+      );
+    } else skipped++;
     process.stdout.write(
       `\rNäringsvärden: ${String(rows.length + skipped)} av ${String(foods.length)}`,
     );
@@ -117,7 +126,9 @@ process.stdout.write('\n');
 
 const retrieved = new Date().toISOString().slice(0, 10);
 const out = fileURLToPath(new URL('../public/livsmedel.json', import.meta.url));
-await writeFile(out, serializeCompactFile(toCompactFile(rows, retrieved)));
+const file = toCompactFile(rows, retrieved);
+await writeFile(out, serializeCompactFile(file));
 console.log(
   `Skrev ${String(rows.length)} livsmedel till public/livsmedel.json (${String(skipped)} utan energivärde).`,
 );
+console.log(`Övriga näringsämnen: ${file.extra?.join(', ') ?? 'inga'}.`);

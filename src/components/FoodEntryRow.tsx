@@ -9,14 +9,20 @@ interface FoodEntryRowProps {
   entry: FoodLogEntry;
   /** Ingredienserna om posten är en sparad måltid (annars `null`). */
   ingredients: LoggedIngredient[] | null;
+  /** Livsmedlet är favoritmarkerat (visas med en stjärna). */
+  favorite: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  /** Svep åt höger växlar favorit. */
+  onToggleFavorite: () => void;
 }
 
 /** Pixlar innan en rörelse räknas som svep eller scroll. */
 const SLOP = 8;
-/** Andel av radens bredd som ett svep åt vänster måste nå för att ta bort. */
+/** Andel av radens bredd som ett svep måste nå för att ta bort (vänster) eller favoritmarkera (höger). */
 const DELETE_FRACTION = 0.35;
+/** Längsta förskjutning åt höger – raden glider inte ut, den studsar tillbaka. */
+const MAX_RIGHT = 160;
 
 interface Drag {
   pointerId: number;
@@ -28,9 +34,17 @@ interface Drag {
 
 /**
  * En loggad post: namn, mängd och kcal på en rad. Tryck öppnar redigering, svep
- * åt vänster tar bort (med Ångra). En sparad måltid kan fällas ut till ingredienserna.
+ * åt vänster tar bort (med Ångra), svep åt höger växlar favorit. En sparad måltid
+ * kan fällas ut till ingredienserna.
  */
-export function FoodEntryRow({ entry, ingredients, onEdit, onDelete }: FoodEntryRowProps) {
+export function FoodEntryRow({
+  entry,
+  ingredients,
+  favorite,
+  onEdit,
+  onDelete,
+  onToggleFavorite,
+}: FoodEntryRowProps) {
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState(false);
   const drag = useRef<Drag | null>(null);
@@ -65,7 +79,7 @@ export function FoodEntryRow({ entry, ingredients, onEdit, onDelete }: FoodEntry
         }
       }
     }
-    if (d.horizontal) setOffset(Math.min(0, dx));
+    if (d.horizontal) setOffset(Math.min(MAX_RIGHT, dx));
   }
 
   function onPointerEnd(e: PointerEvent, cancelled: boolean) {
@@ -75,12 +89,14 @@ export function FoodEntryRow({ entry, ingredients, onEdit, onDelete }: FoodEntry
     if (!d.horizontal) return;
     // Ett svep ska inte också räknas som ett tryck på raden.
     swiped.current = true;
-    if (!cancelled && e.clientX - d.x <= -threshold()) {
+    const dx = e.clientX - d.x;
+    if (!cancelled && dx <= -threshold()) {
       setOffset(-(rowRef.current?.offsetWidth ?? 400));
       onDelete();
-    } else {
-      setOffset(0);
+      return;
     }
+    setOffset(0);
+    if (!cancelled && dx >= Math.min(MAX_RIGHT, threshold())) onToggleFavorite();
   }
 
   return (
@@ -88,10 +104,13 @@ export function FoodEntryRow({ entry, ingredients, onEdit, onDelete }: FoodEntry
       ref={rowRef}
       className="food-entry"
       data-testid="food-entry"
-      data-swiping={offset !== 0 ? 'true' : undefined}
+      data-swiping={offset < 0 ? 'left' : offset > 0 ? 'right' : undefined}
     >
       <span className="food-entry-delete" aria-hidden="true">
         Ta bort
+      </span>
+      <span className="food-entry-favorite" aria-hidden="true">
+        {favorite ? '☆ Ta bort favorit' : '★ Favorit'}
       </span>
       <div
         className="food-entry-content"
@@ -119,7 +138,15 @@ export function FoodEntryRow({ entry, ingredients, onEdit, onDelete }: FoodEntry
             }}
           >
             <span className="food-entry-text">
-              <span className="food-entry-name">{entry.name}</span>
+              <span className="food-entry-name">
+                {favorite && (
+                  <span className="food-entry-star" data-testid="favorite-star">
+                    <span aria-hidden="true">★ </span>
+                    <span className="visually-hidden">Favorit: </span>
+                  </span>
+                )}
+                {entry.name}
+              </span>
               <span className="food-entry-amount">{loggedAmountText(entry)}</span>
             </span>
             <span className="kcal">{formatKcal(kcal)}</span>

@@ -3,9 +3,11 @@ import type { FoodLogEntry, SavedMeal } from '../db/db.ts';
 import {
   currentMealSlot,
   dayLabel,
+  entriesToMealItems,
   entryCountText,
   loggedMealIngredients,
   mealSections,
+  savedMealName,
 } from './foodDay.ts';
 
 const oats = { kcal: 370, proteinG: 13, carbsG: 59, fatG: 7 };
@@ -96,5 +98,75 @@ describe('texter', () => {
     expect(dayLabel('2026-09-27', '2026-09-27')).toBe('Idag');
     expect(dayLabel('2026-09-26', '2026-09-27')).toBe('Igår');
     expect(dayLabel('2026-09-25', '2026-09-27')).toMatch(/fre.*25 sep/);
+  });
+});
+
+describe('spara som egen måltid', () => {
+  it('förifyller namnet med måltid och datum', () => {
+    expect(savedMealName('frukost', '2026-09-26')).toBe('Frukost 26 sep');
+    expect(savedMealName('mellanmal', '2026-01-03')).toBe('Mellanmål 3 jan');
+  });
+
+  it('kopierar posterna med mängd och enhet i loggordning', () => {
+    const items = entriesToMealItems(
+      [
+        entry({
+          id: 'b',
+          meal: 'frukost',
+          foodId: 'lv:2',
+          name: 'Mjölk',
+          per100: milk,
+          amount: 2,
+          unit: 'dl',
+          grams: 206,
+          per100Unit: 'ml',
+          createdAt: 2,
+        }),
+        entry({ id: 'a', meal: 'frukost', amount: 1, unit: 'dl', grams: 40, createdAt: 1 }),
+      ],
+      [],
+    );
+    expect(items).toEqual([
+      { foodId: 'lv:1', name: 'Havregryn', per100: oats, amount: 1, unit: 'dl', grams: 40 },
+      {
+        foodId: 'lv:2',
+        name: 'Mjölk',
+        per100: milk,
+        amount: 2,
+        unit: 'dl',
+        grams: 206,
+        per100Unit: 'ml',
+      },
+    ]);
+  });
+
+  it('delar upp en loggad måltid i ingredienserna i gram', () => {
+    const meal: SavedMeal = {
+      id: 'm1',
+      name: 'Gröt',
+      items: [
+        { foodId: 'lv:1', name: 'Havregryn', per100: oats, amount: 1, unit: 'dl', grams: 40 },
+        { foodId: 'lv:2', name: 'Mjölk', per100: milk, amount: 2, unit: 'dl', grams: 200 },
+      ],
+      createdAt: 1,
+    };
+    const items = entriesToMealItems(
+      [
+        entry({
+          id: 'a',
+          meal: 'frukost',
+          foodId: 'maltid:m1',
+          name: 'Gröt',
+          grams: 120,
+          amount: 0.5,
+          unit: 'portion',
+        }),
+      ],
+      [meal],
+    );
+    expect(items.map((i) => [i.name, i.amount, i.unit, i.grams])).toEqual([
+      ['Havregryn', 20, 'g', 20],
+      ['Mjölk', 100, 'g', 100],
+    ]);
   });
 });

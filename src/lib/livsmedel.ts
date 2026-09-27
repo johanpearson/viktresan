@@ -4,6 +4,7 @@
  *
  * Källa: Livsmedelsverkets livsmedelsdatabas, licens CC BY 4.0 – källan ska anges.
  */
+import { isNutrientKey, type ExtraNutrients, type NutrientKey } from '../data/nutrients.ts';
 import type { FoodItem } from './foodSearch.ts';
 import { LIVSMEDEL_FORMAT, type LivsmedelFile } from './livsmedelFormat.ts';
 
@@ -26,10 +27,14 @@ export function parseLivsmedel(value: unknown): Livsmedel {
   if (typeof value !== 'object' || value === null) return empty;
   const file = value as Partial<Record<keyof LivsmedelFile, unknown>>;
   if (file.format !== LIVSMEDEL_FORMAT || !Array.isArray(file.foods)) return empty;
+  // Kolumnerna i den valfria åttonde kolumnen; okända näringsämnen hoppas över.
+  const extraKeys: (NutrientKey | null)[] = Array.isArray(file.extra)
+    ? (file.extra as unknown[]).map((k) => (isNutrientKey(k) ? k : null))
+    : [];
   const foods: FoodItem[] = [];
   for (const row of file.foods as unknown[]) {
     if (!Array.isArray(row) || row.length < 6) continue;
-    const [nummer, namn, kcal, proteinG, carbsG, fatG, grupp] = row as unknown[];
+    const [nummer, namn, kcal, proteinG, carbsG, fatG, grupp, extras] = row as unknown[];
     if (!Number.isInteger(nummer) || typeof namn !== 'string' || namn === '') continue;
     if (!isNum(kcal) || !isNum(proteinG) || !isNum(carbsG) || !isNum(fatG)) continue;
     const food: FoodItem = {
@@ -39,6 +44,14 @@ export function parseLivsmedel(value: unknown): Livsmedel {
       per100: { kcal, proteinG, carbsG, fatG },
     };
     if (typeof grupp === 'string' && grupp.trim() !== '') food.group = grupp.trim();
+    if (Array.isArray(extras)) {
+      const extra: ExtraNutrients = {};
+      for (const [i, key] of extraKeys.entries()) {
+        const value: unknown = extras[i];
+        if (key !== null && isNum(value)) extra[key] = value;
+      }
+      if (Object.keys(extra).length > 0) food.extra = extra;
+    }
     foods.push(food);
   }
   return {
