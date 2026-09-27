@@ -1,34 +1,85 @@
+/*
+ * Designsystem (docs/DESIGN.md). Tokens först; äldre namn längre ner är alias så att
+ * vyer som inte flyttats till systemet ännu fortsätter fungera.
+ */
 :root {
   color-scheme: light dark;
 
+  /* Avstånd: 4/8/12/16/24/32 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Typografi: fem storlekar. Siffror alltid med tabular-nums (.num, .kcal). */
+  --text-xs: 0.8125rem; /* 13 px – metadata, sekundärtext, etiketter */
+  --text-sm: 0.9375rem; /* 15 px – knappar i segment, brödtext i täta listor */
+  --text-md: 1rem; /* 16 px – brödtext, radrubriker */
+  --text-lg: 1.25rem; /* 20 px – kortrubriker, nyckeltal */
+  --text-xl: 1.75rem; /* 28 px – sidrubrik, huvudsiffra */
+  --leading-tight: 1.2;
+
+  /* Radier */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-sheet: 20px;
+  --radius-full: 999px;
+
+  /* Skuggor */
+  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.15);
+  --shadow-md: 0 6px 24px rgb(15 23 42 / 0.2);
+  --shadow-lg: 0 12px 40px rgb(15 23 42 / 0.35);
+
+  /* Rörelse: korta övergångar; prefers-reduced-motion stänger av dem (längre ner). */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Ytor och text */
   --bg: #f8fafc;
   --surface: #ffffff;
   --text: #0f172a;
   --muted: #475569;
   --border: #e2e8f0;
+  --track: #e2e8f0;
   --accent: #0f766e;
   --accent-contrast: #ffffff;
   --nav-bg: #ffffff;
+
+  /* Semantiska färger */
+  --success: #047857;
+  --warning: #b45309;
   --danger: #b91c1c;
-  --ok: #047857;
-  --chart-point: #64748b;
-  --chart-goal: #b45309;
-  --track: #e2e8f0;
+  --on-danger: #ffffff;
+
+  /* En färg per datatyp: grafer, kalenderprickar, ikoner, ringar och staplar. */
+  --data-weight: #0f766e;
+  --data-food: #c2410c;
+  --data-drink: #0284c7;
+  --data-steps: #7c3aed;
+  --data-training: #4d7c0f;
+  --data-dose: #4338ca;
+  --data-waist: #db2777;
+  --data-mood: #a16207;
+
+  /* Makron (bara i matens detaljer) */
   --macro-protein: #0f766e;
   --macro-carbs: #b45309;
   --macro-fat: #7c3aed;
-  --dot-waist: #db2777;
-  --dot-water: #0284c7;
-  --dot-training: #4d7c0f;
-  --dot-glp1: #4338ca;
-  --dot-mood: #a16207;
-  --chart-dose: #4338ca;
-  --ring-kcal: #c2410c;
-  --chart-point-faint: rgb(100 116 139 / 45%);
 
-  --radius: 16px;
+  /* Grafer */
+  --chart-point: #64748b;
+  --chart-point-faint: rgb(100 116 139 / 45%);
+  --chart-goal: #b45309;
+
+  /* Storlekar */
+  --tap-min: 44px;
   --tap: 56px;
   --nav-height: 68px;
+  --page-header-height: 56px;
 
   font-family:
     system-ui,
@@ -49,32 +100,67 @@
     --text: #f1f5f9;
     --muted: #94a3b8;
     --border: #334155;
+    --track: #334155;
     --accent: #2dd4bf;
     --accent-contrast: #042f2e;
     --nav-bg: #0f172a;
+
+    --success: #34d399;
+    --warning: #fbbf24;
     --danger: #f87171;
-    --ok: #34d399;
-    --chart-point: #94a3b8;
-    --chart-goal: #fbbf24;
-    --track: #334155;
+    --on-danger: #1f0a0a;
+
+    --data-weight: #2dd4bf;
+    --data-food: #fb923c;
+    --data-drink: #38bdf8;
+    --data-steps: #c4b5fd;
+    --data-training: #a3e635;
+    --data-dose: #a5b4fc;
+    --data-waist: #f472b6;
+    --data-mood: #fde047;
+
     --macro-protein: #2dd4bf;
     --macro-carbs: #fbbf24;
     --macro-fat: #c4b5fd;
-    --dot-waist: #f472b6;
-    --dot-water: #38bdf8;
-    --dot-training: #a3e635;
-    --dot-glp1: #a5b4fc;
-    --dot-mood: #fde047;
-    --chart-dose: #a5b4fc;
-    --ring-kcal: #fb923c;
+
+    --chart-point: #94a3b8;
     --chart-point-faint: rgb(148 163 184 / 40%);
+    --chart-goal: #fbbf24;
+
+    --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 6px 24px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.6);
   }
+}
+
+/* Alias för äldre namn – nya regler använder tokens ovan. */
+:root {
+  --radius: var(--radius-lg);
+  --ok: var(--success);
+  --ring-kcal: var(--data-food);
+  --dot-waist: var(--data-waist);
+  --dot-water: var(--data-drink);
+  --dot-training: var(--data-training);
+  --dot-glp1: var(--data-dose);
+  --dot-mood: var(--data-mood);
+  --chart-dose: var(--data-dose);
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+/* Sticky sidhuvud och bottennavigering: element som scrollas fram hamnar mellan dem. */
+html {
+  scroll-padding-top: calc(var(--page-header-height) + var(--space-2));
+  scroll-padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + var(--space-2));
+}
+
+/* Mat har dessutom sökraden (och miniraden) sticky under sidhuvudet. */
+html:has(.food-sticky) {
+  scroll-padding-top: calc(var(--page-header-height) + 128px);
 }
 
 html,
@@ -110,15 +196,43 @@ body {
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
+  /* Skyddsnät: innehåll som ändå blir för brett får aldrig göra layoutvyn bredare (mobil-zoom). */
+  overflow-x: clip;
   /* Plats för den fasta bottennavigeringen (+ luft) så att inget döljs bakom den. */
   padding: 0 16px calc(var(--nav-height) + env(safe-area-inset-bottom) + 24px);
 }
 
+/*
+ * Sidhuvud: sticky rubrikrad med fast höjd. Vid scroll krymper rubriken med
+ * transform (ingen layoutändring) och raden får en skugga.
+ */
+.page-sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+}
+
 .page-header {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
+  min-height: var(--page-header-height);
+  margin: 0 calc(-1 * var(--space-4)) var(--space-2);
+  padding: 0 var(--space-4);
+  background: var(--bg);
+  transition: box-shadow var(--duration-base) var(--ease-out);
+}
+
+.page-header[data-stuck='true'] {
+  box-shadow: 0 1px 0 var(--border);
+}
+
+/* Mat har en egen sticky rad (sök) direkt under – skuggan hör hemma där. */
+.page:has(.food-sticky) .page-header[data-stuck='true'] {
+  box-shadow: none;
 }
 
 .icon-link {
@@ -128,7 +242,7 @@ body {
   min-width: 48px;
   min-height: 48px;
   margin-right: -12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   color: var(--muted);
 }
 
@@ -138,9 +252,15 @@ body {
 }
 
 .page-title {
-  font-size: 1.75rem;
-  line-height: 1.2;
-  margin: 8px 0 16px;
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+  margin: 0;
+  transform-origin: left center;
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.page-header[data-stuck='true'] .page-title {
+  transform: scale(0.72);
 }
 
 .page-title:focus {
@@ -148,32 +268,50 @@ body {
 }
 
 .empty-state {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
   color: var(--muted);
   background: var(--surface);
   border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-4);
   margin: 0;
+}
+
+.empty-state > p {
+  margin: 0;
+}
+
+.empty-state-title {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.empty-state-action {
+  width: auto;
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
 }
 
 .card + .card,
 .card + .segmented,
 .card + .empty-state,
+.empty-state + .card,
 .segmented + .card,
 .segmented + .empty-state {
-  margin-top: 16px;
+  margin-top: var(--space-3);
 }
 
 .card-title {
-  font-size: 1.125rem;
-  margin: 0 0 12px;
+  font-size: var(--text-md);
+  font-weight: 700;
+  margin: 0 0 var(--space-3);
 }
 
 .kv {
@@ -202,7 +340,7 @@ body {
   width: 100%;
   padding: 0 20px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: var(--accent-contrast);
   font: inherit;
@@ -250,7 +388,7 @@ body {
   padding: 6px 2px;
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   font-weight: 500;
 }
 
@@ -264,7 +402,7 @@ body {
 .segmented-button:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 .nav-label {
@@ -275,6 +413,11 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+
   * {
     transition: none !important;
     animation: none !important;
@@ -292,7 +435,7 @@ body {
 /* uPlots legend = hovervärden. Text i textfärg; serien identifieras av markören. */
 .chart .u-legend {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   text-align: left;
 }
 
@@ -304,7 +447,7 @@ body {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .form .card-title {
@@ -320,13 +463,13 @@ body {
 
 .field-label {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .input {
@@ -334,11 +477,11 @@ body {
   width: 100%;
   padding: 0 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--bg);
   color: var(--text);
   font: inherit;
-  font-size: 1.05rem;
+  font-size: var(--text-md);
 }
 
 .textarea {
@@ -354,7 +497,7 @@ body {
 .big-input {
   min-height: 72px;
   text-align: center;
-  font-size: 2.25rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -362,7 +505,7 @@ body {
 .nudge-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 8px;
 }
 
@@ -386,7 +529,7 @@ body {
 
 .button-row {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .button-secondary {
@@ -403,10 +546,16 @@ body {
 
 .button-small {
   width: auto;
-  min-height: 48px;
-  min-width: 48px;
-  padding: 0 14px;
-  font-size: 0.9rem;
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* Textknapp utan ram: Stäng, sekundära val i rubrikrader. */
+.button-ghost {
+  background: transparent;
+  color: var(--accent);
 }
 
 .form-error {
@@ -445,7 +594,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .entry-weight {
@@ -457,7 +606,7 @@ body {
 .entry-extra {
   color: var(--muted);
   margin: 4px 0 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -465,7 +614,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 4px 0;
 }
 
@@ -475,7 +624,7 @@ body {
 
 .entry-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 8px;
 }
 
@@ -483,12 +632,13 @@ body {
 .hero-label {
   margin: 0;
   color: var(--muted);
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
 .hero-value {
   margin: 4px 0;
-  font-size: 2.5rem;
+  font-size: var(--text-xl);
   font-weight: 800;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -501,40 +651,40 @@ body {
 .stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin: 0 0 20px;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-4);
 }
 
 .stat dt {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
 .stat dd {
   margin: 2px 0 0;
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .progress {
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--track);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
+  border-radius: var(--radius-full);
+  background: var(--tone, var(--accent));
   min-width: 0;
 }
 
 .progress-caption {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   margin: 8px 0 0;
 }
 
@@ -554,7 +704,7 @@ body {
 .table thead th {
   border-top: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .table .num {
@@ -564,7 +714,7 @@ body {
 
 .muted-inline {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 /* Tidsfilter */
@@ -573,16 +723,16 @@ body {
   /* Lika breda knappar oavsett antal (flikar för avstängda funktioner döljs). */
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  gap: 4px;
+  gap: var(--space-1);
   padding: 4px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--track);
 }
 
 .segmented-button {
   min-height: 48px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -593,7 +743,7 @@ body {
 .segmented-button[aria-pressed='true'] {
   background: var(--surface);
   color: var(--accent);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Bilder */
@@ -601,7 +751,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   margin-bottom: 12px;
 }
 
@@ -611,7 +761,7 @@ body {
 
 .form-note {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .file-button {
@@ -661,7 +811,7 @@ body {
   aspect-ratio: 3 / 4;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--track);
   cursor: pointer;
@@ -680,7 +830,7 @@ body {
   padding: 16px 6px 4px;
   background: linear-gradient(transparent, rgb(0 0 0 / 0.65));
   color: #fff;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-align: left;
 }
@@ -726,7 +876,7 @@ body {
 .viewer[open] {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .viewer::backdrop {
@@ -749,7 +899,7 @@ body {
 .viewer-toolbar {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .viewer-button {
@@ -780,7 +930,7 @@ body {
 .compare-side {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 16px;
 }
 
@@ -793,13 +943,13 @@ body {
   width: 100%;
   aspect-ratio: 3 / 4;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--track);
 }
 
 .compare-figure figcaption {
   margin-top: 4px;
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -814,7 +964,7 @@ body {
   max-height: 70dvh;
   width: 100%;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--track);
   touch-action: pan-y;
 }
@@ -863,10 +1013,10 @@ body {
   position: absolute;
   top: 8px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: rgb(0 0 0 / 0.6);
   color: #fff;
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   pointer-events: none;
 }
@@ -893,10 +1043,10 @@ body {
 .compare-caption {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .compare-close {
@@ -915,7 +1065,7 @@ body {
 .session-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -929,13 +1079,13 @@ body {
 .session-head {
   display: flex;
   align-items: center;
-  gap: 8px 12px;
+  gap: var(--space-2) var(--space-3);
   margin-bottom: 8px;
 }
 
 .session-date {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .session-weight {
@@ -947,7 +1097,7 @@ body {
 .session-note {
   margin: 0 0 8px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -965,11 +1115,11 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-1);
   width: 100%;
   aspect-ratio: 3 / 4;
   border: 2px dashed var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--accent);
   font: inherit;
@@ -978,7 +1128,7 @@ body {
 }
 
 .photo-slot span {
-  font-size: 1.75rem;
+  font-size: var(--text-xl);
   line-height: 1;
 }
 
@@ -991,7 +1141,7 @@ body {
 .angle-queue {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
   margin: 12px 0 0;
   padding: 0;
   list-style: none;
@@ -1000,7 +1150,7 @@ body {
 .angle-item {
   position: relative;
   aspect-ratio: 3 / 4;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--track);
 }
@@ -1029,7 +1179,7 @@ body {
 .angle-pick {
   min-height: 48px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgb(255 255 255 / 0.92);
   color: #0f172a;
   font: inherit;
@@ -1046,19 +1196,19 @@ body {
 .flow-count {
   margin: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
 .flow-title {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
 }
 
 .flow-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .flow-preview {
@@ -1066,7 +1216,7 @@ body {
   width: 50%;
   aspect-ratio: 3 / 4;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--track);
 }
 
@@ -1078,7 +1228,7 @@ body {
 .flow-thumbs {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1089,12 +1239,12 @@ body {
   width: 100%;
   aspect-ratio: 3 / 4;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 .flow-thumbs span {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 /* Kameravy */
@@ -1114,7 +1264,7 @@ body {
 .camera[open] {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .camera::backdrop {
@@ -1131,7 +1281,7 @@ body {
 .camera-note {
   margin: 0;
   color: #cbd5e1;
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   text-align: center;
 }
 
@@ -1140,7 +1290,7 @@ body {
   flex: 1;
   min-height: 240px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: #111;
 }
 
@@ -1177,19 +1327,19 @@ body {
 .camera-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .camera-ghost-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .camera-check {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 48px;
   white-space: nowrap;
   cursor: pointer;
@@ -1205,7 +1355,7 @@ body {
 .camera-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .camera .button-secondary {
@@ -1221,7 +1371,7 @@ body {
 .compare-sessions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 16px 0 4px;
 }
 
@@ -1232,12 +1382,12 @@ body {
 .compare-sessions dd {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .compare-angle-title {
   margin: 20px 0 0;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .compare-missing {
@@ -1250,7 +1400,7 @@ body {
 
 /* Säkerhetskopia */
 .subheading {
-  font-size: 1rem;
+  font-size: var(--text-md);
   margin: 8px 0 0;
 }
 
@@ -1271,7 +1421,7 @@ body {
 .check {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 48px;
   padding: 12px 0;
   cursor: pointer;
@@ -1288,7 +1438,7 @@ body {
 .check-hint {
   display: block;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .choices {
@@ -1305,15 +1455,15 @@ body {
 .preview {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--bg);
 }
 
 .preview-title {
-  font-size: 1rem;
+  font-size: var(--text-md);
   margin: 0;
 }
 
@@ -1321,12 +1471,17 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 16px 20px;
-  border: 2px solid var(--chart-goal);
-  border-radius: var(--radius);
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius-lg);
   background: var(--surface);
+}
+
+.banner .button {
+  align-self: flex-start;
 }
 
 .banner-title {
@@ -1348,7 +1503,7 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   text-align: center;
 }
 
@@ -1394,7 +1549,7 @@ a.button {
 .fieldset {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   border: 0;
@@ -1404,13 +1559,13 @@ a.button {
 .fieldset > legend {
   padding: 0;
   margin-bottom: 8px;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .choice-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   border: 0;
@@ -1423,12 +1578,12 @@ a.button {
 
 .choice {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: flex-start;
   min-height: 48px;
   padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
@@ -1453,7 +1608,7 @@ a.button {
 .choice-description {
   display: block;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .pick-list {
@@ -1485,7 +1640,7 @@ a.button {
 .pick:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 .pick-name {
@@ -1495,7 +1650,7 @@ a.button {
 
 .pick-detail {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .quick-list {
@@ -1509,10 +1664,10 @@ a.button {
   min-width: 48px;
   min-height: 48px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--chart-goal);
-  font-size: 1.6rem;
+  font-size: var(--text-lg);
   cursor: pointer;
 }
 
@@ -1531,7 +1686,7 @@ a.button {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 4px 8px;
+  gap: var(--space-1) var(--space-2);
   padding: 8px 0;
   border-top: 1px solid var(--border);
 }
@@ -1549,7 +1704,7 @@ a.button {
 .ingredient-amount {
   display: grid;
   grid-template-columns: 5.5rem minmax(5rem, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .ingredient-amount input.input {
@@ -1563,7 +1718,7 @@ a.button {
 .scanner-video {
   width: 100%;
   max-height: 50vh;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: #000;
   object-fit: cover;
 }
@@ -1572,7 +1727,7 @@ a.button {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: end;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .scan-manual .button {
@@ -1591,7 +1746,7 @@ a.button {
 .plan-details {
   margin-top: 16px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .plan-details summary {
@@ -1617,7 +1772,7 @@ a.button {
 .log-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1627,12 +1782,12 @@ a.button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--space-1);
   width: 100%;
   min-height: 128px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -1650,14 +1805,39 @@ a.button {
   margin-bottom: auto;
 }
 
+/* Ikonen i datatypens färg – samma som i kalendern och graferna. */
+.log-tile[data-type='vikt'] .log-tile-icon {
+  color: var(--data-weight);
+}
+
+.log-tile[data-type='midja'] .log-tile-icon {
+  color: var(--data-waist);
+}
+
+.log-tile[data-type='steg'] .log-tile-icon {
+  color: var(--data-steps);
+}
+
+.log-tile[data-type='vatten'] .log-tile-icon {
+  color: var(--data-drink);
+}
+
+.log-tile[data-type='traning'] .log-tile-icon {
+  color: var(--data-training);
+}
+
+.log-tile[data-type='glp1'] .log-tile-icon {
+  color: var(--data-dose);
+}
+
 .log-tile-label {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 
 .log-tile-summary {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 /* Bottom sheet */
@@ -1668,7 +1848,7 @@ a.button {
   margin: auto auto 0;
   padding: 0;
   border: 0;
-  border-radius: 20px 20px 0 0;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
   background: var(--bg);
   color: var(--text);
   overflow-y: auto;
@@ -1680,34 +1860,35 @@ a.button {
 }
 
 .sheet[open] {
-  animation: sheet-up 0.2s ease-out;
+  animation: sheet-up var(--duration-base) var(--ease-out);
 }
 
+/* Kort glid (32 px) i stället för hela höjden: panelen är tryckbar direkt. */
 @keyframes sheet-up {
   from {
-    transform: translateY(24px);
+    transform: translateY(32px);
   }
 }
 
 .sheet-panel {
-  padding: 12px 16px calc(env(safe-area-inset-bottom) + 20px);
+  padding: var(--space-2) var(--space-4) calc(env(safe-area-inset-bottom) + var(--space-5));
 }
 
 .sheet-header {
   position: sticky;
-  top: -12px;
+  top: calc(-1 * var(--space-2));
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin: -12px -16px 12px;
-  padding: 12px 16px;
+  gap: var(--space-3);
+  margin: 0 calc(-1 * var(--space-4)) var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   background: var(--bg);
 }
 
 .sheet-title {
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   margin: 0;
 }
 
@@ -1720,14 +1901,14 @@ a.button {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: var(--space-2) var(--space-3);
   max-width: 616px;
   margin: 0 auto;
   padding: 12px 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.2);
+  box-shadow: var(--shadow-md);
 }
 
 .toast-text {
@@ -1737,7 +1918,7 @@ a.button {
 
 .toast-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* Inställningar → Funktioner */
@@ -1755,7 +1936,7 @@ a.button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   min-height: var(--tap);
   padding: 8px 0;
   cursor: pointer;
@@ -1772,7 +1953,7 @@ a.button {
 
 .switch-description {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .switch {
@@ -1796,7 +1977,7 @@ a.button {
 .app-footer {
   margin: 24px 0 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   text-align: center;
 }
 
@@ -1809,7 +1990,7 @@ a.button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 8px;
 }
 
@@ -1819,7 +2000,7 @@ a.button {
 }
 
 .calendar-nav {
-  font-size: 1.5rem;
+  font-size: var(--text-lg);
   line-height: 1;
 }
 
@@ -1832,7 +2013,7 @@ a.button {
 .calendar-grid th {
   padding: 4px 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -1850,7 +2031,7 @@ a.button {
   min-height: 48px;
   padding: 6px 0 4px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -1889,7 +2070,7 @@ a.button {
 }
 
 .dot-vikt {
-  background: var(--accent);
+  background: var(--data-weight);
 }
 
 .dot-midja {
@@ -1897,11 +2078,11 @@ a.button {
 }
 
 .dot-steg {
-  background: var(--macro-fat);
+  background: var(--data-steps);
 }
 
 .dot-mat {
-  background: var(--macro-carbs);
+  background: var(--data-food);
 }
 
 .dot-bilder {
@@ -1911,12 +2092,12 @@ a.button {
 .calendar-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--space-1) var(--space-4);
   margin: 12px 8px 0;
   padding: 0;
   list-style: none;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .calendar-legend li {
@@ -1987,12 +2168,12 @@ a.button {
 .week-day {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   width: 100%;
   min-height: var(--tap);
   padding: 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -2027,14 +2208,14 @@ a.button {
 
 .week-day-date {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .week-day-body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -2044,7 +2225,7 @@ a.button {
 
 .week-day-summary {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   overflow-wrap: anywhere;
 }
 
@@ -2056,7 +2237,7 @@ a.button {
 }
 
 .workout {
-  padding: 12px 0;
+  padding: var(--space-3) 0;
   border-top: 1px solid var(--border);
 }
 
@@ -2065,34 +2246,48 @@ a.button {
   padding-top: 0;
 }
 
-.stats + .workout-list,
-.today-water + .stats {
-  margin-top: 4px;
+.stats + .workout-list {
+  margin-top: var(--space-1);
+}
+
+.stats-compact + .workout-list {
+  margin-top: var(--space-3);
 }
 
 .workout-main {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.workout-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .workout-when {
-  font-weight: 700;
+  color: var(--muted);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .workout-title {
-  flex: 1;
-  min-width: 0;
   overflow-wrap: anywhere;
 }
 
+.workout .entry-actions {
+  margin-top: var(--space-2);
+}
+
 .workout-badge {
+  flex: none;
   padding: 2px 8px;
   border: 1px solid currentColor;
-  border-radius: 999px;
-  font-size: 0.8rem;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -2101,11 +2296,12 @@ a.button {
 }
 
 .badge-genomford {
-  color: var(--ok);
+  color: var(--success);
 }
 
+/* Samma som kalenderns prick för obesvarat pass. */
 .badge-obesvarad {
-  color: var(--chart-goal);
+  color: var(--danger);
 }
 
 .badge-hoppad {
@@ -2120,7 +2316,7 @@ a.button {
 .workout-manage {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: var(--space-3);
   margin-top: 8px;
 }
 
@@ -2129,25 +2325,29 @@ a.button {
 }
 
 .missed-card {
-  border: 2px solid var(--chart-goal);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-3);
+}
+
+.show-more {
+  margin-top: var(--space-2);
+  padding: 0;
 }
 
 .weekday-picker {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .weekday-button {
   min-height: 48px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--bg);
   color: var(--text);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
 }
@@ -2167,7 +2367,7 @@ a.button {
 .today-water {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
   margin-bottom: 16px;
 }
 
@@ -2214,19 +2414,19 @@ a.button {
 
 .water-ring-goal {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
 }
 
 .water-controls {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .water-quick {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .water-quick-3 {
@@ -2247,7 +2447,7 @@ a.button {
 }
 
 .water-quick-label {
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
 }
 
 .drink-note {
@@ -2258,7 +2458,7 @@ a.button {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: end;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .water-custom .button {
@@ -2278,7 +2478,7 @@ a.button {
 .water-day {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 4px 12px;
+  gap: var(--space-1) var(--space-3);
   padding: 8px 0;
   border-top: 1px solid var(--border);
 }
@@ -2286,6 +2486,10 @@ a.button {
 .water-day .progress {
   grid-column: 1 / -1;
   height: 8px;
+}
+
+.water-day .progress-fill {
+  background: var(--data-drink);
 }
 
 .water-day-ml {
@@ -2297,14 +2501,14 @@ a.button {
 .chip-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .chip {
   min-height: 48px;
   padding: 0 16px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -2326,7 +2530,7 @@ a.button {
 .site-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .site-button {
@@ -2337,7 +2541,7 @@ a.button {
   min-height: 56px;
   padding: 4px 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -2356,7 +2560,7 @@ a.button {
 }
 
 .site-hint {
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   font-weight: 400;
   color: var(--muted);
 }
@@ -2364,7 +2568,7 @@ a.button {
 .ladder {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2373,7 +2577,7 @@ a.button {
 .ladder-row {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .ladder-row .field {
@@ -2385,14 +2589,14 @@ a.button {
   margin: 0;
   padding: 12px 16px;
   border-left: 4px solid var(--dot-glp1);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .dose-next {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 
@@ -2405,7 +2609,7 @@ a.button {
 .dose-changes li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 8px 0;
 }
 
@@ -2416,26 +2620,26 @@ a.button {
 /* Enheter för matloggning */
 .log-preview {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .unit-form {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 /* Gissad styckvikt: "1 skiva ≈ 30 g, stämmer det?" */
 .guess-confirm {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 12px;
   border: 1px dashed var(--accent);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 .guess-question {
@@ -2445,9 +2649,9 @@ a.button {
 
 .unit-list {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .unit-entry .entry-main {
@@ -2455,24 +2659,24 @@ a.button {
 }
 
 /* Mål-ringar: kalorier och protein (Översikt → Idag, Mat → Dag) */
-.nutrition-rings {
+.rings {
   display: flex;
-  justify-content: center;
-  gap: 24px;
-  margin: 8px 0 16px;
+  justify-content: space-around;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
 }
 
-.nutrition-ring {
+.ring-figure {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
 }
 
-.nutrition-ring figcaption {
+.ring-figure figcaption {
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--text-xs);
 }
 
 .goal-ring {
@@ -2490,12 +2694,8 @@ a.button {
   stroke: var(--track);
 }
 
-.goal-ring-kcal .goal-ring-fill {
-  stroke: var(--ring-kcal);
-}
-
-.goal-ring-protein .goal-ring-fill {
-  stroke: var(--macro-protein);
+.goal-ring-fill {
+  stroke: var(--tone, var(--accent));
 }
 
 .goal-ring-text {
@@ -2516,7 +2716,7 @@ a.button {
 
 .goal-ring-goal {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
 }
 
 /* Proteinrikt livsmedel (sökträffar, favoriter) */
@@ -2525,9 +2725,9 @@ a.button {
   margin-left: 6px;
   padding: 0 6px;
   border: 1px solid var(--macro-protein);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--text);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   line-height: 1.5;
   vertical-align: 0.1em;
@@ -2536,13 +2736,13 @@ a.button {
 /* Översikt: trendvikt som huvudsiffra */
 .hero-sub {
   margin: 4px 0 0;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .hero-note {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--text-xs);
 }
 
 /* Veckosummering */
@@ -2550,7 +2750,7 @@ a.button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .week-headline {
@@ -2559,7 +2759,7 @@ a.button {
 
 .week-rows {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 0 0 12px;
 }
 
@@ -2567,7 +2767,7 @@ a.button {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .week-row dt {
@@ -2576,10 +2776,11 @@ a.button {
 }
 
 .week-row dd {
+  min-width: 0;
   display: flex;
   align-items: baseline;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--space-1);
   margin: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -2594,7 +2795,7 @@ a.button {
 
 .week-list {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2645,13 +2846,13 @@ a.button {
   position: relative;
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   max-width: 420px;
   padding: 28px 20px 20px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
+  box-shadow: var(--shadow-lg);
   text-align: center;
   animation: celebration-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
@@ -2668,24 +2869,24 @@ a.button {
 
 .celebration-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--text-lg);
 }
 
 .celebration-message {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: var(--text-md);
 }
 
 .celebration-date,
 .celebration-hint,
 .celebration-more {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-xs);
 }
 
 .celebration-actions {
   display: grid;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   margin-top: 8px;
 }
@@ -2728,16 +2929,16 @@ a.button {
   inset: calc(env(safe-area-inset-top) + 12px) 12px auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   width: auto;
   max-width: 616px;
   margin: 0 auto;
   padding: 12px 16px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--text);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.2);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
   animation: toast-drop 0.35s ease-out;
 }
@@ -2759,7 +2960,7 @@ a.button {
   min-width: 48px;
   height: 48px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--accent-contrast);
   font-weight: 800;
@@ -2769,7 +2970,7 @@ a.button {
 .milestone-toast-body {
   flex: 1;
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -2783,7 +2984,7 @@ a.button {
 }
 
 .milestone-toast-text {
-  font-size: 0.9375rem;
+  font-size: var(--text-sm);
 }
 
 .milestone-toast-body .button {
@@ -2800,7 +3001,7 @@ a.button {
 /* Framsteg → Milstolpar */
 .milestone-list {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2809,7 +3010,7 @@ a.button {
 .milestone-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .milestone-badge {
@@ -2819,11 +3020,11 @@ a.button {
   min-width: 52px;
   height: 52px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--accent);
   color: var(--accent-contrast);
   font-weight: 800;
-  font-size: 0.9375rem;
+  font-size: var(--text-sm);
 }
 
 .milestone-badge-upcoming {
@@ -2835,7 +3036,7 @@ a.button {
 .milestone-body {
   flex: 1;
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -2857,13 +3058,13 @@ a.button {
 
 .segmented-small {
   padding: 2px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 .segmented-small .segmented-button {
   min-height: 44px;
   padding: 0 12px;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .page-tabs {
@@ -2881,11 +3082,11 @@ a.button {
   min-width: 48px;
   min-height: 48px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--accent);
   font: inherit;
-  font-size: 1.75rem;
+  font-size: var(--text-xl);
   line-height: 1;
   cursor: pointer;
 }
@@ -2906,9 +3107,9 @@ a.button {
   justify-content: center;
   align-items: center;
   min-height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: var(--text-md);
 }
 
 .date-bar-label:has(.date-bar-input:focus-visible) {
@@ -2938,76 +3139,69 @@ a.button {
 }
 
 .day-summary {
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
 }
 
 .totals-row,
 .day-summary-mini {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
-.total {
+/* StatBar: värde mot mål, tunn stapel i datatypens färg, metarad. */
+.stat-bar {
   min-width: 0;
 }
 
-.total-value {
+.stat-bar-value {
   margin: 0 0 6px;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.total-value strong {
+.stat-bar-value strong {
   color: var(--text);
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
 }
 
-.total-meta {
-  margin: 4px 0 0;
+.stat-bar-meta {
+  margin: var(--space-1) 0 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.stat-bar-mini .stat-bar-value {
+  margin-bottom: var(--space-1);
+}
+
+.stat-bar-mini .stat-bar-value strong {
+  font-size: var(--text-md);
 }
 
 .progress-thin {
   height: 8px;
 }
 
-.progress-kcal .progress-fill {
-  background: var(--ring-kcal);
-}
-
-.progress-protein .progress-fill {
-  background: var(--macro-protein);
-}
-
 .macro-line {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .day-summary-mini {
-  padding: 0 0 8px;
-}
-
-.day-summary-mini .total-value {
-  margin-bottom: 4px;
-}
-
-.day-summary-mini .total-value strong {
-  font-size: 1rem;
+  padding: 0 0 var(--space-2);
 }
 
 /* Sökfältet (och miniraden vid scroll) stannar under toppen. */
 .food-sticky {
   position: sticky;
-  top: 0;
+  top: var(--page-header-height);
   z-index: 5;
   margin: 0 -16px;
   padding: 8px 16px;
@@ -3015,14 +3209,13 @@ a.button {
 }
 
 .food-sticky[data-compact='true'] {
-  padding-top: calc(env(safe-area-inset-top) + 8px);
   box-shadow: 0 1px 0 var(--border);
 }
 
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .search-field {
@@ -3033,11 +3226,11 @@ a.button {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 48px;
   padding: 0 16px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--muted);
   font: inherit;
@@ -3083,42 +3276,43 @@ a.button {
 
 .meal-sections {
   display: grid;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.meal-card {
+/* SectionAccordion: hopfällbart kort med rubrikrad och åtgärder. */
+.accordion {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   overflow: hidden;
 }
 
-.meal-card-header {
+.accordion-header {
   display: flex;
   align-items: center;
 }
 
-.meal-heading {
+.accordion-heading {
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
-.meal-heading-empty {
-  padding-left: 16px;
+.accordion-heading-empty {
+  padding-left: var(--space-4);
   color: var(--muted);
   font-weight: 600;
 }
 
-.meal-toggle {
+.accordion-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   min-height: 52px;
-  padding: 0 4px 0 16px;
+  padding: 0 var(--space-1) 0 var(--space-4);
   border: 0;
   background: none;
   color: var(--text);
@@ -3127,161 +3321,179 @@ a.button {
   cursor: pointer;
 }
 
-.meal-toggle:focus-visible,
-.meal-add:focus-visible,
-.food-entry-button:focus-visible,
-.food-entry-expand:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: -3px;
-  border-radius: 12px;
-}
-
-.meal-name {
+.accordion-title {
   font-weight: 700;
 }
 
-.meal-count {
+.accordion-meta {
   flex: 1;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   font-weight: 400;
   white-space: nowrap;
+}
+
+.accordion-value {
+  white-space: nowrap;
+}
+
+.accordion-action {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.accordion-add {
+  color: var(--accent);
+  font-size: var(--text-xl);
+}
+
+.accordion-body {
+  animation: accordion-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes accordion-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .chevron {
   flex: none;
   width: 8px;
   height: 8px;
-  margin: 0 8px 4px;
+  margin: 0 var(--space-2) var(--space-1);
   border-right: 2px solid var(--muted);
   border-bottom: 2px solid var(--muted);
   transform: rotate(45deg);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    margin var(--duration-base) var(--ease-out);
 }
 
 [aria-expanded='true'] > .chevron {
   margin-bottom: 0;
-  margin-top: 4px;
+  margin-top: var(--space-1);
   transform: rotate(-135deg);
 }
 
-.meal-menu {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 1.4rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.meal-menu:focus-visible {
+.accordion-toggle:focus-visible,
+.list-row-body:focus-visible,
+.list-row-expand:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: -3px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
-.meal-add {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  font-size: 1.75rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.food-entries {
+/* ListRow */
+.list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.food-entry {
+.list-row {
   position: relative;
   overflow: hidden;
   border-top: 1px solid var(--border);
 }
 
-/* Syns bakom raden medan den sveps åt vänster. */
-.food-entry-delete {
+/* Listor direkt i ett kort: ingen linje över första raden. */
+.card > .list > .list-row:first-child {
+  border-top: 0;
+}
+
+.card > .list {
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-4));
+}
+
+.card > .card-title + .list,
+.card > .card-header + .list {
+  margin-top: calc(-1 * var(--space-2));
+}
+
+/* Syns bakom raden medan den sveps: vänster = ta bort, höger = t.ex. favorit. */
+.list-row-action {
   position: absolute;
   inset: 0;
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  padding-right: 16px;
-  background: var(--danger);
-  color: #ffffff;
+  padding: 0 var(--space-4);
   font-weight: 700;
   visibility: hidden;
 }
 
-.food-entry[data-swiping='left'] .food-entry-delete {
-  visibility: visible;
+.list-row-action-left {
+  justify-content: flex-end;
+  background: var(--danger);
+  color: var(--on-danger);
 }
 
-/* Syns bakom raden medan den sveps åt höger (växlar favorit). */
-.food-entry-favorite {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  padding-left: 16px;
+.list-row-action-right {
   background: var(--accent);
   color: var(--accent-contrast);
-  font-weight: 700;
-  visibility: hidden;
 }
 
-.food-entry[data-swiping='right'] .food-entry-favorite {
+.list-row[data-swiping='left'] .list-row-action-left,
+.list-row[data-swiping='right'] .list-row-action-right {
   visibility: visible;
 }
 
-.food-entry-star {
-  color: var(--chart-goal);
-}
-
-.food-entry-content {
+.list-row-content {
   position: relative;
   background: var(--surface);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.list-row-content[data-swipeable='true'] {
   touch-action: pan-y;
 }
 
-.food-entry-row {
+.list-row-content[data-dragging='true'] {
+  transition: none;
+}
+
+.list-row-main {
   display: flex;
   align-items: stretch;
 }
 
-.food-entry-button {
+.list-row-body {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 8px 16px;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
   border: 0;
   background: none;
   color: var(--text);
   font: inherit;
   text-align: left;
+  text-decoration: none;
+}
+
+button.list-row-body,
+a.list-row-body {
   cursor: pointer;
 }
 
-.food-entry-text {
+.list-row-leading {
+  flex: none;
+  display: inline-flex;
+}
+
+.list-row-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
-.food-entry-name {
+.list-row-primary {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -3290,12 +3502,31 @@ a.button {
   overflow-wrap: anywhere;
 }
 
-.food-entry-amount {
+.list-row-secondary {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
-.food-entry-expand {
+.list-row-value {
+  flex: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.list-row-chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: calc(-1 * var(--space-1));
+  border-top: 2px solid var(--muted);
+  border-right: 2px solid var(--muted);
+  transform: rotate(45deg);
+}
+
+.list-row-expand {
   flex: none;
   width: 48px;
   border: 0;
@@ -3303,18 +3534,22 @@ a.button {
   cursor: pointer;
 }
 
+.food-entry-star {
+  color: var(--chart-goal);
+}
+
 .food-entry-ingredients {
   margin: 0;
-  padding: 0 16px 8px 28px;
+  padding: 0 var(--space-4) var(--space-2) 28px;
   list-style: none;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
 }
 
 .food-entry-ingredients li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   padding: 2px 0;
 }
 
@@ -3336,7 +3571,7 @@ a.button {
 .food-picker {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .food-picker .quick-list {
@@ -3351,7 +3586,7 @@ a.button {
 .food-day-head {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .food-day-head .date-bar {
@@ -3361,13 +3596,16 @@ a.button {
 
 .day-menu {
   color: var(--muted);
-  font-size: 1.4rem;
+  font-size: var(--text-lg);
 }
 
-/* Menyer i en bottom sheet: en knapp per rad. */
+/* Menyer i en bottom sheet: ListRow per val, kant i kant. */
 .action-list {
-  display: grid;
-  gap: 12px;
+  margin: 0 calc(-1 * var(--space-4));
+}
+
+.action-list > .list-row:first-child {
+  border-top: 0;
 }
 
 .back-button {
@@ -3383,7 +3621,7 @@ a.button {
 
 .analysis-title {
   margin: 0 0 8px;
-  font-size: 1.05rem;
+  font-size: var(--text-md);
 }
 
 .analysis-notes,
@@ -3437,7 +3675,7 @@ a.button {
 .analysis-table thead th {
   border-top: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -3448,7 +3686,7 @@ a.button {
 /* Fråga AI */
 .ask-ai {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .ask-ai .button-row {
@@ -3461,6 +3699,244 @@ a.button {
 
 .ai-preview {
   min-height: 12em;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   line-height: 1.4;
+}
+
+/* ------------------------------------------------------------------ */
+/* Designsystem: toner, kortvarianter, paneler, toast, skeleton        */
+/* ------------------------------------------------------------------ */
+
+/* En ton per datatyp: sätter --tone som staplar, ringar och ikoner använder. */
+.tone-weight {
+  --tone: var(--data-weight);
+}
+
+.tone-food {
+  --tone: var(--data-food);
+}
+
+.tone-protein {
+  --tone: var(--macro-protein);
+}
+
+.tone-drink {
+  --tone: var(--data-drink);
+}
+
+.tone-steps {
+  --tone: var(--data-steps);
+}
+
+.tone-training {
+  --tone: var(--data-training);
+}
+
+.tone-dose {
+  --tone: var(--data-dose);
+}
+
+/* Ett Card i ett Card ritas som en grupp utan egen ram (inget kort-i-kort). */
+.card-group + .card-group {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.card-header .card-title {
+  margin: 0;
+}
+
+/* Semantiska kort: färgad vänsterkant, ingen egen bakgrund. */
+.card-warning,
+.card-danger,
+.card-success,
+.card-info {
+  border-left-width: 4px;
+}
+
+.card-warning {
+  border-left-color: var(--warning);
+}
+
+.card-danger {
+  border-left-color: var(--danger);
+}
+
+.card-success {
+  border-left-color: var(--success);
+}
+
+.card-info {
+  border-left-color: var(--accent);
+}
+
+/* Paneler: innehållet ligger direkt på panelen, kort i en panel får ingen ram. */
+.sheet:not(.sheet-full) {
+  background: var(--surface);
+}
+
+.sheet:not(.sheet-full) .sheet-header {
+  background: var(--surface);
+}
+
+.sheet .card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.sheet .card + .card {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.sheet::backdrop {
+  animation: backdrop-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.sheet-full[open] {
+  animation: sheet-fade var(--duration-base) var(--ease-out);
+}
+
+/* Bara rörelse, ingen opacitet – kontrasten är full från första bildrutan. */
+@keyframes sheet-fade {
+  from {
+    transform: translateY(24px);
+  }
+}
+
+.sheet {
+  scroll-padding-top: calc(var(--tap) + var(--space-3));
+}
+
+.sheet-grabber {
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 0 auto var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--border);
+}
+
+/* Toast: Ångra är knappen, Stäng en textknapp. */
+.toast-undo {
+  font-weight: 700;
+}
+
+/* Skeleton */
+.skeleton-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.skeleton + .card,
+.card + .skeleton {
+  margin-top: var(--space-3);
+}
+
+.skeleton-card + .skeleton-card {
+  margin-top: var(--space-3);
+}
+
+.skeleton-line {
+  display: block;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--track);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line:last-child {
+  width: 60%;
+}
+
+.skeleton-hero {
+  width: 40%;
+  height: 32px;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Siffror och enheter bryts aldrig. */
+.num,
+.nowrap {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Översikt: huvudkortet (vikt, väg mot målet, nyckeltal, prognos). */
+.hero-progress {
+  margin-top: var(--space-4);
+}
+
+.stats-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.stats-compact .stat dt {
+  font-size: var(--text-xs);
+}
+
+.stats-compact .stat dd {
+  font-size: var(--text-md);
+}
+
+.stat-sub {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+
+.hero-forecast {
+  margin: var(--space-3) 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* Översikt → Idag: dryck som små sekundära knappar på en rad. */
+.water-controls-chips .water-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.water-controls-chips .water-quick .button.chip {
+  flex-direction: row;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
+  border-width: 1px;
+  border-radius: var(--radius-full);
+}
+
+.water-controls-chips .water-undo {
+  padding: 0;
+}
+
+.water-controls-chips {
+  gap: var(--space-1);
 }

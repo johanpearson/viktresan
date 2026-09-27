@@ -1,7 +1,7 @@
 /**
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
  * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
- * spökbild och vad "Fråga AI" tar med i prompten. Lagras i `settings`
+ * spökbild, vad "Fråga AI" tar med i prompten och haptik. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
@@ -22,6 +22,8 @@ export interface Preferences {
   ghostOpacity: number;
   /** Kryssrutorna i "Fråga AI" (GLP-1 är av som standard). */
   aiOptions: AiOptions;
+  /** Lätt vibration vid spara/klar (navigator.vibrate). */
+  haptics: boolean;
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -34,6 +36,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   ghostEnabled: true,
   ghostOpacity: 0.4,
   aiOptions: DEFAULT_AI_OPTIONS,
+  haptics: true,
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -58,6 +61,7 @@ export function parsePreferences(raw: unknown): Preferences {
         ? stored.ghostOpacity
         : DEFAULT_PREFERENCES.ghostOpacity,
     aiOptions: parseAiOptions(stored.aiOptions),
+    haptics: typeof stored.haptics === 'boolean' ? stored.haptics : DEFAULT_PREFERENCES.haptics,
   };
 }
 
@@ -85,6 +89,11 @@ function subscribe(listener: () => void): () => void {
 
 function getState(): State {
   return state;
+}
+
+/** Aktuella inställningar utanför React (t.ex. för haptik). */
+export function currentPreferences(): Preferences {
+  return state.prefs;
 }
 
 export function initPreferences(): Promise<void> {

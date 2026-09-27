@@ -1,6 +1,7 @@
 import { useState, type SyntheticEvent } from 'react';
 import { addWater, undoLastWater, type WaterEntry } from '../db/db.ts';
 import { formatMl } from '../lib/format.ts';
+import { haptic } from '../lib/haptics.ts';
 import { parseWaterAmount } from '../lib/validation.ts';
 import { WATER_QUICK_ADD } from '../lib/water.ts';
 
@@ -10,10 +11,19 @@ interface WaterControlsProps {
   onChange: () => Promise<unknown>;
   /** Visa fältet för valfri mängd (annars en länk till Logga → Dryck). */
   custom?: boolean;
+  /** `chips`: små sekundära knappar på en rad (Översikt → Idag). */
+  variant?: 'buttons' | 'chips';
 }
 
 /** Glas, flaska, kopp kaffe/te, valfri mängd och Ångra senaste för en dag. */
-export function WaterControls({ date, water, onChange, custom = false }: WaterControlsProps) {
+export function WaterControls({
+  date,
+  water,
+  onChange,
+  custom = false,
+  variant = 'buttons',
+}: WaterControlsProps) {
+  const chips = variant === 'chips';
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -21,6 +31,7 @@ export function WaterControls({ date, water, onChange, custom = false }: WaterCo
 
   async function add(ml: number) {
     await addWater(date, ml);
+    haptic('light');
     await onChange();
     setError(null);
     setStatus(`La till ${formatMl(ml)}.`);
@@ -44,16 +55,24 @@ export function WaterControls({ date, water, onChange, custom = false }: WaterCo
   }
 
   return (
-    <div className="water-controls">
+    <div className={chips ? 'water-controls water-controls-chips' : 'water-controls'}>
       <div className={custom ? 'water-quick water-quick-3' : 'water-quick'}>
         {WATER_QUICK_ADD.map(({ ml, label }) => (
-          <button key={ml} type="button" className="button" onClick={() => void add(ml)}>
+          <button
+            key={ml}
+            type="button"
+            className={chips ? 'button button-secondary button-small chip' : 'button'}
+            onClick={() => void add(ml)}
+          >
             <span className="water-quick-amount">+{formatMl(ml)}</span>{' '}
             <span className="water-quick-label">{label}</span>
           </button>
         ))}
         {!custom && (
-          <a className="button button-secondary" href="#/logga/vatten">
+          <a
+            className={chips ? 'button button-ghost button-small chip' : 'button button-secondary'}
+            href="#/logga/vatten"
+          >
             Valfri mängd
           </a>
         )}
@@ -85,7 +104,11 @@ export function WaterControls({ date, water, onChange, custom = false }: WaterCo
       )}
       <button
         type="button"
-        className="button button-secondary button-small water-undo"
+        className={
+          chips
+            ? 'button button-ghost button-small water-undo'
+            : 'button button-secondary button-small water-undo'
+        }
         disabled={!hasEntries}
         onClick={() => void undo()}
       >

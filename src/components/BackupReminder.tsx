@@ -16,7 +16,7 @@ export function BackupReminder() {
           : `Det har gått mer än ${String(BACKUP_REMINDER_DAYS)} dagar sedan din senaste export.`}{' '}
         Din data finns bara på den här enheten.
       </p>
-      <a className="button button-small" href="#/installningar">
+      <a className="button button-secondary button-small" href="#/installningar">
         Exportera nu
       </a>
     </aside>

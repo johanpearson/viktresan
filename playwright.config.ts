@@ -14,7 +14,17 @@ export default defineConfig({
     trace: 'on-first-retry',
     ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
-  projects: [{ name: 'Pixel 7', use: { ...devices['Pixel 7'] } }],
+  projects: [
+    { name: 'Pixel 7', use: { ...devices['Pixel 7'] }, testIgnore: /visual\.spec\.ts/ },
+    // Visuella regressionstester: körs bara i Playwrights Docker-avbild (npm run test:visual)
+    // så att typsnitt och Chromium alltid är desamma som när baslinjerna togs.
+    {
+      name: 'visual',
+      use: { ...devices['Pixel 7'] },
+      testMatch: /visual\.spec\.ts/,
+      snapshotPathTemplate: '{testDir}/__screenshots__/{arg}{ext}',
+    },
+  ],
   // E2E körs mot produktionsbygget så att CSP och service worker testas på riktigt.
   webServer: {
     command: 'npm run build && npm run preview',

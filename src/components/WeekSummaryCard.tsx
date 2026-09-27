@@ -30,7 +30,7 @@ export function WeekSummaryCard({ data, now }: WeekSummaryCardProps) {
         </div>
         <button
           type="button"
-          className="button button-secondary button-small"
+          className="button button-ghost button-small"
           aria-label="Stäng veckosummeringen"
           onClick={() => void setPreference('weekCardDismissed', entry.summary.from)}
         >

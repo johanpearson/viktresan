@@ -12,6 +12,7 @@ import { buildCatalog, entryToItem, mealToItem, storedToItem } from '../lib/food
 import { currentMealSlot, savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import { formatDate, formatDayMonth } from '../lib/format.ts';
+import { haptic } from '../lib/haptics.ts';
 import { mealLabel, totalOf, type MealSlot } from '../lib/nutrition.ts';
 import type { FoodUnit } from '../lib/units.ts';
 import { AskAi } from './AskAi.tsx';
@@ -20,11 +21,12 @@ import { DateBar } from './DateBar.tsx';
 import { DaySummary } from './DaySummary.tsx';
 import { FoodLogForm } from './FoodLogForm.tsx';
 import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
-import { FoodToast } from './FoodToast.tsx';
+import { ListRow } from './ListRow.tsx';
 import { MealAnalysisView } from './MealAnalysisView.tsx';
 import { MealSections } from './MealSections.tsx';
 import { SaveMealForm } from './SaveMealForm.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
+import { Toast } from './Toast.tsx';
 
 interface FoodDayProps {
   source: FoodSource;
@@ -52,7 +54,7 @@ interface Picker {
   focus: boolean;
 }
 
-interface Toast {
+interface ToastState {
   message: string;
   /** Borttagen post som Ångra lägger tillbaka. */
   removed?: FoodLogEntry;
@@ -93,7 +95,7 @@ export function FoodDay({
     initialPicker ? { meal: null, scan: false, focus: true } : null,
   );
   const [editing, setEditing] = useState<FoodLogEntry | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const [menu, setMenu] = useState<Target | null>(null);
   const [saving, setSaving] = useState<MealSlot | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null);
@@ -125,12 +127,12 @@ export function FoodDay({
   useEffect(() => {
     const el = summaryRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    // Minus sökfältets höjd: summeringen räknas som dold när den ligger under sökraden.
+    // Minus sidhuvudets och sökfältets höjd: summeringen räknas som dold när den ligger under sökraden.
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry) setCompact(!entry.isIntersecting);
       },
-      { rootMargin: '-72px 0px 0px 0px' },
+      { rootMargin: '-128px 0px 0px 0px' },
     );
     observer.observe(el);
     return () => {
@@ -276,6 +278,7 @@ export function FoodDay({
             date,
             meal: picker.meal,
             onLogged: (_message, meal) => {
+              haptic('success');
               expand(meal);
               void reloadLog();
             },
@@ -307,6 +310,7 @@ export function FoodDay({
               await reloadFood();
             }}
             onSaved={(message, meal) => {
+              haptic('success');
               setEditing(null);
               expand(meal);
               void reloadLog().then(() => {
@@ -331,30 +335,26 @@ export function FoodDay({
             setMenu(null);
           }}
         >
-          <div className="action-list">
+          <ul className="list action-list">
             {menu.kind === 'meal' && (
-              <button
-                type="button"
-                className="button button-secondary"
+              <ListRow
+                primary="Spara som egen måltid"
+                chevron
                 onClick={() => {
                   setMenu(null);
                   setSaving(menu.slot);
                 }}
-              >
-                Spara som egen måltid
-              </button>
+              />
             )}
-            <button
-              type="button"
-              className="button button-secondary"
+            <ListRow
+              primary="Analysera"
+              chevron
               onClick={() => {
                 setMenu(null);
                 setAnalysis({ target: menu, view: 'analysis' });
               }}
-            >
-              Analysera
-            </button>
-          </div>
+            />
+          </ul>
         </BottomSheet>
       )}
       {saving && (
@@ -435,7 +435,9 @@ export function FoodDay({
         </BottomSheet>
       )}
       {toast && (
-        <FoodToast
+        <Toast
+          label="Mat"
+          testId="food-toast"
           message={toast.message}
           onUndo={
             toast.removed

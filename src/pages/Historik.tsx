@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DoseChangeList } from '../components/DoseChangeList.tsx';
 import { Feature } from '../components/Feature.tsx';
-import { EmptyState } from '../components/Page.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { RangeFilter } from '../components/RangeFilter.tsx';
 import { StepsHistory } from '../components/StepsHistory.tsx';
 import { WaistHistory } from '../components/WaistHistory.tsx';

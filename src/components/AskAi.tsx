@@ -13,7 +13,7 @@ import {
 } from '../lib/aiPrompt.ts';
 import { useFeatures } from '../lib/features.ts';
 import { setPreference, usePreferences } from '../lib/preferences.ts';
-import { FoodToast } from './FoodToast.tsx';
+import { Toast } from './Toast.tsx';
 
 interface AskAiProps {
   subject: AiSubject;
@@ -168,7 +168,7 @@ export function AskAi({ subject, context }: AskAiProps) {
           </button>
         ))}
       </div>
-      {toast && <FoodToast message={toast} onClose={closeToast} />}
+      {toast && <Toast message={toast} onClose={closeToast} label="Mat" testId="food-toast" />}
     </div>
   );
 }

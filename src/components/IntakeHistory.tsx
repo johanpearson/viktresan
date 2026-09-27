@@ -5,7 +5,7 @@ import { formatInt, formatKcal, formatShortDate } from '../lib/format.ts';
 import { averageKcal, dailyIntake } from '../lib/nutrition.ts';
 import { filterRange, type RangeId } from '../lib/stats.ts';
 import { IntakeChart } from './IntakeChart.tsx';
-import { EmptyState } from './Page.tsx';
+import { EmptyState } from './EmptyState.tsx';
 import { RangeFilter } from './RangeFilter.tsx';
 
 interface IntakeHistoryProps {

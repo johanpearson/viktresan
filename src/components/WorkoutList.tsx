@@ -68,8 +68,10 @@ export function WorkoutList({ items, mode, now, onChange, showDate, label }: Wor
               data-date={item.date}
             >
               <div className="workout-main">
-                <span className="workout-when">{when}</span>
-                <span className="workout-title">{describeWorkout(item)}</span>
+                <span className="workout-text">
+                  <span className="workout-title">{describeWorkout(item)}</span>
+                  <span className="workout-when">{when}</span>
+                </span>
                 <span className={`workout-badge badge-${status}`}>
                   {DISPLAY_STATUS_LABELS[status]}
                 </span>
@@ -79,7 +81,7 @@ export function WorkoutList({ items, mode, now, onChange, showDate, label }: Wor
                 <div className="entry-actions">
                   <button
                     type="button"
-                    className="button button-small"
+                    className="button button-secondary button-small"
                     aria-label={`Klar: ${item.type} ${when}`}
                     onClick={() => {
                       setCompleting(item);
@@ -90,7 +92,7 @@ export function WorkoutList({ items, mode, now, onChange, showDate, label }: Wor
                   {mode !== 'manage' && (
                     <button
                       type="button"
-                      className="button button-secondary button-small"
+                      className="button button-ghost button-small"
                       aria-label={`${mode === 'prompt' ? 'Hoppade över' : 'Hoppa över'}: ${item.type} ${when}`}
                       onClick={() => void setStatus(item, 'hoppad')}
                     >

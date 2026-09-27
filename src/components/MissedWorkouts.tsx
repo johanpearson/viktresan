@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { AppData } from '../lib/useAppData.ts';
 import { findUnanswered } from '../lib/workouts.ts';
+import { Card } from './Card.tsx';
 import { WorkoutList } from './WorkoutList.tsx';
 
 interface MissedWorkoutsProps {
@@ -8,27 +10,36 @@ interface MissedWorkoutsProps {
   onChange: () => Promise<unknown>;
 }
 
+/** Så många obesvarade pass visas innan "Visa alla". */
+const VISIBLE = 3;
+
 /** Överst på Översikt: planerade pass vars tid passerat, tills de är besvarade. */
 export function MissedWorkouts({ data, now, onChange }: MissedWorkoutsProps) {
+  const [all, setAll] = useState(false);
   const missed = findUnanswered(data.workouts, data.workoutPlans, now);
   if (missed.length === 0) return null;
+  const shown = all ? missed : missed.slice(0, VISIBLE);
   return (
-    <section
-      className="card missed-card"
-      aria-labelledby="missed-title"
-      data-testid="missed-workouts"
-    >
-      <h2 className="card-title" id="missed-title">
-        Blev passet av?
-      </h2>
+    <Card title="Blev passet av?" tone="warning" className="missed-card" testId="missed-workouts">
       <WorkoutList
-        items={missed}
+        items={shown}
         mode="prompt"
         now={now}
         onChange={onChange}
         showDate
         label="Obesvarade pass"
       />
-    </section>
+      {missed.length > shown.length && (
+        <button
+          type="button"
+          className="button button-ghost button-small show-more"
+          onClick={() => {
+            setAll(true);
+          }}
+        >
+          Visa alla {missed.length} obesvarade
+        </button>
+      )}
+    </Card>
   );
 }

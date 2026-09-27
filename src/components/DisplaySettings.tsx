@@ -29,6 +29,26 @@ export function DisplaySettings() {
             />
           </label>
         </li>
+        <li>
+          <label className="switch-row">
+            <span className="switch-text">
+              <span className="switch-label">Vibration vid spara</span>
+              <span className="switch-description" id="pref-haptics-desc">
+                En kort vibration när du sparar eller markerar något som klart (om telefonen stöder
+                det). Stängs alltid av med systemets inställning för minskad rörelse.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch"
+              checked={prefs.haptics}
+              aria-describedby="pref-haptics-desc"
+              data-testid="pref-haptics"
+              onChange={(e) => void setPreference('haptics', e.target.checked)}
+            />
+          </label>
+        </li>
       </ul>
     </section>
   );

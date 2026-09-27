@@ -28,7 +28,7 @@ export function IntakeChart({ days, targetKcal, height = 240 }: IntakeChartProps
       averages.map((a) => Math.round(a.kcal)),
       days.map(() => targetKcal),
     ];
-    const accent = cssVar(el, '--accent');
+    const accent = cssVar(el, '--data-food');
     const point = cssVar(el, '--chart-point');
     const goal = cssVar(el, '--chart-goal');
     const bars = uPlot.paths.bars?.({ size: [0.7, 40], radius: 0.2 });

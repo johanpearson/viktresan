@@ -23,7 +23,7 @@ export function StepsChart({ days, height = 240 }: StepsChartProps) {
       days.map((d) => toChartSeconds(d.date)),
       days.map((d) => d.steps),
     ];
-    const accent = cssVar(el, '--accent');
+    const accent = cssVar(el, '--data-steps');
     const bars = uPlot.paths.bars?.({ size: [0.7, 40], radius: 0.2 });
 
     const chart = new uPlot(

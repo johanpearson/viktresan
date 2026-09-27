@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { EmptyState } from '../components/Page.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { PhotoSessionFlow, type PhotoFlowMode } from '../components/PhotoSessionFlow.tsx';
 import { PhotoViewer } from '../components/PhotoViewer.tsx';
 import { SessionCompare } from '../components/SessionCompare.tsx';

@@ -98,7 +98,7 @@ function mealToggle(page: Page, slot: string): Locator {
 
 /** Sveper raden åt vänster med pekarhändelser (som ett finger på mobilen). */
 async function swipeLeft(row: Locator) {
-  const content = row.locator('.food-entry-content');
+  const content = row.locator('.list-row-content');
   const box = await content.boundingBox();
   if (!box) throw new Error('Raden syns inte');
   const y = box.y + box.height / 2;
@@ -971,12 +971,12 @@ test('dagsvyn med 15 poster ryms inom en skärmhöjds scroll när måltiderna ä
   const nameBox = await page
     .getByTestId('food-entry')
     .first()
-    .locator('.food-entry-name')
+    .locator('.list-row-primary')
     .boundingBox();
   const lineHeight = await page
     .getByTestId('food-entry')
     .first()
-    .locator('.food-entry-name')
+    .locator('.list-row-primary')
     .evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
   expect(nameBox?.height).toBeLessThanOrEqual(lineHeight * 2 + 1);
 
