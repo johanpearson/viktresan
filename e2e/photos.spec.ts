@@ -222,7 +222,8 @@ test('nytt fototillfälle med båda vinklarna via filväljaren när kameran neka
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Framsteg');
   await expect(page.getByText('Här samlas dina progressbilder')).toBeVisible();
-  await expect(page.getByTestId('photo-storage')).toHaveText('0 st · 0 B');
+  // Tomt läge: ingen lagringsruta förrän det finns bilder.
+  await expect(page.getByTestId('photo-storage')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Nytt fototillfälle' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Nytt fototillfälle' });
@@ -277,6 +278,7 @@ test('nytt fototillfälle med båda vinklarna via filväljaren när kameran neka
   await expect(row.getByTestId('photo').nth(0)).toHaveAttribute('data-angle', 'fram');
   await expect(row.getByTestId('photo').nth(1)).toHaveAttribute('data-angle', 'profil');
   await expect(page.getByTestId('session-count')).toHaveText('1');
+  await expect(page.getByTestId('photo-storage')).toHaveText(/^2 st · /);
 
   // Samma komprimering och EXIF-rensning som tidigare.
   const stored = await readStoredPhotos(page);

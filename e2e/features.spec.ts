@@ -163,7 +163,7 @@ test('bilder av döljer fliken i Framsteg och i kalendern', async ({ page }) => 
   expect(v.legend).not.toContain('Bilder');
   expect(v.day).not.toContain('Bilder');
   await page.goto('./#/framsteg/bilder');
-  await expect(page.getByRole('heading', { name: 'Fototillfällen' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Nytt fototillfälle' })).toHaveCount(0);
   await expect(page.getByTestId('history-table')).toBeVisible();
 });
 

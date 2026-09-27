@@ -79,7 +79,7 @@ test('5 kg: helskärmsfirandet visas en gång och milstolpen hamnar i listan', a
   // Framsteg → Milstolpar: uppnådda med datum och tre kommande.
   await page.goto('./#/framsteg/milstolpar');
   const reached = page.getByTestId('reached-milestones');
-  await expect(reached.locator('[data-milestone="kg-5"]')).toContainText('5 kg lättare');
+  await expect(reached.getByTestId('milestone-kg-5')).toContainText('5 kg lättare');
   await expect(reached.getByRole('listitem')).toHaveCount(3);
   await expect(page.getByTestId('upcoming-milestones').getByRole('listitem')).toHaveCount(3);
   await expectNoViolations(page, 'Milstolpar');

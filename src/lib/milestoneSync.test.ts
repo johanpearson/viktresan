@@ -17,7 +17,7 @@ import {
 import { deleteTestDb } from '../test/db.ts';
 import { createBackup, readBackup } from './backup.ts';
 import { addDays } from './dates.ts';
-import { syncMilestones } from './milestoneSync.ts';
+import { onMilestonesSaved, syncMilestones } from './milestoneSync.ts';
 
 const TODAY = '2026-09-26';
 const profile = { startDate: '2026-01-01', startWeightKg: 100, heightCm: 180, goalWeightKg: 80 };
@@ -76,6 +76,21 @@ describe('syncMilestones', () => {
     expect(await syncMilestones({ mode: 'silent', today: TODAY })).toEqual([]);
     expect((await listMilestones()).map((m) => m.id)).toEqual(['pass-1']);
     expect(await syncMilestones({ mode: 'live', today: TODAY })).toEqual([]);
+  });
+
+  it('meddelar när en körning sparat milstolpar – även utan firande', async () => {
+    let calls = 0;
+    const off = onMilestonesSaved(() => {
+      calls += 1;
+    });
+    await saveProfile(profile);
+    await putWorkout(workout(TODAY));
+    await syncMilestones({ mode: 'silent', today: TODAY });
+    expect(calls).toBe(1);
+    // Inget nytt sparat → inget meddelande.
+    await syncMilestones({ mode: 'live', today: TODAY });
+    expect(calls).toBe(1);
+    off();
   });
 
   it('två snabba sparningar firar inte samma milstolpe två gånger', async () => {

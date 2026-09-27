@@ -305,6 +305,32 @@ Två kolumner med `log-tile` (`--radius-lg`, 12/16 px inre marginal, minst `--ta
 via `data-type`) och namnet (`--text-lg`) på samma rad, status (`--text-xs`, dämpad) under över hela bredden. Rutan
 öppnar loggtypens panel. Inga ikoner ovanför texten – rutan ska inte vara högre än två textrader.
 
+### Galleri (Framsteg → Bilder)
+
+```tsx
+<Card title="Fototillfällen" action={<button className="button button-secondary button-small">Nytt fototillfälle</button>}>
+  <SegmentedControl label="Visa bilder" options={…} className="gallery-views" … />
+  <ul className="list">
+    <ListRow primary="Jämför tillfällen" secondary="Första mot senaste …" chevron onClick={compare} />
+    <ListRow primary="22 sep. 2026" secondary="Morgon" value="87,6 kg" chevron onClick={edit}>
+      <ul className="session-photos">…miniatyrer…</ul>
+    </ListRow>
+  </ul>
+</Card>
+```
+
+Poster med bilder är `ListRow` (tryck = öppna posten) med bilderna som `children` i ett rutnät (`session-photos`, tre
+kolumner, samma storlek som `photo-grid` per vinkel, `--space-2` mellanrum). Bilderna är egna knappar (helskärm), en tom
+plats är en streckad ruta "+ Profil" (ett litet tomt läge). Ingen knapp per post. Tomt galleri = `EmptyState` med
+"Nytt fototillfälle"; kort som bara beskriver innehållet (lagring) visas först när det finns något.
+
+### Milstolpar
+
+`ListRow` med märket som `leading` (`milestone-badge`, 40 px, `--text-xs`; nådd = `--accent`, kommande =
+`milestone-badge-upcoming`, tonad `--track`). Kommande: `secondary` är en tunn `ProgressBar` (`milestone-progress`) och
+`value` "0,1 kg kvar" (`milestone-remaining`, minsta bredd så att staplarna slutar lika). Uppnådda: datum som `value`.
+Streckade ramar betyder tomt läge – inte "ej nådd".
+
 ### Nyckeltal och tät tabell
 
 ```tsx

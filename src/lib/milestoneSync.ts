@@ -50,6 +50,18 @@ export interface SyncOptions {
 }
 
 let queue: Promise<unknown> = Promise.resolve();
+const listeners = new Set<() => void>();
+
+/**
+ * Anropas när en körning sparat nya milstolpar (även `silent` vid start), så att en vy som
+ * redan läst listan (Framsteg → Milstolpar) kan läsa om den.
+ */
+export function onMilestonesSaved(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 /** Sparar nådda milstolpar och returnerar de som ska firas (viktigast först). */
 export function syncMilestones(options: SyncOptions): Promise<ReachedMilestone[]> {
@@ -74,5 +86,6 @@ async function runSync({
   await addMilestones(
     diff.added.map((r) => ({ id: r.milestone.id, date: r.date, createdAt: now })),
   );
+  if (diff.added.length > 0) for (const listener of listeners) listener();
   return diff.celebrate;
 }

@@ -97,6 +97,87 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-mat-historik`);
     });
 
+    test('vy: framsteg-bilder-galleri', async ({ page }) => {
+      await open(page, '#/framsteg/bilder');
+      // Enfärgade bilder med en siluett, kodade i samma Chromium som jämför (deterministiskt).
+      const [front, side, later] = await page.evaluate(
+        (colors) =>
+          Promise.all(
+            colors.map(async ([bg, fg]) => {
+              const canvas = document.createElement('canvas');
+              canvas.width = 300;
+              canvas.height = 400;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) throw new Error('canvas');
+              ctx.fillStyle = bg;
+              ctx.fillRect(0, 0, 300, 400);
+              ctx.fillStyle = fg;
+              ctx.beginPath();
+              ctx.ellipse(150, 90, 40, 48, 0, 0, Math.PI * 2);
+              ctx.ellipse(150, 280, 80, 130, 0, 0, Math.PI * 2);
+              ctx.fill();
+              const blob = await new Promise<Blob | null>((resolve) => {
+                canvas.toBlob(resolve, 'image/webp', 0.8);
+              });
+              if (!blob) throw new Error('toBlob');
+              return Array.from(new Uint8Array(await blob.arrayBuffer()));
+            }),
+          ),
+        [
+          ['#cbd5e1', '#475569'],
+          ['#d6d3d1', '#57534e'],
+          ['#bfdbfe', '#1e3a8a'],
+        ] as const,
+      );
+      const photo = (
+        id: string,
+        sessionId: string,
+        date: string,
+        angle: string,
+        bytes?: number[],
+      ) => ({
+        id,
+        sessionId,
+        date,
+        angle,
+        ...(angle === 'profil' ? { side: 'vanster' } : {}),
+        width: 300,
+        height: 400,
+        createdAt: Date.parse(`${date}T08:00:00+02:00`),
+        bytes: bytes ?? [],
+      });
+      await seed(page, {
+        photoSessions: [
+          {
+            id: 's1',
+            date: '2026-08-25',
+            weightKg: 90.5,
+            note: 'Morgon, samma spegel',
+            createdAt: Date.parse('2026-08-25T08:00:00+02:00'),
+          },
+          {
+            id: 's2',
+            date: '2026-09-22',
+            weightKg: 87.6,
+            createdAt: Date.parse('2026-09-22T08:00:00+02:00'),
+          },
+        ],
+        photos: [
+          photo('p1', 's1', '2026-08-25', 'fram', front),
+          photo('p2', 's1', '2026-08-25', 'profil', side),
+          photo('p3', 's2', '2026-09-22', 'fram', later),
+        ],
+      });
+      await page.reload();
+      await expect(page.getByTestId('photo')).toHaveCount(3);
+      await expect
+        .poll(() =>
+          page.evaluate(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0)),
+        )
+        .toBe(true);
+      await shot(page, `${theme}-framsteg-bilder-galleri`);
+    });
+
     test('vy: kalender-vecka', async ({ page }) => {
       await open(page, '#/kalender');
       await page.getByRole('button', { name: 'Vecka', exact: true }).tap();

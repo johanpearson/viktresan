@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Card } from '../components/Card.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
+import { ListRow } from '../components/ListRow.tsx';
 import { PhotoSessionFlow, type PhotoFlowMode } from '../components/PhotoSessionFlow.tsx';
 import { PhotoViewer } from '../components/PhotoViewer.tsx';
 import { SessionCompare } from '../components/SessionCompare.tsx';
+import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import { SessionEditSheet } from '../components/SessionEditSheet.tsx';
+import { Skeleton } from '../components/Skeleton.tsx';
 import { deletePhoto, setPhotoAngle, type PhotoSession } from '../db/db.ts';
 import { formatDate, formatInt, formatKg, formatPhotoLabel } from '../lib/format.ts';
 import {
@@ -78,29 +82,16 @@ export function Bilder() {
     await reload();
   }
 
-  const loaded = sessions !== null && photos !== null;
+  const loaded = sessions !== null && photos !== null && data !== null;
+  // Jämförelsen öppnas från en rad överst i galleriet och stängs i jämförelsen.
+  const canCompare = rows.length >= 2 && !comparing;
+  const startFlow = () => {
+    setFlow({ kind: 'new' });
+  };
 
   return (
     <>
-      <section className="card" aria-labelledby="sessions-title">
-        <h2 className="card-title" id="sessions-title">
-          Fototillfällen
-        </h2>
-        <p className="form-note">
-          Ta bilder framifrån och i profil vid varje tillfälle, gärna med samma ljus och avstånd.
-          Bilderna lämnar aldrig enheten.
-        </p>
-        <button
-          type="button"
-          className="button session-new"
-          disabled={!data}
-          onClick={() => {
-            setFlow({ kind: 'new' });
-          }}
-        >
-          Nytt fototillfälle
-        </button>
-      </section>
+      {!loaded && <Skeleton cards={2} />}
 
       {unassigned.length > 0 && (
         <AngleQueue photos={unassigned} labelFor={labelFor} onSetAngle={handleSetAngle} />
@@ -116,59 +107,63 @@ export function Bilder() {
       )}
 
       {loaded && rows.length === 0 && (
-        <EmptyState>Här samlas dina progressbilder. De lämnar aldrig enheten.</EmptyState>
+        <EmptyState
+          title="Inga bilder än"
+          action={{ label: 'Nytt fototillfälle', onClick: startFlow }}
+        >
+          Här samlas dina progressbilder – framifrån och i profil, gärna med samma ljus och avstånd.
+          De lämnar aldrig enheten.
+        </EmptyState>
       )}
 
-      {rows.length > 0 && (
-        <section className="card" aria-labelledby="gallery-title">
-          <div className="card-header">
-            <h2 className="card-title" id="gallery-title">
-              Galleri
-            </h2>
-            {rows.length >= 2 && (
-              <button
-                type="button"
-                className="button button-secondary button-small"
-                aria-pressed={comparing}
-                onClick={() => {
-                  setComparing((c) => !c);
-                }}
-              >
-                {comparing ? 'Stäng jämförelse' : 'Jämför'}
-              </button>
-            )}
-          </div>
-          <div className="segmented gallery-views" role="group" aria-label="Visa bilder">
-            {VIEWS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className="segmented-button"
-                aria-pressed={option.id === view}
-                onClick={() => {
-                  setView(option.id);
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          {view === 'tillfallen' ? (
-            <ol className="session-list">
-              {rows.map((row) => (
-                <SessionRowView
-                  key={row.session.id}
-                  row={row}
-                  labelFor={labelFor}
-                  onView={setViewingId}
-                  onEdit={setEditing}
-                  onAdd={(session, angle) => {
-                    setFlow({ kind: 'add', session, angle });
+      {loaded && rows.length > 0 && (
+        <Card
+          title="Fototillfällen"
+          action={
+            <button
+              type="button"
+              className="button button-secondary button-small"
+              onClick={startFlow}
+            >
+              Nytt fototillfälle
+            </button>
+          }
+        >
+          <SegmentedControl
+            label="Visa bilder"
+            options={VIEWS}
+            value={view}
+            onChange={setView}
+            className="gallery-views"
+          />
+          {(view === 'tillfallen' || canCompare) && (
+            <ul className="list">
+              {canCompare && (
+                <ListRow
+                  primary="Jämför tillfällen"
+                  secondary="Första mot senaste, sida vid sida eller med reglage"
+                  chevron
+                  onClick={() => {
+                    setComparing(true);
                   }}
                 />
-              ))}
-            </ol>
-          ) : (
+              )}
+              {view === 'tillfallen' &&
+                rows.map((row) => (
+                  <SessionRowView
+                    key={row.session.id}
+                    row={row}
+                    labelFor={labelFor}
+                    onView={setViewingId}
+                    onEdit={setEditing}
+                    onAdd={(session, angle) => {
+                      setFlow({ kind: 'add', session, angle });
+                    }}
+                  />
+                ))}
+            </ul>
+          )}
+          {view !== 'tillfallen' && (
             <AngleGrid
               photos={browseOrder}
               angle={view}
@@ -177,10 +172,10 @@ export function Bilder() {
               onView={setViewingId}
             />
           )}
-        </section>
+        </Card>
       )}
 
-      {photos && <StorageCard photos={photos} sessions={rows.length} />}
+      {loaded && photos.length > 0 && <StorageCard photos={photos} sessions={rows.length} />}
 
       {viewingId && (
         <PhotoViewer
@@ -256,30 +251,25 @@ interface SessionRowViewProps {
   onAdd: (session: PhotoSession, angle: CaptureAngle) => void;
 }
 
-/** Ett tillfälle: datum och vikt ovanför, framifrån och profil sida vid sida. */
+/**
+ * Ett tillfälle: en `ListRow` (datum, anteckning, vikt – tryck = ändra tillfället) med
+ * framifrån och profil i ett rutnät under. Tom vinkel = "Lägg till".
+ */
 function SessionRowView({ row, labelFor, onView, onEdit, onAdd }: SessionRowViewProps) {
   const { session } = row;
   const date = formatDate(session.date);
   return (
-    <li className="session-row" data-testid="photo-session" aria-label={`Tillfället ${date}`}>
-      <div className="session-head">
-        <h3 className="session-date">{date}</h3>
-        <span className="session-weight">
-          {session.weightKg == null ? 'Ingen vikt' : formatKg(session.weightKg)}
-        </span>
-        <button
-          type="button"
-          className="button button-secondary button-small"
-          aria-label={`Ändra tillfället ${date}`}
-          onClick={() => {
-            onEdit(session);
-          }}
-        >
-          Ändra
-        </button>
-      </div>
-      {session.note && <p className="session-note">{session.note}</p>}
-      <ul className="session-photos">
+    <ListRow
+      testId="photo-session"
+      primary={date}
+      secondary={session.note}
+      value={session.weightKg == null ? 'Ingen vikt' : formatKg(session.weightKg)}
+      chevron
+      onClick={() => {
+        onEdit(session);
+      }}
+    >
+      <ul className="session-photos" aria-label={`Bilder ${date}`}>
         {CAPTURE_ANGLES.flatMap((angle) =>
           row[angle].length > 0
             ? row[angle].map((photo) => (
@@ -314,7 +304,7 @@ function SessionRowView({ row, labelFor, onView, onEdit, onAdd }: SessionRowView
           </li>
         ))}
       </ul>
-    </li>
+    </ListRow>
   );
 }
 
@@ -363,10 +353,7 @@ interface AngleQueueProps {
 /** Uppmaning att ange vinkel på migrerade bilder, med snabbval direkt på bilden. */
 function AngleQueue({ photos, labelFor, onSetAngle }: AngleQueueProps) {
   return (
-    <section className="card" aria-labelledby="angle-queue-title" data-testid="angle-queue">
-      <h2 className="card-title" id="angle-queue-title">
-        Ange vinkel
-      </h2>
+    <Card title="Ange vinkel" tone="warning" testId="angle-queue">
       <p className="form-note">
         {photos.length === 1 ? '1 bild saknar' : `${formatInt(photos.length)} bilder saknar`}{' '}
         vinkel. Välj Framifrån eller Profil på bilden så går den att jämföra per vinkel.
@@ -395,7 +382,7 @@ function AngleQueue({ photos, labelFor, onSetAngle }: AngleQueueProps) {
           );
         })}
       </ul>
-    </section>
+    </Card>
   );
 }
 
@@ -415,28 +402,36 @@ function StorageCard({ photos, sessions }: { photos: readonly PhotoItem[]; sessi
   }, [photos]);
 
   return (
-    <section className="card" aria-labelledby="storage-title">
-      <h2 className="card-title" id="storage-title">
-        Lagring
-      </h2>
-      <dl className="kv">
-        <dt>Bilder</dt>
-        <dd data-testid="photo-storage">
-          {photos.length} st · {formatBytes(photoBytes)}
-        </dd>
-        <dt>Tillfällen</dt>
-        <dd data-testid="session-count">{formatInt(sessions)}</dd>
-        <dt>Appen använder</dt>
-        <dd data-testid="storage-usage">
-          {status == null
-            ? 'Kontrollerar…'
-            : status.usage == null
-              ? 'Okänt – webbläsaren rapporterar inte lagringen.'
-              : status.quota == null
-                ? formatBytes(status.usage)
-                : `${formatBytes(status.usage)} av ${formatBytes(status.quota)}`}
-        </dd>
-      </dl>
-    </section>
+    <Card title="Lagring">
+      <ul className="list">
+        <ListRow
+          primary="Bilder"
+          value={
+            <span data-testid="photo-storage">
+              {formatInt(photos.length)} st · {formatBytes(photoBytes)}
+            </span>
+          }
+        />
+        <ListRow
+          primary="Tillfällen"
+          value={<span data-testid="session-count">{formatInt(sessions)}</span>}
+        />
+        <ListRow
+          primary="Appen använder"
+          wrapValue
+          value={
+            <span data-testid="storage-usage">
+              {status == null
+                ? 'Kontrollerar…'
+                : status.usage == null
+                  ? 'Okänt – webbläsaren rapporterar inte lagringen.'
+                  : status.quota == null
+                    ? formatBytes(status.usage)
+                    : `${formatBytes(status.usage)} av ${formatBytes(status.quota)}`}
+            </span>
+          }
+        />
+      </ul>
+    </Card>
   );
 }

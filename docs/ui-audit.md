@@ -9,7 +9,8 @@ baslinjerna i repot visar läget _efter_ den här PR:en. Översikt före finns k
 PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.png`) och Kalender före PR #22
 (`ui-audit/fore-*-kalender.png`, `ui-audit/fore-*-kalender-vecka.png`), Mat → Egna och Mat → Historik före PR #23
 (`ui-audit/fore-*-mat-egna.png`, `ui-audit/fore-*-mat-historik-7dagar.png`), Framsteg → Veckor och Logga före PR #24
-(`ui-audit/fore-*-framsteg-veckor.png`, `ui-audit/fore-*-logga.png`).
+(`ui-audit/fore-*-framsteg-veckor.png`, `ui-audit/fore-*-logga.png`), Framsteg → Bilder och Milstolpar före PR #25
+(`ui-audit/fore-*-framsteg-bilder.png`, `ui-audit/fore-*-framsteg-bilder-galleri.png`, `ui-audit/fore-*-framsteg-milstolpar.png`).
 
 **Referens:** Mat → Dag (omgjord i PR #16/#17): 16 px sidmarginal, 8 px mellan kort, 12–16 px inre
 marginal, en rad per post med högerställda tabellsiffror, sekundärtext 13 px, inga knappar i listorna
@@ -88,8 +89,9 @@ vid jämförelse, **Låg** = putsning.
 | Hög   | **Historik är 3 800 px** (5 100 px med två månaders mer data): "Vikt dag för dag" listar alla mätningar i en tabell, dryckeshistoriken har en stapel per dag. Behöver begränsas (senaste 14 + "Visa fler") eller grupperas per vecka. | ✅ PR #21 |
 | Medel | Två segmentkontroller ovanpå varandra (flikar + tidsfilter), båda 48 px.                                                                                                                                                              | ✅ PR #21 |
 | Medel | Veckor: varje vecka är ett stort kort med "Fråga AI om veckan" som knapp i varje kort; värden radbryts.                                                                                                                               | ✅ PR #24 |
-| Medel | Bilder: tomt läge och lagringskortet saknar mellanrum (korten klistras ihop).                                                                                                                                                         |           |
-| Låg   | Milstolpar: bra täthet; ikonerna i streckade cirklar är den enda platsen med streckade ramar utöver tomma lägen.                                                                                                                      |           |
+| Medel | Bilder: tomt läge och lagringskortet saknar mellanrum (korten klistras ihop).                                                                                                                                                         | ✅ PR #25 |
+| Låg   | Milstolpar: bra täthet; ikonerna i streckade cirklar är den enda platsen med streckade ramar utöver tomma lägen.                                                                                                                      | ✅ PR #25 |
+| Medel | Bilder: jämförelsen (`SessionCompare`) har egna knappar i kortets rubrik ("Första mot senaste", "Avsluta jämförelse") och helskärmsvyn (`PhotoViewer`) tar bort med bekräftelse i två steg i stället för Ångra.                       |           |
 
 ## Inställningar
 
@@ -227,9 +229,34 @@ vid jämförelse, **Låg** = putsning.
   `weekSummary.ts`. De två `.week-list`-reglerna (Kalender och gamla Veckor) är sammanslagna – bara Kalenderns veckovy
   använder klassen, och den ser likadan ut.
 
+## Åtgärdat: Framsteg → Bilder och Milstolpar (PR #25)
+
+- **Bilder, tomt läge**: ett `EmptyState` ("Inga bilder än", förklaringen och knappen "Nytt fototillfälle") i stället för
+  tre block (introkort med fylld knapp, streckad ruta, lagringskort med "0 st · 0 B"). Lagringskortet visas först när det
+  finns bilder. Innehållet slutar på ~400 px i stället för ~730 px.
+- **Tillfällen som lista**: ett `Card` "Fototillfällen" med "Nytt fototillfälle" som sekundär knapp i rubrikraden,
+  vinkelvalet som `SegmentedControl` och en `ListRow` per tillfälle (datum, anteckning, vikt till höger, ›) med bilderna
+  i ett rutnät under. Knappen "Ändra" per tillfälle är borta – tryck på raden öppnar tillfället. Bilderna har samma storlek
+  (tre kolumner) i tillfällena som per vinkel. "Jämför" är raden "Jämför tillfällen" överst i listan (stängs i
+  jämförelsen). Med testdatan (två tillfällen, tre bilder) är vyn **1 208 px i stället för 1 570 px** (−23 %) och ett
+  tillfälle tar ~210 px i stället för ~330 px.
+- **Lagring** (och "Ange vinkel", med `tone="warning"`) är `Card`; värdena är `ListRow` med värdet till höger i stället för
+  `dl` med etikett och värde på varsin rad. `Skeleton` medan bilderna läses.
+- **Milstolpar som listor**: en `ListRow` per milstolpe med märket som `leading` (40 px; nådd = fylld, kommande = tonad
+  i stället för streckad cirkel). Kommande: rubrik, tunn stapel under och "0,1 kg kvar" till höger; uppnådda: rubrik och
+  datum till höger på en rad. En rad är 57 px i stället för 64–80 px; vyn 938 px i stället för 1 028 px.
+- **Tomma lägen med knapp**: inga uppnådda → "Inga milstolpar än" + "Logga vikt"; utan profil → "Fyll i profilen" (tidigare
+  en länk i löptext). `Skeleton` i stället för en tom sida under laddning.
+- **Rättat**: Milstolpar kunde läsas innan startens tysta synk sparat passerade milstolpar, och "Uppnådda" var då tom tills
+  man bytte flik (så såg baslinjen ut). `onMilestonesSaved` i `milestoneSync.ts` låter vyn läsa om. Före-bilderna är tagna
+  med rättelsen, så att listorna går att jämföra.
+- Nytt visuellt test `framsteg-bilder-galleri` (två tillfällen, bilder ritade med canvas i testet).
+- Designsystemet: mönstren "Galleri (Framsteg → Bilder)" och "Milstolpar" i `DESIGN.md`.
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vy: 8.
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla vyer är genomgångna; kvar är paneler och
+kontroller från tabellerna ovan (9–12). Ta nästa punkt utan ✅ (eller de två närmaste om de är små).
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
 2. ~~**Inställningar**~~ ✅ PR #20.
@@ -238,7 +265,11 @@ Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarva
 5. ~~**Mat → Egna och Historik**~~ ✅ PR #23.
 6. ~~**Framsteg → Veckor**~~ ✅ PR #24.
 7. ~~**Logga** (rutnätet)~~ ✅ PR #24.
-8. **Framsteg → Bilder och Milstolpar** (nästa): marginaler, tomt läge med knapp.
-
-Kvar utanför vyerna (från tabellerna ovan): radioknappar i Inställningar, Mats redigera- och analyspanel (Låg/Medel),
-sökikon i Mats sök-sheet.
+8. ~~**Framsteg → Bilder och Milstolpar**~~ ✅ PR #25.
+9. **Mats redigera- och analyspanel** (nästa; Medel/Låg, se Mat): "Ta bort" som destruktiv textknapp längst ner i
+   stället för en helbreddsknapp under Spara/Avbryt; nyckeltalen i analysen som `ListRow` med värdet till höger.
+10. **Sökikon i Mats sök-sheet** (Låg, se Mat) – liten, passar ihop med 9.
+11. **Radioknappar i Inställningar** (Medel, se Inställningar): egna kontroller som switcharna (`SegmentedControl` eller
+    valrader) i stället för webbläsarens standard.
+12. **Jämförelsen och helskärmsvyn i Bilder** (Medel, se Framsteg): `SessionCompare` har egna knappar i kortets rubrik
+    och `PhotoViewer` tar bort med bekräftelse i två steg – bör följa panelmönstret (Ta bort direkt + `Toast` med Ångra).
