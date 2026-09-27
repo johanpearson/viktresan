@@ -1,11 +1,12 @@
 /**
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
- * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida och kameravyns
- * spökbild. Lagras i `settings`
+ * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
+ * spökbild och vad "Fråga AI" tar med i prompten. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
 import { SETTING_PREFERENCES, getSetting, setSetting } from '../db/db.ts';
+import { DEFAULT_AI_OPTIONS, parseAiOptions, type AiOptions } from './aiPrompt.ts';
 import { isProfileSide, type ProfileSide } from './photoSessions.ts';
 
 export interface Preferences {
@@ -19,6 +20,8 @@ export interface Preferences {
   ghostEnabled: boolean;
   /** Spökbildens opacitet, 0,1–0,9. */
   ghostOpacity: number;
+  /** Kryssrutorna i "Fråga AI" (GLP-1 är av som standard). */
+  aiOptions: AiOptions;
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -30,6 +33,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   profileSide: 'vanster',
   ghostEnabled: true,
   ghostOpacity: 0.4,
+  aiOptions: DEFAULT_AI_OPTIONS,
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -53,6 +57,7 @@ export function parsePreferences(raw: unknown): Preferences {
       stored.ghostOpacity <= GHOST_OPACITY_MAX
         ? stored.ghostOpacity
         : DEFAULT_PREFERENCES.ghostOpacity,
+    aiOptions: parseAiOptions(stored.aiOptions),
   };
 }
 

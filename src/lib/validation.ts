@@ -496,3 +496,6 @@ export function parseSymptomFields(fields: SymptomFields): Parsed<SymptomValues>
   if (fields.appetite !== '') value.appetite = appetite;
   return { ok: true, value };
 }
+
+/** Längsta tillåtna matpreferenser (Inställningar → Matpreferenser). */
+export const FOOD_PREFERENCES_MAX = 1000;

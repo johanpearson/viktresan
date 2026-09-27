@@ -56,6 +56,14 @@ export function formatShortDate(iso: string): string {
   return shortDateFormat.format(new Date(toDayNumber(iso) * 86_400_000));
 }
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+/** "2026-09-26" → "26 sep" – utan punkt, för namn och löptext. */
+export function formatDayMonth(iso: string): string {
+  const month = MONTHS[Number(iso.slice(5, 7)) - 1] ?? '';
+  return `${String(Number(iso.slice(8, 10)))} ${month}`;
+}
+
 /**
  * Tolkar ett tal skrivet med komma eller punkt ("81,5", " 81.5 ").
  * Returnerar `null` för tom eller ogiltig inmatning.

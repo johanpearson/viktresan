@@ -3,6 +3,7 @@ import { parseLivsmedel } from './livsmedel.ts';
 import {
   parseFoodList,
   pickGroup,
+  pickExtraNutrients,
   pickNutrients,
   serializeCompactFile,
   toCompactFile,
@@ -132,5 +133,54 @@ describe('toCompactFile', () => {
     ]);
     const parsed = parseLivsmedel(JSON.parse(serializeCompactFile(file)));
     expect(parsed.foods[1]?.group).toBe('Drycker');
+  });
+
+  it('skriver övriga näringsämnen som åttonde kolumn med rubriker i `extra`', () => {
+    const file = toCompactFile(
+      [
+        {
+          nummer: 1,
+          namn: 'Apelsin',
+          kcal: 50,
+          proteinG: 0.8,
+          carbsG: 10.4,
+          fatG: 0.2,
+          extra: { vitaminC: 51, fiberG: 2 },
+        },
+        { nummer: 2, namn: 'Banan', kcal: 95, proteinG: 1.1, carbsG: 21, fatG: 0.3 },
+        { nummer: 3, namn: 'Läsk', kcal: 36, proteinG: 0, carbsG: 8.8, fatG: 0, grupp: 'Drycker' },
+      ],
+      '2026-09-25',
+    );
+    expect(file.extra).toEqual(['fiberG', 'vitaminC']);
+    expect(file.foods).toEqual([
+      [1, 'Apelsin', 50, 0.8, 10.4, 0.2, '', [2, 51]],
+      [2, 'Banan', 95, 1.1, 21, 0.3],
+      [3, 'Läsk', 36, 0, 8.8, 0, 'Drycker'],
+    ]);
+    const text = serializeCompactFile(file);
+    expect(text.split('\n')).toHaveLength(6);
+    const parsed = parseLivsmedel(JSON.parse(text));
+    expect(parsed.foods[0]?.extra).toEqual({ fiberG: 2, vitaminC: 51 });
+  });
+});
+
+describe('pickExtraNutrients', () => {
+  it('matchar på kod eller namn och räknar om enheten', () => {
+    const extra = pickExtraNutrients({
+      naringsvarden: [
+        { namn: 'Fibrer', euroFIRkod: 'FIBT', varde: '2,4', enhet: 'g' },
+        { namn: 'Sockerarter, totalt', varde: 8.1, enhet: 'g' },
+        { namn: 'Vitamin C', euroFIRkod: 'VITC', varde: 0.051, enhet: 'g' },
+        { namn: 'Vitamin D', euroFIRkod: 'VITD', varde: 1.234, enhet: 'µg' },
+        { namn: 'Järn, Fe', varde: 450, enhet: 'µg' },
+        { namn: 'Kalium, K', euroFIRkod: 'K', varde: -1, enhet: 'mg' },
+      ],
+    });
+    expect(extra).toEqual({ fiberG: 2.4, sugarG: 8.1, vitaminC: 51, vitaminD: 1.23, iron: 0.45 });
+  });
+
+  it('tomt utan näringsvärden', () => {
+    expect(pickExtraNutrients('nej')).toEqual({});
   });
 });

@@ -4,6 +4,7 @@ import { DisplaySettings } from '../components/DisplaySettings.tsx';
 import { ExportBackup } from '../components/ExportBackup.tsx';
 import { Feature } from '../components/Feature.tsx';
 import { FeatureSettings } from '../components/FeatureSettings.tsx';
+import { FoodPreferencesSettings } from '../components/FoodPreferencesSettings.tsx';
 import { ImportBackup } from '../components/ImportBackup.tsx';
 import { LockSettings } from '../components/LockSettings.tsx';
 import { Page } from '../components/Page.tsx';
@@ -79,6 +80,11 @@ export function Installningar() {
       {data && (
         <Feature id="mat">
           <ProteinGoalSettings key={imports} data={data} onChange={reload} />
+        </Feature>
+      )}
+      {data && (
+        <Feature id="mat">
+          <FoodPreferencesSettings key={imports} data={data} onChange={reload} />
         </Feature>
       )}
       {data && (

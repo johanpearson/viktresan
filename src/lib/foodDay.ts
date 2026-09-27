@@ -2,12 +2,14 @@
  * Mat → Dag: dagens logg per måltid, pågående måltid och ingredienser i en
  * loggad sparad måltid. Rena funktioner.
  */
-import type { FoodLogEntry, SavedMeal } from '../db/db.ts';
+import type { FoodLogEntry, MealIngredient, SavedMeal } from '../db/db.ts';
 import { addDays, toDayNumber } from './dates.ts';
 import { mealFoodId } from './foodCatalog.ts';
+import { formatDayMonth } from './format.ts';
 import {
   MEAL_SLOTS,
   defaultMealSlot,
+  mealLabel,
   scaleNutrients,
   totalOf,
   type MealSlot,
@@ -86,4 +88,53 @@ export function dayLabel(date: string, today: string): string {
   if (date === today) return 'Idag';
   if (date === addDays(today, -1)) return 'Igår';
   return dayFormat.format(new Date(toDayNumber(date) * 86_400_000));
+}
+
+/** Förifyllt namn när en måltid sparas som egen måltid: "Frukost 26 sep". */
+export function savedMealName(slot: MealSlot, date: string): string {
+  return `${mealLabel(slot)} ${formatDayMonth(date)}`;
+}
+
+/**
+ * Loggposter → ingredienser i en egen måltid, med mängd och enhet som de loggades.
+ * En loggad sparad måltid delas upp i sina ingredienser (i gram, skalade efter loggad
+ * mängd) – en måltid kan inte vara ingrediens i en annan.
+ */
+export function entriesToMealItems(
+  entries: readonly FoodLogEntry[],
+  meals: readonly SavedMeal[],
+): MealIngredient[] {
+  const sorted = [...entries].sort((a, b) => a.createdAt - b.createdAt);
+  return sorted.flatMap((entry): MealIngredient[] => {
+    if (entry.foodId.startsWith('maltid:')) {
+      const meal = meals.find((m) => mealFoodId(m.id) === entry.foodId);
+      const totalG = meal?.items.reduce((s, i) => s + i.grams, 0) ?? 0;
+      if (meal && totalG > 0) {
+        const factor = entry.grams / totalG;
+        return meal.items.map((item) => {
+          const grams = Math.round(item.grams * factor * 10) / 10;
+          const ingredient: MealIngredient = {
+            foodId: item.foodId,
+            name: item.name,
+            per100: item.per100,
+            amount: grams,
+            unit: 'g',
+            grams,
+          };
+          if (item.per100Unit) ingredient.per100Unit = item.per100Unit;
+          return ingredient;
+        });
+      }
+    }
+    const ingredient: MealIngredient = {
+      foodId: entry.foodId,
+      name: entry.name,
+      per100: entry.per100,
+      amount: entry.amount,
+      unit: entry.unit,
+      grams: entry.grams,
+    };
+    if (entry.per100Unit) ingredient.per100Unit = entry.per100Unit;
+    return [ingredient];
+  });
 }

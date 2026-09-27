@@ -50,11 +50,12 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
       setMessage({ kind: 'error', text: result.error });
       return;
     }
-    // Dryckes- och proteinmålet sparas i egna kort under Inställningar och ska inte försvinna här.
+    // Dryckes-, proteinmålet och matpreferenserna sparas i egna kort under Inställningar och ska inte försvinna här.
     const next: Profile = { ...result.value };
     if (profile?.waterGoalMl != null) next.waterGoalMl = profile.waterGoalMl;
     if (profile?.waterTrainingBonus != null) next.waterTrainingBonus = profile.waterTrainingBonus;
     if (profile?.proteinFactor != null) next.proteinFactor = profile.proteinFactor;
+    if (profile?.foodPreferences != null) next.foodPreferences = profile.foodPreferences;
     await saveProfile(next);
     setMessage({ kind: 'ok', text: 'Profilen är sparad.' });
     onSaved();
