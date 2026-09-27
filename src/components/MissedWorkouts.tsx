@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AppData } from '../lib/useAppData.ts';
 import { findUnanswered } from '../lib/workouts.ts';
 import { Card } from './Card.tsx';
+import { ShowMore } from './ShowMore.tsx';
 import { WorkoutList } from './WorkoutList.tsx';
 
 interface MissedWorkoutsProps {
@@ -29,17 +30,14 @@ export function MissedWorkouts({ data, now, onChange }: MissedWorkoutsProps) {
         showDate
         label="Obesvarade pass"
       />
-      {missed.length > shown.length && (
-        <button
-          type="button"
-          className="button button-ghost button-small show-more"
-          onClick={() => {
-            setAll(true);
-          }}
-        >
-          Visa alla {missed.length} obesvarade
-        </button>
-      )}
+      <ShowMore
+        hidden={missed.length - shown.length}
+        onClick={() => {
+          setAll(true);
+        }}
+      >
+        Visa alla {missed.length} obesvarade
+      </ShowMore>
     </Card>
   );
 }

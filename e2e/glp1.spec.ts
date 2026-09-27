@@ -227,7 +227,9 @@ test('dosbyten syns som markeringar i viktgrafen', async ({ page }) => {
   const changes = page.getByTestId('dose-changes').getByRole('listitem');
   await expect(changes).toHaveCount(2);
   await expect(changes.nth(0)).toContainText('Mounjaro 5 mg');
-  await expect(changes.nth(1)).toContainText('Start: Mounjaro 2,5 mg');
+  await expect(changes.nth(0)).toContainText('Dosbyte');
+  await expect(changes.nth(1)).toContainText('Mounjaro 2,5 mg');
+  await expect(changes.nth(1)).toContainText('Start');
 
   // Med GLP-1 avstängd försvinner markeringarna – datan ligger kvar.
   await page.goto('./#/installningar/funktioner');

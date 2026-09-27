@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { Page } from '../components/Page.tsx';
+import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import type { FeatureGated } from '../lib/features.ts';
 import { useFeatures } from '../lib/features.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
@@ -34,21 +35,14 @@ export function Framsteg() {
   return (
     <Page title="Framsteg">
       {tabs.length > 1 && (
-        <div className="segmented" role="group" aria-label="Visa">
-          {tabs.map((t) => (
-            <button
-              key={t.sub}
-              type="button"
-              className="segmented-button"
-              aria-pressed={t === active}
-              onClick={() => {
-                window.location.hash = hrefFor(route, t.sub);
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Visa"
+          options={tabs.map((t) => ({ id: t.sub, label: t.label }))}
+          value={active?.sub ?? ''}
+          onChange={(tabSub) => {
+            window.location.hash = hrefFor(route, tabSub);
+          }}
+        />
       )}
       {/* Hela delsökvägen som nyckel: "bilder/jamfor" öppnar jämförelsen även från Bilder. */}
       {active && <active.Content key={sub} />}

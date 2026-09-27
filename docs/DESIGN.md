@@ -126,6 +126,9 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `Toast`            | `Toast.tsx`            | Kvittens ovanför navigeringen med valfri Ångra; försvinner efter 8 s          |
 | `useUndoToast`     | `lib/useUndoToast.ts`  | Tillstånd för en Toast med Ångra efter borttagning i en lista                 |
 | `Skeleton`         | `Skeleton.tsx`         | Platshållare medan IndexedDB läses (ingen layout som hoppar)                  |
+| `ShowMore`         | `ShowMore.tsx`         | "Visa fler" under en begränsad lista (med `useShowMore`)                      |
+| `RangeFilter`      | `RangeFilter.tsx`      | Tidsfilter 1 mån / 3 mån / Allt som chips                                     |
+| `DailyBarChart`    | `DailyBarChart.tsx`    | Stapelgraf, ett värde per dag i datatypens färg, valfri mållinje              |
 
 ### Page (sidhuvud)
 
@@ -279,6 +282,34 @@ Stäng kvittensen (`toast.close()`) när något nytt sparas, så att bara ett st
 
 `size="small"` (44 px) i sidhuvudet, `regular` (48 px) i innehållet. Högst en segmentkontroll per nivå –
 ett tidsfilter under flikarna ska vara `small` eller en rad chips.
+
+### Tidsfilter (RangeFilter)
+
+`<RangeFilter value={range} onChange={setRange} />` – en rad chips (`chip-grid range-filter`, 44 px, `--text-sm`)
+med `aria-pressed`, direkt under flikarna. Chips i stället för en andra segmentkontroll: filtret ska inte se ut som
+en ny nivå flikar. Filtret gäller alla kort under det (Framsteg → Historik) eller hela fliken (Mat → Historik).
+
+### Långa listor (ShowMore)
+
+```tsx
+const { shown, hidden, next, more } = useShowMore(rows); // 14 först, sedan 28 till per tryck
+…
+<ShowMore hidden={hidden} onClick={more}>Visa {next} dagar till</ShowMore>
+```
+
+En lista som växer med tiden (vikt dag för dag, midjemått) visar de 14 senaste. "Visa fler" är en liten textknapp
+under listan och renderas inte när allt syns. Ge komponenten `key={range}` om listan ska börja om vid byte av
+filter. Samma knapp (`ShowMore`) används för "Visa alla N obesvarade" på Översikt.
+
+### Grafer
+
+- uPlot med `baseAxes()` (dämpade axlar, svenska datum "13 sep." på tidsaxeln, minst 64 px per etikett) och
+  `dateSeries()` (datum i legenden).
+- Serien har datatypens färg (`--data-*`), mål är en streckad linje i `--chart-goal`.
+- Ett värde per dag (steg, dryck): `DailyBarChart` med `colorVar`, `label`, `format`, `step` (avrundning av
+  y-axelns tak) och valfri `goalOn(date)`. Vikt (`WeightChart`) och intag (`IntakeChart`) har egna grafer.
+- Grafen ligger i ett `Card` med rubrik och `className="chart-card"`; sammanfattningen (snitt, mål nått) är en
+  dämpad rad under grafen.
 
 ### StatBar och Ring
 

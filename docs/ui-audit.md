@@ -5,7 +5,8 @@ datum (torsdag 2026-09-24 12:30, `e2e/visualData.ts`). Skärmdumparna finns i `e
 (`light-*.png` / `dark-*.png`). De togs med `npm run test:visual:update` innan designsystemet infördes;
 baslinjerna i repot visar läget _efter_ den här PR:en. Översikt före finns kvar som jämförelse:
 [`ui-audit/fore-light-oversikt.png`](ui-audit/fore-light-oversikt.png) och
-[`ui-audit/fore-dark-oversikt.png`](ui-audit/fore-dark-oversikt.png).
+[`ui-audit/fore-dark-oversikt.png`](ui-audit/fore-dark-oversikt.png); likaså Framsteg → Historik och Mat → Historik före
+PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.png`).
 
 **Referens:** Mat → Dag (omgjord i PR #16/#17): 16 px sidmarginal, 8 px mellan kort, 12–16 px inre
 marginal, en rad per post med högerställda tabellsiffror, sekundärtext 13 px, inga knappar i listorna
@@ -31,7 +32,7 @@ vid jämförelse, **Låg** = putsning.
 | Medel | Paneler (bottom sheets) glider upp men stängs utan övergång; kvitton (toast) finns i tre varianter (uppdatering, genväg, mat) med olika knappordning.                                                                                                        |
 | Medel | Ingen haptisk återkoppling vid spara/klar.                                                                                                                                                                                                                   |
 | Låg   | Siffror och enheter bryts över rader ("1 054 kcal (mål 1 685 kcal) · 7 ↵ dagar" i veckokortet, "30 ↵ min" i passlistan).                                                                                                                                     |
-| Låg   | Grafaxlar visar amerikanskt datumformat ("9/13", "7/29 2026") i en i övrigt svensk app.                                                                                                                                                                      |
+| Låg   | ~~Grafaxlar visar amerikanskt datumformat ("9/13", "7/29 2026") i en i övrigt svensk app.~~ ✅ PR #21: "13 sep." i alla grafer.                                                                                                                              |
 | Låg   | Fasta element: vid helsidesskärmdumpar hamnar bottennavigeringen mitt i sidan – inget fel i appen, men testerna behöver hantera det (görs i `visual.spec.ts`).                                                                                               |
 
 ## Översikt
@@ -59,13 +60,13 @@ vid jämförelse, **Låg** = putsning.
 
 ## Mat (referens)
 
-| Prio  | Iakttagelse                                                                                                                                                                                                         |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Medel | **Egna**: sektionerna är kort med en fylld primärknapp var ("Ny måltid", "Nytt livsmedel") och "Redigera"/"Ta bort"-knappar per livsmedel – följer inte Dag-flikens mönster.                                        |
-| Medel | **Historik**: tidsfilter (1 mån/3 mån/Allt) är ett stort segment (48 px) direkt under sidans lilla segment – två segmentkontroller i olika storlek ovanpå varandra. Intagsgrafen är teal i stället för Mats orange. |
-| Medel | Redigera-panelen: kort-i-kort, och "Ta bort" är en helbreddsknapp under Spara/Avbryt (tre knappar). Ta bort bör ligga längst ner som textknapp i fel-färg, eller bara via svep.                                     |
-| Låg   | Analyspanelen: nyckeltalen är staplade etikett/värde-par, de skulle vara ListRow med högerställt värde.                                                                                                             |
-| Låg   | Sök-sheeten saknar ikon i sökfältet (Dag-fliken har en).                                                                                                                                                            |
+| Prio  | Iakttagelse                                                                                                                                                                                                                                                            |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medel | **Egna**: sektionerna är kort med en fylld primärknapp var ("Ny måltid", "Nytt livsmedel") och "Redigera"/"Ta bort"-knappar per livsmedel – följer inte Dag-flikens mönster.                                                                                           |
+| Medel | **Historik**: tidsfilter (1 mån/3 mån/Allt) är ett stort segment (48 px) direkt under sidans lilla segment – två segmentkontroller i olika storlek ovanpå varandra. Intagsgrafen är teal i stället för Mats orange. ✅ PR #18 (orange), PR #21 (tidsfiltret är chips). |
+| Medel | Redigera-panelen: kort-i-kort, och "Ta bort" är en helbreddsknapp under Spara/Avbryt (tre knappar). Ta bort bör ligga längst ner som textknapp i fel-färg, eller bara via svep.                                                                                        |
+| Låg   | Analyspanelen: nyckeltalen är staplade etikett/värde-par, de skulle vara ListRow med högerställt värde.                                                                                                                                                                |
+| Låg   | Sök-sheeten saknar ikon i sökfältet (Dag-fliken har en).                                                                                                                                                                                                               |
 
 ## Kalender
 
@@ -78,13 +79,13 @@ vid jämförelse, **Låg** = putsning.
 
 ## Framsteg
 
-| Prio  | Iakttagelse                                                                                                                                                                                                                           |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hög   | **Historik är 3 800 px** (5 100 px med två månaders mer data): "Vikt dag för dag" listar alla mätningar i en tabell, dryckeshistoriken har en stapel per dag. Behöver begränsas (senaste 14 + "Visa fler") eller grupperas per vecka. |
-| Medel | Två segmentkontroller ovanpå varandra (flikar + tidsfilter), båda 48 px.                                                                                                                                                              |
-| Medel | Veckor: varje vecka är ett stort kort med "Fråga AI om veckan" som knapp i varje kort; värden radbryts.                                                                                                                               |
-| Medel | Bilder: tomt läge och lagringskortet saknar mellanrum (korten klistras ihop).                                                                                                                                                         |
-| Låg   | Milstolpar: bra täthet; ikonerna i streckade cirklar är den enda platsen med streckade ramar utöver tomma lägen.                                                                                                                      |
+| Prio  | Iakttagelse                                                                                                                                                                                                                           | Status    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| Hög   | **Historik är 3 800 px** (5 100 px med två månaders mer data): "Vikt dag för dag" listar alla mätningar i en tabell, dryckeshistoriken har en stapel per dag. Behöver begränsas (senaste 14 + "Visa fler") eller grupperas per vecka. | ✅ PR #21 |
+| Medel | Två segmentkontroller ovanpå varandra (flikar + tidsfilter), båda 48 px.                                                                                                                                                              | ✅ PR #21 |
+| Medel | Veckor: varje vecka är ett stort kort med "Fråga AI om veckan" som knapp i varje kort; värden radbryts.                                                                                                                               |           |
+| Medel | Bilder: tomt läge och lagringskortet saknar mellanrum (korten klistras ihop).                                                                                                                                                         |           |
+| Låg   | Milstolpar: bra täthet; ikonerna i streckade cirklar är den enda platsen med streckade ramar utöver tomma lägen.                                                                                                                      |           |
 
 ## Inställningar
 
@@ -152,15 +153,33 @@ vid jämförelse, **Låg** = putsning.
   längst ner ligger under den modala panelen och gick inte att nå.
 - Designsystemet: mönstret "Inställningslista" och `list-flush` (lista direkt i en panel) i `DESIGN.md`.
 
+## Åtgärdat: Framsteg → Historik (PR #21)
+
+- **Begränsade listor**: "Vikt dag för dag" och midjemåtten visar de 14 senaste, sedan "Visa 28 dagar till"/"… mått till" (textknapp,
+  `ShowMore` + `useShowMore`). Byts tidsfilter börjar listan om från 14. Med testdatan är sidan **2 814 px i stället för
+  3 732 px** (−25 %); med ett års vägningar är skillnaden mycket större, eftersom listan inte längre växer med perioden.
+- **Dryck som stapelgraf** (`DailyBarChart`, `--data-drink`) med dagsmålet som streckad linje – samma form som steg och
+  intag – i stället för en rad med stapel per dag. Sammanfattningen ("Snitt … · målet nått 6 av 11 dagar") ligger kvar
+  och bryts bara vid "·".
+- **En segmentkontroll**: flikarna (Historik/Veckor/Bilder/Milstolpar) är `SegmentedControl`; tidsfiltret (`RangeFilter`)
+  är en rad chips i 44 px med `--text-sm`, så att det inte ser ut som en andra nivå flikar. Samma filter i Mat → Historik.
+- **Grafer i datatypsfärg och på svenska**: vikt (teal), steg (lila), dryck (blå). Tidsaxeln visar "13 sep." i stället
+  för "9/13" i alla grafer (`dateAxisValues` i `chartUtils.ts`) – även Mat → Historik.
+- **Kort enligt systemet**: alla sektioner är `Card` med rubrik (viktgrafen har fått rubriken "Vikt"); dosbytena är
+  `ListRow` (dos till vänster, "Start"/"Dosbyte" under, datum till höger) i stället för en egen lista.
+- **Tomt läge** med knappen "Logga vikt" (`#/logga/vikt`) och `Skeleton` medan datan läses.
+- Designsystemet: `DailyBarChart` (steg använder den också), `ShowMore`/`useShowMore`, mönstret "Tidsfilter" (chips) och
+  svenska datum på tidsaxeln i `DESIGN.md`.
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 3–8.
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 4–8.
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
 2. ~~**Inställningar**~~ ✅ PR #20.
-3. **Framsteg → Historik** (nästa): begränsa listorna, en segmentkontroll, grafer i datatypsfärg.
-4. **Kalender**: kompakt förklaring (hopfällbar), dagsvyn som `ListRow`, pass utan knappar i listan.
-5. **Mat → Egna och Historik**: `ListRow`, svep för ta bort, liten segmentkontroll för tidsfilter.
+3. ~~**Framsteg → Historik**~~ ✅ PR #21.
+4. **Kalender** (nästa): kompakt förklaring (hopfällbar), dagsvyn som `ListRow`, pass utan knappar i listan.
+5. **Mat → Egna och Historik**: `ListRow`, svep för ta bort (tidsfiltret är redan chips, PR #21).
 6. **Framsteg → Veckor**: täta veckokort (ListRow), en "Fråga AI"-knapp i panelen i stället för per kort.
 7. **Logga** (rutnätet): lägre rutor (ikonerna har redan datatypsfärg).
 8. **Framsteg → Bilder och Milstolpar**: marginaler, tomt läge med knapp.

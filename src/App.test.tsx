@@ -28,7 +28,7 @@ import { deleteTestDb } from './test/db.ts';
 
 // uPlot behöver canvas, som jsdom saknar. Graferna testas i e2e.
 vi.mock('./components/WeightChart.tsx', () => ({ WeightChart: () => null }));
-vi.mock('./components/StepsChart.tsx', () => ({ StepsChart: () => null }));
+vi.mock('./components/DailyBarChart.tsx', () => ({ DailyBarChart: () => null }));
 
 afterEach(async () => {
   // Avmontera först, så att inga laddningar hinner öppna databasen igen medan den raderas.

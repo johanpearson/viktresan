@@ -11,15 +11,18 @@ interface RangeFilterProps {
   onChange: (range: RangeId) => void;
 }
 
-/** Tidsfilter: en rad med växlingsknappar. */
+/**
+ * Tidsfilter: en rad chips (växlingsknappar) – lättare än en segmentkontroll, så att
+ * den inte konkurrerar med flikarna ovanför.
+ */
 export function RangeFilter({ value, onChange }: RangeFilterProps) {
   return (
-    <div className="segmented" role="group" aria-label="Tidsperiod">
+    <div className="chip-grid range-filter" role="group" aria-label="Tidsperiod">
       {OPTIONS.map((option) => (
         <button
           key={option.id}
           type="button"
-          className="segmented-button"
+          className="chip"
           aria-pressed={option.id === value}
           onClick={() => {
             onChange(option.id);
