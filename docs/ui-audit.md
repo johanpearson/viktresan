@@ -91,6 +91,7 @@ vid jämförelse, **Låg** = putsning.
 | Medel | Veckor: varje vecka är ett stort kort med "Fråga AI om veckan" som knapp i varje kort; värden radbryts.                                                                                                                               | ✅ PR #24 |
 | Medel | Bilder: tomt läge och lagringskortet saknar mellanrum (korten klistras ihop).                                                                                                                                                         | ✅ PR #25 |
 | Låg   | Milstolpar: bra täthet; ikonerna i streckade cirklar är den enda platsen med streckade ramar utöver tomma lägen.                                                                                                                      | ✅ PR #25 |
+| Medel | Bilder: jämförelsen (`SessionCompare`) har egna knappar i kortets rubrik ("Första mot senaste", "Avsluta jämförelse") och helskärmsvyn (`PhotoViewer`) tar bort med bekräftelse i två steg i stället för Ångra.                       |           |
 
 ## Inställningar
 
@@ -254,7 +255,8 @@ vid jämförelse, **Låg** = putsning.
 
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla vyer är genomgångna.
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla vyer är genomgångna; kvar är paneler och
+kontroller från tabellerna ovan (9–12). Ta nästa punkt utan ✅ (eller de två närmaste om de är små).
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
 2. ~~**Inställningar**~~ ✅ PR #20.
@@ -264,11 +266,10 @@ Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla v
 6. ~~**Framsteg → Veckor**~~ ✅ PR #24.
 7. ~~**Logga** (rutnätet)~~ ✅ PR #24.
 8. ~~**Framsteg → Bilder och Milstolpar**~~ ✅ PR #25.
-
-Kvar utanför vyerna (från tabellerna ovan), förslag på ordning:
-
-1. **Mats redigera- och analyspanel** (Medel/Låg): "Ta bort" som destruktiv textknapp längst ner; nyckeltalen som `ListRow`.
-2. **Radioknappar i Inställningar** (Medel): egna kontroller som switcharna (t.ex. `SegmentedControl` eller valrader).
-3. **Sökikon i Mats sök-sheet** (Låg).
-4. **Jämförelsen och helskärmsvyn i Bilder** (ingen egen punkt i granskningen): `SessionCompare` har kvar egna knappar och
-   `PhotoViewer` bekräftelse i två steg – kan följa panelmönstret.
+9. **Mats redigera- och analyspanel** (nästa; Medel/Låg, se Mat): "Ta bort" som destruktiv textknapp längst ner i
+   stället för en helbreddsknapp under Spara/Avbryt; nyckeltalen i analysen som `ListRow` med värdet till höger.
+10. **Sökikon i Mats sök-sheet** (Låg, se Mat) – liten, passar ihop med 9.
+11. **Radioknappar i Inställningar** (Medel, se Inställningar): egna kontroller som switcharna (`SegmentedControl` eller
+    valrader) i stället för webbläsarens standard.
+12. **Jämförelsen och helskärmsvyn i Bilder** (Medel, se Framsteg): `SessionCompare` har egna knappar i kortets rubrik
+    och `PhotoViewer` tar bort med bekräftelse i två steg – bör följa panelmönstret (Ta bort direkt + `Toast` med Ångra).
