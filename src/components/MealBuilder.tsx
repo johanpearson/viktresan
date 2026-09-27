@@ -1,6 +1,6 @@
 import { useMemo, useState, type SyntheticEvent } from 'react';
 import { newId, putMeal, type MealIngredient, type SavedMeal } from '../db/db.ts';
-import { entryUnit, sourceOf } from '../lib/foodCatalog.ts';
+import { buildCatalog, entryUnit, sourceOf, storedToItem } from '../lib/foodCatalog.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import { decimalInput, formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
@@ -8,22 +8,19 @@ import {
   GRAM,
   baseOf,
   formatBase,
-  initialUsage,
   isGram,
   mergeUnits,
   parseUnitAmount,
   unitsFor,
   type FoodUnit,
 } from '../lib/units.ts';
-import { FoodSearch } from './FoodSearch.tsx';
+import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
 
 interface MealBuilderProps {
   /** Måltiden som redigeras, annars skapas en ny. */
   meal: SavedMeal | null;
-  searchItems: readonly FoodItem[];
-  /** Användarens egna enheter per livsmedel. */
-  customUnits: ReadonlyMap<string, readonly FoodUnit[]>;
-  loading: boolean;
+  /** Livsmedel och egna enheter; ingredienser läggs till med sök-sheeten. */
+  source: FoodSource;
   onSaved: (meal: SavedMeal) => void;
   onCancel: () => void;
 }
@@ -40,15 +37,17 @@ interface Row {
 }
 
 /** Sparad måltid: flera ingredienser, var och en i gram eller en enhet. */
-export function MealBuilder({
-  meal,
-  searchItems,
-  customUnits,
-  loading,
-  onSaved,
-  onCancel,
-}: MealBuilderProps) {
-  const catalog = useMemo(() => new Map(searchItems.map((i) => [i.id, i])), [searchItems]);
+export function MealBuilder({ meal, source, onSaved, onCancel }: MealBuilderProps) {
+  const { foodData, livsmedel } = source;
+  const catalog = useMemo(
+    () => buildCatalog(livsmedel?.foods ?? [], foodData.foods.map(storedToItem)),
+    [livsmedel, foodData.foods],
+  );
+  const customUnits = useMemo(
+    () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
+    [foodData.foodUnits],
+  );
+  const [picking, setPicking] = useState(false);
   const [name, setName] = useState(meal?.name ?? '');
   const [rows, setRows] = useState<Row[]>(() =>
     (meal?.items ?? []).map((item) => {
@@ -88,17 +87,20 @@ export function MealBuilder({
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...change } : r)));
   }
 
-  function addIngredient(item: FoodItem) {
-    const units = unitsFor(item, customUnits.get(item.id));
-    const usage = initialUsage(units, null);
+  /** Ingrediens från sök-sheeten, med mängden och enheterna som valdes där. */
+  function addIngredient(
+    item: FoodItem,
+    value: { amount: number; unit: string },
+    units: FoodUnit[],
+  ) {
     const row: Row = {
       key: newId(),
       foodId: item.id,
       name: item.name,
       per100: item.per100,
       units,
-      amount: decimalInput(usage.amount),
-      unit: usage.unit,
+      amount: decimalInput(value.amount),
+      unit: value.unit,
     };
     if (item.per100Unit === 'ml') row.per100Unit = 'ml';
     setRows((prev) => [...prev, row]);
@@ -144,113 +146,134 @@ export function MealBuilder({
   }
 
   return (
-    <form
-      className="card form"
-      onSubmit={(e) => void handleSubmit(e)}
-      noValidate
-      aria-labelledby="meal-builder-title"
-    >
-      <h2 className="card-title" id="meal-builder-title">
-        {meal ? 'Redigera måltid' : 'Ny måltid'}
-      </h2>
-      <label className="field">
-        <span className="field-label">Måltidens namn</span>
-        <input
-          className="input"
-          autoComplete="off"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
+    <>
+      <form
+        className="card form"
+        onSubmit={(e) => void handleSubmit(e)}
+        noValidate
+        aria-labelledby="meal-builder-title"
+      >
+        <h2 className="card-title" id="meal-builder-title">
+          {meal ? 'Redigera måltid' : 'Ny måltid'}
+        </h2>
+        <label className="field">
+          <span className="field-label">Måltidens namn</span>
+          <input
+            className="input"
+            autoComplete="off"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+            }}
+          />
+        </label>
+        {rows.length > 0 && (
+          <ul className="ingredient-list" aria-label="Ingredienser">
+            {parsedRows.map(({ row, parsed }) => (
+              <li key={row.key} className="ingredient" data-testid="ingredient">
+                <span className="ingredient-name">{row.name}</span>
+                <div className="ingredient-amount">
+                  <label>
+                    <span className="visually-hidden">Mängd {row.name}</span>
+                    <input
+                      className="input"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      value={row.amount}
+                      onChange={(e) => {
+                        updateRow(row.key, { amount: e.target.value });
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span className="visually-hidden">Enhet {row.name}</span>
+                    <select
+                      className="input"
+                      value={row.unit}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        updateRow(row.key, {
+                          unit: next,
+                          // Till gram: behåll vikten. Till en annan enhet: börja på 1.
+                          amount: isGram(next)
+                            ? decimalInput(parsed.ok ? parsed.value.grams : 100)
+                            : '1',
+                        });
+                      }}
+                    >
+                      {[...row.units.map((u) => u.name), GRAM].map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  className="button button-danger button-small"
+                  aria-label={`Ta bort ingrediensen ${row.name}`}
+                  onClick={() => {
+                    setRows((prev) => prev.filter((r) => r.key !== row.key));
+                  }}
+                >
+                  Ta bort
+                </button>
+                <span className="ingredient-grams muted-inline" data-testid="ingredient-grams">
+                  {parsed.ok
+                    ? isGram(row.unit)
+                      ? formatKcal((row.per100.kcal * parsed.value.grams) / 100)
+                      : `≈ ${formatBase(parsed.value.grams, baseOf(row))} · ${formatKcal((row.per100.kcal * parsed.value.grams) / 100)}`
+                    : parsed.error}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="form-note" data-testid="meal-total">
+          {rows.length === 0
+            ? 'Inga ingredienser ännu.'
+            : `Totalt ${formatGrams(totalG)} · ${formatKcal(totals.kcal)}`}
+        </p>
+        <button
+          type="button"
+          className="button button-secondary"
+          onClick={() => {
+            setPicking(true);
+          }}
+        >
+          Lägg till ingrediens
+        </button>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="button-row">
+          <button type="submit" className="button">
+            Spara måltid
+          </button>
+          <button type="button" className="button button-secondary" onClick={onCancel}>
+            Avbryt
+          </button>
+        </div>
+      </form>
+      {picking && (
+        <FoodPicker
+          source={source}
+          focusSearch
+          mode={{
+            kind: 'ingredient',
+            onAdd: (item, value, units) => {
+              addIngredient(item, value, units);
+              setPicking(false);
+            },
+          }}
+          onClose={() => {
+            setPicking(false);
           }}
         />
-      </label>
-      {rows.length > 0 && (
-        <ul className="ingredient-list" aria-label="Ingredienser">
-          {parsedRows.map(({ row, parsed }) => (
-            <li key={row.key} className="ingredient" data-testid="ingredient">
-              <span className="ingredient-name">{row.name}</span>
-              <div className="ingredient-amount">
-                <label>
-                  <span className="visually-hidden">Mängd {row.name}</span>
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={row.amount}
-                    onChange={(e) => {
-                      updateRow(row.key, { amount: e.target.value });
-                    }}
-                  />
-                </label>
-                <label>
-                  <span className="visually-hidden">Enhet {row.name}</span>
-                  <select
-                    className="input"
-                    value={row.unit}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      updateRow(row.key, {
-                        unit: next,
-                        // Till gram: behåll vikten. Till en annan enhet: börja på 1.
-                        amount: isGram(next)
-                          ? decimalInput(parsed.ok ? parsed.value.grams : 100)
-                          : '1',
-                      });
-                    }}
-                  >
-                    {[...row.units.map((u) => u.name), GRAM].map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <button
-                type="button"
-                className="button button-danger button-small"
-                aria-label={`Ta bort ingrediensen ${row.name}`}
-                onClick={() => {
-                  setRows((prev) => prev.filter((r) => r.key !== row.key));
-                }}
-              >
-                Ta bort
-              </button>
-              <span className="ingredient-grams muted-inline" data-testid="ingredient-grams">
-                {parsed.ok
-                  ? isGram(row.unit)
-                    ? formatKcal((row.per100.kcal * parsed.value.grams) / 100)
-                    : `≈ ${formatBase(parsed.value.grams, baseOf(row))} · ${formatKcal((row.per100.kcal * parsed.value.grams) / 100)}`
-                  : parsed.error}
-              </span>
-            </li>
-          ))}
-        </ul>
       )}
-      <p className="form-note" data-testid="meal-total">
-        {rows.length === 0
-          ? 'Inga ingredienser ännu.'
-          : `Totalt ${formatGrams(totalG)} · ${formatKcal(totals.kcal)}`}
-      </p>
-      <FoodSearch
-        items={searchItems}
-        onPick={addIngredient}
-        label="Lägg till ingrediens"
-        loading={loading}
-      />
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="button-row">
-        <button type="submit" className="button">
-          Spara måltid
-        </button>
-        <button type="button" className="button button-secondary" onClick={onCancel}>
-          Avbryt
-        </button>
-      </div>
-    </form>
+    </>
   );
 }

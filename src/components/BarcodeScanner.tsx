@@ -118,7 +118,7 @@ export function BarcodeScanner({ onEan, onClose, busy }: BarcodeScannerProps) {
             onClose();
           }}
         >
-          Stäng
+          Stäng skannern
         </button>
       </div>
       <video
