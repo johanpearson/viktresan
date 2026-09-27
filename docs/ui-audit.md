@@ -8,7 +8,8 @@ baslinjerna i repot visar läget _efter_ den här PR:en. Översikt före finns k
 [`ui-audit/fore-dark-oversikt.png`](ui-audit/fore-dark-oversikt.png); likaså Framsteg → Historik och Mat → Historik före
 PR #21 (`ui-audit/fore-*-framsteg-historik.png`, `ui-audit/fore-*-mat-historik.png`) och Kalender före PR #22
 (`ui-audit/fore-*-kalender.png`, `ui-audit/fore-*-kalender-vecka.png`), Mat → Egna och Mat → Historik före PR #23
-(`ui-audit/fore-*-mat-egna.png`, `ui-audit/fore-*-mat-historik-7dagar.png`).
+(`ui-audit/fore-*-mat-egna.png`, `ui-audit/fore-*-mat-historik-7dagar.png`), Framsteg → Veckor och Logga före PR #24
+(`ui-audit/fore-*-framsteg-veckor.png`, `ui-audit/fore-*-logga.png`).
 
 **Referens:** Mat → Dag (omgjord i PR #16/#17): 16 px sidmarginal, 8 px mellan kort, 12–16 px inre
 marginal, en rad per post med högerställda tabellsiffror, sekundärtext 13 px, inga knappar i listorna
@@ -52,13 +53,13 @@ vid jämförelse, **Låg** = putsning.
 
 ## Logga
 
-| Prio  | Iakttagelse                                                                                                                                                                            | Status                   |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| Medel | Rutnätet är luftigt (130 px höga rutor, 20 px marginal) men fungerar. Alla ikoner är teal – datatypens färg borde användas så att ikonen känns igen i kalendern och graferna.          | Ikonfärg ✅, rutnät kvar |
-| Hög   | **Panelerna (vikt, midja, steg, dryck, träning, GLP-1)** lägger formuläret i ett kort inne i panelen (kort-i-kort), och historiken under har "Redigera"/"Ta bort" som knappar per rad. | ✅ PR #19                |
-| Medel | "Stäng" är en inramad knapp i panelens rubrik – i Mat-sheeten är det samma knapp; en ikonknapp (×) eller textknapp vore lättare.                                                       | ✅ (textknapp, PR #18)   |
-| Medel | Datumfält i paneler visar `mm/dd/yyyy` i vissa webbläsare; Mats `DateBar` (‹ Idag ›) är både kompaktare och tydligare.                                                                 | ✅ PR #19                |
-| Låg   | ±0,1-knapparna under vikten är lika höga som Spara och konkurrerar visuellt.                                                                                                           | ✅ PR #19                |
+| Prio  | Iakttagelse                                                                                                                                                                            | Status                 |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Medel | Rutnätet är luftigt (130 px höga rutor, 20 px marginal) men fungerar. Alla ikoner är teal – datatypens färg borde användas så att ikonen känns igen i kalendern och graferna.          | ✅ PR #24              |
+| Hög   | **Panelerna (vikt, midja, steg, dryck, träning, GLP-1)** lägger formuläret i ett kort inne i panelen (kort-i-kort), och historiken under har "Redigera"/"Ta bort" som knappar per rad. | ✅ PR #19              |
+| Medel | "Stäng" är en inramad knapp i panelens rubrik – i Mat-sheeten är det samma knapp; en ikonknapp (×) eller textknapp vore lättare.                                                       | ✅ (textknapp, PR #18) |
+| Medel | Datumfält i paneler visar `mm/dd/yyyy` i vissa webbläsare; Mats `DateBar` (‹ Idag ›) är både kompaktare och tydligare.                                                                 | ✅ PR #19              |
+| Låg   | ±0,1-knapparna under vikten är lika höga som Spara och konkurrerar visuellt.                                                                                                           | ✅ PR #19              |
 
 ## Mat (referens)
 
@@ -86,7 +87,7 @@ vid jämförelse, **Låg** = putsning.
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | Hög   | **Historik är 3 800 px** (5 100 px med två månaders mer data): "Vikt dag för dag" listar alla mätningar i en tabell, dryckeshistoriken har en stapel per dag. Behöver begränsas (senaste 14 + "Visa fler") eller grupperas per vecka. | ✅ PR #21 |
 | Medel | Två segmentkontroller ovanpå varandra (flikar + tidsfilter), båda 48 px.                                                                                                                                                              | ✅ PR #21 |
-| Medel | Veckor: varje vecka är ett stort kort med "Fråga AI om veckan" som knapp i varje kort; värden radbryts.                                                                                                                               |           |
+| Medel | Veckor: varje vecka är ett stort kort med "Fråga AI om veckan" som knapp i varje kort; värden radbryts.                                                                                                                               | ✅ PR #24 |
 | Medel | Bilder: tomt läge och lagringskortet saknar mellanrum (korten klistras ihop).                                                                                                                                                         |           |
 | Låg   | Milstolpar: bra täthet; ikonerna i streckade cirklar är den enda platsen med streckade ramar utöver tomma lägen.                                                                                                                      |           |
 
@@ -209,15 +210,35 @@ vid jämförelse, **Låg** = putsning.
 - Designsystemet: mönstren "Egna listor" och "Nyckeltal och tät tabell" i `DESIGN.md`; `CustomFoodForm` och
   `MealBuilder` har `onDelete`.
 
+## Åtgärdat: Framsteg → Veckor och Logga (PR #24)
+
+- **Veckor som lista**: ett `Card` ("Avslutade veckor") med en `ListRow` per vecka – "Vecka 38", datum och "loggat
+  7 av 7 dagar" under, trendviktens förändring till höger och ›. Tidigare var varje vecka ett eget kort med rubrik,
+  mening, sex värderader och en egen "Fråga AI om veckan"-knapp. Med testdatan (8 veckor) är fliken **877 px i stället
+  för 2 387 px** (−63 %; innehållet slutar på ~720 px) och varje vecka tar 60 px i stället för 210–390 px.
+- **Tryck = hela summeringen i en panel** (`BottomSheet`, rubrik "Vecka 38 · 14 sep.–20 sep."): samma innehåll som
+  förut (mening, värden med pilar mot veckan innan, loggade dagar) och **en** "Fråga AI om veckan" längst ner, som
+  öppnar Fråga AI ovanpå panelen. Ingen knapp per vecka i listan.
+- Vecka utan vägning: "· ingen vägning" i raden och inget värde till höger. Tomt läge har rubrik och knappen "Logga
+  vikt"; `Skeleton` medan datan läses.
+- **Logga**: rutorna är lägre – ikon och namn på samma rad, status under (78 px i stället för 128 px, 12/16 px inre
+  marginal). De sex rutorna tar 262 px i stället för 408 px; panelerna ovanpå ändras inte.
+- Designsystemet: mönstren "Lista → panel (Veckor)" och "Logga-rutnät" i `DESIGN.md`; `weekName`/`weekRange` i
+  `weekSummary.ts`. De två `.week-list`-reglerna (Kalender och gamla Veckor) är sammanslagna – bara Kalenderns veckovy
+  använder klassen, och den ser likadan ut.
+
 ## Rekommenderad ordning för resten av vyerna
 
-Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vyer: 6–8.
+Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Kvarvarande vy: 8.
 
 1. ~~**Paneler i Logga**~~ ✅ PR #19.
 2. ~~**Inställningar**~~ ✅ PR #20.
 3. ~~**Framsteg → Historik**~~ ✅ PR #21.
 4. ~~**Kalender**~~ ✅ PR #22.
 5. ~~**Mat → Egna och Historik**~~ ✅ PR #23.
-6. **Framsteg → Veckor** (nästa): täta veckokort (ListRow), en "Fråga AI"-knapp i panelen i stället för per kort.
-7. **Logga** (rutnätet): lägre rutor (ikonerna har redan datatypsfärg).
-8. **Framsteg → Bilder och Milstolpar**: marginaler, tomt läge med knapp.
+6. ~~**Framsteg → Veckor**~~ ✅ PR #24.
+7. ~~**Logga** (rutnätet)~~ ✅ PR #24.
+8. **Framsteg → Bilder och Milstolpar** (nästa): marginaler, tomt läge med knapp.
+
+Kvar utanför vyerna (från tabellerna ovan): radioknappar i Inställningar, Mats redigera- och analyspanel (Låg/Medel),
+sökikon i Mats sök-sheet.

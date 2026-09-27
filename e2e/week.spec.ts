@@ -115,9 +115,14 @@ test('veckokortet på måndagen: förra veckan mot veckan innan, stängs och fin
     'aria-pressed',
     'true',
   );
-  const list = page.getByTestId('week-list');
-  await expect(list.getByRole('heading', { level: 2 })).toHaveText([/^Vecka 38/, /^Vecka 37/]);
-  await expect(list.getByTestId('week-protein').first()).toContainText('110 g');
+  const rows = page.getByTestId('week-list').getByTestId('week');
+  await expect(rows.locator('.list-row-primary')).toHaveText(['Vecka 38', 'Vecka 37']);
+  await expect(rows.first()).toContainText('loggat 6 av 7 dagar');
+  // Tryck på en vecka: hela summeringen i en panel.
+  await rows.first().getByRole('button').tap();
+  const sheet = page.getByRole('dialog');
+  await expect(sheet.getByRole('heading', { name: /^Vecka 38/ })).toBeVisible();
+  await expect(sheet.getByTestId('week-protein')).toContainText('110 g');
   expect(errors).toEqual([]);
 });
 

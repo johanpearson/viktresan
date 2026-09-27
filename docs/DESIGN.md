@@ -272,6 +272,39 @@ button-small` via `action`), sedan en `list` med en `ListRow` per post: namn, se
 ner), svep vänster = ta bort med `Toast` och Ångra. Ångra lägger tillbaka även favoritmarkeringen och de egna
 enheterna, som borttagningen tar med sig. Inga fyllda knappar i vyn – primärknappen är Spara i formuläret.
 
+### Lista → panel (Framsteg → Veckor)
+
+```tsx
+<Card title="Avslutade veckor">
+  <ul className="list">
+    <ListRow
+      primary="Vecka 38"
+      secondary={<Parts text="14 sep.–20 sep. · loggat 7 av 7 dagar" />}
+      value={<span className="num">−0,7 kg</span>}
+      chevron
+      onClick={() => setOpen(week)}
+    />
+  </ul>
+</Card>;
+{
+  open && (
+    <BottomSheet title="Vecka 38 · 14 sep.–20 sep.">
+      …detaljer… <button className="button button-secondary">Fråga AI om veckan</button>
+    </BottomSheet>
+  );
+}
+```
+
+En lista av perioder eller poster med mycket innehåll var visar en rad per post (namn, kort metatext, ett nyckeltal
+till höger, ›) och hela innehållet i en panel vid tryck. Åtgärder som gäller en post (Fråga AI) ligger **en gång** i
+panelen – aldrig som en knapp per kort i listan. En panel ovanpå (Fråga AI i helskärm) staplas på den första.
+
+### Logga-rutnät
+
+Två kolumner med `log-tile` (`--radius-lg`, 12/16 px inre marginal, minst `--tap`): ikonen (28 px, datatypens färg
+via `data-type`) och namnet (`--text-lg`) på samma rad, status (`--text-xs`, dämpad) under över hela bredden. Rutan
+öppnar loggtypens panel. Inga ikoner ovanför texten – rutan ska inte vara högre än två textrader.
+
 ### Nyckeltal och tät tabell
 
 ```tsx

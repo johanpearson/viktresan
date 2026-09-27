@@ -202,6 +202,14 @@ for (const theme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Nytt fototillfälle' }).tap();
       await expect(sheet).toBeVisible();
       await shot(page, `${theme}-sheet-fototillfalle`, false);
+      await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(sheet).toBeHidden();
+
+      // Framsteg → Veckor: tryck på en vecka öppnar hela summeringen.
+      await page.getByRole('button', { name: 'Veckor', exact: true }).tap();
+      await page.getByTestId('week').first().getByRole('button').tap();
+      await expect(sheet).toBeVisible();
+      await shot(page, `${theme}-sheet-framsteg-vecka`, false);
     });
   });
 }
