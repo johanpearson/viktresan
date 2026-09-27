@@ -120,6 +120,7 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | Inställningslista  | `Card` + `ListRow`     | Grupp av rader med status och › som var och en öppnar en panel                |
 | `SegmentedControl` | `SegmentedControl.tsx` | Flikar/filter med `aria-pressed`; `size="small"` i sidhuvudet                 |
 | `ChoiceList`       | `ChoiceList.tsx`       | Valrader: ett val av flera (radioknappar) med förklaring och egen markering   |
+| `ChipGroup`        | `ChipGroup.tsx`        | Val som chips med fältetikett: biverkningar, veckodagar, injektionsställe     |
 | `StatBar`          | `StatBar.tsx`          | "827 / 1 680 kcal" + tunn stapel i datatypens färg + metarad                  |
 | `GoalRing` (Ring)  | `GoalRing.tsx`         | Ring mot dagsmål (dryck, kalorier, protein) med `tone`                        |
 | `ProgressBar`      | `ProgressBar.tsx`      | Stapel med `tone`, `thin`, `decorative` (dold för skärmläsare)                |
@@ -214,6 +215,8 @@ Tom sektion = smal rad med bara rubrik och `actions`. Innehållet glider in (200
   (150 ms). Stängningen har en timer som reserv så att panelen alltid stängs, även om animationens
   tidslinje står still.
 - Grabber överst, rubrik + textknappen "Stäng" (ghost). Esc, "Stäng" eller tryck utanför stänger.
+- Rubrikraden är sticky och får en 1 px linje (`data-stuck`) när innehållet scrollats under den – samma som
+  sidhuvudet (`Page`). Gäller alla paneler, även helskärm (sök, analys, Fråga AI).
 - `full` = helskärm (sök, analys, Fråga AI). Helskärmspanelen har sidans bakgrund (`--bg`); en `ListRow` i den
   följer den bakgrunden i stället för att ritas som ett ljust band.
 - Menyer i en panel är `ListRow` med `chevron` (en rad per val) – inte en stapel knappar.
@@ -280,7 +283,9 @@ Av/på-val är **switchar** (`label.switch-row` med `.switch-text` och `input.sw
 kryssrutor med text efter: rubrik och förklaring till vänster, brytaren till höger på samma rad.
 
 Ett val av flera (aktivitetsnivå, profilsida, importläge) är **valrader** (`ChoiceList`), inte webbläsarens
-radioknappar – se nedan.
+radioknappar – se nedan. Samma switchar används för val i en panel, t.ex. "Ta med" i Fråga AI: `fieldset.switch-group`
+med `legend` och en `switch-list`; en förklaring ("Inte ifyllt – …") är `switch-description` och kopplas med
+`aria-describedby`, så att switchens namn bara är rubriken.
 
 ### ChoiceList (valrader)
 
@@ -476,6 +481,28 @@ Stäng kvittensen (`toast.close()`) när något nytt sparas, så att bara ett st
 `size="small"` (44 px) i sidhuvudet, `regular` (48 px) i innehållet. Högst en segmentkontroll per nivå –
 ett tidsfilter under flikarna ska vara `small` eller en rad chips. `value={null}` = inget alternativ valt (en bild
 utan vinkel i helskärmsvyn).
+
+I ett formulär: `showLabel` visar `label` som fältetikett ovanför (gruppen namnges av etiketten, `aria-labelledby`) i
+stället för `<fieldset>` + `<legend>` runt egen markup – t.ex. Status (pass), Hur ofta (läkemedel), Aptit (mående).
+Ett alternativ med kort etikett får `ariaLabel` ("Aptit 2" för "2"). Klick på det valda alternativet anropar
+`onChange` igen, så ett valfritt val kan avmarkeras (aptit).
+
+### ChipGroup
+
+```tsx
+<ChipGroup
+  label="Veckodagar"
+  columns={7}
+  options={[{ id: '0', label: 'mån', ariaLabel: 'måndag' }, …]}
+  selected={['0', '2']}
+  onToggle={toggleDay}
+/>
+```
+
+Chips (`chip`, `aria-pressed`, vald = ram och text i `--accent`, som dryckens snabbval) under en fältetikett. Utan
+`columns` radbryts chipsen (biverkningar); med `columns` blir de lika breda i ett rutnät (veckodagar 7,
+injektionsställe 2). `hint` är en dämpad rad under etiketten ("Förslag"). Flerval och enkelval är samma komponent –
+anroparen avgör vad `onToggle` gör. Inga egna knappstilar för val (tidigare `weekday-button`, `site-button`).
 
 ### Tidsfilter (RangeFilter)
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import {
   AI_OPTIONS,
   AI_SERVICES,
@@ -110,28 +110,45 @@ export function AskAi({ subject, context }: AskAiProps) {
     window.open(aiServiceHome(service), '_blank', 'noopener,noreferrer');
   }
 
+  const idPrefix = useId();
+
   return (
     <div className="ask-ai" data-testid="ask-ai">
-      <fieldset className="choices">
+      <fieldset className="switch-group">
         <legend className="field-label">Ta med</legend>
-        {visible.map((o) => {
-          const hint = missingHint(o.id, context);
-          return (
-            <label key={o.id} className="check">
-              <input
-                type="checkbox"
-                checked={options[o.id]}
-                onChange={(e) => {
-                  toggle(o.id, e.target.checked);
-                }}
-              />
-              <span>
-                {optionLabel(o, scope)}
-                {hint && <span className="check-hint">{hint}</span>}
-              </span>
-            </label>
-          );
-        })}
+        <ul className="switch-list">
+          {visible.map((o) => {
+            const hint = missingHint(o.id, context);
+            const id = `${idPrefix}-${o.id}`;
+            return (
+              <li key={o.id}>
+                <label className="switch-row">
+                  <span className="switch-text">
+                    <span className="switch-label" id={`${id}-label`}>
+                      {optionLabel(o, scope)}
+                    </span>
+                    {hint && (
+                      <span className="switch-description" id={`${id}-hint`}>
+                        {hint}
+                      </span>
+                    )}
+                  </span>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    className="switch"
+                    checked={options[o.id]}
+                    aria-labelledby={`${id}-label`}
+                    aria-describedby={hint ? `${id}-hint` : undefined}
+                    onChange={(e) => {
+                      toggle(o.id, e.target.checked);
+                    }}
+                  />
+                </label>
+              </li>
+            );
+          })}
+        </ul>
       </fieldset>
       <label className="field">
         <span className="field-label">Förhandsvisning</span>

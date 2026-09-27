@@ -108,12 +108,12 @@ vid jämförelse, **Låg** = putsning.
 
 ## Paneler (bottom sheets)
 
-| Prio  | Iakttagelse                                                                                                                                                                |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hög   | Kort-i-kort i nästan alla paneler (Logga, Redigera post, Markera som klar). Panelens bakgrund är `--bg` och korten `--surface` – ger dubbla ramar och 36 px inre marginal. |
-| Medel | Panelens rubrik: 20 px rubrik + inramad "Stäng" (48 px) tar ~80 px innan innehållet börjar.                                                                                |
-| Medel | Ingen stängningsövergång; ingen handtagsindikator (grabber).                                                                                                               |
-| Låg   | Helskärmspaneler (sök, analys, Fråga AI) har samma rubrikrad som halva paneler – ok, men saknar skugga när innehållet scrollar under.                                      |
+| Prio  | Iakttagelse                                                                                                                                                                | Status    |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| Hög   | Kort-i-kort i nästan alla paneler (Logga, Redigera post, Markera som klar). Panelens bakgrund är `--bg` och korten `--surface` – ger dubbla ramar och 36 px inre marginal. | ✅ PR #18 |
+| Medel | Panelens rubrik: 20 px rubrik + inramad "Stäng" (48 px) tar ~80 px innan innehållet börjar.                                                                                | ✅ PR #18 |
+| Medel | Ingen stängningsövergång; ingen handtagsindikator (grabber).                                                                                                               | ✅ PR #18 |
+| Låg   | Helskärmspaneler (sök, analys, Fråga AI) har samma rubrikrad som halva paneler – ok, men saknar skugga när innehållet scrollar under.                                      | ✅ PR #28 |
 
 ## Åtgärdat i den här PR:en
 
@@ -305,6 +305,30 @@ vid jämförelse, **Låg** = putsning.
   injektionsställe m.m. i Logga-panelerna) och kryssrutorna i Fråga AI (`.check`) har fortfarande egna äldre stilar, och
   helskärmspanelerna saknar skugga när innehållet scrollar under rubriken (Låg, Paneler).
 
+## Åtgärdat: sista kontrollerna (PR #28)
+
+- **Val i Logga-panelerna** bygger på delade komponenter i stället för egen markup i `fieldset.choice-group`:
+  - Status (pass), Hur ofta (läkemedel) och Aptit (mående) är `SegmentedControl` med synlig etikett (`showLabel`). De
+    såg redan ut så, men var kopierad markup; nu har de samma kod och gruppen namnges av etiketten.
+  - Veckodagar (schema), Biverkningar (mående) och Injektionsställe (dos) är `ChipGroup` (ny). Veckodagarna var egna
+    rutor som fylldes med `--accent` när de valdes och injektionsställena egna inramade rutor – nu är båda chips som
+    dryckens snabbval och biverkningarna (vald = ram och text i `--accent`), i ett rutnät med 7 resp. 2 kolumner.
+    "Förslag" står som en dämpad rad i chipet. `weekday-*`- och `site-*`-stilarna är borttagna.
+- **Fråga AI**: "Ta med" är switchar (`switch-list`, som Inställningar → Funktioner) i stället för webbläsarens
+  kryssrutor med text efter. Förklaringen ("Inte ifyllt – …") står under rubriken och läses upp som beskrivning –
+  switchens namn är bara rubriken. `.check`/`.choices` är borttagna; appen har inga standardkryssrutor eller
+  -radioknappar kvar.
+- **Panelrubriken får en linje** när innehållet scrollats under den (`data-stuck`, som sidhuvudet) – i alla paneler, så
+  att man ser att det finns mer ovanför. Syns i `sheet-logga-radmeny`, `sheet-logga-lakemedel`,
+  `sheet-installningar-aktivitet`/`-import` och `sheet-fraga-ai-scrollad`.
+- Nya visuella tester: `sheet-logga-schema`, `sheet-logga-maende`, `sheet-logga-lakemedel`, `sheet-fraga-ai` och
+  `sheet-fraga-ai-scrollad` (före-bilder i `docs/ui-audit/`, även `fore-*-sheet-logga-traning`/`-glp1`).
+- Designsystemet: `ChipGroup`, `SegmentedControl` `showLabel`/`ariaLabel`, switchar i en grupp och linjen under
+  panelrubriken i `DESIGN.md`.
+- **Kvar**: inget från granskningen. `fieldset.choice-group` finns bara kvar för dostrappan (en grupp med fält, inte
+  ett val). Fråga AI har fortfarande fyra knappar (Dela fylld, tre sekundära) – de är olika mål för samma prompt och
+  har inte granskats.
+
 ## Rekommenderad ordning för resten av vyerna
 
 Efter designsystemet (PR #18: Mat och Översikt) – i prioritetsordning. Alla vyer, paneler och kontroller från
@@ -323,5 +347,4 @@ tabellerna ovan är genomgångna (1–12).
 11. ~~**Radioknappar i Inställningar**~~ ✅ PR #27 (valrader, `ChoiceList`).
 12. ~~**Jämförelsen och helskärmsvyn i Bilder**~~ ✅ PR #27.
 
-Möjliga nästa steg (inte från granskningens tabeller): valrader/chips för `choice-group` i Logga-panelerna och
-Fråga AI:s kryssrutor som switchar, skugga under rubriken i helskärmspaneler.
+13. ~~**Kontroller i Logga-panelerna, Fråga AI:s kryssrutor och linjen under panelrubriken**~~ ✅ PR #28.

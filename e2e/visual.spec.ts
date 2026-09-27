@@ -254,6 +254,49 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-sheet-logga-radmeny`, false);
     });
 
+    test('paneler: val i Logga och Fråga AI', async ({ page }) => {
+      await open(page, '#/logga');
+      const sheet = page.getByRole('dialog');
+      const close = () => sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      const scrollTo = (name: string) =>
+        sheet.getByText(name, { exact: true }).evaluate((el) => {
+          el.scrollIntoView({ block: 'center' });
+        });
+
+      // Veckodagar i ett nytt schema.
+      await page.getByTestId('log-tile-traning').tap();
+      await sheet.getByRole('button', { name: 'Återkommande' }).tap();
+      await scrollTo('Veckodagar');
+      await shot(page, `${theme}-sheet-logga-schema`, false);
+      await close();
+      await expect(sheet).toBeHidden();
+
+      // GLP-1: mående (aptit, biverkningar) och läkemedel (hur ofta).
+      await page.getByTestId('log-tile-glp1').tap();
+      await sheet.getByRole('button', { name: 'Mående', exact: true }).tap();
+      await shot(page, `${theme}-sheet-logga-maende`, false);
+      await sheet.getByRole('button', { name: 'Läkemedel', exact: true }).tap();
+      await scrollTo('Hur ofta');
+      await shot(page, `${theme}-sheet-logga-lakemedel`, false);
+      await close();
+      await expect(sheet).toBeHidden();
+
+      // Fråga AI (helskärm) från analysen av lunchen – överst och scrollad.
+      await page.goto('./#/mat');
+      await page.getByRole('button', { name: 'Fler val för lunch' }).tap();
+      await sheet.getByRole('button', { name: 'Analysera' }).tap();
+      await sheet.getByRole('button', { name: 'Fråga AI' }).tap();
+      await expect(sheet.getByTestId('ask-ai')).toBeVisible();
+      await sheet.evaluate((el) => {
+        el.scrollTop = 0;
+      });
+      await shot(page, `${theme}-sheet-fraga-ai`, false);
+      await sheet.evaluate((el) => {
+        el.scrollTop = 240;
+      });
+      await shot(page, `${theme}-sheet-fraga-ai-scrollad`, false);
+    });
+
     test('paneler: Mat', async ({ page }) => {
       await open(page, '#/mat');
       const sheet = page.getByRole('dialog');

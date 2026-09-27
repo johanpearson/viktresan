@@ -14,6 +14,7 @@ import {
 import { IntensityField } from './IntensityField.tsx';
 import { WorkoutTypeField } from './WorkoutTypeField.tsx';
 import { haptic } from '../lib/haptics.ts';
+import { SegmentedControl } from './SegmentedControl.tsx';
 
 interface WorkoutFormProps {
   data: AppData;
@@ -126,24 +127,13 @@ export function WorkoutForm({ data, onChange }: WorkoutFormProps) {
           }}
         />
       </label>
-      <fieldset className="choice-group">
-        <legend className="field-label">Status</legend>
-        <div className="segmented">
-          {WORKOUT_STATUSES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className="segmented-button"
-              aria-pressed={workoutStatus === s.id}
-              onClick={() => {
-                setChosenStatus(s.id);
-              }}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      <SegmentedControl
+        label="Status"
+        showLabel
+        options={WORKOUT_STATUSES}
+        value={workoutStatus}
+        onChange={setChosenStatus}
+      />
       {error && (
         <p className="form-error" role="alert">
           {error}

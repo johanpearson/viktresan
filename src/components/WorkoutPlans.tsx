@@ -18,6 +18,7 @@ import { IntensityField } from './IntensityField.tsx';
 import { ListRow } from './ListRow.tsx';
 import { Toast } from './Toast.tsx';
 import { WorkoutTypeField } from './WorkoutTypeField.tsx';
+import { ChipGroup } from './ChipGroup.tsx';
 
 interface WorkoutPlansProps {
   data: AppData;
@@ -108,25 +109,19 @@ export function WorkoutPlans({ data, onChange }: WorkoutPlansProps) {
           onChange={setType}
           types={workoutTypes(data.workouts, data.workoutPlans)}
         />
-        <fieldset className="choice-group">
-          <legend className="field-label">Veckodagar</legend>
-          <div className="weekday-picker">
-            {WEEKDAYS.map(([short, long], day) => (
-              <button
-                key={long}
-                type="button"
-                className="weekday-button"
-                aria-pressed={weekdays.includes(day)}
-                aria-label={long}
-                onClick={() => {
-                  toggleDay(day);
-                }}
-              >
-                {short}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <ChipGroup
+          label="Veckodagar"
+          columns={7}
+          options={WEEKDAYS.map(([short, long], day) => ({
+            id: String(day),
+            label: short,
+            ariaLabel: long,
+          }))}
+          selected={weekdays.map(String)}
+          onToggle={(day) => {
+            toggleDay(Number(day));
+          }}
+        />
         <div className="field-row">
           <label className="field">
             <span className="field-label">Tid</span>

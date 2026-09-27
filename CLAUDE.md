@@ -101,7 +101,7 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         StorageSettings (Inställningar → Lagring), ShowMore (+ useShowMore: 14 rader, sedan fler),
                         RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck),
                         PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·"),
-                        ChoiceList (valrader i stället för radioknappar)
+                        ChoiceList (valrader i stället för radioknappar), ChipGroup (val som chips)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar

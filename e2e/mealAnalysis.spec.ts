@@ -200,10 +200,10 @@ test('analys av måltiden och "Fråga AI" med kopiera, dela och öppna', async (
   await expect(prompt).toHaveValue(/Havregryn, 60 g/);
   await expect(prompt).toHaveValue(/koriander/);
   // GLP-1 är avstängd som funktion – ingen kryssruta.
-  await expect(dialog.getByRole('checkbox', { name: /GLP-1/ })).toHaveCount(0);
+  await expect(dialog.getByRole('switch', { name: /GLP-1/ })).toHaveCount(0);
 
   // Kryssrutorna styr innehållet och valet sparas.
-  await dialog.getByRole('checkbox', { name: 'Matpreferenser' }).uncheck();
+  await dialog.getByRole('switch', { name: 'Matpreferenser' }).uncheck();
   await expect(prompt).not.toHaveValue(/koriander/);
 
   await dialog.getByRole('button', { name: 'Kopiera' }).tap();
@@ -223,7 +223,7 @@ test('analys av måltiden och "Fråga AI" med kopiera, dela och öppna', async (
   await page.getByRole('button', { name: 'Fler val för dagen' }).tap();
   await page.getByRole('button', { name: 'Analysera' }).tap();
   await page.getByRole('button', { name: 'Fråga AI' }).tap();
-  await expect(page.getByRole('checkbox', { name: 'Matpreferenser' })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Matpreferenser' })).not.toBeChecked();
   await expect(page.getByTestId('ai-prompt')).toHaveValue(/förbättra min mat/);
   expect(errors).toEqual([]);
 });
@@ -248,7 +248,7 @@ test('GLP-1 går att ta med när funktionen är på, men är avkryssad från bö
   await page.getByRole('button', { name: 'Fler val för frukost' }).tap();
   await page.getByRole('button', { name: 'Analysera' }).tap();
   await page.getByRole('button', { name: 'Fråga AI' }).tap();
-  const glp1 = page.getByRole('checkbox', { name: /GLP-1/ });
+  const glp1 = page.getByRole('switch', { name: /GLP-1/ });
   await expect(glp1).not.toBeChecked();
   await expect(page.getByTestId('ai-prompt')).not.toHaveValue(/Wegovy/);
   await glp1.check();
