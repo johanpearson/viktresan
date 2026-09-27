@@ -100,7 +100,8 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         ActionSheet (radmeny ovanpå en panel), DateBar (‹ Idag ›, även i Logga-panelernas formulär),
                         StorageSettings (Inställningar → Lagring), ShowMore (+ useShowMore: 14 rader, sedan fler),
                         RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck),
-                        PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·")
+                        PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·"),
+                        ChoiceList (valrader i stället för radioknappar)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
@@ -319,7 +320,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   opacitet/av sparas i `preferences`. Saknas getUserMedia eller nekas den → filväljare med `capture`; "Välj från
   galleriet" finns alltid. Bildrutan går genom `compressImage` som en vald fil. Galleri: Tillfällen (en rad per
   tillfälle, framifrån + profil, tom plats = "Lägg till") eller en vinkel i rutnät. "Ange vinkel" listar bilder med
-  `okand` med snabbval på bilden. Jämförelse (`SessionCompare`): två tillfällen, vinkel eller båda, sida vid sida/
+  `okand` med snabbval på bilden. Jämförelse (`SessionCompare`, helskärmspanel): två tillfällen, vinkel eller båda, sida vid sida/
   reglage, dagar och viktskillnad; "Första mot senaste" (förval, även `#/framsteg/bilder/jamfor`). Profilsida:
   Inställningar → Bilder.
 - **Beständig lagring**: `requestPersistence()` vid start; status + knapp i Inställningar.

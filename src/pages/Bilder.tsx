@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Card } from '../components/Card.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { ListRow } from '../components/ListRow.tsx';
@@ -8,7 +9,15 @@ import { SessionCompare } from '../components/SessionCompare.tsx';
 import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import { SessionEditSheet } from '../components/SessionEditSheet.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
-import { deletePhoto, setPhotoAngle, type PhotoSession } from '../db/db.ts';
+import { Toast } from '../components/Toast.tsx';
+import {
+  deletePhoto,
+  putPhoto,
+  putPhotoSession,
+  setPhotoAngle,
+  type PhotoEntry,
+  type PhotoSession,
+} from '../db/db.ts';
 import { formatDate, formatInt, formatKg, formatPhotoLabel } from '../lib/format.ts';
 import {
   ANGLE_LABELS,
@@ -25,6 +34,7 @@ import { formatBytes, getStorageStatus, type StorageStatus } from '../lib/storag
 import { useAppData } from '../lib/useAppData.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 import { usePhotos, type PhotoItem } from '../lib/usePhotos.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
 
 type GalleryView = 'tillfallen' | CaptureAngle;
 
@@ -46,6 +56,7 @@ export function Bilder() {
   // "#/framsteg/bilder/jamfor" (från milstolpen) öppnar jämförelsen: första mot senaste.
   const { sub } = useHashRoute();
   const [comparing, setComparing] = useState(sub === 'bilder/jamfor');
+  const toast = useUndoToast();
 
   const rows = useMemo(() => sessionRows(sessions ?? [], photos ?? []), [sessions, photos]);
   const sessionById = useMemo(
@@ -74,17 +85,35 @@ export function Bilder() {
     await reload();
   }
 
+  // Borttagning i helskärmsvyn: direkt, med Ångra (bilden och ett tömt tillfälle kommer tillbaka).
   async function handleDelete(id: string) {
     const index = browseOrder.findIndex((p) => p.id === id);
+    const photo = browseOrder[index];
+    if (!photo) return;
     const next = browseOrder[index + 1] ?? browseOrder[index - 1];
+    const session = sessions?.find((s) => s.id === photo.sessionId);
     await deletePhoto(id);
     setViewingId(next?.id ?? null);
     await reload();
+    toast.show(`Tog bort bilden ${labelFor(photo)}.`, async () => {
+      if (session) await putPhotoSession(session);
+      await putPhoto(toEntry(photo));
+      await reload();
+    });
   }
 
+  const undoToast = toast.toast && (
+    <Toast
+      message={toast.toast.message}
+      onUndo={toast.onUndo}
+      onClose={toast.close}
+      testId="photo-toast"
+    />
+  );
+
   const loaded = sessions !== null && photos !== null && data !== null;
-  // Jämförelsen öppnas från en rad överst i galleriet och stängs i jämförelsen.
-  const canCompare = rows.length >= 2 && !comparing;
+  // Jämförelsen öppnas från en rad överst i galleriet, i en helskärmspanel.
+  const canCompare = rows.length >= 2;
   const startFlow = () => {
     setFlow({ kind: 'new' });
   };
@@ -95,15 +124,6 @@ export function Bilder() {
 
       {unassigned.length > 0 && (
         <AngleQueue photos={unassigned} labelFor={labelFor} onSetAngle={handleSetAngle} />
-      )}
-
-      {comparing && rows.length >= 2 && (
-        <SessionCompare
-          rows={rows}
-          onClose={() => {
-            setComparing(false);
-          }}
-        />
       )}
 
       {loaded && rows.length === 0 && (
@@ -188,7 +208,21 @@ export function Bilder() {
           onClose={() => {
             setViewingId(null);
           }}
+          toast={undoToast}
         />
+      )}
+      {!viewingId && undoToast}
+
+      {comparing && rows.length >= 2 && (
+        <BottomSheet
+          title="Jämför tillfällen"
+          full
+          onClose={() => {
+            setComparing(false);
+          }}
+        >
+          <SessionCompare rows={rows} />
+        </BottomSheet>
       )}
 
       {flow && data && photos && (
@@ -214,6 +248,13 @@ export function Bilder() {
       )}
     </>
   );
+}
+
+/** Bilden som den lagras (utan object URL:en). */
+function toEntry(photo: PhotoItem): PhotoEntry {
+  const entry: Partial<PhotoItem> = { ...photo };
+  delete entry.url;
+  return entry as PhotoEntry;
 }
 
 interface ThumbProps {

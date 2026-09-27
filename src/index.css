@@ -877,10 +877,17 @@ body {
   background: #000;
 }
 
+.viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .viewer-title {
   margin: 0;
+  min-width: 0;
   font-weight: 600;
-  text-align: center;
 }
 
 .viewer-image {
@@ -896,8 +903,9 @@ body {
   gap: var(--space-2);
 }
 
-.viewer-button {
-  width: 100%;
+/* Svart bakgrund: textknappar och ramar i vitt, borttagning i ljus fel-färg. */
+.viewer .button-ghost {
+  color: #fff;
 }
 
 .viewer .button-secondary {
@@ -905,27 +913,35 @@ body {
   border-color: #fff;
 }
 
-.viewer .button-danger {
+.viewer .button-danger-text {
   color: #fca5a5;
-  border-color: #fca5a5;
 }
 
-/* Jämförelse */
-.segmented-2 {
-  grid-template-columns: repeat(2, 1fr);
+.viewer .viewer-delete {
+  align-self: center;
 }
 
-.compare-summary {
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+/* Toast med Ångra ovanpå helskärmsvyn (ingen navigering under). */
+.viewer .toast {
+  bottom: calc(env(safe-area-inset-bottom) + var(--space-3));
+  color: var(--text);
+}
+
+/* Jämförelse (helskärmspanel): val, vinkel, skillnad och bilderna under varandra. */
+.compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.compare-reset {
+  align-self: flex-start;
 }
 
 .compare-side {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
-  margin-top: 16px;
 }
 
 .compare-figure {
@@ -954,7 +970,6 @@ body {
 
 .compare-slider {
   position: relative;
-  margin-top: 16px;
   max-height: 70dvh;
   width: 100%;
   overflow: hidden;
@@ -1041,10 +1056,6 @@ body {
   margin: 6px 0 0;
   color: var(--muted);
   font-size: var(--text-xs);
-}
-
-.compare-close {
-  margin-top: 16px;
 }
 
 /* Fototillfällen: en ListRow per tillfälle med bilderna i ett rutnät under (samma storlek som per vinkel). */
@@ -1320,34 +1331,13 @@ body {
 }
 
 /* Jämförelse av tillfällen */
-.compare-angles {
-  margin-top: 12px;
-}
-
-.compare-sessions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-  margin: 16px 0 4px;
-}
-
-.compare-sessions dt {
-  font-weight: 700;
-}
-
-.compare-sessions dd {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
 .compare-angle-title {
-  margin: 20px 0 0;
+  margin: var(--space-3) 0 var(--space-2);
   font-size: var(--text-md);
 }
 
 .compare-missing {
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .viewer-angles {
@@ -1364,14 +1354,6 @@ body {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
-}
-
-.kv-compact {
-  margin: 0;
-}
-
-.kv-compact dd {
-  margin-bottom: 8px;
 }
 
 .check {
@@ -1408,14 +1390,11 @@ body {
   margin-bottom: 4px;
 }
 
+/* Förhandsvisning av en säkerhetskopia: direkt i panelen (inget kort-i-kort). */
 .preview {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg);
 }
 
 .preview-title {
@@ -1532,28 +1511,68 @@ a.button {
   margin-bottom: 6px;
 }
 
-.choice {
+/* Valrader (ChoiceList): ett val av flera, som switcharna – text till vänster, markering till höger. */
+.choice-list {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.choice-list > legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+
+.choice-row {
   display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
-  min-height: 48px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--tap);
+  padding: var(--space-2) 0;
   cursor: pointer;
 }
 
-.choice:has(input:checked) {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+.choice-row + .choice-row {
+  border-top: 1px solid var(--border);
 }
 
-.choice input {
-  width: 22px;
-  height: 22px;
-  margin: 2px 0 0;
+.choice-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Egen radioknapp: samma storlek i ljust och mörkt tema; vald = fylld ring i --accent. */
+.choice-radio {
   flex: none;
-  accent-color: var(--accent);
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 2px solid var(--muted);
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  background-clip: content-box;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.choice-radio:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+}
+
+.choice-radio-danger:checked {
+  border-color: var(--danger);
+  background-color: var(--danger);
+}
+
+.choice-radio:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .choice-label {

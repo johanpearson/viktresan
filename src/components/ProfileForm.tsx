@@ -9,6 +9,7 @@ import {
   type Sex,
 } from '../lib/energy.ts';
 import { parseProfile } from '../lib/validation.ts';
+import { ChoiceList } from './ChoiceList.tsx';
 
 interface ProfileFormProps {
   profile: Profile | null;
@@ -164,26 +165,13 @@ export function ProfileForm({ profile, onSaved }: ProfileFormProps) {
             />
           </label>
         </div>
-        <fieldset className="choice-group">
-          <legend className="field-label">Aktivitetsnivå</legend>
-          {ACTIVITY_LEVELS.map((level) => (
-            <label key={level.id} className="choice">
-              <input
-                type="radio"
-                name="activity"
-                value={level.id}
-                checked={activityLevel === level.id}
-                onChange={() => {
-                  setActivityLevel(level.id);
-                }}
-              />
-              <span>
-                <span className="choice-label">{level.label}</span>
-                <span className="choice-description">{level.description}</span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
+        <ChoiceList
+          legend="Aktivitetsnivå"
+          name="activity"
+          options={ACTIVITY_LEVELS}
+          value={activityLevel === '' ? null : activityLevel}
+          onChange={setActivityLevel}
+        />
         <label className="field">
           <span className="field-label">Önskad takt</span>
           <select

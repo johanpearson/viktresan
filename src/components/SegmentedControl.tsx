@@ -7,7 +7,8 @@ interface SegmentedControlProps<T extends string> {
   /** Gruppens namn för skärmläsare, t.ex. "Visa". */
   label: string;
   options: readonly SegmentedOption<T>[];
-  value: T;
+  /** Valt alternativ; `null` = inget valt (t.ex. en bild utan vinkel). */
+  value: T | null;
   onChange: (value: T) => void;
   /** `small` (44 px, i sidhuvudet) eller `regular` (48 px, i innehållet). */
   size?: 'small' | 'regular';

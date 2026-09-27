@@ -327,12 +327,21 @@ test('nytt fototillfälle med båda vinklarna via filväljaren när kameran neka
   await expect(page.getByTestId('photo')).toHaveCount(1);
   await expect(page.getByTestId('photo')).toHaveAttribute('data-angle', 'profil');
 
-  // Helskärmsvyn visar vinkeln och tar bort bilden (med bekräftelse).
+  // Helskärmsvyn visar vinkeln och tar bort bilden direkt, med Ångra.
   await page.getByTestId('photo').tap();
   const viewer = page.getByRole('dialog', { name: /Profil \(vänster sida\)/ });
   await expect(viewer).toContainText('89,6 kg');
-  await viewer.getByRole('button', { name: 'Ta bort' }).tap();
-  await viewer.getByRole('button', { name: 'Bekräfta borttagning' }).tap();
+  await viewer.getByRole('button', { name: 'Ta bort bilden' }).tap();
+  await expect(viewer).toBeHidden();
+  await expect(page.getByText('Inga bilder i profil än.')).toBeVisible();
+  const photoToast = page.getByTestId('photo-toast');
+  await expect(photoToast).toContainText('Tog bort bilden');
+  await photoToast.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(page.getByTestId('photo')).toHaveCount(1);
+  await expect(page.getByTestId('photo')).toHaveAttribute('data-angle', 'profil');
+  // Samma bild igen – nu utan Ångra.
+  await page.getByTestId('photo').tap();
+  await viewer.getByRole('button', { name: 'Ta bort bilden' }).tap();
   await expect(viewer).toBeHidden();
   await expect(page.getByText('Inga bilder i profil än.')).toBeVisible();
   await page
@@ -534,11 +543,13 @@ test('kameravy med spökbild och självutlösare, jämför två tillfällen per 
   // Jämförelse (som från milstolpen): första mot senaste, framifrån förvalt.
   await page.goto('./#/framsteg/bilder/jamfor');
   const compare = page.getByTestId('photo-compare');
-  await expect(compare.getByTestId('compare-summary')).toHaveText(
-    '30 dagar mellan tillfällena · −2,5 kg',
-  );
-  await expect(compare.getByTestId('compare-sessions')).toContainText('90,5 kg');
-  await expect(compare.getByTestId('compare-sessions')).toContainText('88,0 kg');
+  await expect(page.getByRole('dialog', { name: 'Jämför tillfällen' })).toBeVisible();
+  await expect(compare.getByTestId('compare-summary')).toContainText('30 dagar mellan tillfällena');
+  await expect(compare.getByTestId('compare-summary')).toContainText('−2,5 kg');
+  await expect(compare.getByTestId('compare-fram')).toContainText('90,5 kg');
+  await expect(compare.getByTestId('compare-fram')).toContainText('88,0 kg');
+  // Första mot senaste är redan valt – snabbvalet visas först när man valt annat.
+  await expect(compare.getByRole('button', { name: 'Första mot senaste' })).toHaveCount(0);
   await expect(compare.getByTestId('compare-fram')).toBeVisible();
   await expect(compare.getByRole('img', { name: /^Före: .*90,5 kg$/ })).toBeVisible();
   await expect(compare.getByRole('img', { name: /^Efter: .*88,0 kg$/ })).toBeVisible();
@@ -549,7 +560,7 @@ test('kameravy med spökbild och självutlösare, jämför två tillfällen per 
   await expect(compare.getByTestId('compare-fram')).toHaveCount(0);
 
   // Båda vinklarna under varandra, med dra-reglage.
-  await angles.getByRole('button', { name: 'Båda vinklarna' }).tap();
+  await angles.getByRole('button', { name: 'Båda' }).tap();
   await expect(compare.getByRole('heading', { name: 'Framifrån' })).toBeVisible();
   await expect(compare.getByRole('heading', { name: 'Profil' })).toBeVisible();
   await compare.getByRole('button', { name: 'Reglage' }).tap();
@@ -571,7 +582,10 @@ test('kameravy med spökbild och självutlösare, jämför två tillfällen per 
   await compare.getByRole('button', { name: 'Första mot senaste' }).tap();
   await expect(compare.getByTestId('compare-summary')).toContainText('30 dagar');
 
-  await compare.getByRole('button', { name: 'Avsluta jämförelse' }).tap();
+  await page
+    .getByRole('dialog', { name: 'Jämför tillfällen' })
+    .getByRole('button', { name: 'Stäng', exact: true })
+    .tap();
   await expect(compare).toBeHidden();
   // Galleriets knapp öppnar jämförelsen igen.
   await page.getByRole('button', { name: 'Jämför' }).tap();

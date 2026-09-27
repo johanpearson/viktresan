@@ -4,6 +4,8 @@ import { BackupError, readBackup, summarizeBackup, type BackupContents } from '.
 import { formatDate } from '../lib/format.ts';
 import { syncMilestones } from '../lib/milestoneSync.ts';
 import { formatBytes } from '../lib/storage.ts';
+import { ChoiceList, type ChoiceOption } from './ChoiceList.tsx';
+import { ListRow } from './ListRow.tsx';
 
 interface ImportBackupProps {
   onImported: () => Promise<void>;
@@ -167,93 +169,81 @@ interface PreviewProps {
   onCancel: () => void;
 }
 
+const IMPORT_MODES: readonly ChoiceOption<ImportMode>[] = [
+  {
+    id: 'merge',
+    label: 'Slå ihop med befintlig data',
+    description:
+      'Nya poster läggs till. Finns samma post redan behålls den senast ändrade. Din nuvarande profil behålls.',
+  },
+  {
+    id: 'replace',
+    label: 'Ersätt all befintlig data',
+    description: 'Profil, mätningar, matlogg och bilder på den här enheten raderas och ersätts.',
+  },
+];
+
 function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewProps) {
   const summary = summarizeBackup(contents);
+  const value = (text: string | number, testId?: string) => (
+    <span data-testid={testId}>{text}</span>
+  );
   return (
     <section className="preview" aria-labelledby="preview-title" data-testid="import-preview">
       <h4 className="preview-title" id="preview-title">
         Innehåll i säkerhetskopian
       </h4>
-      <dl className="kv kv-compact">
-        <dt>Exporterad</dt>
-        <dd>{dateTime.format(new Date(summary.exportedAt))}</dd>
-        <dt>Krypterad</dt>
-        <dd>{summary.encrypted ? 'Ja' : 'Nej'}</dd>
-        <dt>Profil</dt>
-        <dd>{summary.hasProfile ? 'Ja' : 'Nej'}</dd>
-        <dt>Vikt</dt>
-        <dd data-testid="preview-weights">{summary.weights}</dd>
-        <dt>Midjemått</dt>
-        <dd data-testid="preview-waist">{summary.waist}</dd>
-        <dt>Dagar med steg</dt>
-        <dd data-testid="preview-steps">{summary.steps}</dd>
-        <dt>Matloggposter</dt>
-        <dd data-testid="preview-food-log">{summary.foodLog}</dd>
-        <dt>Egna livsmedel och måltider</dt>
-        <dd data-testid="preview-foods">
-          {summary.foods} + {summary.meals}
-        </dd>
-        <dt>Dryckesposter</dt>
-        <dd data-testid="preview-water">{summary.water}</dd>
-        <dt>Träningspass och scheman</dt>
-        <dd data-testid="preview-workouts">
-          {summary.workouts} + {summary.workoutPlans}
-        </dd>
-        <dt>GLP-1: läkemedel, doser och dagar med mående</dt>
-        <dd data-testid="preview-glp1">
-          {summary.medications} + {summary.injections} + {summary.symptoms}
-        </dd>
-        <dt>Bilder</dt>
-        <dd data-testid="preview-photos">
-          {summary.photos} ({formatBytes(summary.photoBytes)})
-        </dd>
+      <ul className="list list-flush">
+        <ListRow primary="Exporterad" value={dateTime.format(new Date(summary.exportedAt))} />
+        <ListRow primary="Krypterad" value={summary.encrypted ? 'Ja' : 'Nej'} />
+        <ListRow primary="Profil" value={summary.hasProfile ? 'Ja' : 'Nej'} />
+        <ListRow primary="Vikt" value={value(summary.weights, 'preview-weights')} />
+        <ListRow primary="Midjemått" value={value(summary.waist, 'preview-waist')} />
+        <ListRow primary="Dagar med steg" value={value(summary.steps, 'preview-steps')} />
+        <ListRow primary="Matloggposter" value={value(summary.foodLog, 'preview-food-log')} />
+        <ListRow
+          primary="Egna livsmedel och måltider"
+          value={value(`${String(summary.foods)} + ${String(summary.meals)}`, 'preview-foods')}
+        />
+        <ListRow primary="Dryckesposter" value={value(summary.water, 'preview-water')} />
+        <ListRow
+          primary="Träningspass och scheman"
+          value={value(
+            `${String(summary.workouts)} + ${String(summary.workoutPlans)}`,
+            'preview-workouts',
+          )}
+        />
+        <ListRow
+          primary="GLP-1"
+          secondary="Läkemedel, doser och dagar med mående"
+          value={value(
+            `${String(summary.medications)} + ${String(summary.injections)} + ${String(summary.symptoms)}`,
+            'preview-glp1',
+          )}
+        />
+        <ListRow
+          primary="Bilder"
+          value={value(
+            `${String(summary.photos)} (${formatBytes(summary.photoBytes)})`,
+            'preview-photos',
+          )}
+        />
         {summary.firstDate && summary.lastDate && (
-          <>
-            <dt>Period</dt>
-            <dd>
-              {formatDate(summary.firstDate)} – {formatDate(summary.lastDate)}
-            </dd>
-          </>
+          <ListRow
+            primary="Period"
+            value={`${formatDate(summary.firstDate)} – ${formatDate(summary.lastDate)}`}
+            wrapValue
+          />
         )}
-      </dl>
-      <fieldset className="choices">
-        <legend className="field-label">Hur ska datan importeras?</legend>
-        <label className="check">
-          <input
-            type="radio"
-            name="import-mode"
-            value="merge"
-            checked={mode === 'merge'}
-            onChange={() => {
-              onMode('merge');
-            }}
-          />
-          <span>
-            Slå ihop med befintlig data
-            <span className="check-hint">
-              Nya poster läggs till. Finns samma post redan behålls den senast ändrade. Din
-              nuvarande profil behålls.
-            </span>
-          </span>
-        </label>
-        <label className="check">
-          <input
-            type="radio"
-            name="import-mode"
-            value="replace"
-            checked={mode === 'replace'}
-            onChange={() => {
-              onMode('replace');
-            }}
-          />
-          <span>
-            Ersätt all befintlig data
-            <span className="check-hint">
-              Profil, mätningar, matlogg och bilder på den här enheten raderas och ersätts.
-            </span>
-          </span>
-        </label>
-      </fieldset>
+      </ul>
+      <ChoiceList
+        legend="Hur ska datan importeras?"
+        name="import-mode"
+        options={IMPORT_MODES}
+        value={mode}
+        onChange={onMode}
+        dangerOption="replace"
+      />
       <div className="button-row">
         <button
           type="button"
