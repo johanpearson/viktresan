@@ -1,8 +1,11 @@
 /*
  * Designsystem (docs/DESIGN.md). Tokens först; äldre namn längre ner är alias så att
  * vyer som inte flyttats till systemet ännu fortsätter fungera.
+ *
+ * `.theme-light` ger ljusa tokens oavsett app-tema (rapporten, som skrivs ut på papper).
  */
-:root {
+:root,
+.theme-light {
   color-scheme: light dark;
 
   /* Avstånd: 4/8/12/16/24/32 */
@@ -135,8 +138,16 @@
   }
 }
 
+/* Ljust tema i en del av sidan (mörka tokens ärvs inte in). */
+.theme-light {
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--text);
+}
+
 /* Alias för äldre namn – nya regler använder tokens ovan. */
-:root {
+:root,
+.theme-light {
   --radius: var(--radius-lg);
   --ok: var(--success);
   --ring-kcal: var(--data-food);
@@ -738,6 +749,18 @@ body {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* Fem flikar eller fler (Framsteg): kolumner efter innehållet och mindre text så att alla får plats. */
+.segmented:has(> :nth-child(5)) {
+  grid-auto-columns: auto;
+  gap: 2px;
+}
+
+.segmented:has(> :nth-child(5)) .segmented-button {
+  min-width: 0;
+  padding: 0 var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .segmented-button[aria-pressed='true'] {
@@ -3690,6 +3713,14 @@ a.list-row-body {
   --tone: var(--data-supplement);
 }
 
+.tone-waist {
+  --tone: var(--data-waist);
+}
+
+.tone-mood {
+  --tone: var(--data-mood);
+}
+
 /* Ett Card i ett Card ritas som en grupp utan egen ram (inget kort-i-kort). */
 .card-group + .card-group {
   margin-top: var(--space-4);
@@ -4249,4 +4280,286 @@ a.list-row-body {
 
 .nutrient-field .button {
   min-height: var(--tap);
+}
+
+/* ------------------------------------------------------------------ */
+/* SvgChart: statisk graf som SVG (rapporten, utskrift)                */
+/* ------------------------------------------------------------------ */
+
+.svg-chart {
+  margin: 0 0 var(--space-3);
+}
+
+.svg-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.svg-chart-grid line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.svg-chart-grid text,
+.svg-chart-axis {
+  fill: var(--muted);
+}
+
+.svg-chart-line {
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.svg-chart-point {
+  fill: var(--tone);
+}
+
+.svg-chart-point-faint {
+  fill: var(--tone);
+  opacity: 0.4;
+}
+
+.svg-chart-bars rect {
+  fill: var(--tone);
+}
+
+.bar-legend-swatch-faint {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------------------ */
+/* Platåkortet (Översikt)                                              */
+/* ------------------------------------------------------------------ */
+
+.plateau-lead {
+  margin: 0 0 var(--space-3);
+}
+
+.plateau-subtitle {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--text-md);
+}
+
+.plateau-reasons {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-5);
+}
+
+p.plateau-reasons {
+  padding-left: 0;
+}
+
+.plateau-reasons li + li {
+  margin-top: var(--space-2);
+}
+
+/* ------------------------------------------------------------------ */
+/* Rapport (Framsteg → Rapport): dokument i ljust tema, A4 i utskrift  */
+/* ------------------------------------------------------------------ */
+
+.report-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+.report-toolbar .button {
+  flex: 1;
+}
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-lg);
+}
+
+.report-header {
+  padding: 0 var(--space-1);
+}
+
+.report-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+
+.report-period {
+  margin: var(--space-1) 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-meta {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.report .card {
+  margin: 0;
+}
+
+/* Listor i sektionerna går kant i kant; det som följer får luft. */
+.report-section > .list {
+  margin-bottom: 0;
+}
+
+.report-section > .list + * {
+  margin-top: var(--space-3);
+}
+
+/* Sidhuvudet upprepas överst i varje sektion – bara i utskrift. */
+.report-running-head {
+  display: none;
+}
+
+.report-caption {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+}
+
+.report .table {
+  margin-top: var(--space-2);
+}
+
+.report-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-photos li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.report-photos img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.report-photo-missing {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 4;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.report-photo-caption {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+@page {
+  size: A4;
+  margin: 14mm 16mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff;
+  }
+
+  /* Bara rapporten skrivs ut. */
+  .app-header,
+  .nav,
+  .page-header,
+  .segmented,
+  .no-print,
+  .toast,
+  dialog {
+    display: none !important;
+  }
+
+  .app-main {
+    max-width: none;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .report {
+    display: block;
+    padding: 0;
+    border-radius: 0;
+    background: var(--surface);
+    font-size: 11pt;
+  }
+
+  .report-header {
+    padding: 0 0 var(--space-4);
+  }
+
+  .report .card {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* En sektion per sida, med sidhuvudet (datum och period) överst. */
+  .report .report-section {
+    break-before: page;
+  }
+
+  .report-header + .report-section {
+    break-before: auto;
+  }
+
+  .report-running-head {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin: 0 0 var(--space-3);
+    padding-bottom: var(--space-1);
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 9pt;
+  }
+
+  /* Första sektionen har rapportens eget sidhuvud. */
+  .report-header + .report-section .report-running-head {
+    display: none;
+  }
+
+  .report .report-section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .report-running-head {
+    order: -1;
+  }
+
+  .svg-chart,
+  .report .table,
+  .report .list-row,
+  .report-photos li {
+    break-inside: avoid;
+  }
+
+  /* Samma textstorlek som på mobilen: grafen skalas inte upp till hela A4-bredden. */
+  .svg-chart-svg {
+    max-width: 120mm;
+  }
 }

@@ -6,6 +6,7 @@ import { Feature } from '../components/Feature.tsx';
 import { MissedWorkouts } from '../components/MissedWorkouts.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
 import { NextDoseCard } from '../components/NextDoseCard.tsx';
+import { PlateauCard } from '../components/PlateauCard.tsx';
 import { Card } from '../components/Card.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { ListRow } from '../components/ListRow.tsx';
@@ -73,6 +74,7 @@ export function Oversikt() {
           weights={data.weights}
           foodLog={data.foodLog}
           week={<WeekSummaryCard data={data} now={now} />}
+          plateau={<PlateauCard data={data} now={now} />}
         >
           <TodayCard data={data} now={now} onChange={reload} />
           <Feature id="tillskott">
@@ -101,6 +103,8 @@ interface SummaryProps {
   foodLog: FoodLogEntry[];
   /** Förra veckans summering (visas efter Idag). */
   week?: ReactNode;
+  /** Platåkortet (visas efter veckosummeringen). */
+  plateau?: ReactNode;
   /** Visas direkt under huvudsiffran (Idag, Nästa dos, Kommande). */
   children?: ReactNode;
 }
@@ -108,7 +112,7 @@ interface SummaryProps {
 /** Så många veckor visas i "Snitt per vecka" (resten finns under Framsteg). */
 const WEEKS_SHOWN = 4;
 
-function Summary({ profile, weights, foodLog, week, children }: SummaryProps) {
+function Summary({ profile, weights, foodLog, week, plateau, children }: SummaryProps) {
   const today = todayIso();
   const daily = dailyWeights(weights);
   const latest = daily[daily.length - 1];
@@ -210,6 +214,7 @@ function Summary({ profile, weights, foodLog, week, children }: SummaryProps) {
 
       {children}
       {week}
+      {plateau}
 
       <Feature id="mat">
         <CaloriePlanCard profile={profile} result={plan} />

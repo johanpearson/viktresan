@@ -492,6 +492,23 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-sheet-installningar-import`, false);
     });
 
+    test('rapport: val, skärmvy och utskrift (A4)', async ({ page }) => {
+      await open(page, '#/framsteg/rapport');
+      await expect(page.getByTestId('report-settings')).toBeVisible();
+      await shot(page, `${theme}-framsteg-rapport`);
+      await page.getByRole('link', { name: 'Visa rapport' }).tap();
+      await expect(page.getByTestId('report')).toBeVisible();
+      await shot(page, `${theme}-rapport`);
+      // Utskriftsvyn: A4-bredd (210 mm vid 96 dpi), alltid ljust tema.
+      await page.setViewportSize({ width: 794, height: 1123 });
+      await page.emulateMedia({ media: 'print' });
+      await expect(page.locator('.nav')).toBeHidden();
+      await expect(page).toHaveScreenshot(`${theme}-rapport-utskrift.png`, {
+        fullPage: true,
+        maxDiffPixelRatio: 0.002,
+      });
+    });
+
     test('paneler: Översikt och Framsteg', async ({ page }) => {
       await open(page, '');
       const sheet = page.getByRole('dialog');

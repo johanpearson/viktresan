@@ -47,6 +47,9 @@ src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (
 src/lib/milestones.ts   Milstolpar: regler (trendvikt), evaluateMilestones, kommande, diffMilestones, texter
 src/lib/milestoneSync.ts  Milstolpar mot databasen: syncMilestones('silent' | 'live'), köade körningar
 src/lib/celebration.ts  Kö med firanden (useCelebration); confetti.ts = canvas-confetti utan worker
+src/lib/plateau.ts      Platå: regeln (takt > 0, ≥ 4 v sedan start, ≥ 70 % vägda dagar, trend < 0,2 kg på 21 d), vilotid 14 d,
+                        jämförelse 3 v mot 3 v innan (intag, loggade dagar, steg, pass, dos, TDEE) och förklaringar
+src/lib/report.ts       Rapport: perioder, sektioner (med funktion), inställningar (preferences.report), buildReport per period
 src/lib/weekSummary.ts  Veckosummering mån–sön: trend, intag, protein, vatten, pass, steg + pilar och texter
 src/lib/pwaUpdate.ts    Registrerar sw.js, söker uppdateringar, toast-tillstånd, SKIP_WAITING
 src/lib/version.ts      Version, commit och byggtid (Vite define)
@@ -123,11 +126,12 @@ docs/DESIGN.md          Designsystemet: tokens, komponenter, regler, mikrointera
 docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kvarvarande vyer
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
-                        dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar), Inställningar
+                        dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar | Rapport; `Rapport.tsx`), Inställningar
 e2e/                    Playwright-tester. supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
-                        veckokort, milstolpar, bilder, måltidsanalys); hjälpare i helpers.ts. mealAnalysis.spec.ts mockar
+                        veckokort, milstolpar, bilder, måltidsanalys, rapport, platå); hjälpare i helpers.ts. report.spec.ts
+                        ersätter window.print (addInitScript) och räknar anropen; plateau.spec.ts styr tiden med page.clock. mealAnalysis.spec.ts mockar
                         clipboard, navigator.share och window.open (addInitScript). photos.spec.ts mockar getUserMedia
                         (nekad resp. canvas-ström) och skapar en v8-databas för migreringen. week.spec.ts styr tiden med page.clock. training.spec.ts och glp1.spec.ts styr tiden med page.clock.setFixedTime.
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
@@ -197,7 +201,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
-  `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -268,6 +273,22 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   veckor med data under Framsteg → Veckor (`pastWeeks`; en `ListRow` per vecka, tryck = summeringen och "Fråga AI" i en panel). Trend = EMA vid veckans slut − dagen före veckan
   (kräver vägning i veckan); snitt räknas över loggade dagar. Rader har `feature` och filtreras. Texter är
   sakliga och uppmuntrande, aldrig skuldbeläggande; uppgång (bort från målet) beskrivs neutralt.
+- **Platå** (`plateau.ts`, `PlateauCard` på Översikt efter veckokortet): utvärderas bara när takten > 0 (aldrig i
+  viktstabiliseringsläget), ≥ 28 dagar efter `profile.startDate` och med vägning ≥ 70 % av de senaste 21 dagarna. Platå =
+  EMA-trendvikten idag − dagen före fönstret är < 0,2 kg (absolut). Stäng sparar dagen i `preferences.plateauDismissed`;
+  kortet visas igen tidigast 14 dagar senare. Analysen jämför de senaste 21 hela dagarna (t.o.m. igår) mot de 21 innan:
+  snittintag per loggad dag, loggade matdagar, snittsteg, pass/vecka, GLP-1-dos och förbrukning (`buildPlan` dagen efter
+  perioden, adaptiv eller formel). Förklaringar (`Explanation`, med `feature`) rangordnas efter ungefärlig kcal/dag; de två
+  första visas, alltid med notisen om vätska och mätbrus. "Fråga AI om platån" = `AskAi` med ämnet `plateau`
+  (`AI_PLATEAU_TEMPLATE`; kryssrutan "Platåanalysen", inga matpreferenser).
+- **Rapport** (`report.ts`, Framsteg → Rapport, `#/framsteg/rapport` = val, `#/framsteg/rapport/visa` = rapporten): period
+  4 v / 12 v (t.o.m. idag) / sedan start (startdatum eller första vägningen) / egen (kortas till idag). Sektioner (med
+  `feature`): grunddata, viktgraf, midja, GLP-1 (dostidslinje, missade doser när ±3-dagarsfönstret passerat, aptit,
+  biverkningar), kost (snitt per loggad dag, fiber via Livsmedelsverkets data och `partsOf`, snabbloggar utan fiber),
+  tillskott (dagar med tagen dos), träning (pass per kalendervecka), steg, bilder (första och senaste tillfället, av som
+  standard). `ReportDocument` är alltid ljust (`theme-light`), grafer är `SvgChart` (SVG), utskrift A4 med en sektion per
+  sida. "Spara som PDF" = `window.print()` (titeln sätts till perioden = filnamnet); instruktionen visas första gången.
+  Inga nätverksanrop (livsmedel.json är precachad).
 - **Milstolpar** (`milestones.ts`, id:n `kg-1`, `kg-5`/`kg-10`/…, `procent-5|10`, `bmi-overvikt|normalvikt`,
   `halvvags-<mål>`, `mal-<mål>`, `dagar-7|30|100`, `pass-1|10|50`, `vatten-7`, `protein-7`, `bild-1`, `bild-30`):
   viktmilstolparna mäts på EMA-trendvikten (en dipp i dagsvikten triggar inte). Varje milstolpe sparas en gång

@@ -24,3 +24,19 @@ Gör så här:
 
 /** Rubriken före underlaget när användaren inte tagit med något. */
 export const AI_PROMPT_NO_CONTEXT = 'Jag har valt att inte dela några uppgifter om mig själv.';
+
+/**
+ * Mallen för "Fråga AI om platån" (samma platshållare; `{{underlag}}` innehåller
+ * platåanalysen om användaren tar med den).
+ */
+export const AI_PLATEAU_TEMPLATE = `
+Hej! Jag följer min vikt i en app och vill ha hjälp att förstå {{amne}}.
+
+{{underlag}}
+
+Gör så här:
+1. Förklara kort vad som mest sannolikt ligger bakom platån utifrån uppgifterna ovan. Kom ihåg att vätska och mätbrus kan dölja en nedgång i några veckor.
+2. Föreslå 2–3 konkreta, realistiska justeringar jag kan prova de närmaste veckorna.
+3. Föreslå aldrig ett dagsintag under {{kalorigolv}} och inga ändringar av läkemedelsdoser – det bestäms av förskrivaren.
+4. Var saklig och uppmuntrande, svara kort och på svenska, gärna i punktform.
+`;

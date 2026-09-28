@@ -172,6 +172,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, 'Mat näring med tillskott');
     });
 
+    test('rapport: val och rapportvy saknar tillgänglighetsfel', async ({ page }) => {
+      await seedData(page);
+      await page.goto('./#/framsteg/rapport');
+      await expect(page.getByTestId('report-settings')).toBeVisible();
+      await expectNoViolations(page, 'Rapport val');
+      await page.getByRole('link', { name: 'Visa rapport' }).tap();
+      await expect(page.getByTestId('report')).toBeVisible();
+      await expectNoViolations(page, 'Rapport');
+    });
+
     test('sidor med data saknar tillgänglighetsfel', async ({ page }) => {
       await seedData(page);
       for (const [label, path] of ROUTES) {

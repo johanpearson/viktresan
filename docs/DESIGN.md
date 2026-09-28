@@ -87,12 +87,20 @@ En färg per datatyp (ljust / mörkt tema):
 | `--data-mood`       | Mående    | `#a16207` | `#fde047` | Kalenderprick                                         |
 | `--data-supplement` | Tillskott | `#a21caf` | `#f0abfc` | Tillskottsdelen i näringsstaplar, kalenderprick, ikon |
 
+Tonerna `waist` och `mood` (`tone-waist`, `tone-mood`) finns för grafer i rapporten.
+
 Protein har `--macro-protein` (samma teal som vikt, men används bara i matens detaljer). I komponenter
 väljs färgen med en **ton** (`src/lib/tones.ts`): `tone="food"` → klassen `tone-food` → `--tone`, som
 `ProgressBar`, `StatBar` och `GoalRing` använder. Grafer läser `--data-*` med `cssVar()`.
 
 Äldre variabelnamn (`--ring-kcal`, `--dot-water`, `--chart-dose`, `--ok`, `--radius` …) är alias till
 tokens ovan och tas bort när sista vyn flyttats.
+
+### Ljust tema i en del av sidan (`theme-light`)
+
+Klassen `theme-light` ger ljusa tokens (ytor, text, `--data-*`, alias) för ett element och allt i det, oavsett
+`prefers-color-scheme`. Används av rapporten, som ska se ut som papper både på skärmen och i utskrift. Mörka tokens
+ärvs inte in eftersom elementet deklarerar om variablerna.
 
 ### Storlekar och rörelse
 
@@ -141,6 +149,9 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `AiLabelImport`    | `AiLabelImport.tsx`    | Prompt (kopiera/dela) → klistra in JSON → validering, förhandsvisning         |
 | `IngredientEditor` | `IngredientEditor.tsx` | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept     |
 | `WeekBudgetStatus` | `WeekBudgetStatus.tsx` | Veckoläge: veckans `StatBar`, dagens förslag, golvnotis (Mat → Dag, Idag)     |
+| `SvgChart`         | `SvgChart.tsx`         | Statisk graf som SVG (linje, punkter, staplar) – rapporten och utskrift       |
+| `PlateauCard`      | `PlateauCard.tsx`      | Översikt: platå, jämförelsetabell, 1–2 förklaringar, Fråga AI, Stäng          |
+| `ReportDocument`   | `ReportDocument.tsx`   | Rapporten till vården: sidhuvud + en `Card` per sektion, `theme-light`        |
 
 ### Page (sidhuvud)
 
@@ -494,6 +505,9 @@ stället för `<fieldset>` + `<legend>` runt egen markup – t.ex. Status (pass)
 Ett alternativ med kort etikett får `ariaLabel` ("Aptit 2" för "2"). Klick på det valda alternativet anropar
 `onChange` igen, så ett valfritt val kan avmarkeras (aptit).
 
+Fem flikar eller fler (Framsteg: Historik, Veckor, Bilder, Milstolpar, Rapport) får kolumner efter innehållet och
+`--text-sm` så att alla syns på en mobil – ingen horisontell scroll.
+
 ### ChipGroup
 
 ```tsx
@@ -536,6 +550,9 @@ filter. Samma knapp (`ShowMore`) används för "Visa alla N obesvarade" på Öve
 - Serien har datatypens färg (`--data-*`), mål är en streckad linje i `--chart-goal`.
 - Ett värde per dag (steg, dryck): `DailyBarChart` med `colorVar`, `label`, `format`, `step` (avrundning av
   y-axelns tak) och valfri `goalOn(date)`. Vikt (`WeightChart`) och intag (`IntakeChart`) har egna grafer.
+- Rapporten (utskrift, PDF) använder `SvgChart` i stället för uPlot: SVG är skarp i PDF och behöver ingen canvas.
+  Serier: `points` (svaga dagsvärden), `line` (trend), `line-points` (midja, aptit), `bars` (steg). Legenden är
+  `bar-legend` under grafen när det finns flera serier.
 - Grafen ligger i ett `Card` med rubrik och `className="chart-card"`; sammanfattningen (snitt, mål nått) är en
   dämpad rad under grafen.
 
@@ -605,6 +622,28 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
   **utanför** formuläret (syskon), eftersom den har egna formulär. Portioner loggas med chips ½ · 1 · 1½ · 2.
 - **Veckobudget** (`WeekBudgetStatus`) ligger inuti summeringskortet under en 1 px linje – aldrig som eget kort i ett
   kort. `StatBar` med `title="Veckan"`, dagens förslag på en egen rad och golvnotisen som saklig `form-note`.
+
+### Platåkortet (Översikt)
+
+`Card` med `tone="info"` och "Stäng" (ghost, liten) i rubrikraden. En saklig mening om trendvikten, sedan en `.table`
+med de senaste tre veckorna mot de tre innan (rader med `feature`, filtreras), dosbyten som dämpad rad, rubriken
+"Det här kan förklara platån" med högst två förklaringar som punktlista, alltid notisen om vätska och mätbrus och
+"Fråga AI om platån" som sekundär knapp (helskärmspanel med `AskAi`). Formuleringar beskriver vad datan visar – aldrig
+vad användaren "borde" ha gjort.
+
+### Rapport (Framsteg → Rapport)
+
+- **Val** (`ReportSettingsForm`, ett `Card` med `.form`): period som `ChipGroup` (två kolumner, enkelval), egen period
+  = två datumfält i `field-row`, perioden som dämpad rad, sektioner som switchar (`switch-group`) med förklaring.
+  "Visa rapport" är vyns enda primärknapp (inaktiv utan giltig period eller sektion). Valen sparas direkt.
+- **Rapportvyn** (`#/framsteg/rapport/visa`): verktygsrad (`report-toolbar no-print`) med "Ändra urval" (sekundär) och
+  "Spara som PDF" (primär, `window.print()`; första gången en panel med instruktion och "Fortsätt"). Under den
+  `ReportDocument` (`article.report.theme-light`): rubrik, period och skapad-datum, sedan en `Card` per sektion med
+  värden som `list list-flush` + `ListRow`, tabeller som `.table` med `caption` och grafer som `SvgChart`.
+- **Utskrift** (`@media print`, `@page { size: A4 }`): allt utom rapporten döljs (sidhuvud, navigering, flikar,
+  `.no-print`, paneler), korten tappar ram, varje sektion börjar på ny sida och får sidhuvudet (`report-running-head`:
+  period och skapad-datum) överst. Grafer, tabeller och rader bryts inte mitt i. Grafen är högst 120 mm bred så att
+  texten får samma storlek som på mobilen.
 
 ### Skeleton
 
