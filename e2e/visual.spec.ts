@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { collectErrors, seed } from './helpers.ts';
-import { FROZEN_NOW, LIVSMEDEL, VISUAL_DATA } from './visualData.ts';
+import { FROZEN_NOW, LIVSMEDEL, VISUAL_DATA, WEEKLY_EXTRA } from './visualData.ts';
 
 /**
  * Visuella regressionstester: varje vy och de viktigaste panelerna i ljust och
@@ -170,6 +170,50 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-mat-egna`);
       await page.getByRole('button', { name: 'Historik', exact: true }).tap();
       await shot(page, `${theme}-mat-historik`);
+    });
+
+    test('snabblogg, recept och veckobudget', async ({ page }) => {
+      await open(page, '#/mat');
+      await seed(page, {
+        ...WEEKLY_EXTRA,
+        profile: { ...VISUAL_DATA.profile, calorieMode: 'vecka' },
+      });
+      await page.reload();
+      await expect(page.getByTestId('week-budget-status')).toBeVisible();
+      await expect(page.getByTestId('estimated-tag')).toBeVisible();
+      await shot(page, `${theme}-mat-dag-vecka`);
+
+      const sheet = page.getByRole('dialog');
+      const close = () => sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await page.getByRole('button', { name: 'Lägg till i lunch' }).tap();
+      await sheet.getByTestId('quick-log-open').getByRole('button').tap();
+      await expect(sheet.getByTestId('quick-log-form')).toBeVisible();
+      await shot(page, `${theme}-sheet-mat-snabblogg`, false);
+      await sheet.getByRole('button', { name: 'Avbryt' }).tap();
+      await sheet.getByRole('button', { name: 'Måltider', exact: true }).tap();
+      await sheet.getByTestId('quick-pick').filter({ hasText: 'Linsgryta' }).tap();
+      await expect(sheet.getByRole('group', { name: 'Snabbval mängd' })).toBeVisible();
+      await shot(page, `${theme}-sheet-mat-recept`, false);
+      await close();
+
+      await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+      await page.getByTestId('own-recipe').getByRole('button').first().tap();
+      await expect(page.getByTestId('recipe-per-portion')).toBeVisible();
+      await shot(page, `${theme}-mat-recept-formular`);
+
+      await page.goto('./');
+      await expect(page.getByTestId('today-card').getByTestId('week-budget-status')).toBeVisible();
+      await shot(page, `${theme}-oversikt-vecka`);
+
+      await page.goto('./#/installningar/kalorimal');
+      await expect(sheet).toBeVisible();
+      await shot(page, `${theme}-sheet-installningar-kalorimal`, false);
+      await close();
+
+      await page.goto('./#/framsteg/veckor');
+      await page.getByTestId('week').first().getByRole('button').tap();
+      await expect(sheet.getByTestId('week-budget')).toBeVisible();
+      await shot(page, `${theme}-sheet-framsteg-vecka-budget`, false);
     });
 
     test('vy: framsteg-bilder-galleri', async ({ page }) => {

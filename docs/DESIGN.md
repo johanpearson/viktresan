@@ -139,6 +139,8 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `BarcodeNotFound`  | `BarcodeNotFound.tsx`  | "Hittade inte [EAN]": AI från etikett / manuellt + länk till Open Food Facts  |
 | `BarcodeElsewhere` | `BarcodeElsewhere.tsx` | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit    |
 | `AiLabelImport`    | `AiLabelImport.tsx`    | Prompt (kopiera/dela) → klistra in JSON → validering, förhandsvisning         |
+| `IngredientEditor` | `IngredientEditor.tsx` | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept     |
+| `WeekBudgetStatus` | `WeekBudgetStatus.tsx` | Veckoläge: veckans `StatBar`, dagens förslag, golvnotis (Mat → Dag, Idag)     |
 
 ### Page (sidhuvud)
 
@@ -590,6 +592,19 @@ Dagens tillskott är chips (`ChipGroup`, `hideLabel` när kortets rubrik redan s
 vid behov med `hint`. "Alla tagna" är en sekundär liten knapp i kortets rubrikrad och följs av en `Toast` med Ångra.
 Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (mängd, enhet – bara D-vitamin har ett val,
 µg/IE med omräkning – och "Ta bort") och "+ Lägg till näringsämne" som en `select`.
+
+### Snabblogg, recept och veckobudget
+
+- **Snabblogg** är en vanlig `ListRow` i dagsvyn med etiketten `tag tag-estimated` ("uppskattat", dämpad ram och text –
+  ingen datafärg) efter namnet och protein som `secondary`. Den öppnas från raden "Snabblogg" (`ListRow` med `chevron`)
+  överst i sök-sheeten, även via måltidens +. Formuläret (`QuickLogForm`) har samma form som `FoodLogForm`: stjärnan i
+  rubrikraden, en primärknapp och "Ta bort posten" sist vid redigering.
+- **Recept** ligger som eget `Card` under Mat → Egna (samma mönster som Måltider). `RecipeBuilder` använder
+  `IngredientEditor` och visar näringen som `list list-flush` med `ListRow` ("Per portion", "Per 100 g", värdet till
+  höger). "Duplicera recept" är en ghost-textknapp ovanför den destruktiva "Ta bort receptet". Sök-sheeten öppnas
+  **utanför** formuläret (syskon), eftersom den har egna formulär. Portioner loggas med chips ½ · 1 · 1½ · 2.
+- **Veckobudget** (`WeekBudgetStatus`) ligger inuti summeringskortet under en 1 px linje – aldrig som eget kort i ett
+  kort. `StatBar` med `title="Veckan"`, dagens förslag på en egen rad och golvnotisen som saklig `form-note`.
 
 ### Skeleton
 

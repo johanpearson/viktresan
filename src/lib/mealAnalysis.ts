@@ -19,6 +19,7 @@ import {
 import type { FoodLogEntry, SavedMeal } from '../db/db.ts';
 import { mealFoodId } from './foodCatalog.ts';
 import { scaleNutrients, sumNutrients, type Nutrients } from './nutrition.ts';
+import { recipeParts } from './recipes.ts';
 
 /** En del av en post: posten själv, eller en ingrediens i en loggad sparad måltid. */
 export interface AnalysisPart {
@@ -34,13 +35,25 @@ export type ExtraLookup = (foodId: string) => ExtraNutrients | null | undefined;
 /**
  * Posten uppdelad i delar med näringsvärden. En loggad sparad måltid delas upp i
  * ingredienserna (skalade efter loggad mängd) så att deras fiber, vitaminer m.m.
- * kan slås upp; saknas måltiden räknas posten som en helhet.
+ * kan slås upp; saknas måltiden räknas posten som en helhet. Ett loggat recept delas
+ * upp i receptet som det såg ut när posten loggades.
  */
 export function partsOf(
   entry: FoodLogEntry,
   meals: readonly SavedMeal[],
   lookup: ExtraLookup,
 ): AnalysisPart[] {
+  if (entry.recipe) {
+    const parts = recipeParts(entry.recipe, entry.grams);
+    if (parts.length > 0) {
+      return parts.map((item) => ({
+        foodId: item.foodId,
+        grams: item.grams,
+        per100: item.per100,
+        extra: lookup(item.foodId) ?? null,
+      }));
+    }
+  }
   if (entry.foodId.startsWith('maltid:')) {
     const meal = meals.find((m) => mealFoodId(m.id) === entry.foodId);
     const totalG = meal?.items.reduce((s, i) => s + i.grams, 0) ?? 0;

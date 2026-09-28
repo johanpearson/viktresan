@@ -4,6 +4,7 @@
  */
 import { weekdayIndex } from './calendar.ts';
 import { addDays, toDayNumber } from './dates.ts';
+import type { CalorieMode } from '../db/db.ts';
 import type { FeatureGated } from './features.ts';
 import { formatInt, formatKcal, formatKg, formatMl, formatShortDate } from './format.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
@@ -25,7 +26,9 @@ export interface WeekInput {
   water: readonly DatedWater[];
   workouts: readonly { date: string; status: string }[];
   steps: readonly DatedSteps[];
-  profile: (PlanProfile & { proteinFactor?: number; waterGoalMl?: number }) | null;
+  profile:
+    | (PlanProfile & { proteinFactor?: number; waterGoalMl?: number; calorieMode?: CalorieMode })
+    | null;
 }
 
 export interface WeekSummary {
@@ -43,6 +46,10 @@ export interface WeekSummary {
   foodDays: number;
   /** Kalorimålet som det såg ut vid veckans slut. */
   targetKcal: number | null;
+  /** Veckobudget (7 × dagsmålet) – bara i veckoläge (Inställningar → Kalorimål). */
+  budgetKcal: number | null;
+  /** Summan av loggade kcal i veckan, `null` utan matlogg. */
+  weekKcal: number | null;
   proteinGoalG: number | null;
   /** Snitt per dag med dryck (loggad eller ur matloggen). */
   waterMl: number | null;
@@ -119,6 +126,9 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
     proteinG: mean(intake.map((d) => d.proteinG)),
     foodDays: intake.length,
     targetKcal,
+    budgetKcal:
+      profile?.calorieMode === 'vecka' && targetKcal !== null ? Math.round(targetKcal) * 7 : null,
+    weekKcal: intake.length === 0 ? null : intake.reduce((s, d) => s + d.kcal, 0),
     proteinGoalG: proteinGoalFor(profile),
     waterMl: mean(water.map((d) => d.ml)),
     waterDays: water.length,
@@ -194,7 +204,7 @@ export function compareValues(
 }
 
 export interface WeekRow extends FeatureGated {
-  id: 'trend' | 'kcal' | 'protein' | 'vatten' | 'traning' | 'steg';
+  id: 'trend' | 'budget' | 'kcal' | 'protein' | 'vatten' | 'traning' | 'steg';
   label: string;
   /** Värdet som jämförs mellan veckorna. */
   value: (s: WeekSummary) => number | null;
@@ -220,6 +230,23 @@ export const WEEK_ROWS: readonly WeekRow[] = [
     value: (s) => s.trendChangeKg,
     tolerance: 0.05,
     text: (s) => (s.trendChangeKg == null ? null : formatKg(s.trendChangeKg, { signed: true })),
+  },
+  {
+    // Veckoläge: veckans loggade kcal mot budgeten. Dagar utan matlogg syns i dagantalet.
+    id: 'budget',
+    label: 'Veckobudget',
+    feature: 'mat',
+    value: (s) => s.weekKcal,
+    tolerance: 50,
+    text: (s) => {
+      if (s.budgetKcal == null || s.weekKcal == null) return null;
+      const diff = Math.round(s.weekKcal - s.budgetKcal);
+      const vs =
+        Math.abs(diff) < 1
+          ? 'enligt budget'
+          : `${formatKcal(Math.abs(diff))} ${diff < 0 ? 'under' : 'över'}`;
+      return `${formatKcal(s.weekKcal)} av ${formatKcal(s.budgetKcal)} · ${vs} · ${daysText(s.foodDays)} loggade`;
+    },
   },
   {
     id: 'kcal',

@@ -2,15 +2,19 @@ import { useMemo, useState } from 'react';
 import {
   deleteFood,
   deleteMeal,
+  deleteRecipe,
   putFood,
   putMeal,
+  putRecipe,
   saveCustomUnits,
   setFavorite,
+  type Recipe,
   type SavedMeal,
   type StoredFood,
 } from '../db/db.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
+import { recipeFoodId, recipeYield, yieldText } from '../lib/recipes.ts';
 import { loggedAmountText } from '../lib/units.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
 import { Card } from './Card.tsx';
@@ -18,6 +22,7 @@ import { CustomFoodForm } from './CustomFoodForm.tsx';
 import type { FoodSource } from './FoodPicker.tsx';
 import { ListRow } from './ListRow.tsx';
 import { MealBuilder } from './MealBuilder.tsx';
+import { RecipeBuilder } from './RecipeBuilder.tsx';
 import { Toast } from './Toast.tsx';
 
 interface OwnFoodsProps {
@@ -27,14 +32,44 @@ interface OwnFoodsProps {
 }
 
 type Editing =
-  { kind: 'food'; food: StoredFood | null } | { kind: 'meal'; meal: SavedMeal | null } | null;
+  | { kind: 'food'; food: StoredFood | null }
+  | { kind: 'meal'; meal: SavedMeal | null }
+  | { kind: 'recipe'; recipe: Recipe | null }
+  | null;
+
+type Removable =
+  | { kind: 'food'; food: StoredFood }
+  | { kind: 'meal'; meal: SavedMeal }
+  | { kind: 'recipe'; recipe: Recipe };
+
+function foodIdOf(target: Removable): string {
+  switch (target.kind) {
+    case 'food':
+      return target.food.id;
+    case 'meal':
+      return `maltid:${target.meal.id}`;
+    case 'recipe':
+      return recipeFoodId(target.recipe.id);
+  }
+}
+
+function nameOf(target: Removable): string {
+  switch (target.kind) {
+    case 'food':
+      return target.food.name;
+    case 'meal':
+      return target.meal.name;
+    case 'recipe':
+      return target.recipe.name;
+  }
+}
 
 /**
- * Mat → Egna: sparade måltider och egna livsmedel som listor. Tryck = redigera,
+ * Mat → Egna: sparade måltider, recept och egna livsmedel som listor. Tryck = redigera,
  * svep vänster = ta bort (med Ångra). "Ny …" är sekundärknappar i kortens rubrikrad.
  */
 export function OwnFoods({ source, onChange }: OwnFoodsProps) {
-  const { foods, meals, favorites, foodUnits } = source.foodData;
+  const { foods, meals, favorites, foodUnits, recipes } = source.foodData;
   const [editing, setEditing] = useState<Editing>(null);
   const toast = useUndoToast();
   const own = useMemo(() => foods.filter((f) => f.source === 'egen'), [foods]);
@@ -47,20 +82,20 @@ export function OwnFoods({ source, onChange }: OwnFoodsProps) {
    * Tar bort livsmedlet eller måltiden. Borttagningen tar även favoritmarkeringen och
    * de egna enheterna – Ångra lägger tillbaka alla tre.
    */
-  async function remove(
-    target: { kind: 'food'; food: StoredFood } | { kind: 'meal'; meal: SavedMeal },
-  ) {
-    const favoriteId = target.kind === 'food' ? target.food.id : `maltid:${target.meal.id}`;
+  async function remove(target: Removable) {
+    const favoriteId = foodIdOf(target);
     const wasFavorite = favorites.find((f) => f.foodId === favoriteId);
     const units = customUnits.get(favoriteId) ?? [];
-    const name = target.kind === 'food' ? target.food.name : target.meal.name;
+    const name = nameOf(target);
     if (target.kind === 'food') await deleteFood(target.food.id);
-    else await deleteMeal(target.meal.id);
+    else if (target.kind === 'meal') await deleteMeal(target.meal.id);
+    else await deleteRecipe(target.recipe.id);
     setEditing(null);
     await onChange();
     toast.show(`Tog bort ${name}.`, async () => {
       if (target.kind === 'food') await putFood(target.food);
-      else await putMeal(target.meal);
+      else if (target.kind === 'meal') await putMeal(target.meal);
+      else await putRecipe(target.recipe);
       if (wasFavorite) await setFavorite(favoriteId, true, wasFavorite.createdAt);
       if (units.length > 0) await saveCustomUnits(favoriteId, units);
       await onChange();
@@ -95,6 +130,31 @@ export function OwnFoods({ source, onChange }: OwnFoodsProps) {
         }}
         {...(food ? { onDelete: () => void remove({ kind: 'food', food }) } : {})}
       />
+    );
+  }
+  if (editing?.kind === 'recipe') {
+    const { recipe } = editing;
+    return (
+      <>
+        <RecipeBuilder
+          // Ny nyckel när en kopia öppnas, så att formuläret fylls i på nytt.
+          key={recipe?.id ?? 'nytt'}
+          recipe={recipe}
+          source={source}
+          onSaved={(next) => void saved(`Sparade receptet ${next.name}.`)}
+          onDuplicated={(copy) => {
+            void onChange().then(() => {
+              setEditing({ kind: 'recipe', recipe: copy });
+              toast.show(`Skapade ${copy.name}. Ändra det du vill och spara.`);
+            });
+          }}
+          onCancel={() => {
+            setEditing(null);
+          }}
+          {...(recipe ? { onDelete: () => void remove({ kind: 'recipe', recipe }) } : {})}
+        />
+        {toastView}
+      </>
     );
   }
   if (editing?.kind === 'meal') {
@@ -152,6 +212,56 @@ export function OwnFoods({ source, onChange }: OwnFoodsProps) {
                 }}
               />
             ))}
+          </ul>
+        )}
+      </Card>
+      <Card
+        title="Recept"
+        action={
+          <button
+            type="button"
+            className="button button-secondary button-small"
+            onClick={() => {
+              toast.close();
+              setEditing({ kind: 'recipe', recipe: null });
+            }}
+          >
+            Nytt recept
+          </button>
+        }
+      >
+        {recipes.length === 0 ? (
+          <p className="muted">
+            Lägg in grytor och annat du lagar i omgångar, så loggar du en portion eller vägd mängd.
+          </p>
+        ) : (
+          <ul className="list">
+            {recipes.map((recipe) => {
+              const y = recipeYield(recipe);
+              return (
+                <ListRow
+                  key={recipe.id}
+                  testId="own-recipe"
+                  primary={recipe.name}
+                  secondary={yieldText(y, formatGrams)}
+                  value={
+                    <span className="kcal">
+                      {y.perPortion
+                        ? `${formatKcal(y.perPortion.kcal)}/portion`
+                        : `${formatKcal(y.per100.kcal)}/100 g`}
+                    </span>
+                  }
+                  onClick={() => {
+                    toast.close();
+                    setEditing({ kind: 'recipe', recipe });
+                  }}
+                  swipeLeft={{
+                    label: 'Ta bort',
+                    onSwipe: () => void remove({ kind: 'recipe', recipe }),
+                  }}
+                />
+              );
+            })}
           </ul>
         )}
       </Card>

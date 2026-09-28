@@ -199,7 +199,10 @@ export function foodProfile(
   food: UnitFood,
   rules: readonly StandardUnitRule[] = STANDARD_UNIT_RULES,
 ): FoodProfile {
-  if (food.id.startsWith('maltid:')) return { category: 'maltid', density: null, standard: [] };
+  // Måltider, recept och snabbloggar har bara sina egna enheter (portion) och gram.
+  if (/^(maltid|recept|snabb):/.test(food.id)) {
+    return { category: 'maltid', density: null, standard: [] };
+  }
   const rule = standardRuleFor(food, rules);
   let category =
     rule?.category ??

@@ -1,6 +1,7 @@
 import { SOURCE_LABELS, type FoodItem } from '../lib/foodSearch.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
 import { isProteinRich } from '../lib/protein.ts';
+import { quickDetail } from '../lib/quickLog.ts';
 
 interface FoodListProps {
   items: readonly FoodItem[];
@@ -13,6 +14,7 @@ interface FoodListProps {
 }
 
 function detail(item: FoodItem): string {
+  if (item.source === 'snabb') return `${SOURCE_LABELS.snabb} ${quickDetail(item)}`;
   const per100 = `${formatKcal(item.per100.kcal)}/100 g`;
   const unit = item.units?.[0];
   if (!unit) return `${SOURCE_LABELS[item.source]} · ${per100}`;
@@ -43,7 +45,7 @@ export function FoodList({
           >
             <span className="pick-name">
               {item.name}
-              {markProteinRich && isProteinRich(item.per100) && (
+              {markProteinRich && item.source !== 'snabb' && isProteinRich(item.per100) && (
                 <span className="tag" data-testid="protein-rich">
                   Proteinrik
                 </span>

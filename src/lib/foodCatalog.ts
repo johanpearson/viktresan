@@ -31,6 +31,8 @@ export function sourceOf(foodId: string): FoodSource {
   if (foodId.startsWith('lv:')) return 'livsmedelsverket';
   if (foodId.startsWith('off:')) return 'openfoodfacts';
   if (foodId.startsWith('maltid:')) return 'maltid';
+  if (foodId.startsWith('recept:')) return 'recept';
+  if (foodId.startsWith('snabb:')) return 'snabb';
   return 'egen';
 }
 
@@ -45,6 +47,7 @@ export function entryToItem(entry: FoodLogEntry): FoodItem {
   const unit = entryUnit(entry);
   if (unit) item.units = [unit];
   if (entry.per100Unit !== undefined) item.per100Unit = entry.per100Unit;
+  if (entry.recipe !== undefined) item.recipe = entry.recipe;
   return item;
 }
 

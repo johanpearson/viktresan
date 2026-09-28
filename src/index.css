@@ -2609,6 +2609,13 @@ a.button {
   vertical-align: 0.1em;
 }
 
+/* Snabblogg i dagsvyn: uppskattade kcal (dämpad, ingen datafärg) */
+.tag-estimated {
+  border-color: var(--border);
+  color: var(--muted);
+  font-weight: 400;
+}
+
 /* Översikt: trendvikt som huvudsiffra */
 .hero-sub {
   margin: 4px 0 0;
@@ -3068,6 +3075,25 @@ a.button {
 
 .day-summary-mini {
   padding: 0 0 var(--space-2);
+}
+
+/* Veckoläge: veckobudgeten under dagens summering (Mat → Dag, Översikt → Idag). */
+.week-budget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.week-budget .form-note {
+  margin: 0;
+}
+
+.week-budget-line {
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
 /* Sökfältet (och miniraden vid scroll) stannar under toppen. */

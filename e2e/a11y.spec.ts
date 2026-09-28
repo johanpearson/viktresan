@@ -253,6 +253,73 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, 'Logga mat');
     });
 
+    test('snabblogg, recept och veckobudget saknar tillgänglighetsfel', async ({ page }) => {
+      await seedData(page);
+      await seed(page, {
+        foodLog: [
+          {
+            id: 'q1',
+            date: isoDaysFromToday(0),
+            meal: 'frukost',
+            foodId: 'snabb:restaurang:850:',
+            name: 'Restaurang',
+            amount: 1,
+            unit: 'portion',
+            grams: 100,
+            per100: { kcal: 850, proteinG: 0, carbsG: 0, fatG: 0 },
+            estimated: true,
+            createdAt: Date.now(),
+          },
+        ],
+        recipes: [
+          {
+            id: 'r1',
+            name: 'Linsgryta',
+            items: [
+              {
+                foodId: 'egen:gröt',
+                name: 'Gröt',
+                amount: 1200,
+                unit: 'g',
+                grams: 1200,
+                per100: { kcal: 90, proteinG: 3, carbsG: 15, fatG: 2 },
+              },
+            ],
+            servings: 6,
+            cookedWeightG: 1500,
+            createdAt: 1,
+          },
+        ],
+      });
+      await page.goto('./#/installningar/kalorimal');
+      await page.getByRole('dialog', { name: 'Kalorimål' }).getByLabel('Per vecka').tap();
+      await expect(page.getByRole('dialog').getByRole('status')).not.toBeEmpty();
+      await expectNoViolations(page, 'Kalorimål');
+      await page.goto('./#/mat');
+      const breakfast = page.getByTestId('meal-frukost').getByRole('heading').getByRole('button');
+      if ((await breakfast.getAttribute('aria-expanded')) === 'false') await breakfast.tap();
+      await expect(page.getByTestId('estimated-tag')).toBeVisible();
+      await expect(page.getByTestId('week-budget-status')).toBeVisible();
+      await expectNoViolations(page, 'Mat dag med snabblogg och veckobudget');
+      await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
+      await page.getByTestId('quick-log-open').getByRole('button').tap();
+      await expect(page.getByTestId('quick-log-form')).toBeVisible();
+      await expectNoViolations(page, 'Snabblogg');
+      await page.getByRole('button', { name: 'Avbryt' }).tap();
+      await page.getByRole('button', { name: 'Måltider', exact: true }).tap();
+      await page.getByTestId('quick-pick').filter({ hasText: 'Linsgryta' }).tap();
+      await expect(page.getByRole('group', { name: 'Snabbval mängd' })).toBeVisible();
+      await expectNoViolations(page, 'Logga recept');
+      await page.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+      await page.getByTestId('own-recipe').getByRole('button').first().tap();
+      await expect(page.getByTestId('recipe-per-portion')).toBeVisible();
+      await expectNoViolations(page, 'Receptformulär');
+      await page.goto('./');
+      await expect(page.getByTestId('today-card').getByTestId('week-budget-status')).toBeVisible();
+      await expectNoViolations(page, 'Översikt veckobudget');
+    });
+
     test('import-förhandsvisning och krypteringsfält saknar tillgänglighetsfel', async ({
       page,
     }) => {

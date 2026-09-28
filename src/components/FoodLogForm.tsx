@@ -31,6 +31,7 @@ import {
   type FoodUnit,
   type Usage,
 } from '../lib/units.ts';
+import { PORTION_UNIT, RECIPE_PORTIONS } from '../lib/recipes.ts';
 import { UnitList } from './UnitList.tsx';
 
 interface FoodLogFormProps {
@@ -108,7 +109,10 @@ export function FoodLogForm({
 
   const parsed = parseUnitAmount(amount, unit, units);
   const preview = parsed.ok ? scaleNutrients(food.per100, parsed.value.grams) : null;
-  const quick = QUICK_AMOUNT_UNITS.includes(unit);
+  // Recept i portioner: ½, 1, 1½, 2. Övriga enheter som räknas i antal: ½, 1, 2.
+  const recipePortions = food.source === 'recept' && unit === PORTION_UNIT;
+  const quickAmounts = recipePortions ? RECIPE_PORTIONS : QUICK_AMOUNTS;
+  const quick = recipePortions || QUICK_AMOUNT_UNITS.includes(unit);
   const selected = units.find((u) => u.name === unit);
   const guess = isGuess(selected) ? selected : undefined;
 
@@ -161,6 +165,8 @@ export function FoodLogForm({
     };
     if (editing) entry.updatedAt = now;
     if (food.per100Unit === 'ml') entry.per100Unit = 'ml';
+    // Receptet som det ser ut nu (eller som posten loggades) följer med posten.
+    if (food.recipe) entry.recipe = food.recipe;
     await putFoodLog(entry);
     onSaved(
       `${editing ? 'Uppdaterade' : 'Loggade'} ${food.name} (${loggedAmountText(entry)}) till ${mealLabel(meal).toLowerCase()}.`,
@@ -318,7 +324,7 @@ export function FoodLogForm({
       )}
       {quick && (
         <div className="chip-grid" role="group" aria-label="Snabbval mängd">
-          {QUICK_AMOUNTS.map((q) => (
+          {quickAmounts.map((q) => (
             <button
               key={q.value}
               type="button"

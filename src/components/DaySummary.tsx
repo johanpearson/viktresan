@@ -1,6 +1,8 @@
 import { formatGrams, formatInt, formatKcal } from '../lib/format.ts';
 import type { Nutrients } from '../lib/nutrition.ts';
+import type { WeekBudget } from '../lib/weekBudget.ts';
 import { StatBar } from './StatBar.tsx';
+import { WeekBudgetStatus } from './WeekBudgetStatus.tsx';
 
 interface DaySummaryProps {
   totals: Nutrients;
@@ -15,15 +17,21 @@ interface DaySummaryProps {
    * visuell kopia av den fulla summeringen och döljs för skärmläsare.
    */
   variant?: 'full' | 'mini';
+  /** Veckoläge: `targetKcal` är dagens förslag och veckans status visas under makrona. */
+  week?: WeekBudget | null;
 }
 
-/** Mat → Dag: kalorier och protein mot målen som StatBar på en rad, makron som text. */
+/**
+ * Mat → Dag: kalorier och protein mot målen som StatBar på en rad, makron som text och i
+ * veckoläge veckans budget.
+ */
 export function DaySummary({
   totals,
   targetKcal,
   proteinGoalG,
   when,
   variant = 'full',
+  week = null,
 }: DaySummaryProps) {
   const kcal = Math.round(totals.kcal);
   const protein = Math.round(totals.proteinG);
@@ -48,8 +56,8 @@ export function DaySummary({
           remaining == null
             ? undefined
             : remaining >= 0
-              ? `${formatKcal(remaining)} kvar`
-              : `${formatKcal(-remaining)} över`
+              ? `${formatKcal(remaining)} kvar${week ? ' idag' : ''}`
+              : `${formatKcal(-remaining)} över${week ? ' idag' : ''}`
         }
       />
       <StatBar
@@ -90,6 +98,7 @@ export function DaySummary({
         Protein {formatGrams(Math.round(totals.proteinG))} · Kolhydrater{' '}
         {formatGrams(Math.round(totals.carbsG))} · Fett {formatGrams(Math.round(totals.fatG))}
       </p>
+      {week && <WeekBudgetStatus week={week} />}
       {targetKcal == null && (
         <p className="form-note muted">
           Fyll i kön, födelseår och aktivitetsnivå under{' '}

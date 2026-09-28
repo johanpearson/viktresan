@@ -25,7 +25,11 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
   }
 
   const { plan, adaptive } = result;
+  const weekly = profile.calorieMode === 'vecka';
   const notes = [
+    weekly
+      ? `Veckobudget ${formatKcal(Math.round(plan.targetKcal) * 7)} (måndag–söndag). Dagens förslag visas under Idag.`
+      : null,
     ...plan.limits.map((l) => limitText(l, plan)),
     goalDateText(plan, profile.goalDate),
   ].filter((n): n is string => n !== null);
@@ -39,7 +43,7 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
       </h2>
       <dl className="stats stats-compact stats-2">
         <div className="stat">
-          <dt>Dagens kalorimål</dt>
+          <dt>{weekly ? 'Dagsmål i snitt' : 'Dagens kalorimål'}</dt>
           <dd data-testid="calorie-target">{formatKcal(plan.targetKcal)}</dd>
         </div>
         <div className="stat">

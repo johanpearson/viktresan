@@ -43,6 +43,8 @@ export interface DayNutrition {
   partsWithoutData: number;
   /** Tagna tillskott. */
   supplementCount: number;
+  /** Snabbloggar – bara uppskattade kcal, ingår inte i vitaminer och mineraler. */
+  estimatedEntries: number;
   /** Dagar med något loggat (1 eller 0 för en dag, upp till 7 för ett snitt). */
   loggedDays: number;
 }
@@ -70,8 +72,15 @@ export function dayNutrition(date: string, input: NutritionInput): DayNutrition 
   const supplements = new Map<NutrientKey, number>();
   let foodParts = 0;
   let partsWithoutData = 0;
+  let estimatedEntries = 0;
 
   for (const entry of entries) {
+    // Snabbloggar har bara uppskattade kcal – de räknas inte som delar utan data utan
+    // redovisas för sig ("dagens näring är ofullständig").
+    if (entry.estimated) {
+      estimatedEntries++;
+      continue;
+    }
     const parts = partsOf(entry, input.meals, input.lookup);
     foodParts += parts.length;
     partsWithoutData += parts.filter((p) => p.extra === null).length;
@@ -117,6 +126,7 @@ export function dayNutrition(date: string, input: NutritionInput): DayNutrition 
     foodParts,
     partsWithoutData,
     supplementCount: intakes.length,
+    estimatedEntries,
     loggedDays: entries.length > 0 || intakes.length > 0 ? 1 : 0,
   };
 }
@@ -160,6 +170,7 @@ export function weekNutrition(date: string, input: NutritionInput): DayNutrition
     foodParts: logged.reduce((sum, d) => sum + d.foodParts, 0),
     partsWithoutData: logged.reduce((sum, d) => sum + d.partsWithoutData, 0),
     supplementCount: logged.reduce((sum, d) => sum + d.supplementCount, 0),
+    estimatedEntries: logged.reduce((sum, d) => sum + d.estimatedEntries, 0),
     loggedDays: n,
   };
 }

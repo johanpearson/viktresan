@@ -14,7 +14,9 @@
  *                      passerade milstolpar markeras efter importen utan firande),
  *                      photoSessions + tillfälle/vinkel på bilderna (sedan version 8; äldre
  *                      bilder grupperas per datum med vinkel "ej angiven", som i migreringen),
- *                      supplements, supplementLog + valfri `ean` på måltider (sedan version 9)
+ *                      supplements, supplementLog + valfri `ean` på måltider (sedan version 9),
+ *                      recipes + snabbloggar/loggade recept i matloggen och profilens
+ *                      `calorieMode` (sedan version 10)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -42,6 +44,9 @@ import {
   type MilestoneRecord,
   type PhotoEntry,
   type PhotoSession,
+  type LoggedRecipe,
+  type MealIngredient,
+  type Recipe,
   type SavedMeal,
   type StoredFood,
   type Profile,
@@ -75,9 +80,9 @@ import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './wate
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 9;
+export const BACKUP_VERSION = 10;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -136,6 +141,8 @@ export interface BackupSummary {
   /** Kosttillskott och dagar med tagna tillskott. */
   supplements: number;
   supplementLog: number;
+  /** Recept. */
+  recipes: number;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -178,6 +185,7 @@ interface PlainManifest {
   milestones: MilestoneRecord[];
   supplements: Supplement[];
   supplementLog: SupplementIntake[];
+  recipes: Recipe[];
 }
 
 interface EncryptedManifest {
@@ -239,6 +247,7 @@ export async function createBackup(
     milestones: snapshot.milestones,
     supplements: snapshot.supplements,
     supplementLog: snapshot.supplementLog,
+    recipes: snapshot.recipes,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -366,6 +375,7 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     milestones: snapshot.milestones.length,
     supplements: snapshot.supplements.length,
     supplementLog: snapshot.supplementLog.length,
+    recipes: snapshot.recipes.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -460,6 +470,8 @@ function parsePlain(
       milestones: version >= 7 ? parseMilestones(manifest) : [],
       // Version 1–8 saknar tillskott.
       ...(version >= 9 ? parseSupplementData(manifest) : { supplements: [], supplementLog: [] }),
+      // Version 1–9 saknar recept.
+      recipes: version >= 10 ? parseRecipes(manifest) : [],
     },
   };
 }
@@ -638,6 +650,14 @@ function parseSupplementData(
   return result;
 }
 
+function parseRecipes(manifest: Record<string, unknown>): Recipe[] {
+  const { recipes } = manifest;
+  if (!Array.isArray(recipes)) throw invalid('Recept saknas.');
+  const result = recipes.map((r, i) => parseRecipeRecord(r, i));
+  assertUniqueKeys(result, (r) => r.id, 'recept');
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Validering. Posterna byggs upp på nytt så att okända fält aldrig når databasen.
 
@@ -702,6 +722,10 @@ function parseProfileRecord(value: unknown): Profile {
     )
       throw bad();
     if (value.foodPreferences.trim() !== '') profile.foodPreferences = value.foodPreferences;
+  }
+  if (value.calorieMode !== undefined) {
+    if (value.calorieMode !== 'dag' && value.calorieMode !== 'vecka') throw bad();
+    profile.calorieMode = value.calorieMode;
   }
   return profile;
 }
@@ -924,6 +948,53 @@ function parseMealRecord(value: unknown, index: number): LegacySavedMeal {
   return meal;
 }
 
+/** Ingrediens i ett recept eller en loggad receptkopia (alltid mängd + enhet, version 10). */
+function parseRecipeIngredient(value: unknown, bad: () => BackupError): MealIngredient {
+  const legacy = parseIngredient(value, bad);
+  if (legacy.amount === undefined || legacy.unit === undefined) throw bad();
+  const item: MealIngredient = {
+    foodId: legacy.foodId,
+    name: legacy.name,
+    amount: legacy.amount,
+    unit: legacy.unit,
+    grams: legacy.grams,
+    per100: legacy.per100,
+  };
+  if (legacy.per100Unit) item.per100Unit = legacy.per100Unit;
+  return item;
+}
+
+function parseRecipeRecord(value: unknown, index: number): Recipe {
+  const bad = () => invalid(`Recept nr ${index + 1} i säkerhetskopian är ogiltigt.`);
+  if (!isRecord(value) || !isId(value.id) || !isName(value.name) || !Array.isArray(value.items)) {
+    throw bad();
+  }
+  const recipe: Recipe = {
+    id: value.id,
+    name: value.name,
+    items: value.items.map((item) => parseRecipeIngredient(item, bad)),
+    ...parseTimes(value, bad),
+  };
+  if (value.servings !== undefined) {
+    if (!isPositive(value.servings)) throw bad();
+    recipe.servings = value.servings;
+  }
+  if (value.cookedWeightG !== undefined) {
+    if (!isPositive(value.cookedWeightG)) throw bad();
+    recipe.cookedWeightG = value.cookedWeightG;
+  }
+  if (recipe.servings === undefined && recipe.cookedWeightG === undefined) throw bad();
+  return recipe;
+}
+
+function parseLoggedRecipe(value: unknown, bad: () => BackupError): LoggedRecipe {
+  if (!isRecord(value) || !isPositive(value.yieldG) || !Array.isArray(value.items)) throw bad();
+  return {
+    yieldG: value.yieldG,
+    items: value.items.map((item) => parseRecipeIngredient(item, bad)),
+  };
+}
+
 function parseEan(value: unknown, bad: () => BackupError): string {
   const ean = typeof value === 'string' ? normalizeEan(value) : null;
   if (ean === null) throw bad();
@@ -1022,7 +1093,7 @@ function parseFoodLogRecord(value: unknown, index: number): LegacyFoodLogEntry {
   ) {
     throw bad();
   }
-  return {
+  const entry: LegacyFoodLogEntry = {
     id: value.id,
     date: value.date,
     meal: slot.id,
@@ -1032,6 +1103,12 @@ function parseFoodLogRecord(value: unknown, index: number): LegacyFoodLogEntry {
     per100: parseNutrients(value.per100, bad),
     ...parseTimes(value, bad),
   };
+  if (value.estimated !== undefined) {
+    if (value.estimated !== true) throw bad();
+    entry.estimated = true;
+  }
+  if (value.recipe !== undefined) entry.recipe = parseLoggedRecipe(value.recipe, bad);
+  return entry;
 }
 
 function parseFavoriteRecord(value: unknown, index: number): Favorite {

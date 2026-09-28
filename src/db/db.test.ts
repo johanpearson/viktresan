@@ -66,6 +66,10 @@ import {
   splitLegacyMeasurements,
   upsertSteps,
   upsertWaist,
+  deleteRecipe,
+  listRecipes,
+  putRecipe,
+  type Recipe,
 } from './db.ts';
 import { waterGoal } from '../lib/water.ts';
 
@@ -226,6 +230,7 @@ describe('db', () => {
       'photoSessions',
       'photos',
       'profile',
+      'recipes',
       'settings',
       'steps',
       'supplementLog',
@@ -672,6 +677,134 @@ describe('db', () => {
     expect(await listWeights()).toHaveLength(1);
     expect(await listSupplements()).toEqual([]);
     expect(await listSupplementLog()).toEqual([]);
+  });
+
+  it('migrerar v10 → v11: lägger till recept och behåller matloggen', async () => {
+    await createV6Database({
+      foods: [],
+      meals: [],
+      foodLog: [
+        {
+          id: 'e1',
+          date: '2026-01-01',
+          meal: 'lunch',
+          foodId: 'lv:1',
+          name: 'Potatis',
+          grams: 200,
+          per100: { kcal: 80, proteinG: 2, carbsG: 17, fatG: 0.1 },
+          createdAt: 1,
+        },
+      ],
+    });
+    // v6 → v10 med dåvarande scheman, sedan öppnar appen v11.
+    const raw = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 10);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        db.createObjectStore('foodUnits', { keyPath: 'foodId' });
+        db.createObjectStore('milestones', { keyPath: 'id' });
+        const sessions = db.createObjectStore('photoSessions', { keyPath: 'id' });
+        sessions.createIndex('by-date', 'date');
+        req.transaction?.objectStore('photos').createIndex('by-session', 'sessionId');
+        const supplements = db.createObjectStore('supplements', { keyPath: 'id' });
+        supplements.createIndex('by-ean', 'ean');
+        const supplementLog = db.createObjectStore('supplementLog', { keyPath: 'id' });
+        supplementLog.createIndex('by-date', 'date');
+        // Matloggen i v7-format (mängd + enhet), som migreringen till v7 skulle ha gjort.
+        req.transaction?.objectStore('foodLog').put({
+          id: 'e1',
+          date: '2026-01-01',
+          meal: 'lunch',
+          foodId: 'lv:1',
+          name: 'Potatis',
+          amount: 200,
+          unit: 'g',
+          grams: 200,
+          per100: { kcal: 80, proteinG: 2, carbsG: 17, fatG: 0.1 },
+          createdAt: 1,
+        });
+      };
+      req.onsuccess = () => {
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        reject(req.error ?? new Error('open failed'));
+      };
+    });
+    raw.close();
+    const db = await getDb();
+    expect(db.version).toBe(DB_VERSION);
+    expect(DB_VERSION).toBe(11);
+    expect(await listRecipes()).toEqual([]);
+    expect((await listFoodLog()).map((e) => e.name)).toEqual(['Potatis']);
+  });
+
+  it('recept: sparas i namnordning, borttagning tar favorit och egna enheter', async () => {
+    const recipe: Recipe = {
+      id: 'r1',
+      name: 'Linsgryta',
+      items: [
+        {
+          foodId: 'lv:3',
+          name: 'Linser',
+          amount: 500,
+          unit: 'g',
+          grams: 500,
+          per100: { kcal: 110, proteinG: 8, carbsG: 16, fatG: 0.5 },
+        },
+      ],
+      servings: 6,
+      createdAt: 1,
+    };
+    await putRecipe(recipe);
+    await putRecipe({ ...recipe, id: 'r2', name: 'Chili' });
+    await setFavorite('recept:r1', true, 2);
+    await saveCustomUnits('recept:r1', [{ name: 'burk', grams: 400, source: 'egen' }]);
+    expect((await listRecipes()).map((r) => r.name)).toEqual(['Chili', 'Linsgryta']);
+    await deleteRecipe('r1');
+    expect((await listRecipes()).map((r) => r.id)).toEqual(['r2']);
+    expect(await listFavorites()).toEqual([]);
+    expect(await listCustomUnits()).toEqual([]);
+  });
+
+  it('recept: en ändring av receptet ändrar inte redan loggade portioner', async () => {
+    const recipe: Recipe = {
+      id: 'r1',
+      name: 'Gryta',
+      items: [
+        {
+          foodId: 'lv:3',
+          name: 'Linser',
+          amount: 600,
+          unit: 'g',
+          grams: 600,
+          per100: { kcal: 100, proteinG: 8, carbsG: 16, fatG: 0.5 },
+        },
+      ],
+      servings: 6,
+      createdAt: 1,
+    };
+    await putRecipe(recipe);
+    const logged = {
+      id: 'e1',
+      date: '2026-09-24',
+      meal: 'middag' as const,
+      foodId: 'recept:r1',
+      name: 'Gryta',
+      amount: 1,
+      unit: 'portion',
+      grams: 100,
+      per100: { kcal: 100, proteinG: 8, carbsG: 16, fatG: 0.5 },
+      recipe: { yieldG: 600, items: recipe.items },
+      createdAt: 2,
+    };
+    await putFoodLog(logged);
+    await putRecipe({
+      ...recipe,
+      items: recipe.items.map((i) => ({ ...i, grams: 1200, amount: 1200 })),
+      updatedAt: 3,
+    });
+    expect(await listFoodLog()).toEqual([logged]);
   });
 
   it('milstolpar sparas en gång – en sparad skrivs aldrig över', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AboutApp } from '../components/AboutApp.tsx';
 import { BottomSheet } from '../components/BottomSheet.tsx';
+import { CalorieModeSettings } from '../components/CalorieModeSettings.tsx';
 import { Card } from '../components/Card.tsx';
 import { DisplaySettings } from '../components/DisplaySettings.tsx';
 import { ExportBackup } from '../components/ExportBackup.tsx';
@@ -31,6 +32,7 @@ import { waterGoal } from '../lib/water.ts';
 
 type PanelId =
   | 'profil'
+  | 'kalorimal'
   | 'protein'
   | 'dryck'
   | 'matpreferenser'
@@ -92,6 +94,14 @@ const GROUPS: readonly Group[] = [
             : 'Startvikt, längd och mål',
         value: ({ data }) =>
           data?.profile ? `Mål ${formatKg(data.profile.goalWeightKg)}` : 'Fyll i',
+      },
+      {
+        id: 'kalorimal',
+        title: 'Kalorimål',
+        feature: 'mat',
+        secondary: ({ data }) => (data?.profile ? 'Per dag eller veckobudget' : NO_PROFILE),
+        value: ({ data }) =>
+          data?.profile ? (data.profile.calorieMode === 'vecka' ? 'Vecka' : 'Dag') : null,
       },
       {
         id: 'protein',
@@ -252,6 +262,8 @@ export function Installningar() {
             />
           )
         );
+      case 'kalorimal':
+        return data && <CalorieModeSettings key={imports} data={data} onChange={reload} />;
       case 'protein':
         return data && <ProteinGoalSettings key={imports} data={data} onChange={reload} />;
       case 'dryck':

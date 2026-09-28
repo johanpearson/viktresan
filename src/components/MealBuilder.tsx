@@ -1,20 +1,9 @@
-import { useMemo, useState, type SyntheticEvent } from 'react';
-import { newId, putMeal, type MealIngredient, type SavedMeal } from '../db/db.ts';
-import { buildCatalog, entryUnit, sourceOf, storedToItem } from '../lib/foodCatalog.ts';
-import type { FoodItem } from '../lib/foodSearch.ts';
-import { decimalInput, formatGrams, formatKcal } from '../lib/format.ts';
-import { totalOf } from '../lib/nutrition.ts';
-import {
-  GRAM,
-  baseOf,
-  formatBase,
-  isGram,
-  mergeUnits,
-  parseUnitAmount,
-  unitsFor,
-  type FoodUnit,
-} from '../lib/units.ts';
+import { useState, type SyntheticEvent } from 'react';
+import { newId, putMeal, type SavedMeal } from '../db/db.ts';
+import { formatGrams, formatKcal } from '../lib/format.ts';
+import { useIngredients } from '../lib/useIngredients.ts';
 import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
+import { IngredientEditor } from './IngredientEditor.tsx';
 
 interface MealBuilderProps {
   /** Måltiden som redigeras, annars skapas en ny. */
@@ -27,86 +16,12 @@ interface MealBuilderProps {
   onDelete?: () => void;
 }
 
-interface Row {
-  key: string;
-  foodId: string;
-  name: string;
-  per100: MealIngredient['per100'];
-  units: FoodUnit[];
-  amount: string;
-  unit: string;
-  per100Unit?: 'ml';
-}
-
 /** Sparad måltid: flera ingredienser, var och en i gram eller en enhet. */
 export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealBuilderProps) {
-  const { foodData, livsmedel } = source;
-  const catalog = useMemo(
-    () => buildCatalog(livsmedel?.foods ?? [], foodData.foods.map(storedToItem)),
-    [livsmedel, foodData.foods],
-  );
-  const customUnits = useMemo(
-    () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
-    [foodData.foodUnits],
-  );
-  const [picking, setPicking] = useState(false);
+  const ingredients = useIngredients(meal?.items ?? [], source.foodData, source.livsmedel);
   const [name, setName] = useState(meal?.name ?? '');
-  const [rows, setRows] = useState<Row[]>(() =>
-    (meal?.items ?? []).map((item) => {
-      const food = catalog.get(item.foodId) ?? {
-        id: item.foodId,
-        name: item.name,
-        source: sourceOf(item.foodId),
-      };
-      // Ingrediensens enhet som den vägde när måltiden sparades.
-      const logged = entryUnit(item);
-      const row: Row = {
-        key: newId(),
-        foodId: item.foodId,
-        name: item.name,
-        per100: item.per100,
-        units: mergeUnits(unitsFor(food, customUnits.get(item.foodId)), logged ? [logged] : []),
-        amount: decimalInput(item.amount),
-        unit: item.unit,
-      };
-      if (item.per100Unit) row.per100Unit = item.per100Unit;
-      return row;
-    }),
-  );
+  const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const parsedRows = rows.map((row) => ({
-    row,
-    parsed: parseUnitAmount(row.amount, row.unit, row.units),
-  }));
-  const valid = parsedRows.flatMap(({ row, parsed }) =>
-    parsed.ok ? [{ grams: parsed.value.grams, per100: row.per100 }] : [],
-  );
-  const totals = totalOf(valid);
-  const totalG = valid.reduce((s, v) => s + v.grams, 0);
-
-  function updateRow(key: string, change: Partial<Row>) {
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...change } : r)));
-  }
-
-  /** Ingrediens från sök-sheeten, med mängden och enheterna som valdes där. */
-  function addIngredient(
-    item: FoodItem,
-    value: { amount: number; unit: string },
-    units: FoodUnit[],
-  ) {
-    const row: Row = {
-      key: newId(),
-      foodId: item.id,
-      name: item.name,
-      per100: item.per100,
-      units,
-      amount: decimalInput(value.amount),
-      unit: value.unit,
-    };
-    if (item.per100Unit === 'ml') row.per100Unit = 'ml';
-    setRows((prev) => [...prev, row]);
-  }
 
   async function handleSubmit(event: SyntheticEvent) {
     event.preventDefault();
@@ -115,33 +30,23 @@ export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealB
       setError('Ge måltiden ett namn.');
       return;
     }
-    if (rows.length === 0) {
+    if (ingredients.rows.length === 0) {
       setError('Lägg till minst en ingrediens.');
       return;
     }
-    const items: MealIngredient[] = [];
-    for (const row of rows) {
-      const parsed = parseUnitAmount(row.amount, row.unit, row.units);
-      if (!parsed.ok) {
-        setError(`${row.name}: ${parsed.error}`);
-        return;
-      }
-      const ingredient: MealIngredient = {
-        foodId: row.foodId,
-        name: row.name,
-        ...parsed.value,
-        per100: row.per100,
-      };
-      if (row.per100Unit) ingredient.per100Unit = row.per100Unit;
-      items.push(ingredient);
+    const result = ingredients.toItems();
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
     const now = Date.now();
     const saved: SavedMeal = {
       id: meal?.id ?? newId(),
       name: trimmed,
-      items,
+      items: result.items,
       createdAt: meal?.createdAt ?? now,
     };
+    if (meal?.ean) saved.ean = meal.ean;
     if (meal) saved.updatedAt = now;
     await putMeal(saved);
     onSaved(saved);
@@ -169,83 +74,13 @@ export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealB
             }}
           />
         </label>
-        {rows.length > 0 && (
-          <ul className="ingredient-list" aria-label="Ingredienser">
-            {parsedRows.map(({ row, parsed }) => (
-              <li key={row.key} className="ingredient" data-testid="ingredient">
-                <span className="ingredient-name">{row.name}</span>
-                <div className="ingredient-amount">
-                  <label>
-                    <span className="visually-hidden">Mängd {row.name}</span>
-                    <input
-                      className="input"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      value={row.amount}
-                      onChange={(e) => {
-                        updateRow(row.key, { amount: e.target.value });
-                      }}
-                    />
-                  </label>
-                  <label>
-                    <span className="visually-hidden">Enhet {row.name}</span>
-                    <select
-                      className="input"
-                      value={row.unit}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        updateRow(row.key, {
-                          unit: next,
-                          // Till gram: behåll vikten. Till en annan enhet: börja på 1.
-                          amount: isGram(next)
-                            ? decimalInput(parsed.ok ? parsed.value.grams : 100)
-                            : '1',
-                        });
-                      }}
-                    >
-                      {[...row.units.map((u) => u.name), GRAM].map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  className="button button-danger button-small"
-                  aria-label={`Ta bort ingrediensen ${row.name}`}
-                  onClick={() => {
-                    setRows((prev) => prev.filter((r) => r.key !== row.key));
-                  }}
-                >
-                  Ta bort
-                </button>
-                <span className="ingredient-grams muted-inline" data-testid="ingredient-grams">
-                  {parsed.ok
-                    ? isGram(row.unit)
-                      ? formatKcal((row.per100.kcal * parsed.value.grams) / 100)
-                      : `≈ ${formatBase(parsed.value.grams, baseOf(row))} · ${formatKcal((row.per100.kcal * parsed.value.grams) / 100)}`
-                    : parsed.error}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="form-note" data-testid="meal-total">
-          {rows.length === 0
-            ? 'Inga ingredienser ännu.'
-            : `Totalt ${formatGrams(totalG)} · ${formatKcal(totals.kcal)}`}
-        </p>
-        <button
-          type="button"
-          className="button button-secondary"
-          onClick={() => {
+        <IngredientEditor
+          ingredients={ingredients}
+          onAddClick={() => {
             setPicking(true);
           }}
-        >
-          Lägg till ingrediens
-        </button>
+          summary={`Totalt ${formatGrams(ingredients.totalG)} · ${formatKcal(ingredients.totals.kcal)}`}
+        />
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -276,7 +111,7 @@ export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealB
           mode={{
             kind: 'ingredient',
             onAdd: (item, value, units) => {
-              addIngredient(item, value, units);
+              ingredients.add(item, value, units);
               setPicking(false);
             },
           }}
