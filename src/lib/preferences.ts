@@ -1,13 +1,14 @@
 /**
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
  * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
- * spökbild, vad "Fråga AI" tar med i prompten och haptik. Lagras i `settings`
+ * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort och rapportens val. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
 import { SETTING_PREFERENCES, getSetting, setSetting } from '../db/db.ts';
 import { DEFAULT_AI_OPTIONS, parseAiOptions, type AiOptions } from './aiPrompt.ts';
 import { isProfileSide, type ProfileSide } from './photoSessions.ts';
+import { DEFAULT_REPORT_SETTINGS, parseReportSettings, type ReportSettings } from './report.ts';
 
 export interface Preferences {
   /** Översikt visar trendvikten stort och dagsvikten litet under. */
@@ -24,6 +25,12 @@ export interface Preferences {
   aiOptions: AiOptions;
   /** Lätt vibration vid spara/klar (navigator.vibrate). */
   haptics: boolean;
+  /** Dagen platåkortet senast stängdes (visas igen tidigast 14 dagar senare). */
+  plateauDismissed: string | null;
+  /** Rapportens period och sektioner (Framsteg → Rapport). */
+  report: ReportSettings;
+  /** Instruktionen för "Spara som PDF" har visats. */
+  reportPrintHintSeen: boolean;
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -37,6 +44,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   ghostOpacity: 0.4,
   aiOptions: DEFAULT_AI_OPTIONS,
   haptics: true,
+  plateauDismissed: null,
+  report: DEFAULT_REPORT_SETTINGS,
+  reportPrintHintSeen: false,
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -62,6 +72,9 @@ export function parsePreferences(raw: unknown): Preferences {
         : DEFAULT_PREFERENCES.ghostOpacity,
     aiOptions: parseAiOptions(stored.aiOptions),
     haptics: typeof stored.haptics === 'boolean' ? stored.haptics : DEFAULT_PREFERENCES.haptics,
+    plateauDismissed: typeof stored.plateauDismissed === 'string' ? stored.plateauDismissed : null,
+    report: parseReportSettings(stored.report),
+    reportPrintHintSeen: stored.reportPrintHintSeen === true,
   };
 }
 

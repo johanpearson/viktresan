@@ -15,7 +15,11 @@ import { addDays } from './dates.ts';
 import { CALORIE_FLOOR, ageFromBirthYear, type Sex } from './energy.ts';
 import { formatDayMonth, formatInt, formatKcal, formatKg, formatMg, formatRate } from './format.ts';
 import { doseOn, isActive, medicationStart } from './glp1.ts';
-import { AI_PROMPT_NO_CONTEXT, AI_PROMPT_TEMPLATE } from './aiPromptTemplate.ts';
+import {
+  AI_PLATEAU_TEMPLATE,
+  AI_PROMPT_NO_CONTEXT,
+  AI_PROMPT_TEMPLATE,
+} from './aiPromptTemplate.ts';
 import {
   dailyIntake,
   mealLabel,
@@ -32,7 +36,7 @@ import { loggedAmountText } from './units.ts';
 export type AiOption =
   'personal' | 'body' | 'goal' | 'targets' | 'dayIntake' | 'content' | 'preferences' | 'glp1';
 
-export type AiScope = 'meal' | 'day' | 'week';
+export type AiScope = 'meal' | 'day' | 'week' | 'plateau';
 
 export interface AiOptionInfo {
   id: AiOption;
@@ -41,7 +45,8 @@ export interface AiOptionInfo {
   scopes: readonly AiScope[];
 }
 
-const ALL: readonly AiScope[] = ['meal', 'day', 'week'];
+const ALL: readonly AiScope[] = ['meal', 'day', 'week', 'plateau'];
+const FOOD: readonly AiScope[] = ['meal', 'day', 'week'];
 
 export const AI_OPTIONS: readonly AiOptionInfo[] = [
   { id: 'personal', label: 'Ålder och kön', scopes: ALL },
@@ -50,7 +55,7 @@ export const AI_OPTIONS: readonly AiOptionInfo[] = [
   { id: 'targets', label: 'Kcal- och proteinmål', scopes: ALL },
   { id: 'dayIntake', label: 'Dagens intag hittills', scopes: ['meal'] },
   { id: 'content', label: 'Måltidens innehåll', scopes: ALL },
-  { id: 'preferences', label: 'Matpreferenser', scopes: ALL },
+  { id: 'preferences', label: 'Matpreferenser', scopes: FOOD },
   { id: 'glp1', label: 'GLP-1-behandling', scopes: ALL },
 ];
 
@@ -59,6 +64,7 @@ export function optionLabel(option: AiOptionInfo, scope: AiScope): string {
   if (option.id !== 'content') return option.label;
   if (scope === 'day') return 'Dagens mat';
   if (scope === 'week') return 'Veckans mat';
+  if (scope === 'plateau') return 'Platåanalysen';
   return option.label;
 }
 
@@ -189,7 +195,9 @@ export type AiSubject =
       to: string;
       days: { date: string; kcal: number; proteinG: number }[];
       topFoods: { name: string; kcal: number }[];
-    };
+    }
+  /** Platåanalysen (plateau.ts) som färdiga rader. */
+  | { kind: 'plateau'; lines: string[] };
 
 function promptItem(entry: FoodLogEntry, withMeal: boolean): PromptItem {
   const n = scaleNutrients(entry.per100, entry.grams);
@@ -256,6 +264,7 @@ function subjectText(subject: AiSubject): { long: string; short: string } {
   }
   if (subject.kind === 'day')
     return { long: `min mat ${formatDayMonth(subject.date)}`, short: 'dagen' };
+  if (subject.kind === 'plateau') return { long: 'min viktplatå', short: 'platån' };
   return {
     long: `min mat veckan ${formatDayMonth(subject.from)}–${formatDayMonth(subject.to)}`,
     short: 'veckan',
@@ -267,6 +276,7 @@ function kcalProtein(n: { kcal: number; proteinG: number }): string {
 }
 
 function contentLines(subject: AiSubject): string[] {
+  if (subject.kind === 'plateau') return subject.lines;
   if (subject.kind === 'week') {
     if (subject.days.length === 0) return ['Veckans mat: inget loggat.'];
     const avg = {
@@ -353,7 +363,7 @@ export function buildAiPrompt(
   subject: AiSubject,
   context: AiContext,
   options: AiOptions,
-  template: string = AI_PROMPT_TEMPLATE,
+  template: string = subject.kind === 'plateau' ? AI_PLATEAU_TEMPLATE : AI_PROMPT_TEMPLATE,
 ): string {
   const lines = contextLines(subject, context, options);
   const { long, short } = subjectText(subject);

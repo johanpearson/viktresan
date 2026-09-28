@@ -105,7 +105,7 @@ test('allt på som standard', async ({ page }) => {
   expect(v.calorieCard).toBe(1);
   expect(v.rings).toBe(2);
   expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg', 'Dryck', 'Träning']);
-  expect(v.tabs).toEqual(['Historik', 'Veckor', 'Bilder', 'Milstolpar']);
+  expect(v.tabs).toEqual(['Historik', 'Veckor', 'Bilder', 'Milstolpar', 'Rapport']);
   expect(v.sections).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
   expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Dryck', 'Träning', 'Bilder']);
   await expect(page.getByTestId('calendar-value-bilder')).toHaveText(/1 bild/);
@@ -158,7 +158,7 @@ test('mat av döljer Mat i navigeringen, kalorimålet och kalendern', async ({ p
 test('bilder av döljer fliken i Framsteg och i kalendern', async ({ page }) => {
   await setFeature(page, /^Bilder/, false);
   const v = await observe(page);
-  expect(v.tabs).toEqual(['Historik', 'Veckor', 'Milstolpar']);
+  expect(v.tabs).toEqual(['Historik', 'Veckor', 'Milstolpar', 'Rapport']);
   expect(v.todayLabels).not.toContain('Bilder');
   expect(v.legend).not.toContain('Bilder');
   expect(v.day).not.toContain('Bilder');

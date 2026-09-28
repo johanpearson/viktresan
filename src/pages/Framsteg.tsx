@@ -8,6 +8,7 @@ import { hrefFor } from '../routes.ts';
 import { Bilder } from './Bilder.tsx';
 import { Historik } from './Historik.tsx';
 import { Milstolpar } from './Milstolpar.tsx';
+import { Rapport } from './Rapport.tsx';
 import { Veckor } from './Veckor.tsx';
 
 interface Tab extends FeatureGated {
@@ -22,6 +23,7 @@ const TABS: readonly Tab[] = [
   { sub: 'veckor', label: 'Veckor', Content: Veckor },
   { sub: 'bilder', label: 'Bilder', Content: Bilder, feature: 'bilder' },
   { sub: 'milstolpar', label: 'Milstolpar', Content: Milstolpar },
+  { sub: 'rapport', label: 'Rapport', Content: Rapport },
 ];
 
 export function Framsteg() {

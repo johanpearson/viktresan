@@ -196,6 +196,23 @@ describe('buildAiPrompt', () => {
   });
 });
 
+describe('buildAiPrompt – platå', () => {
+  const plateau = { kind: 'plateau' as const, lines: ['Trendvikten har ändrats +0,1 kg.'] };
+
+  it('använder platåmallen med analysen som underlag, utan matpreferenser', () => {
+    const prompt = buildAiPrompt(plateau, context(), DEFAULT_AI_OPTIONS);
+    expect(prompt).toContain('förstå min viktplatå');
+    expect(prompt).toContain('Trendvikten har ändrats +0,1 kg.');
+    expect(prompt).toContain('inga ändringar av läkemedelsdoser');
+    expect(prompt).not.toContain('Mina matpreferenser');
+  });
+
+  it('platåanalysen kan väljas bort', () => {
+    const prompt = buildAiPrompt(plateau, context(), { ...DEFAULT_AI_OPTIONS, content: false });
+    expect(prompt).not.toContain('Trendvikten har ändrats');
+  });
+});
+
 describe('aiContextFrom', () => {
   it('utan profil är allt okänt', () => {
     const ctx = aiContextFrom(
