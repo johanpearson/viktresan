@@ -38,6 +38,10 @@ export function Mat() {
   const plan =
     data?.profile != null ? buildPlan(data.profile, data.weights, data.foodLog, todayIso()) : null;
   const targetKcal = plan?.kind === 'plan' ? plan.plan.targetKcal : null;
+  const weekly =
+    plan?.kind === 'plan' && data?.profile?.calorieMode === 'vecka'
+      ? { floorKcal: plan.plan.floorKcal }
+      : null;
   const proteinGoalG = proteinGoalFor(data?.profile ?? null);
   const source =
     data && food.data
@@ -67,6 +71,7 @@ export function Mat() {
         <FoodDay
           source={source}
           targetKcal={targetKcal}
+          weekly={weekly}
           proteinGoalG={proteinGoalG}
           initialPicker={initialPicker}
           initialEan={initialEan}

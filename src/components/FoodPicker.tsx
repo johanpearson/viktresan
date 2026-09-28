@@ -22,6 +22,8 @@ import {
 import { buildIndex, searchIndex, type FoodItem } from '../lib/foodSearch.ts';
 import type { Livsmedel } from '../lib/livsmedel.ts';
 import { mealLabel, type MealSlot } from '../lib/nutrition.ts';
+import { quickValuesOf, type QuickValues } from '../lib/quickLog.ts';
+import { recipeToItem } from '../lib/recipes.ts';
 import { lastUsage, type FoodUnit } from '../lib/units.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
 import { AiLabelImport } from './AiLabelImport.tsx';
@@ -32,9 +34,11 @@ import { BottomSheet } from './BottomSheet.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import { FoodList } from './FoodList.tsx';
 import { FoodLogForm } from './FoodLogForm.tsx';
+import { ListRow } from './ListRow.tsx';
+import { QuickLogForm } from './QuickLogForm.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
 
-/** Det sök-sheeten behöver: livsmedel, måltider, favoriter, egna enheter och loggen. */
+/** Det sök-sheeten behöver: livsmedel, måltider, recept, favoriter, egna enheter och loggen. */
 export interface FoodSource {
   foodData: FoodData;
   livsmedel: Livsmedel | null;
@@ -90,6 +94,11 @@ interface Creating {
 const NO_FOODS: readonly FoodItem[] = [];
 const NO_UNITS: readonly FoodUnit[] = [];
 
+/** Måltider, recept och snabbloggar kan inte vara ingredienser. */
+function isIngredient(food: FoodItem): boolean {
+  return food.source !== 'maltid' && food.source !== 'recept' && food.source !== 'snabb';
+}
+
 /**
  * Helskärms-sheet för att hitta ett livsmedel: sök, flikarna Senaste / Favoriter /
  * Måltider, streckkod och sedan mängd + enhet. Samma komponent loggar mat (Dag)
@@ -113,6 +122,8 @@ export function FoodPicker({
   const [lookup, setLookup] = useState<Lookup>({ kind: 'idle' });
   const [creating, setCreating] = useState<Creating | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  /** Snabbloggens formulär: tomt eller förifyllt från ett snabbval. */
+  const [quick, setQuick] = useState<{ initial: QuickValues | null } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const custom = useMemo(() => foodData.foods.map(storedToItem), [foodData.foods]);
@@ -121,27 +132,30 @@ export function FoodPicker({
     () => (forLog ? foodData.meals.map(mealToItem) : NO_FOODS),
     [forLog, foodData.meals],
   );
+  const recipeItems = useMemo(
+    () => (forLog ? foodData.recipes.map(recipeToItem) : NO_FOODS),
+    [forLog, foodData.recipes],
+  );
   const lvFoods = livsmedel?.foods ?? NO_FOODS;
   const catalog = useMemo(
-    () => buildCatalog(lvFoods, custom, mealItems),
-    [lvFoods, custom, mealItems],
+    () => buildCatalog(lvFoods, custom, mealItems, recipeItems),
+    [lvFoods, custom, mealItems, recipeItems],
   );
   const index = useMemo(
-    () => buildIndex([...mealItems, ...custom, ...lvFoods]),
-    [mealItems, custom, lvFoods],
+    () => buildIndex([...recipeItems, ...mealItems, ...custom, ...lvFoods]),
+    [recipeItems, mealItems, custom, lvFoods],
   );
   const results = useMemo(() => searchIndex(index, deferred, 20), [index, deferred]);
   const recent = useMemo(
-    () => recentFoods(foodLog, catalog).filter((f) => forLog || f.source !== 'maltid'),
+    () => recentFoods(foodLog, catalog).filter((f) => forLog || isIngredient(f)),
     [foodLog, catalog, forLog],
   );
   const favorites = useMemo(
     () =>
-      favoriteFoods(foodData.favorites, catalog, foodLog).filter(
-        (f) => forLog || f.source !== 'maltid',
-      ),
+      favoriteFoods(foodData.favorites, catalog, foodLog).filter((f) => forLog || isIngredient(f)),
     [foodData.favorites, catalog, foodLog, forLog],
   );
+  const ownDishes = useMemo(() => [...mealItems, ...recipeItems], [mealItems, recipeItems]);
   const favoriteIds = new Set(foodData.favorites.map((f) => f.foodId));
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
@@ -157,6 +171,13 @@ export function FoodPicker({
   }, [focusSearch, scan, initialEan]);
 
   function pick(food: FoodItem) {
+    if (food.source === 'snabb') {
+      // Ett snabbval (Senaste/Favoriter) öppnar snabbloggen förifylld.
+      setQuick({ initial: quickValuesOf(food) });
+      setQuery('');
+      setStatus(null);
+      return;
+    }
     setSelected(food);
     setQuery('');
     setStatus(null);
@@ -228,8 +249,8 @@ export function FoodPicker({
     void handleEan(initialEan);
   });
 
-  async function toggleFavorite(food: FoodItem) {
-    await setFavorite(food.id, !favoriteIds.has(food.id));
+  async function toggleFavorite(foodId: string) {
+    await setFavorite(foodId, !favoriteIds.has(foodId));
     await reloadFood();
   }
 
@@ -241,7 +262,26 @@ export function FoodPicker({
         : 'Logga mat';
 
   let body;
-  if (creating !== null) {
+  if (quick !== null && mode.kind === 'log') {
+    body = (
+      <QuickLogForm
+        initial={quick.initial}
+        editing={null}
+        date={mode.date}
+        defaultMeal={mode.meal}
+        favoriteIds={favoriteIds}
+        onToggleFavorite={(foodId) => void toggleFavorite(foodId)}
+        onSaved={(message, meal) => {
+          setQuick(null);
+          setStatus(message);
+          mode.onLogged(message, meal);
+        }}
+        onCancel={() => {
+          setQuick(null);
+        }}
+      />
+    );
+  } else if (creating !== null) {
     body = (
       <CustomFoodForm
         food={null}
@@ -285,7 +325,7 @@ export function FoodPicker({
         date={mode.kind === 'log' ? mode.date : ''}
         defaultMeal={mode.kind === 'log' ? mode.meal : null}
         favorite={favoriteIds.has(selected.id)}
-        onToggleFavorite={() => void toggleFavorite(selected)}
+        onToggleFavorite={() => void toggleFavorite(selected.id)}
         onUnitsChange={async (units) => {
           await saveCustomUnits(selected.id, units);
           await reloadFood();
@@ -391,6 +431,20 @@ export function FoodPicker({
         ) : (
           lookup.kind === 'idle' && (
             <>
+              {forLog && (
+                <ul className="list list-flush">
+                  <ListRow
+                    testId="quick-log-open"
+                    primary="Snabblogg"
+                    secondary="Bara kcal – t.ex. restaurang eller middag hos vänner"
+                    chevron
+                    onClick={() => {
+                      setQuick({ initial: null });
+                      setStatus(null);
+                    }}
+                  />
+                </ul>
+              )}
               <div className="segmented segmented-small" role="group" aria-label="Snabbval">
                 {tabs.map((t) => (
                   <button
@@ -426,9 +480,9 @@ export function FoodPicker({
                 )}
                 {tab === 'maltider' && forLog && (
                   <FoodList
-                    items={mealItems}
+                    items={ownDishes}
                     onPick={pick}
-                    empty="Inga sparade måltider. Skapa en under Egna."
+                    empty="Inga sparade måltider eller recept. Skapa dem under Egna."
                     testId="quick-pick"
                   />
                 )}

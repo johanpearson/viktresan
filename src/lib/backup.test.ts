@@ -150,6 +150,48 @@ const foodLog: FoodLogEntry[] = [
   },
 ];
 
+/** Snabblogg och loggat recept (version 10). */
+const v10FoodLog: FoodLogEntry[] = [
+  {
+    id: 'q1',
+    date: '2026-01-09',
+    meal: 'middag',
+    foodId: 'snabb:restaurang:900:40',
+    name: 'Restaurang',
+    amount: 1,
+    unit: 'portion',
+    grams: 100,
+    per100: { kcal: 900, proteinG: 40, carbsG: 0, fatG: 0 },
+    estimated: true,
+    createdAt: 12,
+  },
+  {
+    id: 'r1:log',
+    date: '2026-01-10',
+    meal: 'lunch',
+    foodId: 'recept:r1',
+    name: 'Linsgryta',
+    amount: 1,
+    unit: 'portion',
+    grams: 300,
+    per100: { kcal: 80, proteinG: 5, carbsG: 10, fatG: 2 },
+    recipe: {
+      yieldG: 1800,
+      items: [
+        {
+          foodId: 'lv:3',
+          name: 'Linser',
+          amount: 500,
+          unit: 'g',
+          grams: 500,
+          per100: { kcal: 110, proteinG: 8, carbsG: 16, fatG: 0.5 },
+        },
+      ],
+    },
+    createdAt: 13,
+  },
+];
+
 const favorites: Favorite[] = [{ foodId: 'lv:2', createdAt: 11 }];
 
 const foodData = { foods, meals, foodLog, favorites, foodUnits };
@@ -333,7 +375,29 @@ const supplementLog: SupplementIntake[] = [
     createdAt: 83,
   },
 ];
-const supplementData = { supplements, supplementLog };
+const supplementData = {
+  supplements,
+  supplementLog,
+  recipes: [
+    {
+      id: 'r1',
+      name: 'Linsgryta',
+      items: [
+        {
+          foodId: 'lv:3',
+          name: 'Linser',
+          amount: 5,
+          unit: 'dl',
+          grams: 500,
+          per100: { kcal: 110, proteinG: 8, carbsG: 16, fatG: 0.5 },
+        },
+      ],
+      servings: 6,
+      cookedWeightG: 1800,
+      createdAt: 84,
+    },
+  ],
+};
 
 const weights: WeightEntry[] = [
   { id: 'm1', date: '2026-01-01', weightKg: 92.5, createdAt: 1 },
@@ -395,6 +459,7 @@ async function seed(): Promise<void> {
       photoSessions,
       photos,
       ...foodData,
+      foodLog: [...foodLog, ...v10FoodLog],
       ...trainingData,
       ...glp1Data,
       ...milestoneData,
@@ -546,6 +611,7 @@ describe('backup validering', () => {
     foodUnits: [],
     supplements: [],
     supplementLog: [],
+    recipes: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -817,6 +883,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
     milestones: [],
     supplements: [],
     supplementLog: [],
+    recipes: [],
     foods: [],
     meals: [],
     foodLog: [],
@@ -1355,6 +1422,7 @@ describe('import slå ihop', () => {
         { ...supplements[0], id: 's3', name: 'Järn', ean: '73513537' } as Supplement,
       ],
       supplementLog: [],
+      recipes: [],
     };
     await applySnapshot(imported, 'merge');
 
@@ -1386,7 +1454,7 @@ describe('import slå ihop', () => {
     ]);
     expect(after.foods.map((f) => f.name)).toEqual(['Havregryn 1 kg', 'Mormors gröt']);
     expect(after.meals.map((m) => m.name)).toEqual(['Frukostgröt']);
-    expect(after.foodLog.map((e) => e.id)).toEqual(['f1', 'f2', 'f3']);
+    expect(after.foodLog.map((e) => e.id)).toEqual(['f1', 'f2', 'q1', 'f3', 'r1:log']);
     expect(after.favorites).toEqual([
       { foodId: 'lv:2', createdAt: 11 },
       { foodId: 'lv:3', createdAt: 12 },
@@ -1451,6 +1519,7 @@ describe('summarizeBackup', () => {
           photoSessions,
           photos,
           ...foodData,
+          foodLog: [...foodLog, ...v10FoodLog],
           ...trainingData,
           ...glp1Data,
           ...milestoneData,
@@ -1460,7 +1529,7 @@ describe('summarizeBackup', () => {
       ),
     );
     expect(summarizeBackup(contents)).toEqual({
-      foodLog: 2,
+      foodLog: 4,
       foods: 2,
       meals: 1,
       water: 2,
@@ -1472,6 +1541,7 @@ describe('summarizeBackup', () => {
       milestones: 2,
       supplements: 2,
       supplementLog: 1,
+      recipes: 1,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,

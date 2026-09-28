@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { FoodLogEntry } from '../db/db.ts';
 import type { LoggedIngredient } from '../lib/foodDay.ts';
-import { formatKcal } from '../lib/format.ts';
+import { formatGrams, formatKcal } from '../lib/format.ts';
 import { scaleNutrients } from '../lib/nutrition.ts';
 import { formatBase, loggedAmountText } from '../lib/units.ts';
 import { ListRow } from './ListRow.tsx';
@@ -19,7 +19,7 @@ interface FoodEntryRowProps {
 }
 
 /**
- * En loggad post som `ListRow`: namn, mängd och kcal. Tryck öppnar redigering, svep
+ * En loggad post som `ListRow`: namn, mängd och kcal. En snabblogg märks "uppskattat". Tryck öppnar redigering, svep
  * åt vänster tar bort (med Ångra), svep åt höger växlar favorit. En sparad måltid
  * kan fällas ut till ingredienserna.
  */
@@ -47,9 +47,20 @@ export function FoodEntryRow({
             </span>
           )}
           {entry.name}
+          {entry.estimated && (
+            <span className="tag tag-estimated" data-testid="estimated-tag">
+              uppskattat
+            </span>
+          )}
         </>
       }
-      secondary={loggedAmountText(entry)}
+      secondary={
+        entry.estimated
+          ? entry.foodId.endsWith(':')
+            ? undefined
+            : `${formatGrams(Math.round(entry.per100.proteinG))} protein`
+          : loggedAmountText(entry)
+      }
       value={<span className="kcal">{formatKcal(kcal)}</span>}
       onClick={onEdit}
       swipeLeft={{ label: 'Ta bort', onSwipe: onDelete }}

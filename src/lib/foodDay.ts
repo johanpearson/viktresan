@@ -5,6 +5,7 @@
 import type { FoodLogEntry, MealIngredient, SavedMeal } from '../db/db.ts';
 import { addDays, toDayNumber } from './dates.ts';
 import { mealFoodId } from './foodCatalog.ts';
+import { recipeParts } from './recipes.ts';
 import { formatDayMonth } from './format.ts';
 import {
   MEAL_SLOTS,
@@ -58,6 +59,20 @@ export function loggedMealIngredients(
   entry: FoodLogEntry,
   meals: readonly SavedMeal[],
 ): LoggedIngredient[] | null {
+  if (entry.recipe) {
+    const parts = recipeParts(entry.recipe, entry.grams);
+    return parts.length === 0
+      ? null
+      : parts.map((item) => {
+          const result: LoggedIngredient = {
+            name: item.name,
+            grams: item.grams,
+            kcal: scaleNutrients(item.per100, item.grams).kcal,
+          };
+          if (item.per100Unit) result.per100Unit = item.per100Unit;
+          return result;
+        });
+  }
   if (!entry.foodId.startsWith('maltid:')) return null;
   const meal = meals.find((m) => mealFoodId(m.id) === entry.foodId);
   if (!meal || meal.items.length === 0) return null;
@@ -106,6 +121,24 @@ export function entriesToMealItems(
 ): MealIngredient[] {
   const sorted = [...entries].sort((a, b) => a.createdAt - b.createdAt);
   return sorted.flatMap((entry): MealIngredient[] => {
+    if (entry.recipe) {
+      const parts = recipeParts(entry.recipe, entry.grams);
+      if (parts.length > 0) {
+        return parts.map((item) => {
+          const grams = Math.round(item.grams * 10) / 10;
+          const ingredient: MealIngredient = {
+            foodId: item.foodId,
+            name: item.name,
+            per100: item.per100,
+            amount: grams,
+            unit: 'g',
+            grams,
+          };
+          if (item.per100Unit) ingredient.per100Unit = item.per100Unit;
+          return ingredient;
+        });
+      }
+    }
     if (entry.foodId.startsWith('maltid:')) {
       const meal = meals.find((m) => mealFoodId(m.id) === entry.foodId);
       const totalG = meal?.items.reduce((s, i) => s + i.grams, 0) ?? 0;

@@ -247,6 +247,25 @@ const supplementLog = Array.from({ length: 7 }, (_, days) => ({
   createdAt: at(days),
 }));
 
+/** Veckoläge med en snabblogg till lunch idag (egna tester, ändrar inte övriga vyer). */
+export const WEEKLY_EXTRA: SeedData = {
+  foodLog: [
+    {
+      id: 'snabb-idag',
+      date: TODAY,
+      meal: 'lunch',
+      foodId: 'snabb:jobblunch:700:35',
+      name: 'Jobblunch',
+      amount: 1,
+      unit: 'portion',
+      grams: 100,
+      per100: per100(700, 35, 0, 0),
+      estimated: true,
+      createdAt: at(0) + 1000,
+    },
+  ],
+};
+
 export const VISUAL_DATA: SeedData = {
   profile: {
     startDate: daysAgo(60),
@@ -301,6 +320,33 @@ export const VISUAL_DATA: SeedData = {
         },
       ],
       createdAt: at(40),
+    },
+  ],
+  recipes: [
+    {
+      id: 'linsgryta',
+      name: 'Linsgryta med potatis',
+      items: [
+        {
+          foodId: 'lv:4',
+          name: 'Potatis kokt',
+          amount: 800,
+          unit: 'g',
+          grams: 800,
+          per100: POTATIS,
+        },
+        {
+          foodId: 'lv:5',
+          name: 'Ägg kokt',
+          amount: 6,
+          unit: 'st',
+          grams: 360,
+          per100: per100(136, 12.1, 0, 9.8),
+        },
+      ],
+      servings: 4,
+      cookedWeightG: 1200,
+      createdAt: at(10),
     },
   ],
   favorites: [{ foodId: 'lv:6', createdAt: at(20) }],

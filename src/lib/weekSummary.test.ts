@@ -50,6 +50,21 @@ describe('veckor', () => {
 });
 
 describe('summarizeWeek', () => {
+  it('veckoläge: budget = 7 × kalorimålet vid veckans slut och summan av loggat', () => {
+    const input: WeekInput = {
+      ...empty(),
+      profile: { ...profile, calorieMode: 'vecka' },
+      weights: [{ date: '2026-09-14', weightKg: 85 }],
+      foodLog: [food('2026-09-14', 1500, 80), food('2026-09-15', 1800, 90)],
+    };
+    const s = summarizeWeek(input, MON);
+    expect(s.targetKcal).not.toBeNull();
+    expect(s.budgetKcal).toBe(Math.round(s.targetKcal ?? 0) * 7);
+    expect(s.weekKcal).toBe(3300);
+    // Per dag (standard): ingen budget.
+    expect(summarizeWeek({ ...input, profile }, MON).budgetKcal).toBeNull();
+  });
+
   it('summerar trend, intag, protein, vatten, pass och steg', () => {
     const input: WeekInput = {
       ...empty(),
@@ -254,6 +269,7 @@ describe('presentation', () => {
     const text = Object.fromEntries(WEEK_ROWS.map((r) => [r.id, r.text(s)]));
     expect(text).toEqual({
       trend: '−0,4 kg',
+      budget: null,
       kcal: '1 812 kcal (mål 1 900 kcal) · 5 dagar',
       protein: '102 g (mål 128 g)',
       vatten: '2 100 ml (mål 2 800 ml) · 1 dag',
@@ -263,10 +279,22 @@ describe('presentation', () => {
     expect(WEEK_ROWS.filter((r) => r.feature).map((r) => r.feature)).toEqual([
       'mat',
       'mat',
+      'mat',
       'vatten',
       'traning',
       'steg',
     ]);
+  });
+
+  it('veckoläge: budget mot utfall (bara när kalorimålet räknas per vecka)', () => {
+    const budget = WEEK_ROWS.find((r) => r.id === 'budget');
+    expect(budget?.text(summary({ weekKcal: 12_600, budgetKcal: 13_300, foodDays: 6 }))).toBe(
+      '12 600 kcal av 13 300 kcal · 700 kcal under · 6 dagar loggade',
+    );
+    expect(budget?.text(summary({ weekKcal: 14_000, budgetKcal: 13_300, foodDays: 7 }))).toBe(
+      '14 000 kcal av 13 300 kcal · 700 kcal över · 7 dagar loggade',
+    );
+    expect(budget?.text(summary({ weekKcal: 12_600, budgetKcal: null }))).toBeNull();
   });
 
   it('titel med veckonummer', () => {

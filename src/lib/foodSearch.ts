@@ -2,10 +2,12 @@
  * Livsmedel från olika källor i ett gemensamt format, och fuzzy-sökning på svenska.
  */
 import type { ExtraNutrients } from '../data/nutrients.ts';
+import type { LoggedRecipe } from '../db/db.ts';
 import type { Nutrients } from './nutrition.ts';
 import type { BaseUnit, FoodUnit } from './units.ts';
 
-export type FoodSource = 'livsmedelsverket' | 'egen' | 'openfoodfacts' | 'maltid';
+export type FoodSource =
+  'livsmedelsverket' | 'egen' | 'openfoodfacts' | 'maltid' | 'recept' | 'snabb';
 
 /**
  * Ett livsmedel att logga. Värden per 100 g (eller per 100 ml, `per100Unit`).
@@ -14,7 +16,10 @@ export type FoodSource = 'livsmedelsverket' | 'egen' | 'openfoodfacts' | 'maltid
  * (units.ts).
  */
 export interface FoodItem {
-  /** Unikt över källor: `lv:<nummer>`, `egen:<uuid>`, `off:<ean>`, `maltid:<uuid>`. */
+  /**
+   * Unikt över källor: `lv:<nummer>`, `egen:<uuid>`, `off:<ean>`, `maltid:<uuid>`,
+   * `recept:<uuid>`, `snabb:<namn>:<kcal>:<protein>`.
+   */
   id: string;
   name: string;
   source: FoodSource;
@@ -27,6 +32,8 @@ export interface FoodItem {
   extra?: ExtraNutrients;
   units?: FoodUnit[];
   ean?: string;
+  /** Recept: ingredienserna och rättens vikt, som kopieras in i loggposten. */
+  recipe?: LoggedRecipe;
 }
 
 export const SOURCE_LABELS: Record<FoodSource, string> = {
@@ -34,6 +41,8 @@ export const SOURCE_LABELS: Record<FoodSource, string> = {
   egen: 'Eget',
   openfoodfacts: 'Open Food Facts',
   maltid: 'Måltid',
+  recept: 'Recept',
+  snabb: 'Snabblogg',
 };
 
 /**

@@ -117,6 +117,15 @@ export function NutritionView({
       <DateBar date={date} today={today} label="Datum" testId="nutrition-date" onChange={setDate} />
       <SegmentedControl label="Period" options={PERIODS} value={period} onChange={setPeriod} />
       <UpperLimitWarnings warnings={warnings} when={when} />
+      {day.estimatedEntries > 0 && (
+        <p className="form-note" role="note" data-testid="nutrition-estimated">
+          {period === 'dag' ? `Näringen ${when} är ofullständig: ` : 'Näringen är ofullständig: '}
+          {day.estimatedEntries === 1
+            ? '1 snabblogg har bara uppskattade kcal'
+            : `${String(day.estimatedEntries)} snabbloggar har bara uppskattade kcal`}{' '}
+          och ingår inte i vitaminer och mineraler.
+        </p>
+      )}
       {day.loggedDays === 0 && (
         <p className="form-note muted">
           {period === 'dag'

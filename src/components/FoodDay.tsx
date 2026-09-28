@@ -9,11 +9,14 @@ import {
 import { daySubject, mealSubject, type AiContext } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';
 import { buildCatalog, entryToItem, mealToItem, storedToItem } from '../lib/foodCatalog.ts';
+import { quickValuesOf } from '../lib/quickLog.ts';
+import { recipeToItem } from '../lib/recipes.ts';
+import { dayTarget } from '../lib/weekBudget.ts';
 import { currentMealSlot, savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import { formatDate, formatDayMonth } from '../lib/format.ts';
 import { haptic } from '../lib/haptics.ts';
-import { mealLabel, totalOf, type MealSlot } from '../lib/nutrition.ts';
+import { dailyIntake, mealLabel, totalOf, type MealSlot } from '../lib/nutrition.ts';
 import type { FoodUnit } from '../lib/units.ts';
 import { AskAi } from './AskAi.tsx';
 import { BottomSheet } from './BottomSheet.tsx';
@@ -24,13 +27,17 @@ import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
 import { ListRow } from './ListRow.tsx';
 import { MealAnalysisView } from './MealAnalysisView.tsx';
 import { MealSections } from './MealSections.tsx';
+import { QuickLogForm } from './QuickLogForm.tsx';
 import { SaveMealForm } from './SaveMealForm.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
 import { Toast } from './Toast.tsx';
 
 interface FoodDayProps {
   source: FoodSource;
+  /** Dagsmålet (planens kalorimål). I veckoläge räknas dagens förslag ur det. */
   targetKcal: number | null;
+  /** Veckoläge (Inställningar → Kalorimål): kalorigolvet för förslaget, annars `null`. */
+  weekly?: { floorKcal: number } | null;
   proteinGoalG: number | null;
   /** Öppna sök-sheeten direkt (genvägen "Logga mat", `#/mat/logga`). */
   initialPicker?: boolean;
@@ -85,7 +92,8 @@ function itemForEntry(entry: FoodLogEntry, catalog: ReadonlyMap<string, FoodItem
  */
 export function FoodDay({
   source,
-  targetKcal,
+  targetKcal: dailyTargetKcal,
+  weekly = null,
   proteinGoalG,
   initialPicker = false,
   initialEan,
@@ -119,8 +127,9 @@ export function FoodDay({
         livsmedel?.foods ?? NO_FOODS,
         foodData.foods.map(storedToItem),
         foodData.meals.map(mealToItem),
+        foodData.recipes.map(recipeToItem),
       ),
-    [livsmedel, foodData.foods, foodData.meals],
+    [livsmedel, foodData.foods, foodData.meals, foodData.recipes],
   );
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
@@ -130,6 +139,14 @@ export function FoodDay({
 
   const entries = foodLog.filter((e) => e.date === date);
   const totals = totalOf(entries);
+  const { targetKcal, week } = dayTarget(
+    weekly ? 'vecka' : 'dag',
+    dailyTargetKcal === null
+      ? null
+      : { targetKcal: dailyTargetKcal, floorKcal: weekly?.floorKcal ?? 0 },
+    weekly ? dailyIntake(foodLog) : [],
+    date,
+  );
   const when = date === today ? 'idag' : formatDate(date);
 
   // Den fulla summeringen utom synhåll → visa miniraden i den sticky toppen.
@@ -220,6 +237,7 @@ export function FoodDay({
           targetKcal={targetKcal}
           proteinGoalG={proteinGoalG}
           when={when}
+          week={week}
         />
       </div>
       <div className="food-sticky" data-compact={compact ? 'true' : 'false'}>
@@ -306,36 +324,63 @@ export function FoodDay({
             setEditing(null);
           }}
         >
-          <FoodLogForm
-            key={editing.id}
-            food={itemForEntry(editing, catalog)}
-            customUnits={customUnits.get(editing.foodId) ?? NO_UNITS}
-            last={null}
-            editing={editing}
-            date={date}
-            favorite={favoriteIds.has(editing.foodId)}
-            onToggleFavorite={() => void toggleFavorite(editing.foodId)}
-            onUnitsChange={async (units) => {
-              await saveCustomUnits(editing.foodId, units);
-              await reloadFood();
-            }}
-            onSaved={(message, meal) => {
-              haptic('success');
-              setEditing(null);
-              expand(meal);
-              void reloadLog().then(() => {
-                setToast({ message });
-              });
-            }}
-            onDelete={() => {
-              const entry = editing;
-              setEditing(null);
-              void remove(entry);
-            }}
-            onCancel={() => {
-              setEditing(null);
-            }}
-          />
+          {editing.estimated ? (
+            <QuickLogForm
+              key={editing.id}
+              initial={quickValuesOf({ ...editing, id: editing.foodId })}
+              editing={editing}
+              date={date}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={(foodId) => void toggleFavorite(foodId)}
+              onSaved={(message, meal) => {
+                haptic('success');
+                setEditing(null);
+                expand(meal);
+                void reloadLog().then(() => {
+                  setToast({ message });
+                });
+              }}
+              onDelete={() => {
+                const entry = editing;
+                setEditing(null);
+                void remove(entry);
+              }}
+              onCancel={() => {
+                setEditing(null);
+              }}
+            />
+          ) : (
+            <FoodLogForm
+              key={editing.id}
+              food={itemForEntry(editing, catalog)}
+              customUnits={customUnits.get(editing.foodId) ?? NO_UNITS}
+              last={null}
+              editing={editing}
+              date={date}
+              favorite={favoriteIds.has(editing.foodId)}
+              onToggleFavorite={() => void toggleFavorite(editing.foodId)}
+              onUnitsChange={async (units) => {
+                await saveCustomUnits(editing.foodId, units);
+                await reloadFood();
+              }}
+              onSaved={(message, meal) => {
+                haptic('success');
+                setEditing(null);
+                expand(meal);
+                void reloadLog().then(() => {
+                  setToast({ message });
+                });
+              }}
+              onDelete={() => {
+                const entry = editing;
+                setEditing(null);
+                void remove(entry);
+              }}
+              onCancel={() => {
+                setEditing(null);
+              }}
+            />
+          )}
         </BottomSheet>
       )}
       {menu && (

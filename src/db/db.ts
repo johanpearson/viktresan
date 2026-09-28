@@ -21,7 +21,7 @@ import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 10;
+export const DB_VERSION = 11;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -89,7 +89,14 @@ export interface Profile {
    * om användaren vill. Utan schemaändring.
    */
   foodPreferences?: string;
+  /**
+   * Kalorimål per dag (standard) eller vecka (måndag–söndag, 7 × dagsmålet). Saknas →
+   * dag. Utan schemaändring (sedan v11).
+   */
+  calorieMode?: CalorieMode;
 }
+
+export type CalorieMode = 'dag' | 'vecka';
 
 /**
  * Eget livsmedel eller cachad träff från Open Food Facts. Värden per 100 g.
@@ -160,6 +167,31 @@ export interface SavedMeal {
 }
 
 /**
+ * Ett recept (sedan v11): ingredienser och utbyte. Utbytet anges som antal portioner
+ * och/eller tillagad totalvikt – minst ett av dem. Utan tillagad vikt räknas
+ * ingrediensernas vikt som rättens vikt.
+ */
+export interface Recipe {
+  id: string;
+  name: string;
+  items: MealIngredient[];
+  servings?: number;
+  cookedWeightG?: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * Receptet som det såg ut när posten loggades (sedan v11): rättens vikt och
+ * ingredienserna. Används för vitaminer och mineraler och för att visa
+ * ingredienserna – en senare ändring av receptet påverkar inte posten.
+ */
+export interface LoggedRecipe {
+  yieldG: number;
+  items: MealIngredient[];
+}
+
+/**
  * En post i matloggen. Namn och näringsvärden per 100 g kopieras in så att
  * loggen inte ändras om livsmedlet ändras eller tas bort.
  */
@@ -170,6 +202,14 @@ export interface FoodLogEntry extends LoggedAmount {
   foodId: string;
   name: string;
   per100: Nutrients;
+  /**
+   * Snabblogg (sedan v11, utan schemaändring): bara uppskattade kcal (och ev. protein),
+   * `foodId` = `snabb:…`, en "portion" = 100 "gram" så att `per100` är hela värdet.
+   * Räknas i alla summor men inte i vitaminer och mineraler.
+   */
+  estimated?: true;
+  /** Loggat recept: receptet som det såg ut då (sedan v11). */
+  recipe?: LoggedRecipe;
   createdAt: number;
   updatedAt?: number;
 }
@@ -503,6 +543,11 @@ export interface ViktresanDB extends DBSchema {
     value: SupplementIntake;
     indexes: { 'by-date': string };
   };
+  /** Sedan v11. Recept med portioner. */
+  recipes: {
+    key: string;
+    value: Recipe;
+  };
 }
 
 export type Database = IDBPDatabase<ViktresanDB>;
@@ -821,6 +866,11 @@ export function getDb(): Promise<Database> {
         supplements.createIndex('by-ean', 'ean');
         const supplementLog = db.createObjectStore('supplementLog', { keyPath: 'id' });
         supplementLog.createIndex('by-date', 'date');
+      }
+      if (oldVersion < 11) {
+        // v11: recept. Ny store – befintlig data berörs inte. Snabbloggar och loggade
+        // recept är matloggposter med nya valfria fält (ingen datamigrering).
+        db.createObjectStore('recipes', { keyPath: 'id' });
       }
     },
     blocking() {
@@ -1317,6 +1367,30 @@ export async function addMilestones(records: readonly MilestoneRecord[]): Promis
   await tx.done;
 }
 
+/** Recept i namnordning. */
+export async function listRecipes(): Promise<Recipe[]> {
+  const db = await getDb();
+  const all = await db.getAll('recipes');
+  return all.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+}
+
+/** Sparar ett recept. Redan loggade portioner har egna kopior av värdena och ändras inte. */
+export async function putRecipe(recipe: Recipe): Promise<void> {
+  const db = await getDb();
+  await db.put('recipes', recipe);
+}
+
+export async function deleteRecipe(id: string): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(['recipes', 'favorites', 'foodUnits'], 'readwrite');
+  await Promise.all([
+    tx.objectStore('recipes').delete(id),
+    tx.objectStore('favorites').delete(`recept:${id}`),
+    tx.objectStore('foodUnits').delete(`recept:${id}`),
+  ]);
+  await tx.done;
+}
+
 /** Kosttillskott i namnordning. */
 export async function listSupplements(): Promise<Supplement[]> {
   const db = await getDb();
@@ -1405,6 +1479,7 @@ export interface Snapshot {
   milestones: MilestoneRecord[];
   supplements: Supplement[];
   supplementLog: SupplementIntake[];
+  recipes: Recipe[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -1429,6 +1504,7 @@ export function emptySnapshot(): Snapshot {
     milestones: [],
     supplements: [],
     supplementLog: [],
+    recipes: [],
   };
 }
 
@@ -1454,6 +1530,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     milestones,
     supplements,
     supplementLog,
+    recipes,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -1475,6 +1552,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listMilestones(),
     listSupplements(),
     listSupplementLog(),
+    listRecipes(),
   ]);
   return {
     profile,
@@ -1498,6 +1576,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     milestones,
     supplements,
     supplementLog,
+    recipes,
   };
 }
 
@@ -1530,6 +1609,7 @@ const DATA_STORES = [
   'milestones',
   'supplements',
   'supplementLog',
+  'recipes',
 ] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
@@ -1556,6 +1636,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const milestones = tx.objectStore('milestones');
   const supplements = tx.objectStore('supplements');
   const supplementLog = tx.objectStore('supplementLog');
+  const recipes = tx.objectStore('recipes');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -1579,6 +1660,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.milestones.map((m) => milestones.put(m)),
       ...snapshot.supplements.map((s) => supplements.put(s)),
       ...snapshot.supplementLog.map((i) => supplementLog.put(i)),
+      ...snapshot.recipes.map((r) => recipes.put(r)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -1655,6 +1737,10 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     for (const i of snapshot.supplementLog) {
       const existing = await supplementLog.get(i.id);
       if (!existing || changedAt(i) > changedAt(existing)) await supplementLog.put(i);
+    }
+    for (const r of snapshot.recipes) {
+      const existing = await recipes.get(r.id);
+      if (!existing || changedAt(r) > changedAt(existing)) await recipes.put(r);
     }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);

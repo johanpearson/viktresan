@@ -71,6 +71,10 @@ src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-daga
 src/lib/foodDay.ts      Mat → Dag: sektioner per måltid (summa, antal), pågående måltid, ingredienser i loggad måltid, datumetikett,
                         spara som egen måltid (savedMealName, entriesToMealItems)
 src/lib/mealAnalysis.ts Lokal analys: summor (makron, fiber, socker, salt, vitaminer, mineraler) i % av dagsmål/RI, nyckeltal
+src/lib/quickLog.ts     Snabblogg: kcal (+ protein) som matloggpost med `estimated`, id `snabb:<namn>:<kcal>:<protein>`
+src/lib/recipes.ts      Recept: utbyte (portioner/tillagad vikt), näring per portion och 100 g, kopia till loggen, duplicera
+src/lib/useIngredients.ts  Hook: ingrediensrader för egna måltider och recept (IngredientEditor)
+src/lib/weekBudget.ts   Veckobudget: 7 × dagsmål, dagens förslag = kvar / dagar kvar, golvspärr, dayTarget()
 src/lib/swaps.ts        Bytesförslag: samma kategori, klart bättre protein/kcal eller fiber, aldrig mer energi
 src/lib/aiPrompt.ts     "Fråga AI": kryssrutor (AI_OPTIONS), underlag (aiContextFrom), promptbyggare, ChatGPT-/Claude-länkar
 src/lib/aiPromptTemplate.ts  Promptmallen på svenska ({{amne}}, {{amneKort}}, {{underlag}}, {{kalorigolv}}) – redigera här
@@ -100,7 +104,7 @@ src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
 src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
-src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange
+src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 11)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
@@ -139,7 +143,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
   filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
-  (`profil`, `protein`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `bilder`, `las`, `sakerhetskopia`,
+  (`profil`, `kalorimal`, `protein`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `bilder`, `las`, `sakerhetskopia`,
   `lagring`, `om`) öppnar panelen direkt.
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
@@ -150,7 +154,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`); Tillskott också (`availableSince: 4`, `FLAGS_VERSION = 4`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 10`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 11`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
@@ -167,7 +171,11 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `supplements` (v10, tillskott: namn, `form`, `amountPerDose`, `nutrients` per dos `{ key, amount, unit }` i angiven enhet,
   `schedule` `dagligen`/`veckodagar` (+ `weekdays`)/`vid-behov`, `dosesPerDay`, valfri `ean`; index `by-ean`),
   `supplementLog` (v10, tagna doser, id = `<tillskott>:<datum>`, en per tillskott och dag, namn och ämnen kopieras in;
-  index `by-date`). `SavedMeal` har sedan v10 en valfri `ean` (ingen schemaändring – skanning hittar måltiden).
+  index `by-date`), `recipes` (v11, recept: ingredienser som måltider, `servings` och/eller `cookedWeightG`; livsmedels-id
+  `recept:<id>`). Matloggposter har sedan v11 (utan datamigrering) valfria `estimated: true` (snabblogg: 1 portion = 100 "g",
+  `per100` = hela värdet, ingår inte i vitaminer/mineraler – `DayNutrition.estimatedEntries`) och `recipe` (`{ yieldG, items }`,
+  receptet som det såg ut vid loggningen – `partsOf`/ingredienser läser kopian, så en receptändring bara påverkar nya loggar).
+  `SavedMeal` har sedan v10 en valfri `ean` (ingen schemaändring – skanning hittar måltiden).
   Migreringen v8 → v9 (`groupLegacyPhotos`, även för säkerhetskopior version 1–7) grupperar befintliga bilder i ett
   tillfälle per datum (id `migrerad:<datum>`, samma på alla enheter), vinkel `okand`; bildens vikt flyttas till tillfället
   (senast registrerade vinner). `putPhotoSession` flyttar bildernas `date` med tillfället; `deletePhoto` tar bort ett tomt tillfälle.
@@ -176,7 +184,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   och (v5) `waterGoalMl` (eget dryckesmål, sparas från Inställningar → Dryckesmål), `waterTrainingBonus`
   (+500 ml på träningsdagar, utan schemaändring) samt `proteinFactor`
   (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian) och `foodPreferences`
-  (Inställningar → Matpreferenser, fritext ≤ 1 000 tecken, bara för "Fråga AI"; ingen schemaändring).
+  (Inställningar → Matpreferenser, fritext ≤ 1 000 tecken, bara för "Fråga AI"; ingen schemaändring) och `calorieMode`
+  (`dag`/`vecka`, Inställningar → Kalorimål; ingen schemaändring).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
   är det som räknas, så en senare ändrad enhet påverkar inte historiken. Migreringen v6 → v7
@@ -201,6 +210,14 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Adaptiv TDEE: fönster ≤ 28 dagar t.o.m. igår, kräver ≥ 14 dagar med både vikt och matlogg och
   ≥ 80 % loggade dagar; regression på dagsvikterna, vikt = 0,9 × längd × täckning × precision
   (halveras om skattningen kläms till 0,6–1,6 × formeln).
+- **Veckobudget** (`weekBudget.ts`, `profile.calorieMode = 'vecka'`): budget = 7 × dagsmålet (mån–sön). Dagens förslag =
+  (budget − intag före idag) / dagar kvar inkl. idag; tidigare dagar utan matlogg räknas som dagsmålet. Förslaget går aldrig
+  under golvet (`floorKcal`) – räcker inte budgeten visas det sakligt med förslag att fördela resten över nästa vecka.
+  `dayTarget()` ger målet som Mat → Dag (`DaySummary` + `WeekBudgetStatus`) och Översikt → Idag använder. Veckosummeringen
+  har raden `budget` (loggat mot budget, bara i veckoläge).
+- **Snabblogg och recept**: sök-sheeten har raden "Snabblogg" (`QuickLogForm`); snabbval under Senaste/Favoriter
+  ("≈ 700 kcal") öppnar den förifylld. Recept (Mat → Egna, `RecipeBuilder`) söks och listas under Måltider i sök-sheeten,
+  loggas i portioner (½, 1, 1½, 2) eller gram och kan dupliceras.
 - **Dryck** (i UI:t "Dryck"; internt heter det fortfarande `water`/`vatten` – store, funktion, route
   `#/logga/vatten`): mål = eget `waterGoalMl`, annars standardmål efter kön: 2 000 ml (man) / 1 600 ml
   (kvinna), 1 800 ml utan kön – dryckesdelen (~80 %) av EFSA:s totala vätskeintag. Ingen koppling till
@@ -370,16 +387,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 9`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 10`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
     har portioner i stället för enheter och uppgraderas med `upgradeFoodData`; version 1–6 saknar milstolpar
     (tom lista – efter importen markeras passerade milstolpar utan firande); version 1–7 saknar fototillfällen och
-    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor). En bild vars `sessionId` saknas bland tillfällena avvisas.
+    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor); version 1–9 saknar recept (tom lista). En bild vars `sessionId` saknas bland tillfällena avvisas.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.

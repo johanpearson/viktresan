@@ -205,6 +205,7 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
           primary="Egna livsmedel och måltider"
           value={value(`${String(summary.foods)} + ${String(summary.meals)}`, 'preview-foods')}
         />
+        <ListRow primary="Recept" value={value(summary.recipes, 'preview-recipes')} />
         <ListRow primary="Dryckesposter" value={value(summary.water, 'preview-water')} />
         <ListRow
           primary="Träningspass och scheman"
