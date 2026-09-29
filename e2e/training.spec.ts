@@ -414,6 +414,10 @@ test('dryck och träning av: dolda överallt, datan ligger kvar', async ({ page 
   await page.getByRole('switch', { name: /^Dryck/ }).setChecked(false);
   await page.getByRole('switch', { name: /^Träning/ }).setChecked(false);
   await expect(page.getByTestId('settings-dryck')).toHaveCount(0);
+  // Vänta tills brytarna sparats – annars kan sidbytet läsa de gamla värdena.
+  await expect
+    .poll(async () => (await dump(page)).settings.features)
+    .toMatchObject({ vatten: false, traning: false });
 
   await page.goto('./');
   await expect(page.getByTestId('today-card')).toBeVisible();

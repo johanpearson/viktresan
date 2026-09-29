@@ -1,6 +1,6 @@
 /**
- * Veckosummering (måndag–söndag): trendförändring, snittintag, protein, vatten,
- * genomförda pass och snittsteg, jämfört med veckan innan. Rena funktioner.
+ * Veckosummering (måndag–söndag): trendförändring, snittintag, protein, fiber (med
+ * fibermålet), vatten, genomförda pass och snittsteg, jämfört med veckan innan. Rena funktioner.
  */
 import { weekdayIndex } from './calendar.ts';
 import { addDays, toDayNumber } from './dates.ts';
@@ -27,8 +27,22 @@ export interface WeekInput {
   workouts: readonly { date: string; status: string }[];
   steps: readonly DatedSteps[];
   profile:
-    | (PlanProfile & { proteinFactor?: number; waterGoalMl?: number; calorieMode?: CalorieMode })
+    | (PlanProfile & {
+        proteinFactor?: number;
+        waterGoalMl?: number;
+        waterGlp1BonusMl?: number;
+        waterGlp1OnOwnGoal?: boolean;
+        calorieMode?: CalorieMode;
+      })
     | null;
+  /** Fiber per matdag – bara när fibermålet är på (annars ingen fiberrad). */
+  fiber?: {
+    days: readonly { date: string; fiberG: number }[];
+    /** Fibermålet ett datum (veckans mål i upptrappningen). */
+    goalOn: (date: string) => number | null;
+  } | null;
+  /** GLP-1 är på – dryckesmålet får GLP-1-tillägget. */
+  glp1?: boolean;
 }
 
 export interface WeekSummary {
@@ -51,6 +65,10 @@ export interface WeekSummary {
   /** Summan av loggade kcal i veckan, `null` utan matlogg. */
   weekKcal: number | null;
   proteinGoalG: number | null;
+  /** Snitt per matdag, `null` utan fibermål eller matlogg. */
+  fiberG: number | null;
+  /** Fibermålet vid veckans slut. */
+  fiberGoalG: number | null;
   /** Snitt per dag med dryck (loggad eller ur matloggen). */
   waterMl: number | null;
   waterDays: number;
@@ -102,6 +120,7 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
   const water = inWeek(dailyWater(drinkEntries(input.water, input.foodLog)), from, to);
   const steps = inWeek(dailySteps(input.steps), from, to);
   const done = inWeek(input.workouts, from, to).filter((w) => w.status === 'genomford');
+  const fiberDays = input.fiber ? inWeek(input.fiber.days, from, to) : [];
 
   let targetKcal: number | null = null;
   if (profile) {
@@ -130,10 +149,13 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
       profile?.calorieMode === 'vecka' && targetKcal !== null ? Math.round(targetKcal) * 7 : null,
     weekKcal: intake.length === 0 ? null : intake.reduce((s, d) => s + d.kcal, 0),
     proteinGoalG: proteinGoalFor(profile),
+    fiberG: mean(fiberDays.map((d) => d.fiberG)),
+    fiberGoalG: input.fiber ? input.fiber.goalOn(to) : null,
     waterMl: mean(water.map((d) => d.ml)),
     waterDays: water.length,
-    // Målet utan träningstillägg – snittet jämförs med ett vanligt dagsmål.
-    waterGoalMl: profile ? waterGoal({ profile }).baseMl : null,
+    // Målet utan träningstillägg (utan datum) men med ev. GLP-1-tillägg – snittet jämförs med
+    // ett vanligt dagsmål.
+    waterGoalMl: profile ? waterGoal({ profile, glp1: input.glp1 === true }).ml : null,
     workoutsDone: done.length,
     steps: mean(steps.map((d) => d.steps)),
     stepsDays: steps.length,
@@ -204,7 +226,7 @@ export function compareValues(
 }
 
 export interface WeekRow extends FeatureGated {
-  id: 'trend' | 'budget' | 'kcal' | 'protein' | 'vatten' | 'traning' | 'steg';
+  id: 'trend' | 'budget' | 'kcal' | 'protein' | 'fiber' | 'vatten' | 'traning' | 'steg';
   label: string;
   /** Värdet som jämförs mellan veckorna. */
   value: (s: WeekSummary) => number | null;
@@ -271,6 +293,20 @@ export const WEEK_ROWS: readonly WeekRow[] = [
         : ofGoal(
             `${formatInt(Math.round(s.proteinG))} g`,
             s.proteinGoalG == null ? null : `${formatInt(s.proteinGoalG)} g`,
+          ),
+  },
+  {
+    id: 'fiber',
+    label: 'Fiber',
+    feature: 'mat',
+    value: (s) => s.fiberG,
+    tolerance: 1,
+    text: (s) =>
+      s.fiberG == null
+        ? null
+        : ofGoal(
+            `${formatInt(Math.round(s.fiberG))} g`,
+            s.fiberGoalG == null ? null : `${formatInt(s.fiberGoalG)} g`,
           ),
   },
   {

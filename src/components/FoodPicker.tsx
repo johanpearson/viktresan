@@ -220,6 +220,7 @@ export function FoodPicker({
         };
         if (food.units) stored.units = food.units;
         if (food.per100Unit === 'ml') stored.per100Unit = 'ml';
+        if (food.extra?.fiberG !== undefined) stored.fiberG = food.extra.fiberG;
         await putFood(stored);
         await reloadFood();
         pick(food);
@@ -426,7 +427,7 @@ export function FoodPicker({
             onPick={pick}
             empty={livsmedel === null ? 'Laddar livsmedelsdatabasen …' : 'Inga träffar.'}
             testId="search-result"
-            markProteinRich
+            markRich
           />
         ) : (
           lookup.kind === 'idle' && (
@@ -475,7 +476,7 @@ export function FoodPicker({
                     onPick={pick}
                     empty="Inga favoriter ännu. Tryck på stjärnan när du loggar."
                     testId="quick-pick"
-                    markProteinRich
+                    markRich
                   />
                 )}
                 {tab === 'maltider' && forLog && (

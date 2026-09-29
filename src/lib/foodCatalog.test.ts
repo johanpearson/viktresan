@@ -68,6 +68,19 @@ describe('foodCatalog', () => {
     );
   });
 
+  it('lagrad fiber blir `extra.fiberG` (fibermål, fiberrik-etiketten)', () => {
+    expect(
+      storedToItem({
+        id: 'off:1',
+        name: 'A',
+        source: 'openfoodfacts',
+        per100,
+        fiberG: 6,
+        createdAt: 1,
+      }).extra,
+    ).toEqual({ fiberG: 6 });
+  });
+
   it('känner igen källan på id-prefixet', () => {
     expect(sourceOf('lv:1')).toBe('livsmedelsverket');
     expect(sourceOf('off:123')).toBe('openfoodfacts');

@@ -12,8 +12,11 @@ import { useFeatures } from '../lib/features.ts';
 import { buildPlan } from '../lib/plan.ts';
 import { proteinGoalFor } from '../lib/protein.ts';
 import { useAppData } from '../lib/useAppData.ts';
+import { useFiber } from '../lib/useFiber.ts';
 import { useFoodData } from '../lib/useFoodData.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
+
+const NO_LOG: readonly never[] = [];
 
 type Tab = 'dag' | 'egna' | 'historik' | 'naring';
 
@@ -43,6 +46,7 @@ export function Mat() {
       ? { floorKcal: plan.plan.floorKcal }
       : null;
   const proteinGoalG = proteinGoalFor(data?.profile ?? null);
+  const fiber = useFiber(data?.profile ?? null, data?.foodLog ?? NO_LOG, todayIso());
   const source =
     data && food.data
       ? {
@@ -73,6 +77,8 @@ export function Mat() {
           targetKcal={targetKcal}
           weekly={weekly}
           proteinGoalG={proteinGoalG}
+          fiberGoalOn={fiber.goalOn}
+          fiberSource={fiber.source}
           initialPicker={initialPicker}
           initialEan={initialEan}
           onPickerClosed={() => {
@@ -84,7 +90,13 @@ export function Mat() {
       )}
       {source && tab === 'egna' && <OwnFoods source={source} onChange={food.reload} />}
       {data && tab === 'historik' && (
-        <IntakeHistory foodLog={data.foodLog} targetKcal={targetKcal} proteinGoalG={proteinGoalG} />
+        <IntakeHistory
+          foodLog={data.foodLog}
+          targetKcal={targetKcal}
+          proteinGoalG={proteinGoalG}
+          fiberDays={fiber.goal ? fiber.days : null}
+          fiberGoalOn={fiber.goalOn}
+        />
       )}
       {source && data && tab === 'naring' && (
         <NutritionView

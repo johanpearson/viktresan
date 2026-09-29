@@ -12,6 +12,7 @@ import { buildCatalog, entryToItem, mealToItem, storedToItem } from '../lib/food
 import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { dayTarget } from '../lib/weekBudget.ts';
+import { fiberOfEntries, type FiberGoal, type FiberSource } from '../lib/fiber.ts';
 import { currentMealSlot, savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import { formatDate, formatDayMonth } from '../lib/format.ts';
@@ -39,6 +40,10 @@ interface FoodDayProps {
   /** Veckoläge (Inställningar → Kalorimål): kalorigolvet för förslaget, annars `null`. */
   weekly?: { floorKcal: number } | null;
   proteinGoalG: number | null;
+  /** Fibermålet ett datum, `null` när fibermålet inte visas. */
+  fiberGoalOn?: (date: string) => FiberGoal | null;
+  /** Fiberdata för posterna, `null` medan den laddas. */
+  fiberSource?: FiberSource | null;
   /** Öppna sök-sheeten direkt (genvägen "Logga mat", `#/mat/logga`). */
   initialPicker?: boolean;
   /** Slå upp streckkoden i sök-sheeten direkt (`#/mat/ean/<ean>`, från Tillskott). */
@@ -95,6 +100,8 @@ export function FoodDay({
   targetKcal: dailyTargetKcal,
   weekly = null,
   proteinGoalG,
+  fiberGoalOn,
+  fiberSource = null,
   initialPicker = false,
   initialEan,
   onPickerClosed,
@@ -139,6 +146,10 @@ export function FoodDay({
 
   const entries = foodLog.filter((e) => e.date === date);
   const totals = totalOf(entries);
+  const fiberGoal = fiberGoalOn?.(date) ?? null;
+  const fiber = fiberGoal
+    ? { goal: fiberGoal, total: fiberSource ? fiberOfEntries(entries, fiberSource) : null }
+    : null;
   const { targetKcal, week } = dayTarget(
     weekly ? 'vecka' : 'dag',
     dailyTargetKcal === null
@@ -236,6 +247,7 @@ export function FoodDay({
           totals={totals}
           targetKcal={targetKcal}
           proteinGoalG={proteinGoalG}
+          fiber={fiber}
           when={when}
           week={week}
         />
@@ -456,6 +468,7 @@ export function FoodDay({
               goals={{
                 targetKcal,
                 proteinGoalG,
+                fiberGoalG: fiberGoal?.goalG ?? null,
               }}
               what={analysis.target.kind === 'day' ? 'dagen' : 'måltiden'}
               onAskAi={() => {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Injection, Medication } from '../db/db.ts';
 import {
+  fluidLossSideEffects,
+  fluidLossText,
   INJECTION_SITES,
   describeSchedule,
   doseChanges,
@@ -250,5 +252,32 @@ describe('rotation av injektionsställe', () => {
       injection('2026-09-11'),
     ];
     expect(suggestSite(log)).toBe('buk-hoger');
+  });
+});
+
+describe('dryckespåminnelse vid biverkningar', () => {
+  const symptoms = [
+    { date: '2026-09-28', sideEffects: ['Illamående'] },
+    { date: '2026-09-29', sideEffects: ['Kräkning', 'Trötthet', 'Diarré'] },
+    { date: '2026-09-30', sideEffects: [' diarré '] },
+  ];
+
+  it('diarré eller kräkning loggad samma dag ger påminnelse', () => {
+    expect(fluidLossSideEffects(symptoms, '2026-09-29')).toEqual(['Diarré', 'Kräkning']);
+    // Fritext tolereras (gemener, mellanslag).
+    expect(fluidLossSideEffects(symptoms, '2026-09-30')).toEqual(['Diarré']);
+  });
+
+  it('andra biverkningar eller andra dagar ger ingen påminnelse', () => {
+    expect(fluidLossSideEffects(symptoms, '2026-09-28')).toEqual([]);
+    expect(fluidLossSideEffects(symptoms, '2026-10-01')).toEqual([]);
+  });
+
+  it('texten är saklig och nämner det som loggats', () => {
+    expect(fluidLossText(['Diarré'])).toMatch(/^Du har loggat diarré idag\. /);
+    expect(fluidLossText(['Diarré', 'Kräkning'])).toMatch(
+      /^Du har loggat diarré och kräkning idag/,
+    );
+    expect(fluidLossText(['Diarré'])).toMatch(/drick lite extra/);
   });
 });

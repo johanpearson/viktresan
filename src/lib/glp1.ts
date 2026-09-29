@@ -322,3 +322,32 @@ export function describeSchedule(med: Pick<Medication, 'frequency' | 'weekday' |
 export function describeAppetite(appetite: number): string {
   return `${String(appetite)} av ${String(APPETITE_MAX)}`;
 }
+
+// ---------------------------------------------------------------------------
+// Dryckespåminnelse vid biverkningar
+
+/** Biverkningar som gör att kroppen förlorar vätska. */
+export const FLUID_LOSS_SIDE_EFFECTS: readonly string[] = ['Diarré', 'Kräkning'];
+
+/**
+ * Loggade biverkningar dagen `date` som ger vätskeförlust (diarré, kräkning), i
+ * förvalsordning. Tom lista = ingen påminnelse. Påminnelsen höjer aldrig målet.
+ */
+export function fluidLossSideEffects(
+  symptoms: readonly { date: string; sideEffects: readonly string[] }[],
+  date: string,
+): string[] {
+  const logged = symptoms.find((s) => s.date === date)?.sideEffects ?? [];
+  const normalized = new Set(logged.map((e) => e.trim().toLocaleLowerCase('sv')));
+  return FLUID_LOSS_SIDE_EFFECTS.filter((e) => normalized.has(e.toLocaleLowerCase('sv')));
+}
+
+/** "Du har loggat diarré och kräkning idag." */
+export function fluidLossText(effects: readonly string[]): string {
+  const names = effects.map((e) => e.toLocaleLowerCase('sv'));
+  const list =
+    names.length <= 1
+      ? (names[0] ?? '')
+      : `${names.slice(0, -1).join(', ')} och ${names.at(-1) ?? ''}`;
+  return `Du har loggat ${list} idag. Då förlorar kroppen vätska – drick lite extra, gärna i små klunkar. Kontakta vården om du inte kan behålla vätska eller besvären håller i sig.`;
+}

@@ -2,14 +2,12 @@
  * Rapport till vården (Framsteg → Rapport): period, sektioner och aggregering av
  * datan per period. Rena funktioner – "idag" skickas in, inga nätverksanrop.
  */
-import type { ExtraNutrients } from '../data/nutrients.ts';
 import type {
   FoodLogEntry,
   Injection,
   Medication,
   PhotoSession,
   Profile,
-  SavedMeal,
   StepsEntry,
   Supplement,
   SupplementIntake,
@@ -27,6 +25,7 @@ import {
   scheduleDates,
   WEEKLY_WINDOW_DAYS,
 } from './glp1.ts';
+import type { FiberSource } from './fiber.ts';
 import { partsOf } from './mealAnalysis.ts';
 import { dailyIntake } from './nutrition.ts';
 import { proteinGoalFor } from './protein.ts';
@@ -195,11 +194,8 @@ export interface ReportInput {
   supplementLog: readonly SupplementIntake[];
 }
 
-/** Livsmedelsverkets fiberdata för kosten (valfritt – utan den blir fibern okänd). */
-export interface FiberSource {
-  meals: readonly SavedMeal[];
-  lookup: (foodId: string) => ExtraNutrients | null | undefined;
-}
+/** Fiberdata för kosten (valfritt – utan den blir fibern okänd). */
+export type { FiberSource } from './fiber.ts';
 
 export interface ReportBasics {
   heightCm: number;
@@ -258,6 +254,8 @@ export interface ReportDiet {
   fiberG: number | null;
   /** Andel (0–1) av mängden där fiber är känt. */
   fiberCoverage: number;
+  /** Fibermålet vid periodens slut, när fibermålet är på. */
+  fiberGoalG: number | null;
   foodDays: number;
   /** Andel av periodens dagar med matlogg. */
   loggedShare: number;
@@ -436,6 +434,7 @@ function dietOf(
   range: ReportRange,
   days: number,
   fiber: FiberSource | null,
+  fiberGoalG: number | null,
 ): ReportDiet {
   const entries = between(input.foodLog, range.from, range.to);
   const intake = dailyIntake(entries).filter((d) => d.kcal > 0);
@@ -467,6 +466,7 @@ function dietOf(
     proteinGoalG: proteinGoalFor(input.profile),
     fiberG,
     fiberCoverage: coverage,
+    fiberGoalG,
     foodDays: intake.length,
     loggedShare: days > 0 ? intake.length / days : 0,
     estimatedEntries: entries.filter((e) => e.estimated).length,
@@ -528,6 +528,8 @@ export function buildReport(
   range: ReportRange,
   today: string,
   fiber: FiberSource | null = null,
+  /** Fibermålet vid periodens slut (bara när fibermålet är på). */
+  fiberGoalG: number | null = null,
 ): Report {
   const days = daysBetween(range.from, range.to) + 1;
   return {
@@ -537,7 +539,7 @@ export function buildReport(
     weight: weightOf(input, range),
     waist: waistOf(input, range),
     glp1: glp1Of(input, range, today),
-    diet: dietOf(input, range, days, fiber),
+    diet: dietOf(input, range, days, fiber, fiberGoalG),
     supplements: supplementsOf(input, range),
     training: trainingOf(input, range, days),
     steps: stepsOf(input, range),

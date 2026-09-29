@@ -65,6 +65,34 @@ describe('summarizeWeek', () => {
     expect(summarizeWeek({ ...input, profile }, MON).budgetKcal).toBeNull();
   });
 
+  it('fiber: snitt per matdag mot fibermålet vid veckans slut, bara med fibermålet', () => {
+    const input: WeekInput = {
+      ...empty(),
+      foodLog: [food('2026-09-14', 1500, 80), food('2026-09-16', 1800, 90)],
+      fiber: {
+        days: [
+          { date: '2026-09-13', fiberG: 40 },
+          { date: '2026-09-14', fiberG: 18 },
+          { date: '2026-09-16', fiberG: 24 },
+        ],
+        goalOn: (date) => (date >= '2026-09-20' ? 21 : 18),
+      },
+    };
+    const s = summarizeWeek(input, MON);
+    expect(s.fiberG).toBe(21);
+    expect(s.fiberGoalG).toBe(21);
+    expect(WEEK_ROWS.find((r) => r.id === 'fiber')?.text(s)).toBe('21 g (mål 21 g)');
+    // Utan fibermål: ingen fiberrad.
+    const off = summarizeWeek({ ...input, fiber: null }, MON);
+    expect(off.fiberG).toBeNull();
+    expect(WEEK_ROWS.find((r) => r.id === 'fiber')?.text(off)).toBeNull();
+  });
+
+  it('dryckesmålet får GLP-1-tillägget när GLP-1 är på', () => {
+    expect(summarizeWeek(empty(), MON).waterGoalMl).toBe(1600);
+    expect(summarizeWeek({ ...empty(), glp1: true }, MON).waterGoalMl).toBe(2100);
+  });
+
   it('summerar trend, intag, protein, vatten, pass och steg', () => {
     const input: WeekInput = {
       ...empty(),
@@ -272,11 +300,13 @@ describe('presentation', () => {
       budget: null,
       kcal: '1 812 kcal (mål 1 900 kcal) · 5 dagar',
       protein: '102 g (mål 128 g)',
+      fiber: null,
       vatten: '2 100 ml (mål 2 800 ml) · 1 dag',
       traning: '3',
       steg: null,
     });
     expect(WEEK_ROWS.filter((r) => r.feature).map((r) => r.feature)).toEqual([
+      'mat',
       'mat',
       'mat',
       'mat',

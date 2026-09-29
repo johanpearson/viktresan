@@ -6,6 +6,8 @@ import {
   drinkOn,
   foodDrinkMl,
   isAlcoholic,
+  GLP1_WATER_BONUS_OPTIONS,
+  glp1WaterBonusMl,
   waterGoal,
   waterGoalFor,
   waterOn,
@@ -31,17 +33,62 @@ describe('dryckesmål', () => {
       source: 'egen',
       baseMl: 2400,
       bonusMl: 0,
+      glp1BonusMl: 0,
     });
     expect(waterGoal({ profile: { sex: 'man' } })).toEqual({
       ml: 2000,
       source: 'standard',
       baseMl: 2000,
       bonusMl: 0,
+      glp1BonusMl: 0,
     });
   });
 
   it('utan profil används standardmålet utan kön', () => {
     expect(waterGoal({ profile: null }).ml).toBe(1800);
+  });
+});
+
+describe('GLP-1-tillägg', () => {
+  it('+500 ml på standardmålet när GLP-1 är på', () => {
+    expect(waterGoal({ profile: { sex: 'kvinna' }, glp1: true })).toEqual({
+      ml: 2100,
+      source: 'standard',
+      baseMl: 1600,
+      bonusMl: 0,
+      glp1BonusMl: 500,
+    });
+    expect(waterGoal({ profile: { sex: 'kvinna' }, glp1: false }).ml).toBe(1600);
+    expect(waterGoal({ profile: { sex: 'kvinna' } }).ml).toBe(1600);
+  });
+
+  it('tillägget är justerbart 0–1 000 ml i steg om 100', () => {
+    expect(GLP1_WATER_BONUS_OPTIONS[0]).toBe(0);
+    expect(GLP1_WATER_BONUS_OPTIONS.at(-1)).toBe(1000);
+    expect(GLP1_WATER_BONUS_OPTIONS).toHaveLength(11);
+    expect(waterGoal({ profile: { sex: 'man', waterGlp1BonusMl: 800 }, glp1: true }).ml).toBe(2800);
+    expect(waterGoal({ profile: { sex: 'man', waterGlp1BonusMl: 0 }, glp1: true }).ml).toBe(2000);
+  });
+
+  it('manuellt mål respekteras: tillägget läggs bara ovanpå om användaren valt det', () => {
+    const own = { sex: 'man' as const, waterGoalMl: 2400 };
+    expect(waterGoal({ profile: own, glp1: true })).toMatchObject({ ml: 2400, glp1BonusMl: 0 });
+    expect(glp1WaterBonusMl(own, true)).toBe(0);
+    const onTop = { ...own, waterGlp1OnOwnGoal: true, waterGlp1BonusMl: 300 };
+    expect(waterGoal({ profile: onTop, glp1: true })).toMatchObject({
+      ml: 2700,
+      source: 'egen',
+      glp1BonusMl: 300,
+    });
+    // Valet gör inget när GLP-1 är av.
+    expect(waterGoal({ profile: onTop, glp1: false }).ml).toBe(2400);
+  });
+
+  it('läggs ihop med träningstillägget', () => {
+    const profile = { sex: 'kvinna' as const, waterTrainingBonus: true };
+    const workouts = [{ date: '2026-09-10', status: 'genomford' }];
+    expect(waterGoal({ profile, workouts, date: '2026-09-10', glp1: true }).ml).toBe(2600);
+    expect(waterGoalFor({ profile, workouts, glp1: true })('2026-09-11')).toBe(2100);
   });
 });
 
@@ -59,6 +106,7 @@ describe('träningsdagstillägg', () => {
       source: 'standard',
       baseMl: 1600,
       bonusMl: 500,
+      glp1BonusMl: 0,
     });
   });
 
@@ -92,7 +140,13 @@ describe('migrering från 33 ml × trendvikten', () => {
     const legacy = { startWeightKg: 110, heightCm: 180, goalWeightKg: 90, sex: 'man' as const };
     // Förut: 33 × 110 = 3 630 → 3 600 ml. Nu: 2 000 ml, oavsett vikten.
     const goal = waterGoal({ profile: legacy });
-    expect(goal).toEqual({ ml: 2000, source: 'standard', baseMl: 2000, bonusMl: 0 });
+    expect(goal).toEqual({
+      ml: 2000,
+      source: 'standard',
+      baseMl: 2000,
+      bonusMl: 0,
+      glp1BonusMl: 0,
+    });
   });
 
   it('ett manuellt satt mål behålls', () => {
@@ -108,6 +162,7 @@ describe('migrering från 33 ml × trendvikten', () => {
       source: 'egen',
       baseMl: 3600,
       bonusMl: 0,
+      glp1BonusMl: 0,
     });
   });
 });

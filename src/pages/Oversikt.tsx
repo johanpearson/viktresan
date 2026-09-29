@@ -3,6 +3,7 @@ import { BackupReminder } from '../components/BackupReminder.tsx';
 import { CaloriePlanCard } from '../components/CaloriePlanCard.tsx';
 import { DoseDayBanner } from '../components/DoseDayBanner.tsx';
 import { Feature } from '../components/Feature.tsx';
+import { HydrationReminder } from '../components/HydrationReminder.tsx';
 import { MissedWorkouts } from '../components/MissedWorkouts.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
 import { NextDoseCard } from '../components/NextDoseCard.tsx';
@@ -51,6 +52,11 @@ export function Oversikt() {
       {data && (
         <Feature id="glp1">
           <DoseDayBanner data={data} now={now} />
+        </Feature>
+      )}
+      {data && (
+        <Feature id="glp1">
+          <HydrationReminder symptoms={data.symptoms} today={todayIso(now)} />
         </Feature>
       )}
       {data && (

@@ -16,7 +16,9 @@
  *                      bilder grupperas per datum med vinkel "ej angiven", som i migreringen),
  *                      supplements, supplementLog + valfri `ean` på måltider (sedan version 9),
  *                      recipes + snabbloggar/loggade recept i matloggen och profilens
- *                      `calorieMode` (sedan version 10)
+ *                      `calorieMode` (sedan version 10; senare utan versionsbyte: profilens
+ *                      fibermål och GLP-1-dryckestillägg, `fiberG` på livsmedel – äldre
+ *                      versioner av appen släpper dem vid import)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -76,7 +78,12 @@ import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
 import type { FoodUnit, UnitSource } from './units.ts';
 import { isValidProteinFactor } from './protein.ts';
 import { FOOD_PREFERENCES_MAX, isTime } from './validation.ts';
-import { WATER_ENTRY_MAX_ML, WATER_GOAL_MAX_ML, WATER_GOAL_MIN_ML } from './water.ts';
+import {
+  GLP1_WATER_BONUS_MAX_ML,
+  WATER_ENTRY_MAX_ML,
+  WATER_GOAL_MAX_ML,
+  WATER_GOAL_MIN_ML,
+} from './water.ts';
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
@@ -727,6 +734,26 @@ function parseProfileRecord(value: unknown): Profile {
     if (value.calorieMode !== 'dag' && value.calorieMode !== 'vecka') throw bad();
     profile.calorieMode = value.calorieMode;
   }
+  for (const key of ['showFiberGoal', 'fiberRamp', 'waterGlp1OnOwnGoal'] as const) {
+    const flag = value[key];
+    if (flag === undefined) continue;
+    if (typeof flag !== 'boolean') throw bad();
+    profile[key] = flag;
+  }
+  if (value.fiberRampStart !== undefined) {
+    const start = value.fiberRampStart;
+    if (!isRecord(start) || !isDate(start.date) || !isAmount(start.startG)) throw bad();
+    profile.fiberRampStart = { date: start.date, startG: start.startG };
+  }
+  if (value.waterGlp1BonusMl !== undefined) {
+    if (
+      !isInt(value.waterGlp1BonusMl) ||
+      value.waterGlp1BonusMl < 0 ||
+      value.waterGlp1BonusMl > GLP1_WATER_BONUS_MAX_ML
+    )
+      throw bad();
+    profile.waterGlp1BonusMl = value.waterGlp1BonusMl;
+  }
   return profile;
 }
 
@@ -919,6 +946,10 @@ function parseFoodRecord(value: unknown, index: number): LegacyStoredFood {
   if (value.ean !== undefined) {
     if (typeof value.ean !== 'string' || !/^\d{8,14}$/.test(value.ean)) throw bad();
     food.ean = value.ean;
+  }
+  if (value.fiberG !== undefined) {
+    if (!isAmount(value.fiberG)) throw bad();
+    food.fiberG = value.fiberG;
   }
   return food;
 }

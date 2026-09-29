@@ -6,12 +6,14 @@ interface NutritionRingsProps {
   targetKcal: number | null;
   proteinG: number;
   proteinGoalG: number | null;
+  /** Fiber och fibermål – ringen visas bara när fibermålet är på. */
+  fiber?: { fiberG: number; goalG: number } | null;
   /** "idag" eller t.ex. ett datum – ingår i ringarnas namn. */
   when?: string;
 }
 
 /**
- * Kalorier och protein mot dagens mål som två ringar (figurer). Läggs i en
+ * Kalorier och protein (och fiber när fibermålet är på) mot dagens mål som ringar (figurer). Läggs i en
  * `.rings`-rad av den som använder dem (Översikt → Idag, tillsammans med dryck).
  */
 export function NutritionRings({
@@ -19,6 +21,7 @@ export function NutritionRings({
   targetKcal,
   proteinG,
   proteinGoalG,
+  fiber = null,
   when = 'idag',
 }: NutritionRingsProps) {
   const k = Math.round(kcal);
@@ -48,6 +51,19 @@ export function NutritionRings({
         />
         <figcaption>Protein</figcaption>
       </figure>
+      {fiber && (
+        <figure className="ring-figure">
+          <GoalRing
+            label={`Fiber ${when}`}
+            value={`${formatInt(Math.round(fiber.fiberG))} g`}
+            goal={`av ${formatInt(fiber.goalG)} g`}
+            fraction={fiber.goalG ? Math.round(fiber.fiberG) / fiber.goalG : 0}
+            tone="fiber"
+            testId="fiber-ring"
+          />
+          <figcaption>Fiber</figcaption>
+        </figure>
+      )}
     </>
   );
 }

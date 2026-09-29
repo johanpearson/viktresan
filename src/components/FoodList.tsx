@@ -1,5 +1,6 @@
 import { SOURCE_LABELS, type FoodItem } from '../lib/foodSearch.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
+import { isFiberRich } from '../lib/fiber.ts';
 import { isProteinRich } from '../lib/protein.ts';
 import { quickDetail } from '../lib/quickLog.ts';
 
@@ -9,8 +10,8 @@ interface FoodListProps {
   /** Visas när listan är tom. */
   empty: string;
   testId?: string;
-  /** Visa etiketten "Proteinrik" (≥ 15 g protein per 100 kcal). */
-  markProteinRich?: boolean;
+  /** Visa etiketterna "Proteinrik" (≥ 15 g protein per 100 kcal) och "Fiberrik" (≥ 3 g fiber per 100 kcal). */
+  markRich?: boolean;
 }
 
 function detail(item: FoodItem): string {
@@ -28,7 +29,7 @@ export function FoodList({
   onPick,
   empty,
   testId = 'food-option',
-  markProteinRich = false,
+  markRich = false,
 }: FoodListProps) {
   if (items.length === 0) return <p className="muted">{empty}</p>;
   return (
@@ -45,9 +46,14 @@ export function FoodList({
           >
             <span className="pick-name">
               {item.name}
-              {markProteinRich && item.source !== 'snabb' && isProteinRich(item.per100) && (
+              {markRich && item.source !== 'snabb' && isProteinRich(item.per100) && (
                 <span className="tag" data-testid="protein-rich">
                   Proteinrik
+                </span>
+              )}
+              {markRich && item.source !== 'snabb' && isFiberRich(item) && (
+                <span className="tag tag-fiber" data-testid="fiber-rich">
+                  Fiberrik
                 </span>
               )}
             </span>

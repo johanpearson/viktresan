@@ -6,12 +6,14 @@ import { buildPlan } from '../lib/plan.ts';
 import { proteinGoalFor } from '../lib/protein.ts';
 import { useFeatures } from '../lib/features.ts';
 import type { AppData } from '../lib/useAppData.ts';
-import { formatMl } from '../lib/format.ts';
+import { formatInt, formatMl } from '../lib/format.ts';
+import { useFiber } from '../lib/useFiber.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
 import { dayTarget } from '../lib/weekBudget.ts';
 import { todaysWorkouts, workoutsBetween } from '../lib/workouts.ts';
 import { DrinkGoalNote } from './DrinkGoalNote.tsx';
 import { Feature } from './Feature.tsx';
+import { FiberNote } from './FiberNote.tsx';
 import { GoalRing } from './GoalRing.tsx';
 import { NutritionRings } from './NutritionRings.tsx';
 import { WaterControls } from './WaterControls.tsx';
@@ -27,7 +29,7 @@ interface TodayCardProps {
   onChange: () => Promise<unknown>;
 }
 
-/** Översikt → Idag: dryck, kalorier och protein som tre ringar, snabbval för dryck, steg och dagens pass. */
+/** Översikt → Idag: dryck, kalorier, protein (och fiber) som ringar, snabbval för dryck, steg och dagens pass. */
 export function TodayCard({ data, now, onChange }: TodayCardProps) {
   const features = useFeatures();
   const today = todayIso(now);
@@ -50,21 +52,36 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
     dailyIntake(data.foodLog),
     today,
   );
-  const drinkGoal = waterGoal({ profile: data.profile, workouts: data.workouts, date: today });
+  const drinkGoal = waterGoal({
+    profile: data.profile,
+    workouts: data.workouts,
+    date: today,
+    glp1: features.isEnabled('glp1'),
+  });
   const drink = drinkOn(data.water, data.foodLog, today);
+  const fiber = useFiber(data.profile, data.foodLog, today);
+  const foodOn = features.isEnabled('mat');
+  const fiberGoal = foodOn ? fiber.goal : null;
+  const fiberToday = fiber.days?.find((d) => d.date === today) ?? null;
+  // Fyra ringar (dryck, kalorier, protein, fiber) blir mindre så att de ryms på en rad.
+  const ringCount = (features.isEnabled('vatten') ? 1 : 0) + (foodOn ? 2 : 0) + (fiberGoal ? 1 : 0);
 
   return (
     <section className="card" aria-labelledby="today-title" data-testid="today-card">
       <h2 className="card-title" id="today-title">
         Idag
       </h2>
-      <div className="rings">
+      <div className={ringCount > 3 ? 'rings rings-4' : 'rings'}>
         <Feature id="vatten">
           <figure className="ring-figure">
             <GoalRing
               label="Dryck idag"
               value={formatMl(drink.ml)}
-              goal={`av ${formatMl(drinkGoal.ml)}`}
+              // Fyra ringar: enheten står redan i värdet (läses upp via `unit`).
+              goal={
+                ringCount > 3 ? `av ${formatInt(drinkGoal.ml)}` : `av ${formatMl(drinkGoal.ml)}`
+              }
+              {...(ringCount > 3 ? { unit: 'ml' } : {})}
               fraction={drinkGoal.ml ? drink.ml / drinkGoal.ml : 0}
               tone="drink"
               testId="water-ring"
@@ -78,9 +95,11 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
             targetKcal={targetKcal}
             proteinG={totals.proteinG}
             proteinGoalG={proteinGoalFor(data.profile)}
+            fiber={fiberGoal ? { fiberG: fiberToday?.fiberG ?? 0, goalG: fiberGoal.goalG } : null}
           />
         </Feature>
       </div>
+      {fiberGoal && <FiberNote goal={fiberGoal} day={fiberToday} />}
       <Feature id="mat">{week && <WeekBudgetStatus week={week} />}</Feature>
       <Feature id="vatten">
         <WaterControls date={today} water={data.water} onChange={onChange} variant="chips" />

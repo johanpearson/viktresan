@@ -1305,6 +1305,10 @@ describe('validering av vatten och träning', () => {
       { profile: { ...profile, waterTrainingBonus: 'ja' } },
       { profile: { ...profile, proteinFactor: 2.5 } },
       { profile: { ...profile, proteinFactor: '1.6' } },
+      { profile: { ...profile, waterGlp1BonusMl: 1500 } },
+      { profile: { ...profile, waterGlp1BonusMl: 250.5 } },
+      { profile: { ...profile, showFiberGoal: 'ja' } },
+      { profile: { ...profile, fiberRampStart: { date: 'igår', startG: 15 } } },
     ];
     for (const patch of cases) {
       expect((await manifestWith(patch)).code, JSON.stringify(patch)).toBe('invalid-data');
@@ -1318,6 +1322,21 @@ describe('validering av vatten och träning', () => {
       await createBackup({ ...emptySnapshot(), profile: withGoal }, { now: NOW }),
     );
     expect(contents.snapshot.profile).toEqual(withGoal);
+  });
+
+  it('behåller fibermål och GLP-1-dryckestillägg i profilen', async () => {
+    const withFiber = {
+      ...profile,
+      showFiberGoal: true,
+      fiberRamp: false,
+      fiberRampStart: { date: '2026-09-01', startG: 14 },
+      waterGlp1BonusMl: 700,
+      waterGlp1OnOwnGoal: true,
+    };
+    const contents = await readBackup(
+      await createBackup({ ...emptySnapshot(), profile: withFiber }, { now: NOW }),
+    );
+    expect(contents.snapshot.profile).toEqual(withFiber);
   });
 
   it('behåller proteinfaktorn i profilen', async () => {

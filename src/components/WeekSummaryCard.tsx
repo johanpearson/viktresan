@@ -1,6 +1,8 @@
 import { todayIso } from '../lib/dates.ts';
+import { useFeatures } from '../lib/features.ts';
 import { setPreference, usePreferences } from '../lib/preferences.ts';
 import type { AppData } from '../lib/useAppData.ts';
+import { fiberWeekInput, useFiber } from '../lib/useFiber.ts';
 import { hasWeekData, lastCompletedWeek, weekTitle } from '../lib/weekSummary.ts';
 import { WeekSummaryView } from './WeekSummaryView.tsx';
 
@@ -15,8 +17,11 @@ interface WeekSummaryCardProps {
  */
 export function WeekSummaryCard({ data, now }: WeekSummaryCardProps) {
   const { loaded, prefs } = usePreferences();
+  const today = todayIso(now);
+  const glp1 = useFeatures().isEnabled('glp1');
+  const fiber = useFiber(data.profile, data.foodLog, today);
   if (!loaded) return null;
-  const entry = lastCompletedWeek(data, todayIso(now));
+  const entry = lastCompletedWeek({ ...data, glp1, fiber: fiberWeekInput(fiber) }, today);
   if (!hasWeekData(entry.summary) || prefs.weekCardDismissed === entry.summary.from) return null;
 
   return (

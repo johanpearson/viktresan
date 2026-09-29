@@ -94,6 +94,20 @@ export interface Profile {
    * dag. Utan schemaändring (sedan v11).
    */
   calorieMode?: CalorieMode;
+  /**
+   * Fibermål (utan schemaändring): visa det även utan GLP-1 (med GLP-1 visas det alltid),
+   * `fiberRamp: false` = direkt på referensvärdet (saknas = gradvis upptrappning) och
+   * upptrappningens start, som sparas första gången målet visas.
+   */
+  showFiberGoal?: boolean;
+  fiberRamp?: boolean;
+  fiberRampStart?: { date: string; startG: number };
+  /**
+   * Dryckestillägg med GLP-1 i ml (0–1 000, saknas = 500) och om det läggs ovanpå ett
+   * eget dryckesmål (saknas = nej). Utan schemaändring.
+   */
+  waterGlp1BonusMl?: number;
+  waterGlp1OnOwnGoal?: boolean;
 }
 
 export type CalorieMode = 'dag' | 'vecka';
@@ -113,6 +127,8 @@ export interface StoredFood {
   per100Unit?: 'ml';
   units?: FoodUnit[];
   ean?: string;
+  /** Fiber per 100 g (eller ml), när det är känt (OFF, eget livsmedel). Utan schemaändring. */
+  fiberG?: number;
   createdAt: number;
   updatedAt?: number;
 }
