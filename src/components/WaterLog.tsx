@@ -1,13 +1,14 @@
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
-import { formatMl } from '../lib/format.ts';
+import { formatLiters, formatMl } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
 import { Card } from './Card.tsx';
 import { DrinkGoalNote } from './DrinkGoalNote.tsx';
+import { GoalRing } from './GoalRing.tsx';
 import { ListRow } from './ListRow.tsx';
+import { RingRow } from './RingRow.tsx';
 import { WaterControls } from './WaterControls.tsx';
-import { WaterRing } from './WaterRing.tsx';
 
 const timeFormat = new Intl.DateTimeFormat('sv-SE', { hour: '2-digit', minute: '2-digit' });
 
@@ -29,7 +30,19 @@ export function WaterLog({ data, onChange }: WaterLogProps) {
   return (
     <>
       <div className="card form">
-        <WaterRing ml={drink.ml} goalMl={goal.ml} />
+        <RingRow>
+          <GoalRing
+            size="lg"
+            label="Dryck idag"
+            value={formatLiters(drink.ml)}
+            valueUnit="l"
+            goal={`av ${formatLiters(goal.ml)}`}
+            valueText={`${formatMl(drink.ml)} av ${formatMl(goal.ml)}`}
+            fraction={goal.ml ? drink.ml / goal.ml : 0}
+            tone="drink"
+            testId="water-ring"
+          />
+        </RingRow>
         <DrinkGoalNote goal={goal} foodMl={drink.foodMl} />
         <WaterControls date={today} water={data.water} onChange={onChange} custom variant="chips" />
       </div>

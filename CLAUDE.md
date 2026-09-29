@@ -123,6 +123,7 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
                         SegmentedControl, StatBar, GoalRing, ProgressBar, EmptyState, Toast, Skeleton,
                         ActionSheet (radmeny ovanpå en panel), DateBar (‹ Idag ›, även i Logga-panelernas formulär),
+                        RingRow (rad ringar: samma textstorlek, krymps så att texten ryms i ringen – useRingFit/ringFit.ts),
                         StorageSettings (Inställningar → Lagring), ShowMore (+ useShowMore: 14 rader, sedan fler),
                         RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck),
                         PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·"),
@@ -142,7 +143,8 @@ e2e/                    Playwright-tester. overview.spec.ts = Översikt med fast
                         Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
                         flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
-                        BarcodeDetector (kod via `window.__ean`) och OFF. visual.spec.ts + visualData.ts = visuella regressionstester (egen
+                        BarcodeDetector (kod via `window.__ean`) och OFF. rings.spec.ts = ringarnas text inom den inre cirkeln
+                        med värsta fallets värden (WORST_CASE_RINGS) på 412 och 360 px. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
                         veckokort, milstolpar, bilder, måltidsanalys, rapport, platå); hjälpare i helpers.ts. report.spec.ts
                         ersätter window.print (addInitScript) och räknar anropen; plateau.spec.ts styr tiden med page.clock. mealAnalysis.spec.ts mockar
@@ -270,7 +272,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   kategori `dryck`/`mjolk`/`fil` via `foodProfile`, ml = gram ÷ densitet; inte kvarg/keso/koncentrat och
   aldrig alkohol – `isAlcoholic`, bl.a. "vol. %"). `drinkEntries`/`drinkOn` används av Idag, Logga, historik,
   kalender, veckosummering och milstolpen `vatten-7`. `addWater` håller `createdAt` strikt växande per dag så att
-  `undoLastWater` ("Ångra senaste") alltid tar dagens senaste post. Ring i Översikt → Idag; tryck = panel med
+  `undoLastWater` ("Ångra senaste") alltid tar dagens senaste post. Ringarna visar liter med en decimal ("1,8 l", "av 2,5");
+  exakta ml i panelen, historiken och för skärmläsare. Ring i Översikt → Idag; tryck = panel med
   snabbknappar (glas 250, flaska 500, kaffe/te 150 ml, valfri mängd, Ångra senaste) och "Varav … från Mat"; Logga → Dryck listar
   även dryck från Mat; historik i Framsteg → Historik.
 - **Träning**: pass (`Workout`) har datum, valfri tid (`HH:MM`, lokal), typ (förval + egna ur tidigare

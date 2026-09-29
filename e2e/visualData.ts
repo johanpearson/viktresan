@@ -376,3 +376,68 @@ export const VISUAL_DATA: SeedData = {
     lastExportAt: at(2),
   },
 };
+
+/**
+ * Värsta fallet för ringarna på Översikt → Idag: långa värden i alla fyra ringar samtidigt
+ * (2 450 ml, 2 950 kcal av 3 100, 188 g av 210 g, 38 g av 35 g). Egen databas – inte VISUAL_DATA.
+ * Kalorimålet = TDEE (takt 0): man, 36 år, 180 cm, 105 kg, måttligt aktiv → 2 000 × 1,55 = 3 100.
+ * Proteinmålet = 2,0 × 105 kg = 210 g. Fibermålet = 35 g (man, utan upptrappning).
+ */
+export const WORST_CASE_RINGS: SeedData = {
+  profile: {
+    startDate: '2026-08-01',
+    startWeightKg: 105,
+    heightCm: 180,
+    goalWeightKg: 105,
+    sex: 'man',
+    birthYear: 1990,
+    activityLevel: 'mattlig',
+    ratePerWeekKg: 0,
+    proteinFactor: 2,
+    waterGoalMl: 2500,
+    showFiberGoal: true,
+    fiberRamp: false,
+  },
+  weights: [
+    { id: 'w-idag', date: TODAY, weightKg: 105, createdAt: Date.parse(`${TODAY}T07:00:00+02:00`) },
+  ],
+  foods: [
+    {
+      id: 'egen:dagen',
+      name: 'Hela dagen',
+      source: 'egen',
+      per100: { kcal: 2950, proteinG: 188, carbsG: 300, fatG: 100 },
+      fiberG: 38,
+      createdAt: 1,
+    },
+  ],
+  foodLog: [
+    {
+      id: 'dagen',
+      date: TODAY,
+      meal: 'lunch',
+      foodId: 'egen:dagen',
+      name: 'Hela dagen',
+      amount: 100,
+      unit: 'g',
+      grams: 100,
+      per100: { kcal: 2950, proteinG: 188, carbsG: 300, fatG: 100 },
+      createdAt: Date.parse(`${TODAY}T12:00:00+02:00`),
+    },
+  ],
+  water: [{ id: 'v1', date: TODAY, ml: 2450, createdAt: Date.parse(`${TODAY}T11:00:00+02:00`) }],
+  settings: {
+    features: {
+      steg: false,
+      midja: false,
+      mat: true,
+      vatten: true,
+      traning: false,
+      glp1: false,
+      tillskott: false,
+      bilder: false,
+      version: 4,
+    },
+    lastExportAt: Date.parse(FROZEN_NOW),
+  },
+};

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
-import { formatInt, formatMl } from '../lib/format.ts';
+import { formatInt, formatLiters, formatMl } from '../lib/format.ts';
 import { dailyIntake, totalOf } from '../lib/nutrition.ts';
 import { useOverviewItems } from '../lib/overviewItems.ts';
 import { buildPlan } from '../lib/plan.ts';
@@ -16,6 +16,7 @@ import { CalorieDetails } from './CalorieDetails.tsx';
 import { DrinkGoalNote } from './DrinkGoalNote.tsx';
 import { Feature } from './Feature.tsx';
 import { RingAction } from './RingAction.tsx';
+import { RingRow } from './RingRow.tsx';
 import { StatBar } from './StatBar.tsx';
 import { WaterControls } from './WaterControls.tsx';
 import { WeekBudgetRow } from './WeekBudgetRow.tsx';
@@ -69,8 +70,8 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
   const showFiber = fiberGoal !== null && shows('ring-fiber');
   const showWeek = foodOn && week !== null && shows('veckorad');
   const ringCount = [showDrink, showKcal, showProtein, showFiber].filter(Boolean).length;
-  // Fyra ringar blir mindre så att de ryms på en rad; enheten står då inte i ringen.
-  const small = ringCount > 3;
+  // Fyra ringar blir mindre så att de ryms på en rad.
+  const four = ringCount > 3;
 
   const steps = features.isEnabled('steg')
     ? (data.steps.find((s) => s.date === today)?.steps ?? 0)
@@ -93,7 +94,7 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
         Idag
       </h2>
       {ringCount > 0 && (
-        <div className={small ? 'rings rings-4' : 'rings'}>
+        <RingRow four={four}>
           {showDrink && (
             <RingAction
               caption="Dryck"
@@ -102,9 +103,10 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
                 setSheet('dryck');
               }}
               label="Dryck idag"
-              value={formatMl(drink.ml)}
-              goal={small ? `av ${formatInt(drinkGoal.ml)}` : `av ${formatMl(drinkGoal.ml)}`}
-              {...(small ? { unit: 'ml' } : {})}
+              value={formatLiters(drink.ml)}
+              valueUnit="l"
+              goal={`av ${formatLiters(drinkGoal.ml)}`}
+              valueText={`${formatMl(drink.ml)} av ${formatMl(drinkGoal.ml)}`}
               fraction={drinkGoal.ml ? drink.ml / drinkGoal.ml : 0}
               tone="drink"
               testId="water-ring"
@@ -132,7 +134,8 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
               actionLabel="Protein – visa näring"
               href="#/mat/naring"
               label="Protein idag"
-              value={`${formatInt(p)} g`}
+              value={formatInt(p)}
+              valueUnit="g"
               goal={proteinGoalG == null ? null : `av ${formatInt(proteinGoalG)} g`}
               fraction={proteinGoalG ? p / proteinGoalG : 0}
               tone="protein"
@@ -145,14 +148,15 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
               actionLabel="Fiber – visa näring"
               href="#/mat/naring"
               label="Fiber idag"
-              value={`${formatInt(f)} g`}
+              value={formatInt(f)}
+              valueUnit="g"
               goal={`av ${formatInt(fiberGoal.goalG)} g`}
               fraction={fiberGoal.goalG ? f / fiberGoal.goalG : 0}
               tone="fiber"
               testId="fiber-ring"
             />
           )}
-        </div>
+        </RingRow>
       )}
       {chips && (
         <ul className="today-chips" aria-label="Loggat idag">
