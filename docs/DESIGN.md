@@ -150,7 +150,8 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `BarcodeElsewhere`  | `BarcodeElsewhere.tsx`  | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit       |
 | `AiLabelImport`     | `AiLabelImport.tsx`     | Prompt (kopiera/dela) → klistra in JSON → validering, förhandsvisning            |
 | `IngredientEditor`  | `IngredientEditor.tsx`  | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept        |
-| `WeekBudgetStatus`  | `WeekBudgetStatus.tsx`  | Veckoläge: veckans `StatBar`, dagens förslag, golvnotis (Mat → Dag, Idag)        |
+| `WeekBudgetRow`     | `WeekBudgetRow.tsx`     | Veckoraden under kcal-ringen/-stapeln: intag, kvar, ≈ per dag, saldo → panel     |
+| `WeekBudgetSheet`   | `WeekBudgetSheet.tsx`   | Veckopanelen: sju staplar mot dagsmålet, "ej loggad", kvar, per dag och saldo    |
 | `SvgChart`          | `SvgChart.tsx`          | Statisk graf som SVG (linje, punkter, staplar) – rapporten och utskrift          |
 | `PlateauCard`       | `PlateauCard.tsx`       | Översikt: platå, jämförelsetabell, 1–2 förklaringar, Fråga AI, Stäng             |
 | `ReportDocument`    | `ReportDocument.tsx`    | Rapporten till vården: sidhuvud + en `Card` per sektion, `theme-light`           |
@@ -620,7 +621,7 @@ vid behov med `hint`. "Alla tagna" är en sekundär liten knapp i kortets rubrik
 Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (mängd, enhet – bara D-vitamin har ett val,
 µg/IE med omräkning – och "Ta bort") och "+ Lägg till näringsämne" som en `select`.
 
-### Snabblogg, recept och veckobudget
+### Snabblogg, recept och veckoraden
 
 - **Snabblogg** är en vanlig `ListRow` i dagsvyn med etiketten `tag tag-estimated` ("uppskattat", dämpad ram och text –
   ingen datafärg) efter namnet och protein som `secondary`. Den öppnas från raden "Snabblogg" (`ListRow` med `chevron`)
@@ -630,8 +631,15 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
   `IngredientEditor` och visar näringen som `list list-flush` med `ListRow` ("Per portion", "Per 100 g", värdet till
   höger). "Duplicera recept" är en ghost-textknapp ovanför den destruktiva "Ta bort receptet". Sök-sheeten öppnas
   **utanför** formuläret (syskon), eftersom den har egna formulär. Portioner loggas med chips ½ · 1 · 1½ · 2.
-- **Veckobudget** (`WeekBudgetStatus`) ligger inuti summeringskortet under en 1 px linje – aldrig som eget kort i ett
-  kort. `StatBar` med `title="Veckan"`, dagens förslag på en egen rad och golvnotisen som saklig `form-note`.
+- **Veckoraden** (`WeekBudgetRow`) ligger inuti summeringskortet (Mat → Dag) och Idag-kortet (Översikt) under en 1 px
+  linje – aldrig som eget kort i ett kort. Den är en hel rad som knapp (minst `--tap`, › till höger): veckotexten i
+  `--text-sm` med `Parts` (bryts bara vid "·") och saldot dämpat i `--text-xs` under. Saldot är **neutralt** – aldrig
+  `--success`/`--danger`, bara tecknet (+/−/±) visar riktningen. Golvnotisen (`WeekShortfallNote`) är en saklig
+  `form-note` utan varningsfärg: den föreslår att sprida resten över nästa vecka, aldrig att äta under golvet.
+- **Veckopanelen** (`WeekBudgetSheet`, `BottomSheet`): sju staplar (`week-chart`, `ol` med en `li` per dag och uppläst
+  text i `visually-hidden`) i matens färg mot dagsmålet som streckad linje (`--chart-goal`). Värdet står över stapeln,
+  veckodagen under (idag i fetstil). En passerad dag utan matlogg har streckad ram och "ej loggad", kommande dagar "–".
+  Under: förklaringsrad och värden som `list list-flush` + `ListRow` (Loggat, Kvar, Per dag resten av veckan, Saldo).
 
 ### Dryckespåminnelse (Översikt, GLP-1)
 

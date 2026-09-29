@@ -93,6 +93,13 @@ export function formatKcal(value: number): string {
 
 const gramFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 });
 
+/** Saldo: 350 → "+350 kcal", −1200 → "−1 200 kcal", 0 → "±0 kcal". */
+export function formatSignedKcal(value: number): string {
+  const rounded = Math.round(value);
+  if (rounded === 0) return '±0 kcal';
+  return `${rounded > 0 ? '+' : '−'}${formatInt(Math.abs(rounded))} kcal`;
+}
+
 /** 7.84 → "7,8 g", 60 → "60 g". */
 export function formatGrams(value: number): string {
   return `${normalizeSpaces(gramFormat.format(value))} g`;

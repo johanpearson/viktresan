@@ -5,7 +5,7 @@ import type { WeekBudget } from '../lib/weekBudget.ts';
 import { FiberNote } from './FiberNote.tsx';
 import { Macros } from './Macros.tsx';
 import { StatBar } from './StatBar.tsx';
-import { WeekBudgetStatus } from './WeekBudgetStatus.tsx';
+import { WeekBudgetRow } from './WeekBudgetRow.tsx';
 
 interface DaySummaryProps {
   totals: Nutrients;
@@ -24,14 +24,13 @@ interface DaySummaryProps {
    * visuell kopia av den fulla summeringen och döljs för skärmläsare.
    */
   variant?: 'full' | 'mini';
-  /** Veckoläge: `targetKcal` är dagens förslag och veckans status visas under makrona. */
+  /** Veckan som dagen ligger i: veckoraden under makrona (inte i miniraden). */
   week?: WeekBudget | null;
 }
 
 /**
  * Mat → Dag: kalorier och protein mot målen som StatBar på en rad (med fibermålet: kalorier
- * överst, protein och fiber under), makron som text och i
- * veckoläge veckans budget.
+ * överst, protein och fiber under), makron som text och veckoraden.
  */
 export function DaySummary({
   totals,
@@ -66,8 +65,8 @@ export function DaySummary({
           remaining == null
             ? undefined
             : remaining >= 0
-              ? `${formatKcal(remaining)} kvar${week ? ' idag' : ''}`
-              : `${formatKcal(-remaining)} över${week ? ' idag' : ''}`
+              ? `${formatKcal(remaining)} kvar`
+              : `${formatKcal(-remaining)} över`
         }
       />
       <StatBar
@@ -144,7 +143,7 @@ export function DaySummary({
           fiberdata.
         </p>
       )}
-      {week && <WeekBudgetStatus week={week} />}
+      {week && <WeekBudgetRow week={week} />}
       {targetKcal == null && (
         <p className="form-note muted">
           Fyll i kön, födelseår och aktivitetsnivå under{' '}

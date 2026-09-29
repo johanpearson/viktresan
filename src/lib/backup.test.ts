@@ -625,6 +625,21 @@ describe('backup validering', () => {
     expect((await errorOf(readBackup(other))).code).toBe('not-a-backup');
   });
 
+  it('släpper profilens calorieMode från äldre filer (inställningen Dag/Vecka är borttagen)', async () => {
+    const profile = {
+      startWeightKg: 90,
+      heightCm: 180,
+      goalWeightKg: 80,
+      startDate: '2026-01-01',
+      calorieMode: 'vecka',
+      updatedAt: 1,
+    };
+    const file = zipOf({ 'backup.json': JSON.stringify({ ...valid, version: 10, profile }) });
+    const { snapshot } = await readBackup(file);
+    expect(snapshot.profile).not.toBeNull();
+    expect(snapshot.profile).not.toHaveProperty('calorieMode');
+  });
+
   it('avvisar nyare versioner', async () => {
     const file = zipOf({ 'backup.json': JSON.stringify({ ...valid, version: 99 }) });
     expect((await errorOf(readBackup(file))).code).toBe('unsupported-version');

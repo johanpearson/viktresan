@@ -15,8 +15,9 @@
  *                      photoSessions + tillfälle/vinkel på bilderna (sedan version 8; äldre
  *                      bilder grupperas per datum med vinkel "ej angiven", som i migreringen),
  *                      supplements, supplementLog + valfri `ean` på måltider (sedan version 9),
- *                      recipes + snabbloggar/loggade recept i matloggen och profilens
- *                      `calorieMode` (sedan version 10; senare utan versionsbyte: profilens
+ *                      recipes + snabbloggar/loggade recept i matloggen (sedan version 10;
+ *                      profilens `calorieMode` från version 10 släpps vid import – inställningen
+ *                      Dag/Vecka är borttagen; senare utan versionsbyte: profilens
  *                      fibermål och GLP-1-dryckestillägg, `fiberG` på livsmedel – äldre
  *                      versioner av appen släpper dem vid import)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
@@ -729,10 +730,6 @@ function parseProfileRecord(value: unknown): Profile {
     )
       throw bad();
     if (value.foodPreferences.trim() !== '') profile.foodPreferences = value.foodPreferences;
-  }
-  if (value.calorieMode !== undefined) {
-    if (value.calorieMode !== 'dag' && value.calorieMode !== 'vecka') throw bad();
-    profile.calorieMode = value.calorieMode;
   }
   for (const key of ['showFiberGoal', 'fiberRamp', 'waterGlp1OnOwnGoal'] as const) {
     const flag = value[key];

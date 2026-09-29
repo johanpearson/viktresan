@@ -4,7 +4,6 @@
  */
 import { weekdayIndex } from './calendar.ts';
 import { addDays, toDayNumber } from './dates.ts';
-import type { CalorieMode } from '../db/db.ts';
 import type { FeatureGated } from './features.ts';
 import { formatInt, formatKcal, formatKg, formatMl, formatShortDate } from './format.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
@@ -32,7 +31,6 @@ export interface WeekInput {
         waterGoalMl?: number;
         waterGlp1BonusMl?: number;
         waterGlp1OnOwnGoal?: boolean;
-        calorieMode?: CalorieMode;
       })
     | null;
   /** Fiber per matdag – bara när fibermålet är på (annars ingen fiberrad). */
@@ -60,7 +58,7 @@ export interface WeekSummary {
   foodDays: number;
   /** Kalorimålet som det såg ut vid veckans slut. */
   targetKcal: number | null;
-  /** Veckobudget (7 × dagsmålet) – bara i veckoläge (Inställningar → Kalorimål). */
+  /** Veckobudget (7 × dagsmålet vid veckans slut), `null` utan kalorimål. */
   budgetKcal: number | null;
   /** Summan av loggade kcal i veckan, `null` utan matlogg. */
   weekKcal: number | null;
@@ -145,8 +143,7 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
     proteinG: mean(intake.map((d) => d.proteinG)),
     foodDays: intake.length,
     targetKcal,
-    budgetKcal:
-      profile?.calorieMode === 'vecka' && targetKcal !== null ? Math.round(targetKcal) * 7 : null,
+    budgetKcal: targetKcal === null ? null : Math.round(targetKcal) * 7,
     weekKcal: intake.length === 0 ? null : intake.reduce((s, d) => s + d.kcal, 0),
     proteinGoalG: proteinGoalFor(profile),
     fiberG: mean(fiberDays.map((d) => d.fiberG)),
@@ -254,7 +251,8 @@ export const WEEK_ROWS: readonly WeekRow[] = [
     text: (s) => (s.trendChangeKg == null ? null : formatKg(s.trendChangeKg, { signed: true })),
   },
   {
-    // Veckoläge: veckans loggade kcal mot budgeten. Dagar utan matlogg syns i dagantalet.
+    // Budget mot utfall: veckans loggade kcal mot 7 × dagsmålet. Dagar utan matlogg räknas
+    // som 0 kcal och syns i dagantalet.
     id: 'budget',
     label: 'Veckobudget',
     feature: 'mat',

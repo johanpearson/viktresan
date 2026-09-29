@@ -301,16 +301,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
           },
         ],
       });
-      await page.goto('./#/installningar/kalorimal');
-      await page.getByRole('dialog', { name: 'Kalorimål' }).getByLabel('Per vecka').tap();
-      await expect(page.getByRole('dialog').getByRole('status')).not.toBeEmpty();
-      await expectNoViolations(page, 'Kalorimål');
       await page.goto('./#/mat');
       const breakfast = page.getByTestId('meal-frukost').getByRole('heading').getByRole('button');
       if ((await breakfast.getAttribute('aria-expanded')) === 'false') await breakfast.tap();
       await expect(page.getByTestId('estimated-tag')).toBeVisible();
-      await expect(page.getByTestId('week-budget-status')).toBeVisible();
-      await expectNoViolations(page, 'Mat dag med snabblogg och veckobudget');
+      await expect(page.getByTestId('week-line')).toBeVisible();
+      await expectNoViolations(page, 'Mat dag med snabblogg och veckorad');
+      await page.getByTestId('week-row').tap();
+      await expect(page.getByTestId('week-sheet')).toBeVisible();
+      await expectNoViolations(page, 'Veckopanelen');
+      await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
       await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
       await page.getByTestId('quick-log-open').getByRole('button').tap();
       await expect(page.getByTestId('quick-log-form')).toBeVisible();
@@ -326,7 +327,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(page.getByTestId('recipe-per-portion')).toBeVisible();
       await expectNoViolations(page, 'Receptformulär');
       await page.goto('./');
-      await expect(page.getByTestId('today-card').getByTestId('week-budget-status')).toBeVisible();
+      await expect(page.getByTestId('today-card').getByTestId('week-line')).toBeVisible();
       await expectNoViolations(page, 'Översikt veckobudget');
     });
 

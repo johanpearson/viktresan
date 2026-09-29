@@ -29,6 +29,7 @@ function renderDay(foodLog: FoodLogEntry[]) {
     <FoodDay
       source={{ foodData, livsmedel: null, foodLog, reloadFood: () => Promise.resolve(foodData) }}
       targetKcal={2000}
+      floorKcal={1500}
       proteinGoalG={120}
       reloadLog={() => Promise.resolve()}
     />,

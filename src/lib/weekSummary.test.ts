@@ -50,10 +50,10 @@ describe('veckor', () => {
 });
 
 describe('summarizeWeek', () => {
-  it('veckoläge: budget = 7 × kalorimålet vid veckans slut och summan av loggat', () => {
+  it('budget mot utfall: budget = 7 × kalorimålet vid veckans slut och summan av loggat', () => {
     const input: WeekInput = {
       ...empty(),
-      profile: { ...profile, calorieMode: 'vecka' },
+      profile,
       weights: [{ date: '2026-09-14', weightKg: 85 }],
       foodLog: [food('2026-09-14', 1500, 80), food('2026-09-15', 1800, 90)],
     };
@@ -61,8 +61,8 @@ describe('summarizeWeek', () => {
     expect(s.targetKcal).not.toBeNull();
     expect(s.budgetKcal).toBe(Math.round(s.targetKcal ?? 0) * 7);
     expect(s.weekKcal).toBe(3300);
-    // Per dag (standard): ingen budget.
-    expect(summarizeWeek({ ...input, profile }, MON).budgetKcal).toBeNull();
+    // Utan profil finns inget kalorimål och ingen budget.
+    expect(summarizeWeek({ ...input, profile: null }, MON).budgetKcal).toBeNull();
   });
 
   it('fiber: snitt per matdag mot fibermålet vid veckans slut, bara med fibermålet', () => {
@@ -316,7 +316,7 @@ describe('presentation', () => {
     ]);
   });
 
-  it('veckoläge: budget mot utfall (bara när kalorimålet räknas per vecka)', () => {
+  it('budget mot utfall (utan kalorimål ingen rad)', () => {
     const budget = WEEK_ROWS.find((r) => r.id === 'budget');
     expect(budget?.text(summary({ weekKcal: 12_600, budgetKcal: 13_300, foodDays: 6 }))).toBe(
       '12 600 kcal av 13 300 kcal · 700 kcal under · 6 dagar loggade',

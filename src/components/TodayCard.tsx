@@ -9,7 +9,7 @@ import type { AppData } from '../lib/useAppData.ts';
 import { formatInt, formatMl } from '../lib/format.ts';
 import { useFiber } from '../lib/useFiber.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
-import { dayTarget } from '../lib/weekBudget.ts';
+import { weekBudget } from '../lib/weekBudget.ts';
 import { todaysWorkouts, workoutsBetween } from '../lib/workouts.ts';
 import { DrinkGoalNote } from './DrinkGoalNote.tsx';
 import { Feature } from './Feature.tsx';
@@ -17,7 +17,7 @@ import { FiberNote } from './FiberNote.tsx';
 import { GoalRing } from './GoalRing.tsx';
 import { NutritionRings } from './NutritionRings.tsx';
 import { WaterControls } from './WaterControls.tsx';
-import { WeekBudgetStatus } from './WeekBudgetStatus.tsx';
+import { WeekBudgetRow } from './WeekBudgetRow.tsx';
 import { WorkoutList } from './WorkoutList.tsx';
 
 /** Värden i "Idag", i ordning (kalorier och protein visas som ringar). */
@@ -45,13 +45,17 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
   const workouts = todaysWorkouts(data.workouts, data.workoutPlans, now);
   const totals = totalOf(data.foodLog.filter((e) => e.date === today));
   const plan = data.profile ? buildPlan(data.profile, data.weights, data.foodLog, today) : null;
-  // Veckoläge: ringen visar dagens förslag och veckans status visas under ringarna.
-  const { targetKcal, week } = dayTarget(
-    data.profile?.calorieMode,
-    plan?.kind === 'plan' ? plan.plan : null,
-    dailyIntake(data.foodLog),
-    today,
-  );
+  // Ringen visar dagsmålet; veckoraden under ringarna visar veckan (7 × dagsmålet).
+  const targetKcal = plan?.kind === 'plan' ? plan.plan.targetKcal : null;
+  const week =
+    plan?.kind === 'plan'
+      ? weekBudget({
+          dailyTargetKcal: plan.plan.targetKcal,
+          floorKcal: plan.plan.floorKcal,
+          intake: dailyIntake(data.foodLog),
+          today,
+        })
+      : null;
   const drinkGoal = waterGoal({
     profile: data.profile,
     workouts: data.workouts,
@@ -100,7 +104,7 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
         </Feature>
       </div>
       {fiberGoal && <FiberNote goal={fiberGoal} day={fiberToday} />}
-      <Feature id="mat">{week && <WeekBudgetStatus week={week} />}</Feature>
+      <Feature id="mat">{week && <WeekBudgetRow week={week} />}</Feature>
       <Feature id="vatten">
         <WaterControls date={today} water={data.water} onChange={onChange} variant="chips" />
         <DrinkGoalNote goal={drinkGoal} foodMl={drink.foodMl} />
