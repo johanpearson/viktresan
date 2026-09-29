@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { SHARE_PARAMS } from './src/lib/shareTarget.ts';
 import { SHORTCUTS, shortcutUrl } from './src/lib/shortcuts.ts';
 
 const BASE = '/viktresan/';
@@ -156,6 +157,13 @@ export default defineConfig({
           url: shortcutUrl(BASE, s.id),
           icons: [{ src: s.icon, sizes: '96x96', type: 'image/png' }],
         })),
+        // Viktresan i delningsmenyn (Android): en delad länk eller text öppnar "Importera recept".
+        // GET så att det fungerar utan service worker-hantering; tolkas av src/lib/shareTarget.ts.
+        share_target: {
+          action: BASE,
+          method: 'GET',
+          params: SHARE_PARAMS,
+        },
       },
       workbox: {
         // livsmedel.json = Livsmedelsverkets databas (se scripts/fetch-livsmedel.mjs).

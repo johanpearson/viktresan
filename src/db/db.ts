@@ -186,6 +186,8 @@ export interface Recipe {
   items: MealIngredient[];
   servings?: number;
   cookedWeightG?: number;
+  /** Receptets webbadress (receptimporten) – visas som länk i receptet. Ingen schemaändring. */
+  sourceUrl?: string;
   createdAt: number;
   updatedAt?: number;
 }
@@ -1466,6 +1468,8 @@ export const SETTING_LAST_EXPORT = 'lastExportAt';
 export const SETTING_LOCK = 'lock';
 export const SETTING_FEATURES = 'features';
 export const SETTING_PREFERENCES = 'preferences';
+/** Receptimportens minne: ingredienstext → livsmedels-id (manuella matchningar). */
+export const SETTING_INGREDIENT_MATCHES = 'ingredientMatches';
 
 export async function getSetting(key: string): Promise<unknown> {
   const db = await getDb();

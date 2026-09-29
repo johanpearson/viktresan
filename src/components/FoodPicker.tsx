@@ -25,7 +25,7 @@ import type { Livsmedel } from '../lib/livsmedel.ts';
 import { mealLabel, type MealSlot } from '../lib/nutrition.ts';
 import { quickValuesOf, type QuickValues } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
-import { lastUsage, type FoodUnit } from '../lib/units.ts';
+import { lastUsage, type FoodUnit, type Usage } from '../lib/units.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
 import { AiLabelImport } from './AiLabelImport.tsx';
 import { BarcodeElsewhere } from './BarcodeElsewhere.tsx';
@@ -73,6 +73,12 @@ interface FoodPickerProps {
   focusSearch?: boolean;
   /** Slå upp streckkoden direkt (länk från Tillskott: "Logga under Mat"). */
   ean?: string | undefined;
+  /** Förifylld sökning (receptimporten: ingrediensens namn). */
+  initialQuery?: string;
+  /** Förvald mängd och enhet i stället för den senast loggade (receptimporten). */
+  initialUsage?: Usage | null;
+  /** Egen rubrik (annars "Logga mat" / "Lägg till ingrediens"). */
+  title?: string;
   onClose: () => void;
 }
 
@@ -111,12 +117,15 @@ export function FoodPicker({
   scan = false,
   focusSearch = false,
   ean: initialEan,
+  initialQuery = '',
+  initialUsage = null,
+  title: customTitle,
   onClose,
 }: FoodPickerProps) {
   const features = useFeatures();
   const { foodData, livsmedel, foodLog, reloadFood } = source;
   const forLog = mode.kind === 'log';
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const deferred = useDeferredValue(query);
   const [selected, setSelected] = useState<FoodItem | null>(null);
   const [scanning, setScanning] = useState(scan);
@@ -262,11 +271,12 @@ export function FoodPicker({
   }
 
   const title =
-    mode.kind === 'ingredient'
+    customTitle ??
+    (mode.kind === 'ingredient'
       ? 'Lägg till ingrediens'
       : mode.meal
         ? `Lägg till i ${mealLabel(mode.meal).toLowerCase()}`
-        : 'Logga mat';
+        : 'Logga mat');
 
   let body;
   if (quick !== null && mode.kind === 'log') {
@@ -327,7 +337,7 @@ export function FoodPicker({
         food={selected}
         purpose={mode.kind}
         customUnits={customUnits.get(selected.id) ?? NO_UNITS}
-        last={lastUsage(foodLog, selected.id)}
+        last={initialUsage ?? lastUsage(foodLog, selected.id)}
         editing={null}
         date={mode.kind === 'log' ? mode.date : ''}
         defaultMeal={mode.kind === 'log' ? mode.meal : null}

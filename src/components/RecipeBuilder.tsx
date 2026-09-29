@@ -2,6 +2,7 @@ import { useState, type SyntheticEvent } from 'react';
 import { newId, putRecipe, type Recipe } from '../db/db.ts';
 import { scaleFiber } from '../lib/fiber.ts';
 import { decimalInput, formatGrams, formatKcal, parseDecimal } from '../lib/format.ts';
+import { hostOf } from '../lib/recipeImport.ts';
 import {
   COOKED_WEIGHT_MAX_G,
   SERVINGS_MAX,
@@ -137,6 +138,14 @@ export function RecipeBuilder({
             }}
           />
         </label>
+        {recipe?.sourceUrl !== undefined && (
+          <p className="form-note" data-testid="recipe-source">
+            Källa:{' '}
+            <a href={recipe.sourceUrl} target="_blank" rel="noopener noreferrer">
+              {hostOf(recipe.sourceUrl)}
+            </a>
+          </p>
+        )}
         <IngredientEditor
           ingredients={ingredients}
           onAddClick={() => {
