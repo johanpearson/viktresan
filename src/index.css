@@ -2659,6 +2659,40 @@ a.button {
   font-size: var(--text-md);
 }
 
+.hero-label-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Liten info-knapp: synlig ikon 16 px, tryckyta 44 px via negativ marginal. */
+.info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  margin: calc((var(--tap-min) - 16px) / -2) 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.info-button[aria-expanded='true'] {
+  color: var(--accent);
+}
+
+.hero-info {
+  margin: 4px 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--text-xs);
+}
+
 .hero-note {
   margin: 8px 0 0;
   color: var(--muted);

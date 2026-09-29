@@ -71,6 +71,7 @@ src/lib/photoSessions.ts  Fototillfällen/vinklar: gruppering, vinkelfilter, sp�
 src/lib/camera.ts       Kameravyn: getUserMedia-stöd, felmeddelanden, bildruta ur video (grabFrame)
 src/lib/image.ts        Bildkomprimering (max 1080 px WebP, JPEG-reserv) + borttagning av EXIF/XMP
 src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
+src/lib/overview.ts     Översikts nyckeltal på en gemensam viktkälla (trend eller dag): overviewStats
 src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos
 src/lib/energy.ts       BMR (Mifflin-St Jeor), TDEE, kalorimål, spärrar, måldatumskontroll
 src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
@@ -317,7 +318,10 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   katalogen (`catalogFiberSource`) när Livsmedelsverkets data är laddad – innan dess utelämnas fibern. Saknas fiberdata:
   "–" (inte 0) och posten räknas inte in; en summa där någon post saknar fiber får "*" och dagens topp en kort notis.
 - **Trendvikt**: `preferences.trendHero` (på som standard, Inställningar → Visning) visar trendvikten som
-  huvudsiffra och dagsvikten under (`current-weight`), med en kort förklaring. Viktgrafen: trendlinjen
+  huvudsiffra och dagsvikten under (`current-weight`), med en kort förklaring och en info-knapp (`trend-info`, "Vad är
+  trendvikt?"). Alla härledda värden på Översikt (förändring mot startvikten, kvar till mål, %, BMI, prognosens
+  utgångsvikt) räknas på samma vikt som huvudsiffran – trendvikten när inställningen är på, annars dagsvikten
+  (`overviewStats` i `src/lib/overview.ts`; `forecastGoal({ fromKg })` tar takten från linjen). Viktgrafen: trendlinjen
   tjock, dagsvärden som svaga punkter (`--chart-point-faint`).
 - **Veckosummering** (`weekSummary.ts`, veckor mån–sön): `WeekSummaryCard` på Översikt visar förra veckan
   från veckans första öppning tills den stängs (`preferences.weekCardDismissed` = måndagen); alla avslutade

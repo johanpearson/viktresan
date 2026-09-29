@@ -231,6 +231,15 @@ describe('forecastGoal', () => {
     );
   });
 
+  it('utgår från en angiven vikt (t.ex. trendvikten) med linjens takt', () => {
+    // 79,3 − 75,8 = 3,5 kg à 0,1 kg/dag = 35 dagar efter 15 jan.
+    const f = forecastGoal({ daily: falling, goalKg: 75.8, today: '2026-01-15', fromKg: 79.3 });
+    expect(f).toMatchObject({ kind: 'forecast', date: '2026-02-19' });
+    expect(
+      forecastGoal({ daily: falling, goalKg: 79.3, today: '2026-01-15', fromKg: 79.3 }).kind,
+    ).toBe('reached');
+  });
+
   it('räknar inte med mätningar äldre än fönstret', () => {
     const old = series('2025-06-01', [90, 89, 88], 7);
     expect(forecastGoal({ daily: old, goalKg: 80, today: '2026-01-15' }).kind).toBe(
