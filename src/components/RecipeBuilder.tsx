@@ -1,7 +1,7 @@
 import { useState, type SyntheticEvent } from 'react';
 import { newId, putRecipe, type Recipe } from '../db/db.ts';
+import { scaleFiber } from '../lib/fiber.ts';
 import { decimalInput, formatGrams, formatKcal, parseDecimal } from '../lib/format.ts';
-import type { Nutrients } from '../lib/nutrition.ts';
 import {
   COOKED_WEIGHT_MAX_G,
   SERVINGS_MAX,
@@ -13,6 +13,7 @@ import { useIngredients } from '../lib/useIngredients.ts';
 import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
 import { IngredientEditor } from './IngredientEditor.tsx';
 import { ListRow } from './ListRow.tsx';
+import { Macros } from './Macros.tsx';
 
 interface RecipeBuilderProps {
   /** Receptet som redigeras, annars skapas ett nytt. */
@@ -25,10 +26,6 @@ interface RecipeBuilderProps {
   onCancel: () => void;
   /** Visar "Ta bort receptet" längst ner (bara vid redigering). */
   onDelete?: () => void;
-}
-
-function nutrientsText(n: Nutrients): string {
-  return `${formatKcal(n.kcal)} · ${formatGrams(Math.round(n.proteinG))} protein`;
 }
 
 /** Tolkar ett valfritt tal i ett intervall: `null` = tomt, `undefined` = ogiltigt. */
@@ -187,15 +184,27 @@ export function RecipeBuilder({
               <ListRow
                 testId="recipe-per-portion"
                 primary="Per portion"
-                secondary={`≈ ${formatGrams(Math.round(y.portionG))}`}
-                value={<span className="nowrap">{nutrientsText(y.perPortion)}</span>}
+                secondary={
+                  <Macros
+                    lead={`≈ ${formatGrams(Math.round(y.portionG))}`}
+                    nutrients={y.perPortion}
+                    fiber={scaleFiber(ingredients.fiber, 1 / (y.servings ?? 1))}
+                  />
+                }
+                value={<span className="kcal">{formatKcal(y.perPortion.kcal)}</span>}
               />
             )}
             <ListRow
               testId="recipe-per-100"
               primary="Per 100 g"
-              secondary={y.cooked ? 'Tillagad vikt' : 'Ingrediensernas vikt'}
-              value={<span className="nowrap">{nutrientsText(y.per100)}</span>}
+              secondary={
+                <Macros
+                  lead={y.cooked ? 'Tillagad vikt' : 'Ingrediensernas vikt'}
+                  nutrients={y.per100}
+                  fiber={y.yieldG > 0 ? scaleFiber(ingredients.fiber, 100 / y.yieldG) : null}
+                />
+              }
+              value={<span className="kcal">{formatKcal(y.per100.kcal)}</span>}
             />
           </ul>
         )}

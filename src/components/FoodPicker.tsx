@@ -12,6 +12,7 @@ import {
 import type { FoodLabel } from '../lib/aiLabel.ts';
 import { lookupBarcode } from '../lib/barcodeLookup.ts';
 import { useFeatures } from '../lib/features.ts';
+import { catalogFiberSource } from '../lib/fiber.ts';
 import {
   buildCatalog,
   favoriteFoods,
@@ -140,6 +141,11 @@ export function FoodPicker({
   const catalog = useMemo(
     () => buildCatalog(lvFoods, custom, mealItems, recipeItems),
     [lvFoods, custom, mealItems, recipeItems],
+  );
+  // Fiber ur katalogen (Livsmedelsverket, egna, OFF) – först när Livsmedelsverkets data finns.
+  const fiberSource = useMemo(
+    () => (livsmedel ? catalogFiberSource(catalog, foodData.meals) : null),
+    [livsmedel, catalog, foodData.meals],
   );
   const index = useMemo(
     () => buildIndex([...recipeItems, ...mealItems, ...custom, ...lvFoods]),
@@ -342,6 +348,7 @@ export function FoodPicker({
         onCancel={() => {
           setSelected(null);
         }}
+        fiberSource={fiberSource}
       />
     );
   } else {
@@ -428,6 +435,7 @@ export function FoodPicker({
             empty={livsmedel === null ? 'Laddar livsmedelsdatabasen …' : 'Inga träffar.'}
             testId="search-result"
             markRich
+            fiberSource={fiberSource}
           />
         ) : (
           lookup.kind === 'idle' && (
@@ -468,6 +476,7 @@ export function FoodPicker({
                     onPick={pick}
                     empty="Inget loggat ännu. Sök efter ett livsmedel ovan."
                     testId="quick-pick"
+                    fiberSource={fiberSource}
                   />
                 )}
                 {tab === 'favoriter' && (
@@ -477,6 +486,7 @@ export function FoodPicker({
                     empty="Inga favoriter ännu. Tryck på stjärnan när du loggar."
                     testId="quick-pick"
                     markRich
+                    fiberSource={fiberSource}
                   />
                 )}
                 {tab === 'maltider' && forLog && (
@@ -485,6 +495,7 @@ export function FoodPicker({
                     onPick={pick}
                     empty="Inga sparade måltider eller recept. Skapa dem under Egna."
                     testId="quick-pick"
+                    fiberSource={fiberSource}
                   />
                 )}
               </div>

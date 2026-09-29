@@ -1,5 +1,6 @@
 import { useState, type SyntheticEvent } from 'react';
 import { newId, putFoodLog, type FoodLogEntry } from '../db/db.ts';
+import { fiberForItem, type FiberSource } from '../lib/fiber.ts';
 import { entryUnit } from '../lib/foodCatalog.ts';
 import { SOURCE_LABELS, type FoodItem } from '../lib/foodSearch.ts';
 import { decimalInput, formatGrams, formatKcal, parseDecimal } from '../lib/format.ts';
@@ -32,6 +33,8 @@ import {
   type Usage,
 } from '../lib/units.ts';
 import { PORTION_UNIT, RECIPE_PORTIONS } from '../lib/recipes.ts';
+import { ListRow } from './ListRow.tsx';
+import { Macros } from './Macros.tsx';
 import { UnitList } from './UnitList.tsx';
 
 interface FoodLogFormProps {
@@ -60,6 +63,8 @@ interface FoodLogFormProps {
   /** Visar "Ta bort posten" längst ner (vid redigering). */
   onDelete?: () => void;
   onCancel: () => void;
+  /** Fiberdata (Livsmedelsverket, egna, OFF, måltider), `null` medan den laddas. */
+  fiberSource?: FiberSource | null;
 }
 
 interface UnitAmount {
@@ -87,6 +92,7 @@ export function FoodLogForm({
   onAdd,
   onDelete,
   onCancel,
+  fiberSource = null,
 }: FoodLogFormProps) {
   const builtIn = builtInUnits(food);
   const base = baseOf(food);
@@ -109,6 +115,11 @@ export function FoodLogForm({
 
   const parsed = parseUnitAmount(amount, unit, units);
   const preview = parsed.ok ? scaleNutrients(food.per100, parsed.value.grams) : null;
+  // `undefined` medan fiberdatan laddas (då visas ingen fiber), `null` = saknas ("–").
+  const fiberFor = (grams: number) =>
+    fiberSource ? fiberForItem(food, grams, fiberSource) : undefined;
+  // Detaljer: per 100 g och per livsmedlets första enhet med vikt (portion, skiva …).
+  const portion = units[0];
   // Recept i portioner: ½, 1, 1½, 2. Övriga enheter som räknas i antal: ½, 1, 2.
   const recipePortions = food.source === 'recept' && unit === PORTION_UNIT;
   const quickAmounts = recipePortions ? RECIPE_PORTIONS : QUICK_AMOUNTS;
@@ -198,9 +209,31 @@ export function FoodLogForm({
           <span aria-hidden="true">{favorite ? '★' : '☆'}</span>
         </button>
       </div>
-      <p className="form-note muted">
-        {SOURCE_LABELS[food.source]} · {formatKcal(food.per100.kcal)} per 100 {base}
-      </p>
+      <p className="form-note muted">{SOURCE_LABELS[food.source]}</p>
+      <ul className="list list-flush food-facts" data-testid="food-facts">
+        <ListRow
+          testId="food-per-100"
+          primary={`Per 100 ${base}`}
+          secondary={<Macros nutrients={food.per100} fiber={fiberFor(100)} />}
+          value={<span className="kcal">{formatKcal(food.per100.kcal)}</span>}
+        />
+        {portion && (
+          <ListRow
+            testId="food-per-unit"
+            primary={`Per ${portion.name}`}
+            secondary={
+              <Macros
+                lead={`≈ ${formatBase(portion.grams, base)}`}
+                nutrients={scaleNutrients(food.per100, portion.grams)}
+                fiber={fiberFor(portion.grams)}
+              />
+            }
+            value={
+              <span className="kcal">{formatKcal((food.per100.kcal * portion.grams) / 100)}</span>
+            }
+          />
+        )}
+      </ul>
       <div className="field-row">
         <label className="field">
           <span className="field-label">Mängd ({unitLabel})</span>
@@ -341,19 +374,20 @@ export function FoodLogForm({
           ))}
         </div>
       )}
-      <p className="log-preview" data-testid="log-preview" aria-live="polite">
-        {preview && parsed.ok
-          ? isGram(unit)
-            ? `${formatGrams(parsed.value.grams)} · ${formatKcal(preview.kcal)}`
-            : `${amountLabel(parsed.value.amount, unit)} ≈ ${formatBase(parsed.value.grams, base)} · ${formatKcal(preview.kcal)}`
-          : 'Ange en mängd.'}
-      </p>
-      {preview && (
-        <p className="form-note muted">
-          Protein {formatGrams(preview.proteinG)} · kolhydrater {formatGrams(preview.carbsG)} · fett{' '}
-          {formatGrams(preview.fatG)}
+      <div aria-live="polite">
+        <p className="log-preview" data-testid="log-preview">
+          {preview && parsed.ok
+            ? isGram(unit)
+              ? `${formatGrams(parsed.value.grams)} · ${formatKcal(preview.kcal)}`
+              : `${amountLabel(parsed.value.amount, unit)} ≈ ${formatBase(parsed.value.grams, base)} · ${formatKcal(preview.kcal)}`
+            : 'Ange en mängd.'}
         </p>
-      )}
+        {preview && parsed.ok && (
+          <p className="log-macros" data-testid="log-macros">
+            <Macros nutrients={preview} fiber={fiberFor(parsed.value.grams)} />
+          </p>
+        )}
+      </div>
       {error && (
         <p className="form-error" role="alert">
           {error}

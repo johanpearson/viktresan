@@ -29,6 +29,9 @@ export interface AnalysisPart {
   extra: ExtraNutrients | null;
 }
 
+/** Det `partsOf` behöver av en loggpost (även en tänkt mängd av ett livsmedel). */
+export type PartsEntry = Pick<FoodLogEntry, 'foodId' | 'grams' | 'per100' | 'recipe'>;
+
 /** Övriga näringsämnen per livsmedels-id (Livsmedelsverkets data). */
 export type ExtraLookup = (foodId: string) => ExtraNutrients | null | undefined;
 
@@ -39,7 +42,7 @@ export type ExtraLookup = (foodId: string) => ExtraNutrients | null | undefined;
  * upp i receptet som det såg ut när posten loggades.
  */
 export function partsOf(
-  entry: FoodLogEntry,
+  entry: PartsEntry,
   meals: readonly SavedMeal[],
   lookup: ExtraLookup,
 ): AnalysisPart[] {

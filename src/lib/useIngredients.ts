@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { newId, type MealIngredient } from '../db/db.ts';
+import { catalogFiberSource, fiberSum, type FiberAmount } from './fiber.ts';
 import { buildCatalog, entryUnit, sourceOf, storedToItem } from './foodCatalog.ts';
 import type { FoodItem } from './foodSearch.ts';
 import { decimalInput } from './format.ts';
@@ -32,6 +33,11 @@ export interface Ingredients {
   totalG: number;
   /** Giltiga rader som gram + värden per 100 g (för uträkningar). */
   valid: { grams: number; per100: Nutrients }[];
+  /**
+   * Fibern i raderna med giltig mängd: `null` = ingen ingrediens har fiberdata, `undefined`
+   * medan Livsmedelsverkets data laddas. `partial` när någon ingrediens saknar fiber.
+   */
+  fiber: FiberAmount | null | undefined;
   update: (key: string, change: Partial<IngredientRow>) => void;
   remove: (key: string) => void;
   add: (item: FoodItem, value: { amount: number; unit: string }, units: FoodUnit[]) => void;
@@ -87,10 +93,20 @@ export function useIngredients(
     parsed.ok ? [{ grams: parsed.value.grams, per100: row.per100 }] : [],
   );
 
+  const fiber = livsmedel
+    ? fiberSum(
+        parsedRows.flatMap(({ row, parsed }) =>
+          parsed.ok ? [{ foodId: row.foodId, grams: parsed.value.grams, per100: row.per100 }] : [],
+        ),
+        catalogFiberSource(catalog, []),
+      )
+    : undefined;
+
   return {
     rows,
     parsedRows,
     valid,
+    fiber,
     totals: totalOf(valid),
     totalG: valid.reduce((s, v) => s + v.grams, 0),
     update(key, change) {

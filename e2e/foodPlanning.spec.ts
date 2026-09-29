@@ -183,7 +183,8 @@ test('skapar en gryta med 6 portioner, loggar 1 och en ändring påverkar inte l
   await page.getByLabel('Antal portioner').fill('6');
   await page.getByLabel('Tillagad vikt (g)').fill('1500');
   // 1 776 kcal / 6 = 296 kcal; 96,6 g protein / 6 ≈ 16 g. Per 100 g tillagad: 118 kcal.
-  await expect(page.getByTestId('recipe-per-portion')).toContainText('296 kcal · 16 g protein');
+  await expect(page.getByTestId('recipe-per-portion')).toContainText('P 16 g');
+  await expect(page.getByTestId('recipe-per-portion')).toContainText('296 kcal');
   await expect(page.getByTestId('recipe-per-portion')).toContainText('≈ 250 g');
   await expect(page.getByTestId('recipe-per-100')).toContainText('118 kcal');
   await page.getByRole('button', { name: 'Spara recept' }).tap();

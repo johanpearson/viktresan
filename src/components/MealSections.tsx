@@ -1,8 +1,10 @@
 import type { FoodLogEntry, SavedMeal } from '../db/db.ts';
+import { fiberSum, type FiberSource } from '../lib/fiber.ts';
 import { entryCountText, loggedMealIngredients, mealSections } from '../lib/foodDay.ts';
 import { formatKcal } from '../lib/format.ts';
 import type { MealSlot } from '../lib/nutrition.ts';
 import { FoodEntryRow } from './FoodEntryRow.tsx';
+import { Macros } from './Macros.tsx';
 import { SectionAccordion } from './SectionAccordion.tsx';
 
 interface MealSectionsProps {
@@ -13,6 +15,8 @@ interface MealSectionsProps {
   open: ReadonlySet<MealSlot>;
   /** Favoritmarkerade livsmedel (id). */
   favoriteIds: ReadonlySet<string>;
+  /** Fiberdata för posterna, `null` medan den laddas (då visas ingen fiber). */
+  fiberSource?: FiberSource | null;
   onToggle: (slot: MealSlot) => void;
   onAdd: (slot: MealSlot) => void;
   /** Menyn (⋯) för en måltid med poster: spara som egen måltid, analysera. */
@@ -24,7 +28,7 @@ interface MealSectionsProps {
 
 /**
  * Dagens mat per måltid som `SectionAccordion`: namn, kcal och antal poster i
- * rubriken, ⋯ för fler val och + för att lägga till. Tomma måltider är en smal
+ * rubriken, makron och fiber under, ⋯ för fler val och + för att lägga till. Tomma måltider är en smal
  * rad med bara +.
  */
 export function MealSections({
@@ -32,6 +36,7 @@ export function MealSections({
   meals,
   open,
   favoriteIds,
+  fiberSource = null,
   onToggle,
   onAdd,
   onMenu,
@@ -56,6 +61,14 @@ export function MealSections({
             value={
               <span className="kcal" data-testid="meal-kcal">
                 {formatKcal(section.totals.kcal)}
+              </span>
+            }
+            detail={
+              <span data-testid="meal-macros">
+                <Macros
+                  nutrients={section.totals}
+                  fiber={fiberSource ? fiberSum(section.entries, fiberSource) : undefined}
+                />
               </span>
             }
             empty={section.count === 0}
@@ -98,6 +111,7 @@ export function MealSections({
                   entry={entry}
                   ingredients={loggedMealIngredients(entry, meals)}
                   favorite={favoriteIds.has(entry.foodId)}
+                  fiber={fiberSource ? fiberSum([entry], fiberSource) : undefined}
                   onEdit={() => {
                     onEdit(entry);
                   }}

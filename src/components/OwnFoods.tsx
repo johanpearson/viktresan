@@ -21,6 +21,7 @@ import { Card } from './Card.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import type { FoodSource } from './FoodPicker.tsx';
 import { ListRow } from './ListRow.tsx';
+import { Macros } from './Macros.tsx';
 import { MealBuilder } from './MealBuilder.tsx';
 import { RecipeBuilder } from './RecipeBuilder.tsx';
 import { Toast } from './Toast.tsx';
@@ -289,7 +290,15 @@ export function OwnFoods({ source, onChange }: OwnFoodsProps) {
                 key={food.id}
                 testId="own-food"
                 primary={food.name}
-                secondary={`Per 100 g · ${formatGrams(food.per100.proteinG)} protein`}
+                secondary={
+                  <Macros
+                    lead="Per 100 g"
+                    nutrients={food.per100}
+                    fiber={
+                      food.fiberG === undefined ? null : { fiberG: food.fiberG, partial: false }
+                    }
+                  />
+                }
                 value={<span className="kcal">{formatKcal(food.per100.kcal)}</span>}
                 onClick={() => {
                   toast.close();
