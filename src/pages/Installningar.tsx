@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { AboutApp } from '../components/AboutApp.tsx';
 import { BottomSheet } from '../components/BottomSheet.tsx';
 import { CalorieModeSettings } from '../components/CalorieModeSettings.tsx';
@@ -28,6 +28,7 @@ import { DEFAULT_PROTEIN_FACTOR, proteinGoalFor } from '../lib/protein.ts';
 import { getStorageStatus, type StorageStatus } from '../lib/storage.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
 import { useBackupStatus, type BackupStatus } from '../lib/useBackupStatus.ts';
+import { consumeSubPath } from '../lib/navigation.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 import { versionLine } from '../lib/version.ts';
 import { waterGoal } from '../lib/water.ts';
@@ -248,7 +249,6 @@ export function Installningar() {
     setPrevSub(sub);
     if (isPanelId(sub)) setOpenId(sub);
   }
-
   useEffect(() => {
     let active = true;
     void getStorageStatus().then((result) => {
@@ -270,10 +270,14 @@ export function Installningar() {
   };
   const groups = GROUPS.map((g) => ({ ...g, panels: features.filter(g.panels) }));
   const open = groups.flatMap((g) => g.panels).find((p) => p.id === openId);
+  // Delsökvägen öppnade panelen: sidans post blir "#/installningar", panelens post behåller den.
+  const opensPanel = open !== undefined && open.id === sub;
+  useLayoutEffect(() => {
+    if (opensPanel) consumeSubPath('#/installningar');
+  }, [opensPanel]);
 
   function close() {
     setOpenId(null);
-    if (sub) window.history.replaceState(null, '', '#/installningar');
   }
 
   function content(id: PanelId): ReactNode {
@@ -359,7 +363,7 @@ export function Installningar() {
         {versionLine()}
       </footer>
       {open && (
-        <BottomSheet title={open.title} onClose={close}>
+        <BottomSheet key={open.id} title={open.title} onClose={close}>
           {content(open.id)}
         </BottomSheet>
       )}

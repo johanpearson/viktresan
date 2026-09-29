@@ -4,6 +4,7 @@ import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import type { FeatureGated } from '../lib/features.ts';
 import { useFeatures } from '../lib/features.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
+import { navigate } from '../lib/navigation.ts';
 import { hrefFor } from '../routes.ts';
 import { Bilder } from './Bilder.tsx';
 import { Historik } from './Historik.tsx';
@@ -42,12 +43,12 @@ export function Framsteg() {
           options={tabs.map((t) => ({ id: t.sub, label: t.label }))}
           value={active?.sub ?? ''}
           onChange={(tabSub) => {
-            window.location.hash = hrefFor(route, tabSub);
+            // Flikbyte inom Framsteg ersätter posten: bakåt går till Översikt.
+            navigate(hrefFor(route, tabSub));
           }}
         />
       )}
-      {/* Hela delsökvägen som nyckel: "bilder/jamfor" öppnar jämförelsen även från Bilder. */}
-      {active && <active.Content key={sub} />}
+      {active && <active.Content key={active.sub} />}
     </Page>
   );
 }

@@ -7,6 +7,7 @@ import {
   setPreference,
   usePreferences,
 } from '../lib/preferences.ts';
+import { useOverlay } from '../lib/navigation.ts';
 import type { PhotoItem } from '../lib/usePhotos.ts';
 
 type Facing = 'environment' | 'user';
@@ -50,6 +51,10 @@ export function CameraCapture({
   onClose,
 }: CameraCaptureProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Bakåt stänger kameravyn (och därmed strömmen).
+  useOverlay(() => {
+    if (dialogRef.current?.open) dialogRef.current.close();
+  });
   const videoRef = useRef<HTMLVideoElement>(null);
   const [facing, setFacing] = useState<Facing>('environment');
   const [ready, setReady] = useState(false);

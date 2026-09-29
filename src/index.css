@@ -3855,6 +3855,22 @@ a.list-row-body {
   background: var(--border);
 }
 
+/* "Kasta ändringar?" (DiscardPrompt): liten panel ovanpå panelen, två val. */
+.discard-prompt .sheet-panel {
+  padding-top: var(--space-5);
+}
+
+.discard-prompt-text {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--muted);
+}
+
+.discard-prompt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
 /* ActionSheet: kort beskrivning ovanför valen. */
 .action-sheet-description {
   margin: calc(-1 * var(--space-2)) 0 var(--space-2);

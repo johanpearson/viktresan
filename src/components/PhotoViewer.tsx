@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { CAPTURE_ANGLES, ANGLE_LABELS, type CaptureAngle } from '../lib/photoSessions.ts';
+import { useOverlay } from '../lib/navigation.ts';
 import type { PhotoItem } from '../lib/usePhotos.ts';
 import { SegmentedControl } from './SegmentedControl.tsx';
 
@@ -38,6 +39,10 @@ export function PhotoViewer({
   const photo = photos[index];
   const newer = photos[index - 1];
   const older = photos[index + 1];
+  // Bakåt stänger helskärmsvyn.
+  useOverlay(() => {
+    if (dialogRef.current?.open) dialogRef.current.close();
+  });
 
   useEffect(() => {
     const dialog = dialogRef.current;

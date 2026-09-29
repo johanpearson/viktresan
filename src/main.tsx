@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { LockGate } from './components/LockGate.tsx';
 import { initFeatures } from './lib/features.ts';
+import { initNavigation } from './lib/navigation.ts';
 import { initPreferences } from './lib/preferences.ts';
 import { registerServiceWorker } from './lib/pwaUpdate.ts';
 import { requestPersistence } from './lib/storage.ts';
@@ -28,10 +29,13 @@ if (import.meta.env.PROD) {
 const root = document.getElementById('root');
 if (!root) throw new Error('Hittar inte #root');
 
-createRoot(root).render(
-  <StrictMode>
-    <LockGate>
-      <App />
-    </LockGate>
-  </StrictMode>,
-);
+// Historiken först: en djuplänk får Översikt under sig, en omladdning lägger inte till något.
+void initNavigation().then(() => {
+  createRoot(root).render(
+    <StrictMode>
+      <LockGate>
+        <App />
+      </LockGate>
+    </StrictMode>,
+  );
+});

@@ -8,6 +8,11 @@ export interface Route extends FeatureGated {
   label: string;
   /** Visas i bottennavigeringen. Inställningar nås via kugghjulet på Översikt. */
   inNav: boolean;
+  /**
+   * Delsökvägar som är undervyer (en nivå under fliken, egen historikpost), t.ex.
+   * "rapport/visa". Övriga delsökvägar är flikar i sidan eller öppnar en panel.
+   */
+  subviews?: readonly string[];
 }
 
 /** Ordningen här styr ordningen i navigeringen. */
@@ -16,7 +21,13 @@ export const ROUTES: readonly Route[] = [
   { id: 'logga', path: '/logga', label: 'Logga', inNav: true },
   { id: 'mat', path: '/mat', label: 'Mat', inNav: true, feature: 'mat' },
   { id: 'kalender', path: '/kalender', label: 'Kalender', inNav: true },
-  { id: 'framsteg', path: '/framsteg', label: 'Framsteg', inNav: true },
+  {
+    id: 'framsteg',
+    path: '/framsteg',
+    label: 'Framsteg',
+    inNav: true,
+    subviews: ['rapport/visa'],
+  },
   { id: 'installningar', path: '/installningar', label: 'Inställningar', inNav: false },
 ];
 

@@ -1,9 +1,11 @@
-import type { ComponentType } from 'react';
+import { useEffect, type ComponentType } from 'react';
+import { DiscardPrompt } from './components/DiscardPrompt.tsx';
 import { MilestoneCenter } from './components/MilestoneCenter.tsx';
 import { NavBar } from './components/NavBar.tsx';
 import { ShortcutToast } from './components/ShortcutToast.tsx';
 import { UpdateToast } from './components/UpdateToast.tsx';
 import { useFeatures } from './lib/features.ts';
+import { pruneOrphansSoon } from './lib/navigation.ts';
 import { usePreferences } from './lib/preferences.ts';
 import { useHashRoute } from './lib/useHashRoute.ts';
 import { useShortcut } from './lib/useShortcut.ts';
@@ -30,6 +32,10 @@ export function App() {
   const preferences = usePreferences();
   // Genvägar på appikonen (?action=…): körs när funktionsbrytarna är lästa.
   const shortcut = useShortcut(features);
+  // Efter omladdning eller upplåsning: poster för paneler som inte öppnas igen tas bort.
+  useEffect(() => {
+    pruneOrphansSoon();
+  }, []);
   // Vänta in inställningarna så att avstängda delar aldrig blinkar förbi.
   if (!features.loaded || !preferences.loaded) return null;
 
@@ -49,6 +55,7 @@ export function App() {
       <UpdateToast />
       <ShortcutToast state={shortcut} />
       <MilestoneCenter features={features} />
+      <DiscardPrompt />
       <NavBar routes={features.filter(NAV_ROUTES)} current={current} />
     </div>
   );

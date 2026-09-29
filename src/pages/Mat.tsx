@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { FoodDay } from '../components/FoodDay.tsx';
 import { IntakeHistory } from '../components/IntakeHistory.tsx';
 import { NutritionView } from '../components/NutritionView.tsx';
@@ -14,6 +14,7 @@ import { proteinGoalFor } from '../lib/protein.ts';
 import { useAppData } from '../lib/useAppData.ts';
 import { useFiber } from '../lib/useFiber.ts';
 import { useFoodData } from '../lib/useFoodData.ts';
+import { consumeSubPath } from '../lib/navigation.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 
 const NO_LOG: readonly never[] = [];
@@ -37,6 +38,11 @@ export function Mat() {
   const [tab, setTab] = useState<Tab>(() => (sub === 'naring' ? 'naring' : 'dag'));
   const [initialPicker] = useState(() => sub === 'logga');
   const [initialEan] = useState(() => /^ean\/(\d{8,14})$/.exec(sub)?.[1]);
+  // Delsökvägen öppnar sök-sheeten: sidans post blir "#/mat", sheetens post behåller den.
+  const opensPicker = initialPicker || initialEan !== undefined;
+  useLayoutEffect(() => {
+    if (opensPicker) consumeSubPath('#/mat');
+  }, [opensPicker]);
 
   const plan =
     data?.profile != null ? buildPlan(data.profile, data.weights, data.foodLog, todayIso()) : null;
@@ -80,9 +86,6 @@ export function Mat() {
           fiberGoalOn={fiber.goalOn}
           initialPicker={initialPicker}
           initialEan={initialEan}
-          onPickerClosed={() => {
-            if (sub) window.history.replaceState(null, '', '#/mat');
-          }}
           reloadLog={reload}
           aiContext={aiContextFrom(data, todayIso())}
         />

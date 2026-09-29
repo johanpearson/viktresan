@@ -15,6 +15,7 @@ import {
 import { cameraErrorMessage, stopStream } from '../lib/camera.ts';
 import { haptic } from '../lib/haptics.ts';
 import { prefersReducedMotion } from '../lib/motion.ts';
+import { useOverlay } from '../lib/navigation.ts';
 import {
   INITIAL_LIGHT,
   averageLuma,
@@ -73,6 +74,10 @@ function firstEan(codes: readonly { rawValue: string }[]): string | null {
  */
 export function BarcodeScanner({ onEan, onClose }: BarcodeScannerProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Bakåt stänger skannern: close-händelsen stoppar kameraströmmen.
+  useOverlay(() => {
+    if (dialogRef.current?.open) dialogRef.current.close();
+  });
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const stopRef = useRef<(() => void) | null>(null);

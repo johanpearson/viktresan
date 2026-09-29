@@ -46,7 +46,6 @@ interface FoodDayProps {
   initialPicker?: boolean;
   /** Slå upp streckkoden i sök-sheeten direkt (`#/mat/ean/<ean>`, från Tillskott). */
   initialEan?: string | undefined;
-  onPickerClosed?: () => void;
   reloadLog: () => Promise<unknown>;
   /** Det som kan tas med i "Fråga AI" (profil, mål, GLP-1 …), `null` tills datan är läst. */
   aiContext?: AiContext | null;
@@ -101,7 +100,6 @@ export function FoodDay({
   fiberGoalOn,
   initialPicker = false,
   initialEan,
-  onPickerClosed,
   reloadLog,
   aiContext = null,
 }: FoodDayProps) {
@@ -328,7 +326,6 @@ export function FoodDay({
           }}
           onClose={() => {
             setPicker(null);
-            onPickerClosed?.();
           }}
         />
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Card } from '../components/Card.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
@@ -32,6 +32,7 @@ import {
 import { usePreferences } from '../lib/preferences.ts';
 import { formatBytes, getStorageStatus, type StorageStatus } from '../lib/storage.ts';
 import { useAppData } from '../lib/useAppData.ts';
+import { consumeSubPath } from '../lib/navigation.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 import { usePhotos, type PhotoItem } from '../lib/usePhotos.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
@@ -54,8 +55,18 @@ export function Bilder() {
   const [flow, setFlow] = useState<PhotoFlowMode | null>(null);
   const [editing, setEditing] = useState<PhotoSession | null>(null);
   // "#/framsteg/bilder/jamfor" (från milstolpen) öppnar jämförelsen: första mot senaste.
+  // Adressen används en gång och blir sedan "#/framsteg/bilder"; jämförelsen får en egen post.
   const { sub } = useHashRoute();
-  const [comparing, setComparing] = useState(sub === 'bilder/jamfor');
+  const compareLink = sub === 'bilder/jamfor';
+  const [comparing, setComparing] = useState(compareLink);
+  const [prevCompareLink, setPrevCompareLink] = useState(compareLink);
+  if (compareLink !== prevCompareLink) {
+    setPrevCompareLink(compareLink);
+    if (compareLink) setComparing(true);
+  }
+  useLayoutEffect(() => {
+    if (compareLink) consumeSubPath('#/framsteg/bilder');
+  }, [compareLink]);
   const toast = useUndoToast();
 
   const rows = useMemo(() => sessionRows(sessions ?? [], photos ?? []), [sessions, photos]);
