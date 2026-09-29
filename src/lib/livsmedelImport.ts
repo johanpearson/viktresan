@@ -213,18 +213,26 @@ export function pickExtraNutrients(body: unknown): ExtraNutrients {
   return extra;
 }
 
+/** En rad till den kompakta filen (se `CompactFood`). */
+export interface CompactRow {
+  nummer: number;
+  namn: string;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+  grupp?: string;
+  extra?: ExtraNutrients;
+}
+
+/** Den kompakta filen; `meta` = källa och licens (Livsmedelsverket om inget anges). */
 export function toCompactFile(
-  rows: readonly {
-    nummer: number;
-    namn: string;
-    kcal: number;
-    proteinG: number;
-    carbsG: number;
-    fatG: number;
-    grupp?: string;
-    extra?: ExtraNutrients;
-  }[],
+  rows: readonly CompactRow[],
   retrieved: string,
+  meta: { source: string; license: string } = {
+    source: LIVSMEDEL_SOURCE,
+    license: LIVSMEDEL_LICENSE,
+  },
 ): LivsmedelFile {
   // Bara näringsämnen som finns för något livsmedel får en kolumn.
   const keys = NUTRIENT_KEYS.filter((k) => rows.some((r) => r.extra?.[k] !== undefined));
@@ -238,8 +246,8 @@ export function toCompactFile(
     });
   const file: LivsmedelFile = {
     format: LIVSMEDEL_FORMAT,
-    source: LIVSMEDEL_SOURCE,
-    license: LIVSMEDEL_LICENSE,
+    source: meta.source,
+    license: meta.license,
     retrieved,
     foods,
   };

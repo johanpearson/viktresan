@@ -644,6 +644,14 @@ en diskret länk `subtle-link`), träff på annat ställe = `BarcodeElsewhere` (
 (`AiLabelImport`) har numrerade steg (`steps`), "Kopiera prompt" som primärknapp tills svaret är granskat – då blir
 "Använd värdena" primär – och förhandsvisningen som `list list-flush` med värden till höger.
 
+### Källetikett i sökträffar
+
+Sökträffar och snabbval (`FoodList`) visar källan som en liten etikett först i detaljraden: `tag tag-source` med
+"LV", "Fineli", "OFF" eller "Egen" (dämpad ram `--border` och text `--muted`, ingen datafärg – källan är metadata, inte
+data). Skärmläsare får källans fulla namn ("Källa: Livsmedelsverket.", `visually-hidden`). Måltider, recept och
+snabbloggar har ingen etikett – där står typen som text ("Måltid · …"). Samma livsmedel från flera databaser visas en
+gång (Livsmedelsverket före Fineli).
+
 ### Receptimport (Mat → Egna → Recept)
 
 - Ingång: raden "Importera recept" (`ListRow` med `chevron`, överst i Recept-kortets lista – samma mönster som "Jämför

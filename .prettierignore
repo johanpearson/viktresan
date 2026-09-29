@@ -8,3 +8,4 @@ public/*.svg
 lhci-report
 .lighthouseci
 public/livsmedel.json
+public/fineli.json

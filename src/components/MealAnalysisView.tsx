@@ -184,7 +184,8 @@ export function MealAnalysisView({
         })}
         {analysis.rows.every((r) => r.group === 'energi') && (
           <p className="form-note muted">
-            Fiber, vitaminer och mineraler finns bara för livsmedel från Livsmedelsverket.
+            Fiber, vitaminer och mineraler finns bara för livsmedel från Livsmedelsverket och
+            Fineli.
           </p>
         )}
         {partial && (

@@ -26,6 +26,10 @@ const PROFILE = {
 /** Öppnar appen som från en genväg på appikonen. */
 async function launch(page: Page, action: string, data: Parameters<typeof seed>[1] = {}) {
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, { profile: PROFILE, ...data });
   await page.goto(`./?action=${action}`);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LIVSMEDEL_FORMAT, parseLivsmedel } from './livsmedel.ts';
+import { LIVSMEDEL_FORMAT, mergeDatabases, parseLivsmedel } from './livsmedel.ts';
 
 describe('parseLivsmedel', () => {
   it('tolkar den kompakta filen', () => {
@@ -74,5 +74,87 @@ describe('parseLivsmedel', () => {
   it('fel format ger en tom databas', () => {
     expect(parseLivsmedel({ format: 'annat', foods: [[1, 'x', 1, 1, 1, 1]] }).foods).toEqual([]);
     expect(parseLivsmedel(null).foods).toEqual([]);
+  });
+
+  it('Finelis fil får id:n fi:<nummer>, källan fineli och versionen', () => {
+    const result = parseLivsmedel(
+      {
+        format: LIVSMEDEL_FORMAT,
+        source: 'Fineli',
+        license: 'CC BY 4.0',
+        retrieved: '2026-09-29',
+        version: '20.0',
+        foods: [[11049, 'Banan, skalad', 88, 1.2, 18.3, 0.4, 'FRUFRESH']],
+      },
+      'fineli',
+    );
+    expect(result.version).toBe('20.0');
+    expect(result.foods).toEqual([
+      {
+        id: 'fi:11049',
+        name: 'Banan, skalad',
+        source: 'fineli',
+        per100: { kcal: 88, proteinG: 1.2, carbsG: 18.3, fatG: 0.4 },
+        group: 'FRUFRESH',
+      },
+    ]);
+  });
+});
+
+describe('mergeDatabases', () => {
+  const lv = parseLivsmedel({
+    format: LIVSMEDEL_FORMAT,
+    source: 'Livsmedelsverkets livsmedelsdatabas',
+    license: 'CC BY 4.0',
+    retrieved: '2026-09-27',
+    foods: [[1, 'Banan', 95, 1.1, 21, 0.3]],
+  });
+  const fi = parseLivsmedel(
+    {
+      format: LIVSMEDEL_FORMAT,
+      source: 'Fineli',
+      license: 'CC BY 4.0',
+      retrieved: '2026-09-29',
+      version: '20.0',
+      foods: [[1, 'Banan, skalad', 88, 1.2, 18.3, 0.4]],
+    },
+    'fineli',
+  );
+
+  it('slår ihop livsmedlen (Livsmedelsverket först) och listar källorna', () => {
+    const merged = mergeDatabases([
+      { key: 'livsmedelsverket', data: lv },
+      { key: 'fineli', data: fi },
+    ]);
+    expect(merged.foods.map((f) => f.id)).toEqual(['lv:1', 'fi:1']);
+    expect(merged.source).toBe('Livsmedelsverkets livsmedelsdatabas');
+    expect(merged.databases).toEqual([
+      {
+        key: 'livsmedelsverket',
+        source: 'Livsmedelsverkets livsmedelsdatabas',
+        license: 'CC BY 4.0',
+        retrieved: '2026-09-27',
+        count: 1,
+      },
+      {
+        key: 'fineli',
+        source: 'Fineli',
+        license: 'CC BY 4.0',
+        retrieved: '2026-09-29',
+        version: '20.0',
+        count: 1,
+      },
+    ]);
+  });
+
+  it('utelämnar en databas som saknas', () => {
+    const merged = mergeDatabases([
+      { key: 'livsmedelsverket', data: parseLivsmedel(null) },
+      { key: 'fineli', data: fi },
+    ]);
+    expect(merged.foods.map((f) => f.id)).toEqual(['fi:1']);
+    expect(merged.source).toBe('Fineli');
+    expect(merged.databases?.map((d) => d.key)).toEqual(['fineli']);
+    expect(mergeDatabases([]).foods).toEqual([]);
   });
 });

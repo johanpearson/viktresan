@@ -50,6 +50,10 @@ function kcalText(value: number): string {
 
 async function openFood(page: Page, profile: Record<string, unknown> = PROFILE) {
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, { profile });
   await page.goto('./#/mat');
@@ -705,6 +709,10 @@ test('historik och översikt: intag mot mål, 7-dagarssnitt och förklarade spä
     createdAt: Date.now() - daysAgo * 86_400_000,
   }));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, { profile, foodLog });
 
@@ -998,6 +1006,10 @@ test('dagsvyn med 15 poster ryms inom en skärmhöjds scroll när måltiderna ä
     createdAt: Date.now() - (15 - i) * 60_000,
   }));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, { profile: PROFILE, foodLog });
   await page.goto('./#/mat');

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CATEGORIES, CATEGORY_RULES, type FoodCategory } from '../data/foodCategories.ts';
+import { FINELI_CLASSES, categoryFromFineliClass } from '../data/fineliCategories.ts';
 import { STANDARD_UNIT_RULES } from '../data/units.ts';
 import {
   GRAM,
@@ -241,6 +242,31 @@ describe('kategorier och densitet', () => {
     expect(categoryFromGroup('Ris', 'Ris vitt kokt')).toBe('kokt');
     expect(categoryFromGroup('')).toBeNull();
     expect(categoryFromGroup('Okänd grupp')).toBeNull();
+  });
+
+  it('Finelis användningsklasser ger kategori, densitet och enheter', () => {
+    const fineli = (name: string, group: string) => ({ id: 'fi:1', name, group });
+    // Namnet ger ingen kategori – klassen avgör.
+    expect(foodProfile(fineli('Kiwi, skalad', 'FRUFRESH')).category).toBe('frukt');
+    expect(foodProfile(fineli('Mustikka, industriell', 'FRUBSOUP')).category).toBe('efterratt');
+    expect(foodProfile(fineli('Ketsuppi, industriell', 'SPISAUCE')).category).toBe('sas');
+    expect(foodProfile(fineli('Surskorpa', 'BRRYE')).category).toBe('brod');
+    const drink = foodProfile(fineli('Sportdryck, kolhydrat', 'DRSPORT'));
+    expect(drink).toMatchObject({ category: 'dryck', density: 1 });
+    // Namnet går före klassen, som för Livsmedelsverkets grupper.
+    expect(foodProfile(fineli('Korv, grillkorv', 'SAUSAGE')).category).toBe('korv');
+    // Okänd klass och Livsmedelsverkets mönster gäller inte Finelis koder.
+    expect(foodProfile(fineli('Xyz', 'SPECFOOD')).category).toBe('ovrigt');
+    expect(foodProfile({ id: 'fi:2', name: 'Xyz', group: 'Fisk' }).category).toBe('ovrigt');
+    expect(builtInUnits(fineli('Kiwi, skalad', 'FRUFRESH')).map((u) => u.name)).toContain('st');
+  });
+
+  it('alla Finelis klasser pekar på en känd kategori', () => {
+    for (const [code, category] of Object.entries(FINELI_CLASSES)) {
+      expect(CATEGORIES[category], code).toBeDefined();
+      expect(categoryFromFineliClass(code.toLowerCase())).toBe(category);
+    }
+    expect(categoryFromFineliClass('OKAND')).toBeNull();
   });
 
   it('namnet går före gruppen, gruppen före övrigt', () => {

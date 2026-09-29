@@ -54,6 +54,10 @@ test('fiber visas i sheeten, på raden och i summorna – "–" och markering n�
 }) => {
   const errors = collectErrors(page);
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, { profile: PROFILE });
   await page.goto('./#/mat');

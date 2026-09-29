@@ -49,6 +49,10 @@ function kcalText(value: number): string {
 async function start(page: Page, data: Parameters<typeof seed>[1] = {}, hash = '#/mat') {
   await page.clock.setFixedTime(new Date(`${WEDNESDAY}T18:30:00`));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, { profile: PROFILE, ...data });
   await page.goto(`./${hash}`);

@@ -19,6 +19,7 @@ på enheten i IndexedDB. Publiceras på GitHub Pages under `/viktresan/`.
 | `npm run test:visual:update` | Nya baslinjer (`e2e/__screenshots__/`) – granska och committa.  |
 | `npm run icons`              | Regenererar PNG-ikoner i `public/` från SVG-källorna.           |
 | `npm run livsmedel`          | Hämtar Livsmedelsverkets databas → `public/livsmedel.json`.     |
+| `npm run fineli`             | Hämtar Finelis öppna data → `public/fineli.json`.               |
 
 Lighthouse CI lokalt (efter `npm run build`):
 `CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npx --yes @lhci/cli@0.13.0 autorun`.
@@ -99,10 +100,14 @@ src/data/nutrients.ts   Övriga näringsämnen: nyckel, enhet, RI (EU 1169/2011;
 src/lib/units.ts        Enheter: volym via densitet, kategori (foodProfile), relevanta enheter, gissningar, förval, OFF-portion/förpackning
 src/data/units.ts       Kuraterad tabell per livsmedel (Livsmedelsverket): styckvikter, egen densitet/kategori (ungefärliga)
 src/data/foodCategories.ts  Kategorier: densitet, relevanta enheter, gissade styckvikter; namnmönster + Livsmedelsverkets grupper
-src/lib/foodSearch.ts   FoodItem + fuzzy-sökning (å/ä/ö-vikning, Damerau-Levenshtein)
+src/data/fineliCategories.ts  Finelis användningsklasser (FUCLASS) → kategorier (FINELI_CLASSES)
+src/lib/foodSearch.ts   FoodItem + fuzzy-sökning (å/ä/ö-vikning, Damerau-Levenshtein) i alla källor: källordning (SOURCE_RANK),
+                        deduplicering (dedupeKey/isDuplicate), korta källetiketter (SOURCE_TAGS: LV, Fineli, OFF, Egen)
 src/lib/foodCatalog.ts  Lagrat → FoodItem, snabbval (senaste, favoriter)
-src/lib/livsmedel.ts    Laddar/tolkar public/livsmedel.json (format i livsmedelFormat.ts)
-src/lib/livsmedelImport.ts  Ren omvandling av Livsmedelsverkets API-svar (används av skriptet)
+src/lib/livsmedel.ts    Laddar/tolkar public/livsmedel.json och public/fineli.json (format i livsmedelFormat.ts) och slår ihop dem
+                        (mergeDatabases; `databases` = källorna för Om appen)
+src/lib/livsmedelImport.ts  Ren omvandling av Livsmedelsverkets API-svar (används av skriptet); toCompactFile/serializeCompactFile delas
+src/lib/fineliImport.ts Ren omvandling av Finelis CSV-paket (svenska namn, kJ → kcal, enheter) till samma kompakta format
 src/lib/barcode.ts      EAN-validering + Open Food Facts-uppslag (injicerbar fetch), tillskott per portion, bidragslänk
 src/lib/barcodeDetector.ts  Typning/fabrik för BarcodeDetector
 src/lib/barcodeLookup.ts  Uppslag av en skannad kod: lokalt (livsmedel, måltider, tillskott) före OFF, korsträff Mat/Tillskott
@@ -148,7 +153,9 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
                         flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). recipeImport.spec.ts = receptimporten (delning via
                         `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
-                        fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
+                        fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). fineli.spec.ts = sökträff från den bundlade
+                        Fineli-filen (etikett, loggning), källan i Om appen och deduplicering med mockade filer; specar som mockar
+                        livsmedel.json mockar också en tom fineli.json så att resultaten inte beror på Finelis data. supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. rings.spec.ts = ringarnas text inom den inre cirkeln
                         med värsta fallets värden (WORST_CASE_RINGS) på 412 och 360 px. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
@@ -160,8 +167,9 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript); svep görs med
                         dispatchEvent('pointer…') (`swipeLeft` i helpers.ts) och pågående måltid styrs med page.clock.setFixedTime
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
-scripts/                Engångsskript (ikongenerering inkl. genvägsikoner shortcut-*.svg, fetch-livsmedel.ts)
+scripts/                Engångsskript (ikongenerering inkl. genvägsikoner shortcut-*.svg, fetch-livsmedel.ts, fetch-fineli.ts)
 public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), precachad
+public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, grupp = användningsklass, precachad
 ```
 
 - **Routing** är hash-baserad (`#/logga`) – GitHub Pages saknar SPA-fallback och det
@@ -276,7 +284,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Mängd: AI-tjänstens mängd/enhet, vikt inom parentes i originaltexten går före en burk/förpackning; gram direkt, volym via
   densitet (`foodProfile`, saknas den: 1 g/ml och osäker), styck och andra enheter ur `unitsFor` (gissning = osäker).
   Matchning: minnet först (säker), sedan fuzzy-sökning bland egna livsmedel (inkl. cachade OFF) och Livsmedelsverkets –
-  hela namnet, sedan delar; säker = alla ord finns som hela ord och högst två ord till. (Fineli finns inte i appen.)
+  hela namnet, sedan delar; säker = alla ord finns som hela ord och högst två ord till. Fineli ingår bland kandidaterna.
   Tryck på en rad = sök-sheeten (`FoodPicker` med `title`, `initialQuery`, `initialUsage`, skanner); salt/peppar/vatten/
   "efter smak" (`isSkippable`) och rader utan träff har chipet "Hoppa över". Spara = vanligt recept med portioner och
   `sourceUrl`; manuella val sparas i matchningsminnet. Källan visas som länk i receptet (`RecipeBuilder`, `recipe-source`).
@@ -468,9 +476,23 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   intag hittills – bara måltid, innehåll, matpreferenser, GLP-1 – av som standard och bara när funktionen är på),
   förhandsvisning, Dela (Web Share, `text`), Kopiera (toast), Öppna i ChatGPT/Claude (`?q=` om adressen ≤ 6 000 tecken,
   annars kopiera + startsidan). Appen gör inga anrop själv. Finns för måltid, dag och vecka (Framsteg → Veckor).
+- **Fineli** (`fineliImport.ts`, `scripts/fetch-fineli.ts`, `fineliCategories.ts`): THL:s finska livsmedelsdatabas, CC BY 4.0,
+  med svenska namn (`foodname_SV.csv`). `npm run fineli` hämtar första paketet på fineli.fi/fineli/sv/avoin-data med alla
+  filer (eller `FINELI_ZIP_URL`, eller ett nedladdat paket via `FINELI_DIR=<mapp|zip>`) och skriver `public/fineli.json`
+  i samma format som Livsmedelsverkets (energi kJ → kcal, CHOAVL, FIBC, VITPYRID = B6, NACL mg → g; grupp = FUCLASS,
+  `version` ur descript.txt). Workflowet `fineli.yml` kör skriptet när det ändras eller manuellt och checkar in filen.
+  Livsmedel `fi:<FOODID>`, källa `fineli`; `loadLivsmedel()` laddar båda filerna, så Fineli ingår överallt där
+  Livsmedelsverkets data används (sök, fiber, vitaminer/mineraler, analys, rapport, receptimport). Kategorin: namnet,
+  sedan `FINELI_CLASSES[FUCLASS]` (Livsmedelsverkets `GROUP_RULES` gäller inte `fi:`). Appen anropar aldrig Fineli.
+- **Sökning i alla källor** (`searchIndex`): egna livsmedel, måltider, recept, cachade OFF, Livsmedelsverket och Fineli
+  i ett index. Sortering: poäng, hela namnet exakt, träff på första ordet, källa (`SOURCE_RANK`: egna → LV → OFF →
+  Fineli, dvs. Livsmedelsverket vid likvärdig träff), kortare namn. Dubbletter mellan LV/Fineli/OFF (`dedupeKey`: ord
+  utan småord i bokstavsordning; samma nyckel, eller ett tecken fel i en nyckel ≥ 8 tecken med energi inom 15 %/10 kcal)
+  visas en gång, från källan som rankas först. Egna livsmedel döljs aldrig. Träffarna har en liten källetikett
+  (`tag tag-source`: LV, Fineli, OFF, Egen; skärmläsare "Källa: …") före energin.
 - **Livsmedel**: `livsmedel.json` har valfri sjunde kolumn (grupp, `""` = ingen) och åttonde (övriga näringsämnen i
   ordningen i filens `extra`, `null` = saknas; `pickExtraNutrients` matchar EuroFIR-kod eller namn och räknar om enheten).
-  Livsmedelsverkets databas (CC BY 4.0 – källan visas i Inställningar → Om appen, `LivsmedelSource`) hämtas med
+  Livsmedelsverkets databas (CC BY 4.0 – källan visas, liksom Finelis, i Inställningar → Om appen, `LivsmedelSource`) hämtas med
   `npm run livsmedel` (inkl. livsmedelsgrupp när API:t har den – `pickGroup`, förlåtande tolkning) och checkas in – workflowet `livsmedel.yml` gör det automatiskt när skriptet
   ändras, eller manuellt via Actions. Appen anropar aldrig Livsmedelsverket. Streckkoder:
   `BarcodeDetector` + kamera, annars manuell EAN. Okända koder slås upp i Open Food Facts

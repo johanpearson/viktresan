@@ -13,6 +13,7 @@ import {
   GROUP_RULES,
   type FoodCategory,
 } from '../data/foodCategories.ts';
+import { categoryFromFineliClass } from '../data/fineliCategories.ts';
 import { STANDARD_UNIT_RULES, type StandardUnitRule } from '../data/units.ts';
 import { normalize } from './foodSearch.ts';
 import { decimalInput, formatGrams, formatMl, parseDecimal } from './format.ts';
@@ -127,7 +128,7 @@ export function baseOf(food: { per100Unit?: BaseUnit }): BaseUnit {
 export interface UnitFood {
   id: string;
   name: string;
-  /** Livsmedelsverkets livsmedelsgrupp, om den finns i datan. */
+  /** Livsmedelsverkets livsmedelsgrupp eller Finelis användningsklass, om den finns i datan. */
   group?: string;
   per100Unit?: BaseUnit;
   units?: readonly FoodUnit[];
@@ -182,6 +183,13 @@ export function categoryFromGroup(group: string, name = ''): FoodCategory | null
   return category;
 }
 
+/** Kategori ur gruppen: Finelis användningsklass för `fi:`, annars Livsmedelsverkets grupp. */
+function groupCategory(food: UnitFood): FoodCategory | null {
+  if (!food.group) return null;
+  if (food.id.startsWith('fi:')) return categoryFromFineliClass(food.group);
+  return categoryFromGroup(food.group, food.name);
+}
+
 export interface FoodProfile {
   category: FoodCategory;
   /** Gram per ml; `null` = volymenheter passar inte. 1 för värden per 100 ml. */
@@ -207,7 +215,7 @@ export function foodProfile(
   let category =
     rule?.category ??
     categoryFromName(food.name) ??
-    (food.group ? categoryFromGroup(food.group, food.name) : null) ??
+    (food.group ? groupCategory(food) : null) ??
     'ovrigt';
   const standard = (rule?.units ?? []).map((u) => ({ ...u, source: 'standard' as const }));
   if (food.per100Unit === 'ml') {

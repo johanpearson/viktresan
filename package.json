@@ -19,7 +19,8 @@
     "test:visual": "sh scripts/visual.sh",
     "test:visual:update": "sh scripts/visual.sh --update-snapshots",
     "icons": "node scripts/generate-icons.mjs",
-    "livsmedel": "node scripts/fetch-livsmedel.ts"
+    "livsmedel": "node scripts/fetch-livsmedel.ts",
+    "fineli": "node scripts/fetch-fineli.ts"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

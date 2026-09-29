@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
 import { formatDate } from '../lib/format.ts';
-import { loadLivsmedel, type Livsmedel } from '../lib/livsmedel.ts';
+import { loadLivsmedel, type FoodDatabaseInfo, type Livsmedel } from '../lib/livsmedel.ts';
 
-function sourceText(livsmedel: Livsmedel | null): string {
-  if (livsmedel === null) return 'Laddar livsmedelsdatabasen …';
-  if (livsmedel.foods.length === 0) {
-    return 'Livsmedelsverkets databas ingår inte i den här versionen. Egna livsmedel, måltider och streckkoder fungerar.';
-  }
-  const retrieved = livsmedel.retrieved ? `, hämtad ${formatDate(livsmedel.retrieved)}` : '';
-  return `Näringsvärden i Mat: ${livsmedel.source} (${livsmedel.license}${retrieved}).`;
+/** "Fineli, … (THL), version 18.0 (CC BY 4.0, hämtad 29 sep. 2026)" */
+function databaseText(db: FoodDatabaseInfo): string {
+  const version = db.version ? `, version ${db.version}` : '';
+  const retrieved = db.retrieved ? `, hämtad ${formatDate(db.retrieved)}` : '';
+  return `${db.source}${version} (${db.license}${retrieved})`;
 }
 
-/** Inställningar → Om appen: källan för näringsvärdena (krävs av CC BY 4.0). */
+function sourceText(livsmedel: Livsmedel | null): string {
+  if (livsmedel === null) return 'Laddar livsmedelsdatabaserna …';
+  const databases = livsmedel.databases ?? [];
+  if (livsmedel.foods.length === 0 || databases.length === 0) {
+    return 'Livsmedelsdatabaserna ingår inte i den här versionen. Egna livsmedel, måltider och streckkoder fungerar.';
+  }
+  const texts = databases.map(databaseText);
+  const last = texts.pop() ?? '';
+  return `Näringsvärden i Mat: ${texts.length > 0 ? `${texts.join(', ')} och ${last}` : last}.`;
+}
+
+/** Inställningar → Om appen: källorna för näringsvärdena (krävs av CC BY 4.0). */
 export function LivsmedelSource() {
   const [livsmedel, setLivsmedel] = useState<Livsmedel | null>(null);
 

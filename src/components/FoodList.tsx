@@ -1,4 +1,4 @@
-import { SOURCE_LABELS, type FoodItem } from '../lib/foodSearch.ts';
+import { SOURCE_LABELS, SOURCE_TAGS, type FoodItem } from '../lib/foodSearch.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
 import { fiberForItem, isFiberRich, type FiberSource } from '../lib/fiber.ts';
 import { scaleNutrients } from '../lib/nutrition.ts';
@@ -18,13 +18,27 @@ interface FoodListProps {
   fiberSource?: FiberSource | null;
 }
 
+/** Energin per enhet (eller 100 g). Källan står före: etikett eller text (måltid, recept). */
 function detail(item: FoodItem): string {
   if (item.source === 'snabb') return `${SOURCE_LABELS.snabb} ${quickDetail(item)}`;
+  const prefix = SOURCE_TAGS[item.source] === undefined ? `${SOURCE_LABELS[item.source]} · ` : '';
   const per100 = `${formatKcal(item.per100.kcal)}/100 ${item.per100Unit ?? 'g'}`;
   const unit = item.units?.[0];
-  if (!unit) return `${SOURCE_LABELS[item.source]} · ${per100}`;
+  if (!unit) return `${prefix}${per100}`;
   const perUnit = formatKcal((item.per100.kcal * unit.grams) / 100);
-  return `${SOURCE_LABELS[item.source]} · ${perUnit} per ${unit.name} (${formatGrams(unit.grams)})`;
+  return `${prefix}${perUnit} per ${unit.name} (${formatGrams(unit.grams)})`;
+}
+
+/** Liten källetikett (LV, Fineli, OFF, Egen); skärmläsare får källans fulla namn. */
+function SourceTag({ item }: { item: FoodItem }) {
+  const tag = SOURCE_TAGS[item.source];
+  if (tag === undefined) return null;
+  return (
+    <span className="tag tag-source" data-testid="source-tag" data-source={item.source}>
+      <span aria-hidden="true">{tag}</span>
+      <span className="visually-hidden">Källa: {SOURCE_LABELS[item.source]}.</span>
+    </span>
+  );
 }
 
 /** Lista med livsmedel att välja, t.ex. sökträffar eller snabbval. */
@@ -62,7 +76,10 @@ export function FoodList({
                 </span>
               )}
             </span>
-            <span className="pick-detail">{detail(item)}</span>
+            <span className="pick-detail">
+              <SourceTag item={item} />
+              {detail(item)}
+            </span>
             {item.source !== 'snabb' && <PickMacros item={item} fiberSource={fiberSource} />}
           </button>
         </li>
