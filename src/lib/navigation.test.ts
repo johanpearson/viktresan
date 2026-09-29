@@ -124,8 +124,9 @@ describe('stackregler', () => {
 // --- Historiken i jsdom -----------------------------------------------------------------------
 
 function navState(): { depth: number; page: number } | undefined {
-  return (window.history.state as { viktresanNav?: { depth: number; page: number } } | null)
+  const nav = (window.history.state as { viktresanNav?: { depth: number; page: number } } | null)
     ?.viktresanNav;
+  return nav && { depth: nav.depth, page: nav.page };
 }
 
 /** Väntar tills historiken står still (history.go är asynkront). */
@@ -310,5 +311,33 @@ describe('historiken', () => {
     expect(navState()).toEqual({ depth: 1, page: 1 });
     await back();
     expect(window.location.hash).toBe('#/');
+  });
+
+  it('lägger tillbaka poster som webbläsaren hoppat över när appen själv backar', async () => {
+    await initNavigation();
+    navigate('#/installningar');
+    await settle();
+    const view = render(createElement(Host));
+    await act(async () => {
+      view.getByRole('button').click();
+      await Promise.resolve();
+    });
+    expect(navState()).toEqual({ depth: 2, page: 1 });
+    // Som Chrome med en post som lagts till utan användaraktivering: steget landar på roten.
+    const go = vi.spyOn(window.history, 'go').mockImplementation(() => {
+      setTimeout(() => {
+        window.history.replaceState({ viktresanNav: { depth: 0, page: 0, trail: [] } }, '', '/#/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }, 0);
+    });
+    await act(async () => {
+      view.getByRole('button').click();
+      await Promise.resolve();
+    });
+    await settle();
+    go.mockRestore();
+    expect(view.queryByText('panel')).toBeNull();
+    expect(window.location.hash).toBe('#/installningar');
+    expect(navState()).toEqual({ depth: 1, page: 1 });
   });
 });

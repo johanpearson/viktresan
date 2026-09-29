@@ -74,14 +74,34 @@ export function planNavigation(from: NavPosition & { hash: string }, target: str
 
 const STATE_KEY = 'viktresanNav';
 
-function readState(): NavPosition | null {
+/** En post under den nuvarande: adress och sidans djup. Index = postens djup. */
+interface TrailEntry {
+  hash: string;
+  page: number;
+}
+
+function parseTrail(value: unknown): TrailEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item: unknown) => {
+    if (typeof item !== 'object' || item === null) return [];
+    const { hash, page } = item as Record<string, unknown>;
+    return typeof hash === 'string' && typeof page === 'number' ? [{ hash, page }] : [];
+  });
+}
+
+function readNav(): (NavPosition & { trail: TrailEntry[] }) | null {
   const state: unknown = window.history.state;
   if (typeof state !== 'object' || state === null) return null;
   const nav = (state as Record<string, unknown>)[STATE_KEY];
   if (typeof nav !== 'object' || nav === null) return null;
-  const { depth, page } = nav as Record<string, unknown>;
+  const { depth, page, trail } = nav as Record<string, unknown>;
   if (typeof depth !== 'number' || typeof page !== 'number') return null;
-  return { depth, page };
+  return { depth, page, trail: parseTrail(trail) };
+}
+
+function readState(): NavPosition | null {
+  const nav = readNav();
+  return nav && { depth: nav.depth, page: nav.page };
 }
 
 function urlFor(hash: string): string {
@@ -92,13 +112,91 @@ function urlFor(hash: string): string {
 let position: NavPosition = { depth: 0, page: 0 };
 /** Adressen på posten som `position` gäller. */
 let positionUrl = '';
+/**
+ * Posterna under den nuvarande. Sparas i varje post så att de kan läggas tillbaka om Chrome
+ * hoppar över dem (se `repair`).
+ */
+let trail: TrailEntry[] = [];
 
-function writeEntry(kind: 'push' | 'replace', url: string, next: NavPosition): void {
-  const state = { [STATE_KEY]: next };
+function syncFromHistory(): void {
+  const nav = readNav();
+  position = nav ? { depth: nav.depth, page: nav.page } : { depth: 0, page: 0 };
+  trail = nav?.trail ?? [];
+  positionUrl = window.location.href;
+}
+
+function hashOf(url: string): string {
+  const index = url.indexOf('#');
+  return index === -1 ? '' : url.slice(index);
+}
+
+/**
+ * Skriver en post. `push` (och en post som webbläsaren redan lagt till, `below: 'current'`)
+ * ligger ovanpå den nuvarande; `replace` ersätter den.
+ */
+function writeEntry(
+  kind: 'push' | 'replace',
+  url: string,
+  next: NavPosition,
+  below: 'current' | 'same' = kind === 'push' ? 'current' : 'same',
+): void {
+  const nextTrail =
+    below === 'current'
+      ? [...trail, { hash: hashOf(positionUrl), page: position.page }]
+      : [...trail];
+  const state = { [STATE_KEY]: { ...next, trail: nextTrail.slice(0, next.depth) } };
   if (kind === 'push') window.history.pushState(state, '', url);
   else window.history.replaceState(state, '', url);
   position = next;
+  trail = nextTrail.slice(0, next.depth);
   positionUrl = window.location.href;
+}
+
+// Chrome hoppar över poster som lagts till utan användaraktivering, även när sidan själv backar
+// (och efter en omladdning gäller det poster från det förra dokumentet). Landar ett eget steg
+// bakåt för lågt läggs de överhoppade posterna tillbaka ur `trail`. Förväntan sparas även i
+// sessionStorage, eftersom steget kan ladda om sidan (poster från före en omladdning).
+const EXPECT_KEY = 'viktresanNavExpect';
+
+interface Expectation {
+  depth: number;
+  entries: TrailEntry[];
+}
+
+let expectation: Expectation | null = null;
+
+function setExpectation(next: Expectation | null): void {
+  expectation = next;
+  try {
+    if (next) sessionStorage.setItem(EXPECT_KEY, JSON.stringify(next));
+    else sessionStorage.removeItem(EXPECT_KEY);
+  } catch {
+    // Utan sessionStorage lagas bara steg inom samma dokument.
+  }
+}
+
+function storedExpectation(): Expectation | null {
+  try {
+    const raw = sessionStorage.getItem(EXPECT_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as { depth?: unknown; entries?: unknown };
+    return typeof value.depth === 'number'
+      ? { depth: value.depth, entries: parseTrail(value.entries) }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Lägger tillbaka poster som hoppades över mellan där steget landade och målet. */
+function repair(target: Expectation | null): void {
+  setExpectation(null);
+  if (!target || position.depth >= target.depth) return;
+  for (let depth = position.depth + 1; depth <= target.depth; depth += 1) {
+    const entry = target.entries[depth];
+    if (!entry) return;
+    writeEntry('push', urlFor(entry.hash || ROOT_HASH), { depth, page: entry.page });
+  }
 }
 
 // Adressändringar som inte ger hashchange (pushState/replaceState) meddelas här.
@@ -135,15 +233,16 @@ function drain(): void {
 function goBack(steps: number): void {
   const n = Math.min(steps, position.depth);
   if (n <= 0) return;
+  const target = position.depth - n;
+  setExpectation({ depth: target, entries: trail.slice(0, target + 1) });
   traversing = true;
   // Skulle popstate utebli (t.ex. historiken är kortare än väntat) fastnar inte kön.
   window.clearTimeout(traversalTimer);
   traversalTimer = window.setTimeout(() => {
     if (!traversing) return;
     traversing = false;
-    const state = readState();
-    if (state) position = state;
-    positionUrl = window.location.href;
+    setExpectation(null);
+    if (readState()) syncFromHistory();
     drain();
   }, 1000);
   window.history.go(-n);
@@ -292,19 +391,23 @@ export function useDiscardPrompt(): DiscardPromptState {
 function adoptEntry(): void {
   if (window.location.href === positionUrl) {
     const hasOverlays = position.depth > position.page;
-    writeEntry('replace', window.location.href, {
-      depth: position.depth + 1,
-      page: hasOverlays ? position.page : position.depth + 1,
-    });
+    writeEntry(
+      'replace',
+      window.location.href,
+      { depth: position.depth + 1, page: hasOverlays ? position.page : position.depth + 1 },
+      'current',
+    );
   } else {
     for (const overlay of overlays.splice(0).reverse()) {
       overlay.open = false;
       overlay.close();
     }
-    writeEntry('replace', window.location.href, {
-      depth: position.depth + 1,
-      page: position.depth + 1,
-    });
+    writeEntry(
+      'replace',
+      window.location.href,
+      { depth: position.depth + 1, page: position.depth + 1 },
+      'current',
+    );
   }
   emitLocation();
 }
@@ -320,8 +423,8 @@ function onPopState(): void {
     drain();
     return;
   }
-  position = state ?? { depth: 0, page: 0 };
-  positionUrl = window.location.href;
+  syncFromHistory();
+  if (internal) repair(expectation);
 
   const shouldBeOpen = Math.max(0, position.depth - position.page);
   const withEntry = overlays.filter((o) => o.entry);
@@ -379,8 +482,7 @@ let installed = false;
 function install(): void {
   if (installed || typeof window === 'undefined') return;
   installed = true;
-  position = readState() ?? { depth: 0, page: 0 };
-  positionUrl = window.location.href;
+  syncFromHistory();
   window.addEventListener('popstate', onPopState);
   window.addEventListener('hashchange', onHashChange);
   document.addEventListener('click', onClick);
@@ -395,14 +497,16 @@ function install(): void {
  */
 export function initNavigation(): Promise<void> {
   install();
-  const state = readState();
-  if (state) {
-    // Omladdning: historiken finns redan. Ett överlägg som var öppet får tillbaka sin post.
-    position = state;
-    positionUrl = window.location.href;
+  syncFromHistory();
+  if (readState()) {
+    // Omladdning: historiken finns redan. Landade ett eget steg bakåt i en post från före en
+    // omladdning (ny sidladdning) och för lågt läggs posterna tillbaka. Ett överlägg som var
+    // öppet får tillbaka sin post.
+    repair(storedExpectation());
     abandonOverlays();
     return Promise.resolve();
   }
+  setExpectation(null);
   const chain = chainFor(window.location.hash);
   writeEntry('replace', urlFor(ROOT_HASH), { depth: 0, page: 0 });
   chain.slice(1).forEach((hash, i) => {
@@ -557,6 +661,6 @@ export function resetNavigationForTests(): void {
   nextOverlayUrl = null;
   orphans = 0;
   window.clearTimeout(pruneTimer);
-  position = readState() ?? { depth: 0, page: 0 };
-  positionUrl = window.location.href;
+  setExpectation(null);
+  syncFromHistory();
 }
