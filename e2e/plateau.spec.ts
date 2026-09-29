@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, seed, type SeedData } from './helpers.ts';
+import { collectErrors, dump, seed, type SeedData } from './helpers.ts';
 
 /**
  * Platåkortet på Översikt: trendvikten har stått still i tre veckor. Tiden fryses till
@@ -103,6 +103,10 @@ test('platå: kortet jämför perioderna, Fråga AI och Stäng', async ({ page }
 
   await card.getByRole('button', { name: 'Stäng platåkortet' }).tap();
   await expect(card).toBeHidden();
+  // Vänta tills stängningen sparats innan omladdningen.
+  await expect
+    .poll(async () => (await dump(page)).settings.preferences)
+    .toMatchObject({ plateauDismissed: TODAY });
   await page.reload();
   await expect(page.getByTestId('hero')).toBeVisible();
   await expect(page.getByTestId('plateau-card')).toHaveCount(0);

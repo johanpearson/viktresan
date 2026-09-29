@@ -74,23 +74,15 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await nav(page).getByRole('link', { name: 'Översikt' }).tap();
   await expect(page.getByTestId('trend-weight')).toHaveText('86,7 kg');
   await expect(page.getByTestId('current-weight')).toHaveText('86,0 kg');
-  await expect(page.getByTestId('total-change')).toHaveText(/^[−-]3,3 kg$/);
-  await expect(page.getByTestId('remaining')).toHaveText('6,7 kg');
-  await expect(page.getByTestId('bmi')).toHaveText('26,8 (Övervikt)');
+  await expect(page.getByTestId('hero-change')).toHaveText(/^[−-]3,3 kg$/);
+  await expect(page.getByTestId('hero-remaining')).toHaveText('6,7 kg kvar');
   await expect(page.getByRole('progressbar', { name: 'Framsteg mot målvikten' })).toHaveAttribute(
     'aria-valuenow',
     '33',
   );
-  // Nyaste veckan först: 86, 87, 88 och en tom vecka.
-  const weekRows = page.getByTestId('week-average');
-  await expect(weekRows).toHaveCount(4);
-  await expect(weekRows.nth(0)).toContainText('86,0 kg');
-  await expect(weekRows.nth(1)).toContainText('87,0 kg');
-  await expect(weekRows.nth(2)).toContainText('88,0 kg');
-  await expect(weekRows.nth(3)).toContainText('–');
-  // −1 kg/vecka från trendvikten, 6,7 kg kvar.
-  await expect(page.getByTestId('forecast')).toContainText(/[−-]1,0 kg\/vecka/);
-  await expect(page.getByTestId('forecast')).toContainText('når du målet omkring');
+  // −1 kg/vecka från trendvikten: prognosen bygger på trenden (inte "enligt plan").
+  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'trend');
+  await expect(page.getByTestId('goal-eta')).toHaveText(/^mål ca /);
 
   await expect(page.getByTestId('today-card')).toBeVisible();
 
@@ -100,6 +92,13 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
     'aria-pressed',
     'true',
   );
+  // Detaljerna bakom Översikts viktkort: förändring, kvar, BMI och prognosen.
+  const details = page.getByTestId('weight-details');
+  await expect(details.getByTestId('total-change')).toHaveText(/^[−-]3,3 kg$/);
+  await expect(details.getByTestId('remaining')).toHaveText('6,7 kg');
+  await expect(details.getByTestId('bmi')).toHaveText('26,8');
+  await expect(details).toContainText('Övervikt');
+  await expect(details).toContainText(/Med nuvarande trend \([−-]1,0 kg\/vecka\)/);
   const chart = page.getByRole('img', { name: /Viktgraf/ });
   await expect(chart.locator('canvas')).toBeVisible();
   await expect(chart).toHaveAttribute('data-points', '3');

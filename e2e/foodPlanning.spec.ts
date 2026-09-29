@@ -314,8 +314,11 @@ test('veckoraden: loggar mat flera dagar och ser veckan i Mat, på Översikt och
   await page.goto('./');
   const today = page.getByTestId('today-card');
   await expect(today.getByText(`av ${kcalText(target)}`)).toBeVisible();
-  await expect(today.getByTestId('week-row-text')).toHaveText(row);
-  await expect(today.getByTestId('week-balance')).toHaveText(balance);
+  // På Översikt är veckoraden en rad: kvar och ≈ per dag (saldot finns i panelen).
+  await expect(today.getByTestId('week-row-text')).toHaveText(
+    `Vecka: ${kcalText(budget - 3600)} kcal kvar · ≈ ${kcalText(perDay)}/dag`,
+  );
+  await expect(today.getByTestId('week-balance')).toHaveCount(0);
   await today.getByTestId('week-row').tap();
   await expect(page.getByTestId('week-sheet')).toBeVisible();
   expect(errors).toEqual([]);

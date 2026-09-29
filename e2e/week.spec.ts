@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, seed } from './helpers.ts';
+import { collectErrors, dump, seed } from './helpers.ts';
 
 /**
  * Tiden styrs med page.clock: måndag 2026-09-21 (vecka 39). Förra veckan är
@@ -84,26 +84,38 @@ test('veckokortet på måndagen: förra veckan mot veckan innan, stängs och fin
   await expect(card).toContainText(/Vecka 38 · 14 sep\.?–20 sep\.?/);
   await expect(card.getByTestId('week-headline')).toHaveText(/^Trenden rörde sig .* mot målet\./);
 
-  await expect(card.getByTestId('week-trend')).toContainText('−');
-  await expect(card.getByTestId('week-kcal')).toContainText('1 900 kcal (mål');
-  await expect(card.getByTestId('week-kcal')).toContainText('2 dagar');
-  await expect(card.getByTestId('week-protein')).toContainText('110 g (mål 128 g)');
-  await expect(card.getByTestId('week-vatten')).toContainText('1 750 ml');
-  await expect(card.getByTestId('week-traning')).toContainText('2');
-  await expect(card.getByTestId('week-steg')).toContainText('9 000');
+  // Kortet är en rad; hela summeringen ligger under Framsteg → Veckor (tryck på raden).
+  await expect(card.getByTestId('week-kcal')).toHaveCount(0);
+  await card.getByRole('link').tap();
+  await page.getByTestId('week-list').getByTestId('week').first().getByRole('button').tap();
+  const summary = page.getByRole('dialog');
+  await expect(summary.getByTestId('week-trend')).toContainText('−');
+  await expect(summary.getByTestId('week-kcal')).toContainText('1 900 kcal (mål');
+  await expect(summary.getByTestId('week-kcal')).toContainText('2 dagar');
+  await expect(summary.getByTestId('week-protein')).toContainText('110 g (mål 128 g)');
+  await expect(summary.getByTestId('week-vatten')).toContainText('1 750 ml');
+  await expect(summary.getByTestId('week-traning')).toContainText('2');
+  await expect(summary.getByTestId('week-steg')).toContainText('9 000');
 
   // Pilar mot vecka 37.
-  const arrow = (row: string) => card.getByTestId(`week-${row}`).locator('.week-arrow');
+  const arrow = (row: string) => summary.getByTestId(`week-${row}`).locator('.week-arrow');
   await expect(arrow('kcal')).toHaveAttribute('data-direction', 'down');
   await expect(arrow('kcal')).toContainText('lägre än veckan innan');
   await expect(arrow('protein')).toHaveAttribute('data-direction', 'up');
   await expect(arrow('vatten')).toHaveAttribute('data-direction', 'up');
   await expect(arrow('traning')).toHaveAttribute('data-direction', 'up');
   await expect(arrow('steg')).toHaveAttribute('data-direction', 'up');
+  await summary.getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await expect(summary).toHaveCount(0);
+  await page.goto('./');
 
   // Stäng: borta även efter omladdning.
   await card.getByRole('button', { name: 'Stäng veckosummeringen' }).tap();
   await expect(card).toHaveCount(0);
+  // Vänta tills stängningen sparats innan omladdningen.
+  await expect
+    .poll(async () => (await dump(page)).settings.preferences)
+    .toMatchObject({ weekCardDismissed: '2026-09-14' });
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Översikt');
   await expect(page.getByTestId('today-card')).toBeVisible();
@@ -142,11 +154,14 @@ test('uppgång beskrivs neutralt och avstängda funktioner syns inte', async ({ 
   await expect(card.getByTestId('week-headline')).toHaveText(
     'Trenden planade ut, det händer. En vecka säger lite – det är riktningen över tid som räknas.',
   );
-  await expect(card.getByTestId('week-trend')).toContainText('+');
-  await expect(card.getByTestId('week-kcal')).toHaveCount(0);
-  await expect(card.getByTestId('week-protein')).toHaveCount(0);
-  await expect(card.getByTestId('week-steg')).toHaveCount(0);
-  await expect(card.getByTestId('week-vatten')).toBeVisible();
+  await card.getByRole('link').tap();
+  await page.getByTestId('week-list').getByTestId('week').first().getByRole('button').tap();
+  const summary = page.getByRole('dialog');
+  await expect(summary.getByTestId('week-trend')).toContainText('+');
+  await expect(summary.getByTestId('week-kcal')).toHaveCount(0);
+  await expect(summary.getByTestId('week-protein')).toHaveCount(0);
+  await expect(summary.getByTestId('week-steg')).toHaveCount(0);
+  await expect(summary.getByTestId('week-vatten')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -163,11 +178,11 @@ test('trendvikt som huvudsiffra, dagsvikt under och inställning för att stäng
   // EMA: 86 → 85,8 → 85,72.
   await expect(page.getByTestId('trend-weight')).toHaveText('85,7 kg');
   await expect(page.getByTestId('current-weight')).toHaveText('85,0 kg');
-  await expect(page.getByTestId('trend-note')).toContainText('vätska och salt');
-  // Förändring, kvar, % och BMI räknas på trendvikten (85,72 kg, start 90, mål 80).
-  await expect(page.getByTestId('total-change')).toHaveText(/^[−-]4,3 kg$/);
-  await expect(page.getByTestId('remaining')).toHaveText('5,7 kg');
-  await expect(page.getByTestId('bmi')).toHaveText('26,5 (Övervikt)');
+  // Förklaringen om vätska och salt finns bara bakom info-knappen.
+  await expect(hero).not.toContainText('vätska och salt');
+  // Förändring, kvar och % räknas på trendvikten (85,72 kg, start 90, mål 80).
+  await expect(page.getByTestId('hero-change')).toHaveText(/^[−-]4,3 kg$/);
+  await expect(page.getByTestId('hero-remaining')).toHaveText('5,7 kg kvar');
   const progress = page.getByRole('progressbar', { name: 'Framsteg mot målvikten' });
   await expect(progress).toHaveAttribute('aria-valuenow', '43');
 
@@ -178,6 +193,7 @@ test('trendvikt som huvudsiffra, dagsvikt under och inställning för att stäng
   await info.tap();
   await expect(info).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('trend-info-text')).toContainText('ungefär 10 %');
+  await expect(page.getByTestId('trend-info-text')).toContainText('vätska och salt');
   await info.tap();
   await expect(page.getByTestId('trend-info-text')).toHaveCount(0);
 
@@ -187,15 +203,16 @@ test('trendvikt som huvudsiffra, dagsvikt under och inställning för att stäng
   await toggle.tap();
   await expect(toggle).not.toBeChecked();
   await page.goto('./#/');
-  await expect(hero.getByText('Nuvarande vikt')).toBeVisible();
+  await expect(hero.getByText('Dagsvikt', { exact: true })).toBeVisible();
   await expect(page.getByTestId('current-weight')).toHaveText('85,0 kg');
   await expect(page.getByTestId('trend-weight')).toHaveCount(0);
-  await expect(page.getByTestId('trend-note')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Vad är trendvikt?' })).toHaveCount(0);
   // Av: alla härledda värden räknas på dagsvikten (85,0 kg).
-  await expect(page.getByTestId('total-change')).toHaveText(/^[−-]5,0 kg$/);
-  await expect(page.getByTestId('remaining')).toHaveText('5,0 kg');
-  await expect(page.getByTestId('bmi')).toHaveText('26,2 (Övervikt)');
+  await expect(page.getByTestId('hero-change')).toHaveText(/^[−-]5,0 kg$/);
+  await expect(page.getByTestId('hero-remaining')).toHaveText('5,0 kg kvar');
   await expect(progress).toHaveAttribute('aria-valuenow', '50');
+  // BMI finns i Framsteg → Historik, på samma vikt.
+  await hero.tap();
+  await expect(page.getByTestId('weight-details').getByTestId('bmi')).toHaveText('26,2');
   expect(errors).toEqual([]);
 });

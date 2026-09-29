@@ -52,7 +52,8 @@ export function App() {
         {/* Ny nyckel när en genväg ändrat data (t.ex. +250 ml) så att sidan läser om. */}
         <CurrentPage key={`${current.id}:${String(shortcut.dataVersion)}`} />
       </main>
-      <UpdateToast />
+      {/* På Översikt är "Ny version finns" ett kontextkort (UpdateCard) i stället för en toast. */}
+      {current.id !== 'oversikt' && <UpdateToast />}
       <ShortcutToast state={shortcut} />
       <MilestoneCenter features={features} />
       <DiscardPrompt />

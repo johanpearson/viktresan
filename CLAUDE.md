@@ -71,7 +71,10 @@ src/lib/photoSessions.ts  Fototillfällen/vinklar: gruppering, vinkelfilter, sp�
 src/lib/camera.ts       Kameravyn: getUserMedia-stöd, felmeddelanden, bildruta ur video (grabFrame)
 src/lib/image.ts        Bildkomprimering (max 1080 px WebP, JPEG-reserv) + borttagning av EXIF/XMP
 src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
-src/lib/overview.ts     Översikts nyckeltal på en gemensam viktkälla (trend eller dag): overviewStats
+src/lib/overview.ts     Översikts nyckeltal på en gemensam viktkälla (trend eller dag): overviewStats; goalEta = en enda
+                        måldatumsuppgift (trendprognos, annars "enligt plan" med vald takt)
+src/lib/overviewItems.ts  Ringar och kort som kan döljas på Översikt (OVERVIEW_ITEMS, preferences.overviewHidden)
+src/lib/todo.ts         Översikt → Att göra idag: buildTodo (tillskott, dos, pass, obesvarade, backup) + raden Nästa dos
 src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos
 src/lib/energy.ts       BMR (Mifflin-St Jeor), TDEE, kalorimål, spärrar, måldatumskontroll
 src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
@@ -116,7 +119,7 @@ src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
 src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 12)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
-                        ImportBackup, BackupReminder, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
+                        ImportBackup, TodoCard, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
                         SegmentedControl, StatBar, GoalRing, ProgressBar, EmptyState, Toast, Skeleton,
                         ActionSheet (radmeny ovanpå en panel), DateBar (‹ Idag ›, även i Logga-panelernas formulär),
@@ -135,7 +138,8 @@ docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kv
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
                         dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar | Rapport; `Rapport.tsx`), Inställningar
-e2e/                    Playwright-tester. navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
+e2e/                    Playwright-tester. overview.spec.ts = Översikt med fast data (höjd ≤ 1,5 skärmar, varje ring/kort navigerar rätt,
+                        Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
                         flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. visual.spec.ts + visualData.ts = visuella regressionstester (egen
@@ -157,7 +161,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
   filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
-  (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `bilder`, `las`, `sakerhetskopia`,
+  (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `oversikt`, `bilder`, `las`, `sakerhetskopia`,
   `lagring`, `om`) öppnar panelen direkt.
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
@@ -229,7 +233,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -266,17 +270,17 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   kategori `dryck`/`mjolk`/`fil` via `foodProfile`, ml = gram ÷ densitet; inte kvarg/keso/koncentrat och
   aldrig alkohol – `isAlcoholic`, bl.a. "vol. %"). `drinkEntries`/`drinkOn` används av Idag, Logga, historik,
   kalender, veckosummering och milstolpen `vatten-7`. `addWater` håller `createdAt` strikt växande per dag så att
-  `undoLastWater` ("Ångra senaste") alltid tar dagens senaste post. Ring + snabbknappar (glas 250, flaska 500,
-  kaffe/te 150 ml, "Valfri mängd" → Logga → Dryck) i Översikt → Idag med "Varav … från Mat"; Logga → Dryck listar
+  `undoLastWater` ("Ångra senaste") alltid tar dagens senaste post. Ring i Översikt → Idag; tryck = panel med
+  snabbknappar (glas 250, flaska 500, kaffe/te 150 ml, valfri mängd, Ångra senaste) och "Varav … från Mat"; Logga → Dryck listar
   även dryck från Mat; historik i Framsteg → Historik.
 - **Träning**: pass (`Workout`) har datum, valfri tid (`HH:MM`, lokal), typ (förval + egna ur tidigare
   pass), längd, valfri intensitet/anteckning och status `planerad`/`genomford`/`hoppad`. Scheman
   (`WorkoutPlan`: veckodagar 0 = mån, tid, start/slut) genereras till pass vid visning
   (`workoutsBetween`) och sparas först när de besvaras, med id `<planId>:<datum>` som då ersätter det
   genererade. Ett planerat pass vars tid passerat (utan tid: när dagen är slut) är _obesvarat_ och
-  visas i "Blev passet av?" överst på Översikt (`findUnanswered`, 28 dagar bakåt). Idag visar dagens
-  pass (utom obesvarade) med Klar / Hoppa över; Klar öppnar `CompleteWorkoutSheet` med planens längd
-  och intensitet förifyllda. Kommande = tre nästa planerade efter idag. Kalenderns dagsvy (`CalendarDay`) listar passen
+  visas som "Blev passet av?" i Översikt → Att göra idag (`findUnanswered`, 28 dagar bakåt). Att göra idag visar
+  dagens planerade pass med Klar / Hoppa över; Klar öppnar `CompleteWorkoutSheet` med planens längd
+  och intensitet förifyllda. Genomförda pass idag = chip i Idag. Översikt har inget "Kommande". Kalenderns dagsvy (`CalendarDay`) listar passen
   som rader: tryck = radmeny (Klar, Hoppade över, Markera som planerad, Ta bort passet), svep vänster = ta bort med Ångra. Prickar: genomfört fylld, planerat ring, obesvarat röd,
   hoppat grå fyrkant (`DayMarker.dots`).
 - **GLP-1** (`glp1.ts`, bakom brytaren `glp1`): `Medication` har namn (förval Wegovy/Ozempic/Mounjaro/
@@ -285,8 +289,9 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   = senaste steget på/före datumet. **Appen föreslår aldrig doser** – förifyllt värde kommer bara ur
   trappan (annars senast loggade dos) och `PRESCRIBER_NOTE` visas där doser läggs in. En veckodos räknas
   som tagen om en injektion av läkemedlet loggas inom ±3 dagar (dagsdos: samma dag). Planerade doser
-  visas från idag (`dosesBetween`); `nextDose`/`dueToday` ger "Nästa dos" och dosdagsbannern på Översikt
-  (länk till `#/logga/glp1`, som öppnar panelen direkt). Injektionsställe: `suggestSite` = oanvänt
+  visas från idag (`dosesBetween`); `dueToday` ger raden "Dos idag" i Översikt → Att göra idag och `nextDose`
+  annars raden "Nästa dos lör 26 sep · 2,5 mg · buk vänster" längst ner (länk till `#/logga/glp1`, som öppnar panelen
+  direkt; `NextDoseCard` under Dos visar nästa steg, senaste dos och ställe). Injektionsställe: `suggestSite` = oanvänt
   ställe i rotationsordning, annars det som använts längst tillbaka. Injektioner kopierar in
   läkemedlets namn. `doseChanges` (start + byte av dos/läkemedel) ritas som streckade linjer i
   viktgrafen (`WeightChart` `markers`, färg `--chart-dose`) och listas i Framsteg → Historik.
@@ -299,7 +304,9 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `?action=` en gång när brytarna är lästa och tar bort den ur adressen (omladdning kör inte om). Avstängd
   funktion → toast med "Slå på …" som slår på den och kör genvägen. Ikoner: `public/shortcut-*-96x96.png`.
 - **Protein** (`protein.ts`): mål = `proteinFactor` (profil, 1,2–2,0 i steg om 0,1, saknas → 1,6) × målvikt.
-  Ringar för kalorier och protein (`NutritionRings`) i Översikt → Idag och Mat → Dag; proteinkolumn och
+  Ringar för kalorier och protein i Översikt → Idag (`RingAction`: kalorier → panelen `CalorieDetails` med mål,
+  takt, förbrukning/adaptiv TDEE och "Så räknas målet ut"; protein och fiber → Mat → Näring, kortet "Protein och fiber"),
+  StatBar i Mat → Dag; proteinkolumn och
   snitt i Mat → Historik. "Proteinrik" (≥ 15 g protein per 100 kcal) märks i sökträffar och favoriter.
 - **Fibermål** (`fiber.ts`, `useFiber`, `data/fiberReference.ts`): referensvärde NNR 2023, 35 g (man) / 25 g (kvinna) /
   30 g utan kön. Visas automatiskt när GLP-1 är på, annars med `profile.showFiberGoal` (Inställningar → Fibermål, bakom
@@ -308,7 +315,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   starten sparas i profilen första gången målet visas (`useFiber` → `saveRampStart`). "Veckans fibermål: X g (mål Y g)"
   (`FiberNote`). Av/på i inställningen börjar om trappan. Fiber per post via `partsOf` + uppslag: Livsmedelsverket
   (`extra.fiberG`), egna/OFF (`StoredFood.fiberG`); snabbloggar och poster utan värde räknas inte (`missingEntries` →
-  "Dagens fiber kan vara i underkant"). Visas som fjärde ring på Översikt → Idag (`rings-4`), `StatBar` i Mat → Dag (kalorier
+  "Dagens fiber kan vara i underkant"). Visas som fjärde ring på Översikt → Idag (`rings-4`; `FiberNote` med veckans mål och saknad fiberdata i Mat → Näring), `StatBar` i Mat → Dag (kalorier
   överst, protein + fiber under), kolumn och snitt i Mat → Historik, raden `fiber` i veckosummeringen, "Mål" i rapportens
   kost och "Andel av dagens fibermål" i analysen. "Fiberrik" (≥ 3 g/100 kcal, `isFiberRich`) märks som "Proteinrik".
   **Fiber i matloggningen** visas alltid (oberoende av fibermålet) bredvid makrona med `Macros` i fiberns färg
@@ -317,15 +324,22 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `detail`), dagens makrorad, egna måltider och recept (per portion och 100 g) och Egna livsmedel. Fiberkällan byggs ur
   katalogen (`catalogFiberSource`) när Livsmedelsverkets data är laddad – innan dess utelämnas fibern. Saknas fiberdata:
   "–" (inte 0) och posten räknas inte in; en summa där någon post saknar fiber får "*" och dagens topp en kort notis.
+- **Översikt** (docs/DESIGN.md → Översikt): viktkortet (tryck = Framsteg → Historik), kontextkort när de är aktuella
+  (`UpdateCard` – toast på övriga sidor, `MilestoneCard` – nådd senaste 7 dagarna, `preferences.milestoneCardDismissed`,
+  veckokortet, platån, dryckespåminnelse, övre gränsvärden), Idag (ringar, chips för steg/träning, kort veckorad) och
+  `TodoCard` (Att göra idag / "Allt klart för idag"). Inställningar → Översikt döljer ringar och kort. En vanlig dag ryms
+  på ~1,5 skärmhöjder (`e2e/overview.spec.ts`).
 - **Trendvikt**: `preferences.trendHero` (på som standard, Inställningar → Visning) visar trendvikten som
-  huvudsiffra och dagsvikten under (`current-weight`), med en kort förklaring och en info-knapp (`trend-info`, "Vad är
-  trendvikt?"). Alla härledda värden på Översikt (förändring mot startvikten, kvar till mål, %, BMI, prognosens
+  huvudsiffra och dagsvikt + datum som en liten rad (`current-weight`); förklaringen bakom en info-knapp (`trend-info`,
+  "Vad är trendvikt?"). Under stapeln en rad "−X kg · Y kg kvar · mål ca [månad år]" (`goalEta`: trendens prognos, annars
+  datumet enligt vald takt märkt "enligt plan"). BMI och prognosens detaljer finns i Framsteg → Historik
+  (`WeightDetails`). Alla härledda värden (förändring mot startvikten, kvar till mål, %, BMI, prognosens
   utgångsvikt) räknas på samma vikt som huvudsiffran – trendvikten när inställningen är på, annars dagsvikten
   (`overviewStats` i `src/lib/overview.ts`; `forecastGoal({ fromKg })` tar takten från linjen). Viktgrafen: trendlinjen
   tjock, dagsvärden som svaga punkter (`--chart-point-faint`).
-- **Veckosummering** (`weekSummary.ts`, veckor mån–sön): `WeekSummaryCard` på Översikt visar förra veckan
-  från veckans första öppning tills den stängs (`preferences.weekCardDismissed` = måndagen); alla avslutade
-  veckor med data under Framsteg → Veckor (`pastWeeks`; en `ListRow` per vecka, tryck = summeringen och "Fråga AI" i en panel). Trend = EMA vid veckans slut − dagen före veckan
+- **Veckosummering** (`weekSummary.ts`, veckor mån–sön): `WeekSummaryCard` på Översikt visar förra veckans rubrik
+  (en rad → Framsteg → Veckor) från veckans första öppning tills den stängs (`preferences.weekCardDismissed` = måndagen); alla avslutade
+  veckor med data under Framsteg → Veckor (`pastWeeks`; en `ListRow` per vecka med snittvikt (`averageKg`), tryck = summeringen och "Fråga AI" i en panel). Trend = EMA vid veckans slut − dagen före veckan
   (kräver vägning i veckan); snitt räknas över loggade dagar. Rader har `feature` och filtreras. Texter är
   sakliga och uppmuntrande, aldrig skuldbeläggande; uppgång (bort från målet) beskrivs neutralt.
 - **Platå** (`plateau.ts`, `PlateauCard` på Översikt efter veckokortet): utvärderas bara när takten > 0 (aldrig i
@@ -373,7 +387,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   AI-import (`aiLabel.ts`, `AiLabelImport`): prompten ber om ENDAST JSON `{ namn, enhet, mangdPerDos, naringsamnen:
 [{ amne, mangd, enhet }] }`; svaret valideras (kodblock tolereras, okända ämnen hoppas över med varning, fel enhet och
   saknade fält ger fel), förhandsvisas och förs in i formuläret för rättning. Mat har samma import per 100 g
-  (`parseFoodLabel` → `CustomFoodForm prefill`). Översikt: `SupplementsToday` (chips + "Alla tagna" med Ångra) efter Idag.
+  (`parseFoodLabel` → `CustomFoodForm prefill`). Översikt → Att göra idag: en rad per otaget tillskott (tryck = tagen, Ångra) och "Alla tagna".
   Kalendern: markören `tillskott` ("2 av 3 tagna", bara dagar med något taget).
 - **Näring** (Mat → Näring, `#/mat/naring`, `NutritionView`, `micronutrients.ts`): vitaminer och mineraler per dag eller
   snitt 7 dagar (per loggad dag), uppdelat på mat (Livsmedelsverkets värden via `partsOf`, även ingredienser i måltider)
@@ -485,7 +499,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   - `replace`: profil, mätningar och bilder töms och ersätts.
   - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg/mående datum, för egna enheter `foodId`) → senast ändrad (milstolpar: befintlig behålls) (`updatedAt ?? createdAt`) vinner,
     lika → befintlig behålls. Befintlig profil behålls; saknas den tas den från filen.
-- **Påminnelse** (`BackupReminder` på Översikt): visas när det finns data och ingen export gjorts
+- **Påminnelse** (raden "Dags att säkerhetskopiera" i Översikt → Att göra idag): visas när det finns data och ingen export gjorts
   på 7 dagar. Utan tidigare export räknas från äldsta postens `createdAt`.
 - Tester: `src/lib/backup.test.ts` (round-trip okrypterat/krypterat, fel lösenord, validering,
   merge; körs i `node`-miljö eftersom jsdoms Blob inte klarar structuredClone), `e2e/backup.spec.ts`.

@@ -505,6 +505,35 @@ export function diffMilestones(
   return { added, celebrate };
 }
 
+/**
+ * Översiktens kontextkort "Ny milstolpe": den senast nådda (inom `CELEBRATE_WITHIN_DAYS`,
+ * påslagen funktion), viktigast först samma dag. `null` om ingen – eller om den stängts.
+ */
+export function newestMilestone(
+  records: readonly { id: string; date: string }[],
+  {
+    today,
+    dismissed,
+    isEnabled = () => true,
+  }: { today: string; dismissed: string | null; isEnabled?: (m: Milestone) => boolean },
+): ReachedMilestone | null {
+  const from = addDays(today, -(CELEBRATE_WITHIN_DAYS - 1));
+  let best: ReachedMilestone | null = null;
+  for (const r of records) {
+    if (r.date < from || r.date > today) continue;
+    const milestone = describeMilestone(r.id);
+    if (!milestone || !isEnabled(milestone)) continue;
+    if (
+      best === null ||
+      r.date > best.date ||
+      (r.date === best.date && milestone.rank > best.milestone.rank)
+    ) {
+      best = { milestone, date: r.date };
+    }
+  }
+  return best && best.milestone.id !== dismissed ? best : null;
+}
+
 // ---------------------------------------------------------------------------
 // Texter. Varma och personliga, men inte överdrivna.
 

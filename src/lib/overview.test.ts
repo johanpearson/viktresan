@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { overviewStats } from './overview.ts';
+import { goalEta, overviewStats } from './overview.ts';
 import { bmi, emaTrend, forecastGoal, goalProgress, type DailyWeight } from './stats.ts';
 
 const profile = { startWeightKg: 90, goalWeightKg: 80, heightCm: 180 };
@@ -76,5 +76,63 @@ describe('overviewStats', () => {
       expect(s.progress).toMatchObject({ changeKg: 0, fraction: 0, remainingKg: 10 });
       expect(s.forecast).toEqual({ kind: 'insufficient-data' });
     }
+  });
+});
+
+describe('goalEta', () => {
+  const progress = goalProgress(90, 86, 80);
+
+  it('trendbaserad prognos när trenden leder mot målet', () => {
+    const eta = goalEta({
+      stats: {
+        progress,
+        forecast: {
+          kind: 'forecast',
+          date: '2026-05-01',
+          weeklyChangeKg: -0.6,
+          daysVsGoalDate: null,
+        },
+      },
+      today,
+      rateKg: 0.5,
+      planDate: '2026-04-01',
+    });
+    expect(eta).toEqual({ kind: 'trend', date: '2026-05-01', weeklyChangeKg: -0.6 });
+  });
+
+  it('för lite data: datum enligt vald takt (kalorimålets datum om det finns)', () => {
+    const stats = { progress, forecast: { kind: 'insufficient-data' } as const };
+    expect(goalEta({ stats, today, rateKg: 0.5, planDate: '2026-04-01' })).toEqual({
+      kind: 'plan',
+      date: '2026-04-01',
+      rateKg: 0.5,
+    });
+    // 6 kg kvar i 0,5 kg/vecka = 12 veckor.
+    expect(goalEta({ stats, today, rateKg: undefined })).toEqual({
+      kind: 'plan',
+      date: '2026-04-09',
+      rateKg: 0.5,
+    });
+  });
+
+  it('trenden leder inte mot målet: enligt plan, aldrig två motsägande datum', () => {
+    const eta = goalEta({
+      stats: { progress, forecast: { kind: 'not-progressing', weeklyChangeKg: 0.2 } },
+      today,
+      rateKg: 1,
+    });
+    expect(eta?.kind).toBe('plan');
+  });
+
+  it('takt 0 utan trend: inget datum; nått mål: reached', () => {
+    const stats = { progress, forecast: { kind: 'insufficient-data' } as const };
+    expect(goalEta({ stats, today, rateKg: 0 })).toBeNull();
+    expect(
+      goalEta({
+        stats: { progress: goalProgress(90, 80, 80), forecast: stats.forecast },
+        today,
+        rateKg: 0.5,
+      }),
+    ).toEqual({ kind: 'reached' });
   });
 });

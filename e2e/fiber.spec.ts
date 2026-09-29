@@ -87,13 +87,6 @@ test('GLP-1 på: fiberring med upptrappning, höjt dryckesmål och påminnelse v
   await expect(fiberRing).toHaveAttribute('aria-valuetext', '10 g av 15 g');
   await expect(page.getByTestId('kcal-ring')).toBeVisible();
   await expect(page.getByTestId('protein-ring')).toBeVisible();
-  await expect(page.getByTestId('fiber-week-goal')).toHaveText(
-    'Veckans fibermål: 15 g (mål 35 g).',
-  );
-  // Snabbloggen saknar fiberdata – diskret notis.
-  await expect(page.getByTestId('fiber-incomplete')).toContainText(
-    'Dagens fiber kan vara i underkant',
-  );
   // Fyra ringar ryms på en rad.
   const rings = await page.locator('.rings .goal-ring').all();
   expect(rings).toHaveLength(4);
@@ -105,7 +98,25 @@ test('GLP-1 på: fiberring med upptrappning, höjt dryckesmål och påminnelse v
     'aria-valuetext',
     '0 ml av 2 500 ml',
   );
-  await expect(page.getByTestId('drink-note')).toContainText('+500 ml med GLP-1');
+  // Förklaringen står i dryckespanelen (tryck på ringen).
+  await page.getByRole('button', { name: 'Dryck – logga dryck' }).tap();
+  await expect(page.getByRole('dialog').getByTestId('drink-note')).toContainText(
+    '+500 ml med GLP-1',
+  );
+  await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Fiberringen → Mat → Näring: veckans mål och notisen om saknad fiberdata (snabbloggen).
+  await page.getByRole('link', { name: 'Fiber – visa näring' }).tap();
+  await expect(page.getByTestId('fiber-week-goal')).toHaveText(
+    'Veckans fibermål: 15 g (mål 35 g).',
+  );
+  await expect(page.getByTestId('fiber-incomplete')).toContainText(
+    'Dagens fiber kan vara i underkant',
+  );
+  await expect(page.getByTestId('nutrition-fiber')).toContainText('10');
+  await page.goBack();
+  await expect(page.getByTestId('fiber-ring')).toBeVisible();
 
   // Upptrappningens start sparas i profilen.
   await expect

@@ -531,10 +531,34 @@ for (const theme of ['light', 'dark'] as const) {
     test('paneler: Översikt och Framsteg', async ({ page }) => {
       await open(page, '');
       const sheet = page.getByRole('dialog');
-      await page.getByRole('button', { name: /^Klar: Styrketräning/ }).tap();
+      // Tryck på passet i Att göra idag: radmenyn, sedan Klar.
+      await page.getByTestId('todo-workout').getByRole('button').tap();
+      await expect(sheet).toBeVisible();
+      await shot(page, `${theme}-sheet-pass-meny`, false);
+      await sheet.getByRole('button', { name: 'Klar' }).tap();
+      await expect(sheet).toHaveAccessibleName('Markera som klar');
       await expect(sheet).toBeVisible();
       await shot(page, `${theme}-sheet-klar`, false);
       await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(sheet).toBeHidden();
+
+      // Ringarna: dryck och kalorier öppnar var sin panel.
+      await page.getByRole('button', { name: 'Dryck – logga dryck' }).tap();
+      await expect(sheet).toBeVisible();
+      await shot(page, `${theme}-sheet-dryck-idag`, false);
+      await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(sheet).toBeHidden();
+      await page.getByRole('button', { name: 'Kalorier – visa kalorimålet' }).tap();
+      await expect(sheet).toBeVisible();
+      await shot(page, `${theme}-sheet-kalorimal`, false);
+      await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(sheet).toBeHidden();
+
+      await page.goto('./#/installningar/oversikt');
+      await expect(sheet).toBeVisible();
+      await shot(page, `${theme}-sheet-installningar-oversikt`, false);
+      await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+      await expect(sheet).toBeHidden();
 
       await page.goto('./#/framsteg/bilder');
       await page.getByRole('button', { name: 'Nytt fototillfälle' }).tap();

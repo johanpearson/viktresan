@@ -3,7 +3,8 @@ import type { NutrientGroup } from '../data/nutrients.ts';
 import { UPPER_LIMITS_SOURCE, UPPER_LIMITS_URL } from '../data/upperLimits.ts';
 import type { FoodLogEntry, SavedMeal, SupplementIntake } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
-import { formatDate, formatNutrient, formatNutrientValue } from '../lib/format.ts';
+import type { DayFiber, FiberGoal } from '../lib/fiber.ts';
+import { formatDate, formatInt, formatNutrient, formatNutrientValue } from '../lib/format.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import {
   dayNutrition,
@@ -11,9 +12,11 @@ import {
   weekNutrition,
   type NutrientDayRow,
 } from '../lib/micronutrients.ts';
+import { totalOf } from '../lib/nutrition.ts';
 import { Card } from './Card.tsx';
 import { DateBar } from './DateBar.tsx';
 import { Disclosure } from './Disclosure.tsx';
+import { FiberNote } from './FiberNote.tsx';
 import { SegmentedControl } from './SegmentedControl.tsx';
 import { StatBar } from './StatBar.tsx';
 import { UpperLimitWarnings } from './UpperLimitWarnings.tsx';
@@ -26,6 +29,13 @@ interface NutritionViewProps {
   supplementLog: readonly SupplementIntake[];
   /** Tillskott påslaget: visa uppdelningen mat/tillskott. */
   supplements: boolean;
+  /** Dagligt proteinmål i gram, `null` utan profil. */
+  proteinGoalG?: number | null;
+  /**
+   * Fibermålet ett datum och fiber per dag (`days` = `null` medan datan laddas), `null` när
+   * fibermålet är av. Protein- och fiberringarna på Översikt leder hit.
+   */
+  fiber?: { goalOn: (date: string) => FiberGoal | null; days: DayFiber[] | null } | null;
 }
 
 type Period = 'dag' | 'vecka';
@@ -94,6 +104,8 @@ export function NutritionView({
   livsmedel,
   supplementLog,
   supplements,
+  proteinGoalG = null,
+  fiber = null,
 }: NutritionViewProps) {
   const today = todayIso();
   const [date, setDate] = useState(today);
@@ -111,12 +123,58 @@ export function NutritionView({
   const day = period === 'dag' ? dayNutrition(date, input) : weekNutrition(date, input);
   const warnings = period === 'dag' ? upperLimitWarnings(day) : [];
   const when = date === today ? 'idag' : formatDate(date);
+  const proteinG = Math.round(totalOf(foodLog.filter((e) => e.date === date)).proteinG);
+  const fiberGoal = fiber?.goalOn(date) ?? null;
+  const fiberDay = fiber?.days?.find((d) => d.date === date) ?? null;
+  const fiberG = Math.round(fiberDay?.fiberG ?? 0);
 
   return (
     <div className="nutrition" data-testid="nutrition">
       <DateBar date={date} today={today} label="Datum" testId="nutrition-date" onChange={setDate} />
       <SegmentedControl label="Period" options={PERIODS} value={period} onChange={setPeriod} />
       <UpperLimitWarnings warnings={warnings} when={when} />
+      {period === 'dag' && (
+        <Card title="Protein och fiber" testId="nutrition-macros">
+          <div className="totals-row">
+            <StatBar
+              tone="protein"
+              value={proteinG}
+              goal={proteinGoalG}
+              unit="g protein"
+              label={`Protein ${when}`}
+              valueText={
+                proteinGoalG == null
+                  ? undefined
+                  : `${formatInt(proteinG)} av ${formatInt(proteinGoalG)} g protein`
+              }
+              meta={
+                proteinGoalG == null
+                  ? undefined
+                  : proteinG >= proteinGoalG
+                    ? 'Målet nått'
+                    : `${formatInt(proteinGoalG - proteinG)} g kvar`
+              }
+            />
+            {fiberGoal && (
+              <StatBar
+                tone="fiber"
+                value={fiberG}
+                goal={fiberGoal.goalG}
+                unit="g fiber"
+                label={`Fiber ${when}`}
+                valueText={`${formatInt(fiberG)} av ${formatInt(fiberGoal.goalG)} g fiber`}
+                meta={
+                  fiberG >= fiberGoal.goalG
+                    ? 'Målet nått'
+                    : `${formatInt(fiberGoal.goalG - fiberG)} g kvar`
+                }
+                valueTestId="nutrition-fiber"
+              />
+            )}
+          </div>
+          {fiberGoal && <FiberNote goal={fiberGoal} day={fiber?.days ? fiberDay : null} />}
+        </Card>
+      )}
       {day.estimatedEntries > 0 && (
         <p className="form-note" role="note" data-testid="nutrition-estimated">
           {period === 'dag' ? `Näringen ${when} är ofullständig: ` : 'Näringen är ofullständig: '}

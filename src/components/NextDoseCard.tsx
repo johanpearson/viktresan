@@ -9,6 +9,7 @@ import {
   suggestSite,
 } from '../lib/glp1.ts';
 import type { AppData } from '../lib/useAppData.ts';
+import { Card } from './Card.tsx';
 
 interface NextDoseCardProps {
   data: AppData;
@@ -21,7 +22,10 @@ function dayText(date: string, today: string): string {
   return formatDate(date);
 }
 
-/** Översikt → Nästa dos: datum och dos ur schemat och dostrappan, senaste dos och ställe. */
+/**
+ * Logga → GLP-1 → Dos: nästa dos ur schemat och dostrappan, nästa steg i trappan, senaste dos och
+ * förslag på ställe. Översikt visar samma nästa dos som en rad under Att göra idag.
+ */
 export function NextDoseCard({ data, now }: NextDoseCardProps) {
   const today = todayIso(now);
   const next = nextDose(data.medications, data.injections, now);
@@ -30,10 +34,7 @@ export function NextDoseCard({ data, now }: NextDoseCardProps) {
   const upcomingStep = med && next ? nextDoseStep(med, next.date) : null;
 
   return (
-    <section className="card" aria-labelledby="next-dose-title" data-testid="next-dose">
-      <h2 className="card-title" id="next-dose-title">
-        Nästa dos
-      </h2>
+    <Card title="Nästa dos" testId="next-dose">
       {data.medications.length === 0 ? (
         <p className="form-note">
           Lägg in ditt läkemedel och din dostrappa under <a href="#/logga/glp1">Logga → GLP-1</a>.
@@ -71,6 +72,6 @@ export function NextDoseCard({ data, now }: NextDoseCardProps) {
           </div>
         </dl>
       )}
-    </section>
+    </Card>
   );
 }

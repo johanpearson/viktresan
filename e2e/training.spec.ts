@@ -55,25 +55,22 @@ test('planera ett pass, bocka av det från Översikt och se status i kalendern',
   await sheet.getByRole('button', { name: 'Stäng' }).tap();
   await expect(page.getByTestId('log-tile-traning')).toContainText('Idag 0 av 1 klara');
 
-  // Översikt: dagens pass under Idag, de tre nästa under Kommande.
+  // Översikt → Att göra idag: dagens planerade pass med Klar / Hoppa över. Inget "Kommande".
   await nav(page).getByRole('link', { name: 'Översikt' }).tap();
-  const today = page.getByTestId('today-card');
-  const workout = today.getByTestId('workout');
+  const todo = page.getByTestId('todo-card');
+  const workout = todo.getByTestId('todo-workout');
   await expect(workout).toHaveCount(1);
-  await expect(workout).toContainText('07:00');
+  await expect(workout).toContainText('Idag 07:00');
   await expect(workout).toContainText('Löpning · 30 min · Medel');
-  await expect(workout).toHaveAttribute('data-status', 'planerad');
-  await expect(page.getByTestId('upcoming-card').getByTestId('workout')).toHaveCount(3);
-  await expect(
-    page
-      .getByTestId('upcoming-card')
-      .getByTestId('workout')
-      .evaluateAll((els) => els.map((el) => el.getAttribute('data-date'))),
-  ).resolves.toEqual(['2026-09-18', '2026-09-21', '2026-09-23']);
-  await expect(page.getByTestId('missed-workouts')).toHaveCount(0);
+  await expect(page.getByTestId('upcoming-card')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Kommande' })).toHaveCount(0);
+  await expect(todo.getByTestId('todo-unanswered')).toHaveCount(0);
 
-  // Klar → panel med planens längd och intensitet förifyllda; justera och spara.
-  await workout.getByRole('button', { name: /^Klar/ }).tap();
+  // Tryck på passet → radmeny; Klar → panel med planens längd och intensitet förifyllda.
+  await workout.getByRole('button').tap();
+  const todoMenu = page.getByRole('dialog', { name: 'Löpning · 30 min · Medel' });
+  await expect(todoMenu.getByRole('button', { name: 'Hoppa över' })).toBeVisible();
+  await todoMenu.getByRole('button', { name: 'Klar' }).tap();
   const complete = page.getByRole('dialog', { name: 'Markera som klar' });
   await expect(complete.getByLabel('Faktisk längd (min)')).toHaveValue('30');
   await expect(complete.getByRole('button', { name: 'Medel' })).toHaveAttribute(
@@ -84,10 +81,9 @@ test('planera ett pass, bocka av det från Översikt och se status i kalendern',
   await complete.getByRole('button', { name: 'Hög' }).tap();
   await complete.getByRole('button', { name: 'Spara som genomfört' }).tap();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(workout).toHaveAttribute('data-status', 'genomford');
-  await expect(workout).toContainText('Löpning · 45 min · Hög');
-  await expect(workout.getByRole('button', { name: /^Klar/ })).toHaveCount(0);
-  await expect(page.getByTestId('today-traning')).toHaveText(/1 genomfört/);
+  // Passet lämnar Att göra idag och blir ett chip under ringarna.
+  await expect(workout).toHaveCount(0);
+  await expect(page.getByTestId('today-traning')).toHaveText('Löpning · 45 min · Hög');
 
   // Kalendern: genomfört idag, planerat på fredag.
   await nav(page).getByRole('link', { name: 'Kalender' }).tap();
@@ -158,36 +154,31 @@ test('passerade pass frågas "Blev passet av?" tills de är besvarade', async ({
   });
 
   // Mån 07:00, tis (hela dagen) och ons 07:00 har passerat; ons 18:00 har inte det.
-  const missed = page.getByTestId('missed-workouts');
-  await expect(missed.getByRole('heading', { name: 'Blev passet av?' })).toBeVisible();
-  // Kortet ligger överst, före Idag.
-  const cards = await page
-    .locator('.page > section, .page > .card')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
-  expect(cards.indexOf('missed-workouts')).toBeLessThan(cards.indexOf('today-card'));
-  await expect(missed.getByTestId('workout')).toHaveCount(3);
-  await expect(missed.getByTestId('workout').first()).toHaveAttribute('data-status', 'obesvarad');
-  const todays = page.getByTestId('today-card').getByTestId('workout');
+  const todo = page.getByTestId('todo-card');
+  const missed = todo.getByTestId('todo-unanswered');
+  await expect(missed).toHaveCount(3);
+  await expect(missed.first()).toContainText('Blev passet av?');
+  const todays = todo.getByTestId('todo-workout');
   await expect(todays).toHaveCount(1);
   await expect(todays).toContainText('Yoga');
 
-  await missed
-    .getByTestId('workout')
-    .first()
-    .getByRole('button', { name: /^Hoppade över/ })
-    .tap();
-  await expect(missed.getByTestId('workout')).toHaveCount(2);
-  await missed.getByRole('button', { name: /^Klar: Simning/ }).tap();
+  const menu = page.getByRole('dialog');
+  await missed.first().getByRole('button').tap();
+  await menu.getByRole('button', { name: 'Hoppade över' }).tap();
+  await expect(missed).toHaveCount(2);
+  await missed.filter({ hasText: 'Simning' }).getByRole('button').tap();
+  await menu.getByRole('button', { name: 'Klar' }).tap();
   const complete = page.getByRole('dialog', { name: 'Markera som klar' });
   await expect(complete.getByLabel('Faktisk längd (min)')).toHaveValue('40');
   await complete.getByRole('button', { name: 'Spara som genomfört' }).tap();
-  await expect(missed.getByTestId('workout')).toHaveCount(1);
+  await expect(missed).toHaveCount(1);
 
   // Överlever omladdning: bara det obesvarade passet är kvar.
   await page.reload();
-  await expect(missed.getByTestId('workout')).toHaveCount(1);
+  await expect(missed).toHaveCount(1);
   await expect(missed).toContainText('Styrketräning');
-  await missed.getByRole('button', { name: /^Klar: Styrketräning/ }).tap();
+  await missed.getByRole('button').tap();
+  await menu.getByRole('button', { name: 'Klar' }).tap();
   await page.getByRole('button', { name: 'Spara som genomfört' }).tap();
   await expect(missed).toHaveCount(0);
 
@@ -330,20 +321,24 @@ test('dryck: logga, ångra, ring på Översikt, historik, eget mål och träning
   // Standardmål för kvinnor: 1 600 ml – vikten spelar ingen roll.
   const ring = page.getByRole('progressbar', { name: 'Dryck idag' });
   await expect(ring).toHaveAttribute('aria-valuetext', '0 ml av 1 600 ml');
-  await page.getByRole('button', { name: '+250 ml Glas', exact: true }).tap();
+  // Tryck på ringen: panelen med snabbvalen, valfri mängd och Ångra senaste.
+  await page.getByRole('button', { name: 'Dryck – logga dryck' }).tap();
+  const drinkSheet = page.getByRole('dialog', { name: 'Dryck idag' });
+  await drinkSheet.getByRole('button', { name: '+250 ml Glas', exact: true }).tap();
   await expect(ring).toHaveAttribute('aria-valuetext', '250 ml av 1 600 ml');
-  await expect(page.getByTestId('today-vatten')).toHaveText(/250 ml/);
-  await expect(page.getByTestId('today-vatten')).toContainText('Dryck');
-
-  // "Valfri mängd" öppnar Logga → Dryck.
-  await page.getByRole('link', { name: 'Valfri mängd' }).tap();
-  const sheet = page.getByRole('dialog', { name: 'Logga dryck' });
-  await expect(sheet).toBeVisible();
-  await sheet.getByRole('button', { name: 'Stäng' }).tap();
+  await drinkSheet.getByLabel('Valfri mängd (ml)').fill('100');
+  await drinkSheet.getByRole('button', { name: 'Lägg till' }).tap();
+  await expect(ring).toHaveAttribute('aria-valuetext', '350 ml av 1 600 ml');
+  await drinkSheet.getByRole('button', { name: 'Ångra senaste' }).tap();
+  await expect(ring).toHaveAttribute('aria-valuetext', '250 ml av 1 600 ml');
+  await drinkSheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await expect(drinkSheet).toHaveCount(0);
+  await page.goto('./#/logga');
   await expect(page.getByTestId('log-tile-vatten')).toContainText('Idag 250 ml av 1 600 ml');
 
   // Logga → Dryck: snabbknappar (glas, flaska, kaffe/te), valfri mängd och ångra.
   await openLog(page, 'vatten');
+  const sheet = page.getByRole('dialog', { name: 'Logga dryck' });
   await sheet.getByRole('button', { name: '+500 ml Flaska', exact: true }).tap();
   await sheet.getByRole('button', { name: '+150 ml Kaffe/te', exact: true }).tap();
   await sheet.getByLabel('Valfri mängd (ml)').fill('330');
@@ -390,7 +385,10 @@ test('dryck: logga, ångra, ring på Översikt, historik, eget mål och träning
   // Dagens pass är genomfört: 2 000 + 500 ml.
   await page.goto('./');
   await expect(ring).toHaveAttribute('aria-valuetext', '900 ml av 2 500 ml');
-  await expect(page.getByTestId('drink-note')).toHaveText('Målet +500 ml för dagens pass.');
+  await page.getByRole('button', { name: 'Dryck – logga dryck' }).tap();
+  await expect(page.getByRole('dialog').getByTestId('drink-note')).toHaveText(
+    'Målet +500 ml för dagens pass.',
+  );
   expect((await dump(page)).profile).toMatchObject({ waterGoalMl: 2000, waterTrainingBonus: true });
   expect(errors).toEqual([]);
 });
@@ -409,7 +407,7 @@ test('dryck och träning av: dolda överallt, datan ligger kvar', async ({ page 
       },
     ],
   });
-  await expect(page.getByTestId('missed-workouts')).toBeVisible();
+  await expect(page.getByTestId('todo-unanswered')).toBeVisible();
   await page.goto('./#/installningar/funktioner');
   await page.getByRole('switch', { name: /^Dryck/ }).setChecked(false);
   await page.getByRole('switch', { name: /^Träning/ }).setChecked(false);
@@ -421,8 +419,7 @@ test('dryck och träning av: dolda överallt, datan ligger kvar', async ({ page 
 
   await page.goto('./');
   await expect(page.getByTestId('today-card')).toBeVisible();
-  await expect(page.getByTestId('missed-workouts')).toHaveCount(0);
-  await expect(page.getByTestId('upcoming-card')).toHaveCount(0);
+  await expect(page.getByTestId('todo-unanswered')).toHaveCount(0);
   await expect(page.getByTestId('water-ring')).toHaveCount(0);
   await page.goto('./#/logga');
   await expect(page.getByTestId('log-tile-vikt')).toBeVisible();

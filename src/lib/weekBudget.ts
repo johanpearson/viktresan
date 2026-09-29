@@ -155,6 +155,16 @@ export function weekRowText(week: WeekBudget): string {
   return `${used} · ${left} · ≈ ${formatInt(week.perDayKcal)} kcal/dag resten av veckan`;
 }
 
+/** Kort veckorad på Översikt: "Vecka: 10 132 kcal kvar · ≈ 1 804/dag" (resten i veckopanelen). */
+export function weekRowShortText(week: WeekBudget): string {
+  const left =
+    week.remainingKcal >= 0
+      ? `Vecka: ${formatKcal(week.remainingKcal)} kvar`
+      : `Vecka: ${formatKcal(-week.remainingKcal)} över`;
+  if (week.perDayKcal === null) return left;
+  return `${left} · ≈ ${formatInt(week.perDayKcal)}/dag`;
+}
+
 /** "Saldo hittills +350 kcal" – loggat mot planerat för dagarna före idag. */
 export function weekBalanceText(week: WeekBudget): string {
   return `${week.daysLeft > 0 ? 'Saldo hittills' : 'Saldo'} ${formatSignedKcal(week.balanceKcal)}`;

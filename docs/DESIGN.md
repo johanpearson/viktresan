@@ -158,6 +158,12 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `Macros`            | `Macros.tsx`            | "P 6 g · K 30 g · F 2 g · Fi 4 g" – fiber i fiberfärg, "–" saknas, "*" underkant |
 | `FiberNote`         | `FiberNote.tsx`         | Rad under fiberringen/-stapeln: veckans fibermål, notis om saknad fiberdata      |
 | `HydrationReminder` | `HydrationReminder.tsx` | Översikt: "Drick lite extra idag" när diarré/kräkning loggats (GLP-1)            |
+| `RingAction`        | `RingAction.tsx`        | Ring på Översikt som går att trycka på (bildtexten är knappen/länken)            |
+| `TodoCard`          | `TodoCard.tsx`          | Översikt: Att göra idag (tillskott, dos, pass, backup) eller "Allt klart"        |
+| `MilestoneCard`     | `MilestoneCard.tsx`     | Översikt: kontextkortet "Ny milstolpe" (senaste veckan, kan stängas)             |
+| `UpdateCard`        | `UpdateCard.tsx`        | Översikt: kontextkortet "Ny version finns" (toast på övriga sidor)               |
+| `CalorieDetails`    | `CalorieDetails.tsx`    | Kaloriringens panel: mål, takt, förbrukning, spärrar, "Så räknas målet ut"       |
+| `WeightDetails`     | `WeightDetails.tsx`     | Framsteg → Historik: förändring, kvar, BMI, när målet nås (viktkortet leder hit) |
 
 ### Page (sidhuvud)
 
@@ -573,7 +579,7 @@ filter. Samma knapp (`ShowMore`) används för "Visa alla N obesvarade" på Öve
   i sina datafärger och kapas tillsammans vid 100 %. Används i Mat → Näring för mat (`food`) + tillskott
   (`supplement`) mot referensintaget, med en liten förklaring (`bar-legend`) överst i kortet.
 - `GoalRing`: 96 px, `tone`, värde i mitten och "av …" under. Tre ringar på en rad (dryck, kalorier,
-  protein) med bildtext under. Med fibermålet blir det fyra: `.rings-4` ger fyra lika breda kolumner där ringarna
+  protein) med bildtext under. På Översikt är ringen tryckbar via `RingAction`. Med fibermålet blir det fyra: `.rings-4` ger fyra lika breda kolumner där ringarna
   krymper med skärmen (högst 96 px) och värdet får `--text-sm` – aldrig två rader ringar.
 - **Fibermål** i Mat → Dag och Mat → Historik: kalori-`StatBar` över hela bredden och protein + fiber bredvid varandra
   under (`totals-row-fiber`). Under ringen/staplarna en `FiberNote` (`form-note`): "Veckans fibermål: 21 g (mål 35 g)"
@@ -632,7 +638,8 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
   höger). "Duplicera recept" är en ghost-textknapp ovanför den destruktiva "Ta bort receptet". Sök-sheeten öppnas
   **utanför** formuläret (syskon), eftersom den har egna formulär. Portioner loggas med chips ½ · 1 · 1½ · 2.
 - **Veckoraden** (`WeekBudgetRow`) ligger inuti summeringskortet (Mat → Dag) och Idag-kortet (Översikt) under en 1 px
-  linje – aldrig som eget kort i ett kort. Den är en hel rad som knapp (minst `--tap`, › till höger): veckotexten i
+  linje – aldrig som eget kort i ett kort. På Översikt är den `compact`: en rad utan saldo och golvnotis (de finns i
+  panelen). Den är en hel rad som knapp (minst `--tap`, › till höger): veckotexten i
   `--text-sm` med `Parts` (bryts bara vid "·") och saldot dämpat i `--text-xs` under. Saldot är **neutralt** – aldrig
   `--success`/`--danger`, bara tecknet (+/−/±) visar riktningen. Golvnotisen (`WeekShortfallNote`) är en saklig
   `form-note` utan varningsfärg: den föreslår att sprida resten över nästa vecka, aldrig att äta under golvet.
@@ -640,6 +647,30 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
   text i `visually-hidden`) i matens färg mot dagsmålet som streckad linje (`--chart-goal`). Värdet står över stapeln,
   veckodagen under (idag i fetstil). En passerad dag utan matlogg har streckad ram och "ej loggad", kommande dagar "–".
   Under: förklaringsrad och värden som `list list-flush` + `ListRow` (Loggat, Kvar, Per dag resten av veckan, Saldo).
+
+### Översikt
+
+Status och det som kräver handling idag – detaljer ett tryck bort. En vanlig dag ryms på ungefär 1,5 skärmhöjder
+(Pixel 7, vaktas i `e2e/overview.spec.ts`). Ordning:
+
+1. **Viktkortet** (`hero-card`): trendvikten i `--text-xl`, dagsvikt och datum som en rad `--text-xs`, tunn
+   `ProgressBar` och **en** rad under: "−4,5 kg · 7,5 kg kvar · mål ca dec. 2026". Måldatumet är trendens prognos
+   när den räcker, annars datumet enligt vald takt med "enligt plan" (`goalEta`) – aldrig två datum eller en text om
+   att prognosen saknas. Förklaringen om vätska och salt ligger bakom info-ikonen. Hela kortet är en länk (`hero-link`,
+   `::after` över kortet, › uppe till höger) till Framsteg → Historik, där `WeightDetails` visar BMI och prognosen.
+2. **Kontextkort** – bara när de är aktuella, alla kan stängas: ny version (`UpdateCard`), ny milstolpe
+   (`MilestoneCard`), förra veckan (`WeekSummaryCard`, en rad med rubriken → Framsteg → Veckor), platå
+   (`PlateauCard`), dryckespåminnelse och övre gränsvärden.
+3. **Idag**: ringarna (`RingAction`) – dryck öppnar en panel med snabbvalen, kalorier `CalorieDetails` i en panel,
+   protein och fiber Mat → Näring. Under: chips för steg och träning (bara med data idag, `today-chip` med
+   kalenderprick) och veckoraden i kort form (`WeekBudgetRow compact`: "Vecka: 7 771 kcal kvar · ≈ 2 150/dag").
+4. **Att göra idag** (`TodoCard`): `ListRow` per sak som väntar – dos (länk till Logga → GLP-1), tillskott (tryck =
+   tagen, Toast med Ångra; "Alla tagna" i rubrikraden vid fler än ett), pass med Klar / Hoppa över under raden,
+   "Blev passet av?" och säkerhetskopian. Tomt → kortet ersätts av raden "Allt klart för idag" (bock i `--success`).
+   Nästa dos (ej dosdag) är en liten dämpad rad längst ner: "Nästa dos lör 26 sep · 2,5 mg · buk vänster".
+
+Inställningar → Översikt (`OverviewSettings`, switchar) döljer enskilda ringar, veckoraden och korten
+(`preferences.overviewHidden`); viktkortet visas alltid.
 
 ### Dryckespåminnelse (Översikt, GLP-1)
 

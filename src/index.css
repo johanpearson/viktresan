@@ -2207,57 +2207,6 @@ a.button {
 }
 
 /* Träningspass */
-.workout-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.workout {
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--border);
-}
-
-.workout:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.stats + .workout-list {
-  margin-top: var(--space-1);
-}
-
-.stats-compact + .workout-list {
-  margin-top: var(--space-3);
-}
-
-.workout-main {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.workout-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.workout-when {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.workout-title {
-  overflow-wrap: anywhere;
-}
-
-.workout .entry-actions {
-  margin-top: var(--space-2);
-}
 
 .workout-badge {
   flex: none;
@@ -2283,15 +2232,6 @@ a.button {
 
 .badge-hoppad {
   color: var(--muted);
-}
-
-.workout.status-hoppad .workout-title {
-  text-decoration: line-through;
-  color: var(--muted);
-}
-
-.missed-card {
-  margin-bottom: var(--space-3);
 }
 
 .show-more {
@@ -2690,12 +2630,6 @@ a.button {
   border-radius: var(--radius-sm);
   background: var(--bg);
   color: var(--text);
-  font-size: var(--text-xs);
-}
-
-.hero-note {
-  margin: 8px 0 0;
-  color: var(--muted);
   font-size: var(--text-xs);
 }
 
@@ -4133,12 +4067,6 @@ a.list-row-body {
   font-weight: 400;
 }
 
-.hero-forecast {
-  margin: var(--space-3) 0 0;
-  color: var(--muted);
-  font-size: var(--text-xs);
-}
-
 /* Översikt → Idag: dryck som små sekundära knappar på en rad. */
 .water-controls-chips .water-quick {
   display: flex;
@@ -4820,4 +4748,179 @@ p.plateau-reasons {
 
 .fiber-partial {
   margin-left: 1px;
+}
+
+/* Översikt: viktkortet. Hela kortet är en länk till Framsteg → Historik (länkens ::after),
+   info-knappen ligger ovanpå. › uppe till höger visar att kortet öppnar något. */
+.hero-card {
+  position: relative;
+}
+
+.hero-card .hero-progress {
+  margin-top: var(--space-3);
+}
+
+.hero-card .hero-sub {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.hero-summary {
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+}
+
+.hero-link:focus-visible {
+  outline: none;
+}
+
+.hero-link:focus-visible::after {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hero-card .info-button,
+.hero-card .hero-info {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-chevron {
+  position: absolute;
+  top: calc(var(--space-4) + 4px);
+  right: var(--space-4);
+}
+
+/* Översikt → Idag: ringarna är tryckytor (bildtexten är knappen/länken, ::after täcker figuren). */
+.ring-action {
+  position: relative;
+  min-width: var(--tap-min);
+}
+
+.ring-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ring-link::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--space-1));
+  border-radius: var(--radius-md);
+}
+
+.ring-link:focus-visible {
+  outline: none;
+}
+
+.ring-link:focus-visible::after {
+  outline: 3px solid var(--accent);
+}
+
+/* Små chips under ringarna för steg och träning (bara dagar med data). */
+.today-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.today-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.rings + .today-chips {
+  margin-top: calc(-1 * var(--space-1));
+}
+
+/* Veckoraden på Översikt: en rad, ingen saldorad. */
+.week-budget-compact {
+  margin-top: var(--space-2);
+  padding-top: 0;
+}
+
+.week-budget-compact .week-budget-row {
+  min-height: var(--tap-min);
+  padding: var(--space-1) 0;
+}
+
+/* Översikt → Att göra idag */
+.todo-check {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--muted);
+  border-radius: var(--radius-full);
+}
+
+.todo-check-warning {
+  border-color: var(--warning);
+}
+
+.todo-next-dose {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.todo-card .todo-next-dose {
+  margin-top: var(--space-2);
+}
+
+.card + .todo-done-block {
+  margin-top: var(--space-3);
+}
+
+.todo-done {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  margin: 0;
+  padding: 0 var(--space-4);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.todo-done-block .todo-next-dose {
+  padding: 0 var(--space-4);
+}
+
+/* Bock i success-färg, ritad i CSS. */
+.todo-done-icon {
+  width: 12px;
+  height: 7px;
+  margin: 0 4px 4px;
+  border-bottom: 2px solid var(--success);
+  border-left: 2px solid var(--success);
+  transform: rotate(-45deg);
+}
+
+/* Kaloriringens panel: värden som rader, förklaringar under. */
+.calorie-details .plan-notes {
+  margin-top: var(--space-3);
 }

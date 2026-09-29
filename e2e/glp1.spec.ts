@@ -36,7 +36,9 @@ async function start(page: Page, data: Parameters<typeof seed>[1] = {}) {
 test('lägga in läkemedel med dostrappa, logga dos och se den i kalendern', async ({ page }) => {
   const errors = collectErrors(page);
   await start(page);
-  await expect(page.getByTestId('next-dose')).toContainText('Lägg in ditt läkemedel');
+  // Utan läkemedel: ingen dos att göra och ingen rad "Nästa dos".
+  await expect(page.getByTestId('todo-next-dose')).toHaveCount(0);
+  await expect(page.getByTestId('todo-dose')).toHaveCount(0);
 
   // Logga → GLP-1: utan läkemedel öppnas fliken Läkemedel.
   await nav(page).getByRole('link', { name: 'Logga' }).tap();
@@ -74,18 +76,19 @@ test('lägga in läkemedel med dostrappa, logga dos och se den i kalendern', asy
   await sheet.getByRole('button', { name: 'Stäng' }).tap();
   await expect(page.getByTestId('log-tile-glp1')).toContainText('Idag 0,25 mg');
 
-  // Översikt: dosdag och ingen loggad dos → banner; Nästa dos är idag.
+  // Översikt: dosdag och ingen loggad dos → raden i Att göra idag (ingen rad "Nästa dos").
   await nav(page).getByRole('link', { name: 'Översikt' }).tap();
-  const banner = page.getByTestId('dose-day-banner');
-  await expect(banner).toContainText('Dosdag idag');
-  await expect(banner).toContainText('Wegovy 0,25 mg kl. 08:00 är inte loggad än.');
-  await expect(page.getByTestId('next-dose-value')).toHaveText('Idag 08:00 · Wegovy 0,25 mg');
-  await expect(page.getByTestId('next-dose')).toContainText('Nästa steg i dostrappan: 0,5 mg');
-  await expect(page.getByTestId('next-site')).toHaveText('Buk vänster');
+  const dose = page.getByTestId('todo-dose');
+  await expect(dose).toContainText('Dos idag: Wegovy 0,25 mg');
+  await expect(dose).toContainText('kl. 08:00 · Förslag: buk vänster');
+  await expect(page.getByTestId('todo-next-dose')).toHaveCount(0);
 
-  // "Logga dos" öppnar panelen direkt på Dos med dosen ur trappan och förslag på ställe.
-  await banner.getByRole('link', { name: 'Logga dos' }).tap();
+  // Raden öppnar panelen direkt på Dos med dosen ur trappan och förslag på ställe.
+  await dose.getByRole('link').tap();
   const doseSheet = page.getByRole('dialog', { name: 'GLP-1' });
+  await expect(doseSheet.getByTestId('next-dose-value')).toHaveText('Idag 08:00 · Wegovy 0,25 mg');
+  await expect(doseSheet.getByTestId('next-dose')).toContainText('Nästa steg i dostrappan: 0,5 mg');
+  await expect(doseSheet.getByTestId('next-site')).toHaveText('Buk vänster');
   await expect(doseSheet.getByRole('button', { name: 'Dos', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -132,12 +135,19 @@ test('lägga in läkemedel med dostrappa, logga dos och se den i kalendern', asy
   await doseSheet.getByRole('button', { name: 'Stäng' }).tap();
   await expect(page).toHaveURL(/#\/logga$/);
 
-  // Översikt: bannern är borta och nästa dos är nästa onsdag.
+  // Översikt: dosen är klar; nästa dos (nästa onsdag) är en liten rad längst ner.
   await nav(page).getByRole('link', { name: 'Översikt' }).tap();
-  await expect(page.getByTestId('next-dose-value')).toHaveText(/23 sep.* 08:00 · Wegovy 0,25 mg/);
-  await expect(page.getByTestId('dose-day-banner')).toHaveCount(0);
-  await expect(page.getByTestId('last-dose')).toContainText('Wegovy 0,25 mg · Buk vänster');
-  await expect(page.getByTestId('next-site')).toHaveText('Buk höger');
+  await expect(page.getByTestId('todo-dose')).toHaveCount(0);
+  const next = page.getByTestId('todo-next-dose');
+  await expect(next).toHaveText('Nästa dos ons 23 sep · 0,25 mg · buk höger');
+  // Raden öppnar GLP-1-vyn med nästa dos, senaste dos och ställe.
+  await next.tap();
+  const glp1 = page.getByRole('dialog', { name: 'GLP-1' });
+  await expect(glp1.getByTestId('next-dose-value')).toHaveText(/23 sep.* 08:00 · Wegovy 0,25 mg/);
+  await expect(glp1.getByTestId('last-dose')).toContainText('Wegovy 0,25 mg · Buk vänster');
+  await expect(glp1.getByTestId('next-site')).toHaveText('Buk höger');
+  await glp1.getByRole('button', { name: 'Stäng' }).tap();
+  await expect(glp1).toHaveCount(0);
 
   // Kalendern: loggad dos idag, planerade doser framåt (med nästa steg i trappan).
   await nav(page).getByRole('link', { name: 'Kalender' }).tap();

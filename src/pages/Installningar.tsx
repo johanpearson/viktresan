@@ -11,6 +11,7 @@ import { ImportBackup } from '../components/ImportBackup.tsx';
 import { ListRow } from '../components/ListRow.tsx';
 import { LockSettings } from '../components/LockSettings.tsx';
 import { Page } from '../components/Page.tsx';
+import { OverviewSettings } from '../components/OverviewSettings.tsx';
 import { PhotoSettings } from '../components/PhotoSettings.tsx';
 import { ProfileForm } from '../components/ProfileForm.tsx';
 import { ProteinGoalSettings } from '../components/ProteinGoalSettings.tsx';
@@ -20,6 +21,7 @@ import { daysSince } from '../lib/backupReminder.ts';
 import { FEATURES, useFeatures, type FeatureGated } from '../lib/features.ts';
 import { decimalInput, formatInt, formatKg, formatMl } from '../lib/format.ts';
 import { useLockStatus } from '../lib/lock.ts';
+import { OVERVIEW_ITEMS } from '../lib/overviewItems.ts';
 import { SIDE_LABELS } from '../lib/photoSessions.ts';
 import { usePreferences } from '../lib/preferences.ts';
 import { fiberGoalVisible, fiberReferenceG } from '../lib/fiber.ts';
@@ -40,6 +42,7 @@ type PanelId =
   | 'matpreferenser'
   | 'funktioner'
   | 'visning'
+  | 'oversikt'
   | 'bilder'
   | 'las'
   | 'sakerhetskopia'
@@ -56,6 +59,8 @@ interface Summary {
   locked: boolean;
   /** GLP-1 är på (fibermål och dryckestillägg). */
   glp1: boolean;
+  /** Dolda ringar och kort på Översikt (bland påslagna funktioner). */
+  overviewHidden: number;
 }
 
 interface Panel extends FeatureGated {
@@ -173,6 +178,13 @@ const GROUPS: readonly Group[] = [
         secondary: () => 'Trendvikt och vibration',
       },
       {
+        id: 'oversikt',
+        title: 'Översikt',
+        secondary: () => 'Ringar och kort',
+        value: ({ overviewHidden }) =>
+          overviewHidden === 0 ? 'Allt visas' : `${String(overviewHidden)} dolda`,
+      },
+      {
         id: 'bilder',
         title: 'Bilder',
         feature: 'bilder',
@@ -257,6 +269,9 @@ export function Installningar() {
     profileSide: SIDE_LABELS[prefs.profileSide],
     locked: lock === 'locked' || lock === 'unlocked',
     glp1: features.isEnabled('glp1'),
+    overviewHidden: features
+      .filter(OVERVIEW_ITEMS)
+      .filter((i) => prefs.overviewHidden.includes(i.id)).length,
   };
   const groups = GROUPS.map((g) => ({ ...g, panels: features.filter(g.panels) }));
   const open = groups.flatMap((g) => g.panels).find((p) => p.id === openId);
@@ -297,6 +312,8 @@ export function Installningar() {
         return <FeatureSettings />;
       case 'visning':
         return <DisplaySettings />;
+      case 'oversikt':
+        return <OverviewSettings />;
       case 'bilder':
         return <PhotoSettings />;
       case 'las':

@@ -104,6 +104,8 @@ export function Mat() {
           livsmedel={food.livsmedel?.foods ?? null}
           supplementLog={data.supplementLog}
           supplements={features.isEnabled('tillskott')}
+          proteinGoalG={proteinGoalG}
+          fiber={fiber.goal ? { goalOn: fiber.goalOn, days: fiber.days } : null}
         />
       )}
     </Page>

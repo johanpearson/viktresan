@@ -10,6 +10,7 @@ import { WaistHistory } from '../components/WaistHistory.tsx';
 import { WaterHistory } from '../components/WaterHistory.tsx';
 import { WeightChart } from '../components/WeightChart.tsx';
 import { WeightDays } from '../components/WeightDays.tsx';
+import { WeightDetails } from '../components/WeightDetails.tsx';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
 import { formatMg } from '../lib/format.ts';
@@ -19,7 +20,7 @@ import { useAppData } from '../lib/useAppData.ts';
 import { drinkEntries, waterGoalFor } from '../lib/water.ts';
 
 /**
- * Framsteg → Historik: viktgraf och -tabell, plus steg, midja och dryck när de är påslagna.
+ * Framsteg → Historik: mot målet (förändring, kvar, BMI, prognos – Översikts viktkort leder hit), viktgraf och -tabell, plus steg, midja och dryck när de är påslagna.
  * Med GLP-1 på markeras dosbyten i viktgrafen. Tidsfiltret gäller alla kort.
  */
 export function Historik() {
@@ -42,6 +43,15 @@ export function Historik() {
 
   return (
     <>
+      {/* Detaljerna bakom Översikts viktkort; tidsfiltret gäller graferna under. */}
+      {data.profile && (
+        <WeightDetails
+          profile={data.profile}
+          weights={data.weights}
+          foodLog={data.foodLog}
+          today={today}
+        />
+      )}
       <RangeFilter value={range} onChange={setRange} />
       {allDaily.length === 0 ? (
         <EmptyState
