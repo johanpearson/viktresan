@@ -34,6 +34,7 @@ function fieldsFor(
     protein: text(values?.proteinG),
     carbs: text(values?.carbsG),
     fat: text(values?.fatG),
+    fiber: text(food?.fiberG),
     ean: food?.ean ?? ean ?? '',
   };
 }
@@ -43,6 +44,7 @@ const NUTRIENT_FIELDS: readonly { key: keyof FoodFields; label: string }[] = [
   { key: 'protein', label: 'Protein (g)' },
   { key: 'carbs', label: 'Kolhydrater (g)' },
   { key: 'fat', label: 'Fett (g)' },
+  { key: 'fiber', label: 'Fiber (g, valfritt)' },
 ];
 
 const NO_UNITS: readonly FoodUnit[] = [];
@@ -116,7 +118,7 @@ export function CustomFoodForm({
                 className="input"
                 inputMode="decimal"
                 autoComplete="off"
-                value={fields[f.key]}
+                value={fields[f.key] ?? ''}
                 onChange={(e) => {
                   update(f.key, e.target.value);
                 }}

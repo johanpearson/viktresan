@@ -71,6 +71,7 @@
 
   /* Makron (bara i matens detaljer) */
   --macro-protein: #0f766e;
+  --macro-fiber: #15803d;
   --macro-carbs: #b45309;
   --macro-fat: #7c3aed;
 
@@ -125,6 +126,7 @@
     --data-supplement: #f0abfc;
 
     --macro-protein: #2dd4bf;
+    --macro-fiber: #4ade80;
     --macro-carbs: #fbbf24;
     --macro-fat: #c4b5fd;
 
@@ -2618,7 +2620,7 @@ a.button {
   font-size: var(--text-xs);
 }
 
-/* Proteinrikt livsmedel (sökträffar, favoriter) */
+/* Proteinrikt/fiberrikt livsmedel (sökträffar, favoriter) */
 .tag {
   display: inline-block;
   margin-left: 6px;
@@ -2630,6 +2632,10 @@ a.button {
   font-weight: 600;
   line-height: 1.5;
   vertical-align: 0.1em;
+}
+
+.tag-fiber {
+  border-color: var(--macro-fiber);
 }
 
 /* Snabblogg i dagsvyn: uppskattade kcal (dämpad, ingen datafärg) */
@@ -3693,6 +3699,10 @@ a.list-row-body {
   --tone: var(--macro-protein);
 }
 
+.tone-fiber {
+  --tone: var(--macro-fiber);
+}
+
 .tone-drink {
   --tone: var(--data-drink);
 }
@@ -4562,4 +4572,46 @@ p.plateau-reasons {
   .svg-chart-svg {
     max-width: 120mm;
   }
+}
+
+/* Översikt → Idag med fyra ringar (dryck, kalorier, protein, fiber): lika breda kolumner,
+   ringarna krymper med skärmen (högst 96 px). */
+.rings-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.rings-4 .goal-ring {
+  width: 100%;
+  max-width: 96px;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.rings-4 .goal-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.rings-4 .goal-ring-value {
+  font-size: var(--text-sm);
+}
+
+.fiber-note {
+  margin: 0 0 var(--space-3);
+}
+
+/* Översikt: dryckespåminnelse vid diarré/kräkning (GLP-1) */
+.hydration-text {
+  margin: 0;
+}
+
+/* Mat → Dag med fibermål: kalorier över hela bredden, protein och fiber bredvid varandra. */
+.totals-row-fiber > :first-child {
+  grid-column: 1 / -1;
+}
+
+.day-summary .fiber-note {
+  margin: var(--space-2) 0 0;
 }

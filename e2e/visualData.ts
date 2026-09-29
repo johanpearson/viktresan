@@ -14,16 +14,16 @@ export const LIVSMEDEL = {
   source: 'Testdatabas',
   license: 'CC BY 4.0',
   retrieved: '2026-09-01',
-  // Vitaminer och mineraler (åttonde kolumnen) för näringssummeringen.
-  extra: ['vitaminD', 'vitaminB12', 'vitaminC', 'calcium', 'iron', 'zinc'],
+  // Fiber, vitaminer och mineraler (åttonde kolumnen) för fibermålet och näringssummeringen.
+  extra: ['fiberG', 'vitaminD', 'vitaminB12', 'vitaminC', 'calcium', 'iron', 'zinc'],
   foods: [
-    [1, 'Havregryn', 370, 13, 59, 7, '', [0, 0, 0, 50, 4, 3]],
-    [2, 'Mjölk fett 3 %', 60, 3.5, 4.8, 3, '', [0.5, 0.4, 1, 120, 0, 0.4]],
-    [3, 'Banan', 95, 1.1, 21, 0.3, '', [0, 0, 9, 5, 0.3, 0.2]],
-    [4, 'Potatis kokt', 80, 2, 17, 0.1, '', [0, 0, 10, 5, 0.4, 0.3]],
-    [5, 'Ägg kokt', 136, 12.1, 0, 9.8, '', [2, 1.2, 0, 50, 1.8, 1.2]],
-    [6, 'Kycklingfilé stekt', 150, 30, 0, 3, '', [0.2, 0.4, 0, 10, 0.6, 1]],
-    [7, 'Kvarg naturell', 63, 11, 3.5, 0.2, '', [0, 0.6, 0, 90, 0, 0.5]],
+    [1, 'Havregryn', 370, 13, 59, 7, '', [10, 0, 0, 0, 50, 4, 3]],
+    [2, 'Mjölk fett 3 %', 60, 3.5, 4.8, 3, '', [0, 0.5, 0.4, 1, 120, 0, 0.4]],
+    [3, 'Banan', 95, 1.1, 21, 0.3, '', [1.6, 0, 0, 9, 5, 0.3, 0.2]],
+    [4, 'Potatis kokt', 80, 2, 17, 0.1, '', [1.5, 0, 0, 10, 5, 0.4, 0.3]],
+    [5, 'Ägg kokt', 136, 12.1, 0, 9.8, '', [0, 2, 1.2, 0, 50, 1.8, 1.2]],
+    [6, 'Kycklingfilé stekt', 150, 30, 0, 3, '', [0, 0.2, 0.4, 0, 10, 0.6, 1]],
+    [7, 'Kvarg naturell', 63, 11, 3.5, 0.2, '', [0, 0, 0.6, 0, 90, 0, 0.5]],
   ],
 };
 
@@ -287,6 +287,7 @@ export const VISUAL_DATA: SeedData = {
       name: 'Havregrynsgröt',
       source: 'egen',
       per100: GROT,
+      fiberG: 1.5,
       createdAt: at(60),
     },
     {

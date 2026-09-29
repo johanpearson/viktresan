@@ -12,6 +12,7 @@ export function storedToItem(food: StoredFood): FoodItem {
   if (food.units !== undefined && food.units.length > 0) item.units = food.units;
   if (food.per100Unit !== undefined) item.per100Unit = food.per100Unit;
   if (food.ean !== undefined) item.ean = food.ean;
+  if (food.fiberG !== undefined) item.extra = { fiberG: food.fiberG };
   return item;
 }
 

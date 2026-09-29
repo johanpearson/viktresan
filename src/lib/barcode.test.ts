@@ -55,6 +55,17 @@ describe('parseOffProduct', () => {
     });
   });
 
+  it('fiber per 100 g när Open Food Facts har värdet, annars okänd', () => {
+    const product = (nutriments: Record<string, unknown>) =>
+      parseOffProduct(ean, {
+        status: 1,
+        product: { product_name: 'Knäcke', nutriments: { 'energy-kcal_100g': 350, ...nutriments } },
+      });
+    expect(product({ fiber_100g: '17' })?.extra).toEqual({ fiberG: 17 });
+    expect(product({ fiber_100g: 0 })?.extra).toEqual({ fiberG: 0 });
+    expect(product({})?.extra).toBeUndefined();
+  });
+
   it('räknar om kJ till kcal när kcal saknas och sätter saknade makron till 0', () => {
     const food = parseOffProduct(ean, {
       status: 1,

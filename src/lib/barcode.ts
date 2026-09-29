@@ -90,6 +90,9 @@ export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
       fatG: num(n.fat_100g) ?? 0,
     },
   };
+  // Fiber saknas ofta i Open Food Facts – då är den okänd (inte 0).
+  const fiber = num(n.fiber_100g);
+  if (fiber !== null) item.extra = { fiberG: fiber };
   const base = offBaseUnit(p);
   if (base === 'ml') item.per100Unit = 'ml';
   const units: FoodUnit[] = [];

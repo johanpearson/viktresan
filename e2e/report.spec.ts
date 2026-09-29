@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, seed } from './helpers.ts';
+import { collectErrors, dump, seed } from './helpers.ts';
 import { FROZEN_NOW, LIVSMEDEL, VISUAL_DATA } from './visualData.ts';
 
 /**
@@ -137,6 +137,10 @@ test('valen sparas: period och sektioner finns kvar efter omladdning', async ({ 
   await settings.getByRole('button', { name: '4 veckor' }).tap();
   await settings.getByRole('switch', { name: 'Steg' }).uncheck();
   await settings.getByRole('switch', { name: 'Bilder' }).check();
+  // Vänta tills valen sparats – annars kan omladdningen läsa de gamla värdena.
+  await expect
+    .poll(async () => (await dump(page)).settings.preferences)
+    .toMatchObject({ report: { period: '4v', sections: { steg: false, bilder: true } } });
   await page.reload();
   await expect(settings.getByRole('button', { name: '4 veckor' })).toHaveAttribute(
     'aria-pressed',

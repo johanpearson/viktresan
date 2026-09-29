@@ -44,6 +44,9 @@ src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt vec
 src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
 src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
 src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (≥ 15 g/100 kcal)
+src/lib/fiber.ts        Fibermål (NNR 2023, upptrappning 3 g/vecka), fiber per dag ur matloggen, fiberrik-regeln (≥ 3 g/100 kcal)
+src/lib/useFiber.ts     Hook: fibermålet + fiber per dag (läser livsmedel.json/egna livsmedel bara när målet visas), sparar trappans start
+src/data/fiberReference.ts  Referensvärden för fiber (35 g män, 25 g kvinnor, 30 g utan kön) med källa (NNR 2023)
 src/lib/milestones.ts   Milstolpar: regler (trendvikt), evaluateMilestones, kommande, diffMilestones, texter
 src/lib/milestoneSync.ts  Milstolpar mot databasen: syncMilestones('silent' | 'live'), köade körningar
 src/lib/celebration.ts  Kö med firanden (useCelebration); confetti.ts = canvas-confetti utan worker
@@ -127,7 +130,7 @@ docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kv
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
                         dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar | Rapport; `Rapport.tsx`), Inställningar
-e2e/                    Playwright-tester. supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
+e2e/                    Playwright-tester. fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
                         veckokort, milstolpar, bilder, måltidsanalys, rapport, platå); hjälpare i helpers.ts. report.spec.ts
@@ -147,7 +150,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
   filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
-  (`profil`, `kalorimal`, `protein`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `bilder`, `las`, `sakerhetskopia`,
+  (`profil`, `kalorimal`, `protein`, `fiber`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `bilder`, `las`, `sakerhetskopia`,
   `lagring`, `om`) öppnar panelen direkt.
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
@@ -164,7 +167,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
   `by-session` (v9); `date` = kopia av tillfällets datum), `photoSessions` (v9, fototillfällen `{ id, date, weightKg?, note? }`,
   index `by-date`), `settings` (key/value), `profile` (v2, nyckel `current`),
-  `foods` (v4, egna livsmedel `egen:<uuid>` + cachade Open Food Facts-träffar `off:<ean>`, index `by-ean`),
+  `foods` (v4, egna livsmedel `egen:<uuid>` + cachade Open Food Facts-träffar `off:<ean>`, index `by-ean`; valfri
+  `fiberG` per 100 g utan schemaändring – OFF `fiber_100g` eller ifyllt i eget livsmedel),
   `meals` (v4, sparade måltider med ingredienser i gram), `foodLog` (v4, matlogg, index `by-date`),
   `favorites` (v4, nyckel `foodId`), `water` (v5, en post per tillfälle, index `by-date`),
   `workouts` (v5, pass, index `by-date`), `workoutPlans` (v5, återkommande scheman),
@@ -189,7 +193,9 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (+500 ml på träningsdagar, utan schemaändring) samt `proteinFactor`
   (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian) och `foodPreferences`
   (Inställningar → Matpreferenser, fritext ≤ 1 000 tecken, bara för "Fråga AI"; ingen schemaändring) och `calorieMode`
-  (`dag`/`vecka`, Inställningar → Kalorimål; ingen schemaändring).
+  (`dag`/`vecka`, Inställningar → Kalorimål; ingen schemaändring) samt fibermålet (`showFiberGoal`, `fiberRamp: false` =
+  direkt på referensvärdet, `fiberRampStart` `{ date, startG }`) och GLP-1-dryckestillägget (`waterGlp1BonusMl` 0–1 000,
+  saknas = 500, `waterGlp1OnOwnGoal`) – Inställningar → Fibermål/Dryckesmål, ingen schemaändring, följer med i säkerhetskopian.
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
   är det som räknas, så en senare ändrad enhet påverkar inte historiken. Migreringen v6 → v7
@@ -228,7 +234,9 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (kvinna), 1 800 ml utan kön – dryckesdelen (~80 %) av EFSA:s totala vätskeintag. Ingen koppling till
   vikten. Det gamla standardmålet (33 ml × trendvikt) sparades aldrig, så profiler utan eget mål får det nya
   automatiskt; eget mål lämnas orört (ingen DB-migrering). `waterTrainingBonus` → +500 ml dagar med ett
-  genomfört pass (`waterGoal({ profile, workouts, date })`). Drycker i matloggen räknas in (`foodDrinkMl`:
+  genomfört pass (`waterGoal({ profile, workouts, date, glp1 })`). Med GLP-1 på: +`waterGlp1BonusMl` (standard 500 ml,
+  0–1 000 i steg om 100) på standardmålet, med kort förklaring (`GLP1_WATER_REASON`, `DrinkGoalNote`); ett eget mål får
+  tillägget bara med `waterGlp1OnOwnGoal` (`glp1WaterBonusMl`). Milstolpen `vatten-7` räknar utan GLP-1-tillägget. Drycker i matloggen räknas in (`foodDrinkMl`:
   kategori `dryck`/`mjolk`/`fil` via `foodProfile`, ml = gram ÷ densitet; inte kvarg/keso/koncentrat och
   aldrig alkohol – `isAlcoholic`, bl.a. "vol. %"). `drinkEntries`/`drinkOn` används av Idag, Logga, historik,
   kalender, veckosummering och milstolpen `vatten-7`. `addWater` håller `createdAt` strikt växande per dag så att
@@ -257,6 +265,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   läkemedlets namn. `doseChanges` (start + byte av dos/läkemedel) ritas som streckade linjer i
   viktgrafen (`WeightChart` `markers`, färg `--chart-dose`) och listas i Framsteg → Historik.
   Kalendern: romb-prick, fylld = loggad, kontur = planerad; `maende`-markören visar aptit/biverkningar.
+  Diarré eller kräkning loggad idag (`fluidLossSideEffects`) → `HydrationReminder` (Card, `warning`) på Översikt med en
+  saklig uppmaning att dricka extra. Den höjer aldrig dryckesmålet.
 - **Genvägar** (`shortcuts.ts`, manifestets `shortcuts` byggs från samma lista i vite.config.ts):
   "Logga vikt" (`?action=log-weight` → `#/logga/vikt`), "+250 ml (glas)" (`add-water`: loggas direkt,
   Översikt + toast med Ångra) och "Logga mat" (`log-food` → `#/mat/logga`). `useShortcut` i `App` läser
@@ -265,6 +275,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - **Protein** (`protein.ts`): mål = `proteinFactor` (profil, 1,2–2,0 i steg om 0,1, saknas → 1,6) × målvikt.
   Ringar för kalorier och protein (`NutritionRings`) i Översikt → Idag och Mat → Dag; proteinkolumn och
   snitt i Mat → Historik. "Proteinrik" (≥ 15 g protein per 100 kcal) märks i sökträffar och favoriter.
+- **Fibermål** (`fiber.ts`, `useFiber`, `data/fiberReference.ts`): referensvärde NNR 2023, 35 g (man) / 25 g (kvinna) /
+  30 g utan kön. Visas automatiskt när GLP-1 är på, annars med `profile.showFiberGoal` (Inställningar → Fibermål, bakom
+  `mat`). Gradvis upptrappning (på som standard): start = snitt av de senaste 7 loggade dagarna med fiber före idag
+  (`rampStartG`, 15 g utan data, högst referensvärdet), +3 g per hel vecka (`weeklyFiberGoalG`) tills referensvärdet nås;
+  starten sparas i profilen första gången målet visas (`useFiber` → `saveRampStart`). "Veckans fibermål: X g (mål Y g)"
+  (`FiberNote`). Av/på i inställningen börjar om trappan. Fiber per post via `partsOf` + uppslag: Livsmedelsverket
+  (`extra.fiberG`), egna/OFF (`StoredFood.fiberG`); snabbloggar och poster utan värde räknas inte (`missingEntries` →
+  "Dagens fiber kan vara i underkant"). Visas som fjärde ring på Översikt → Idag (`rings-4`), `StatBar` i Mat → Dag (kalorier
+  överst, protein + fiber under), kolumn och snitt i Mat → Historik, raden `fiber` i veckosummeringen, "Mål" i rapportens
+  kost och "Andel av dagens fibermål" i analysen. "Fiberrik" (≥ 3 g/100 kcal, `isFiberRich`) märks som "Proteinrik".
 - **Trendvikt**: `preferences.trendHero` (på som standard, Inställningar → Visning) visar trendvikten som
   huvudsiffra och dagsvikten under (`current-weight`), med en kort förklaring. Viktgrafen: trendlinjen
   tjock, dagsvärden som svaga punkter (`--chart-point-faint`).

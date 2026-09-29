@@ -85,7 +85,7 @@ export interface NutrientRow {
   unit: NutrientUnit | 'kcal';
   group: 'energi' | NutrientGroup;
   amount: number;
-  /** Andel av det personliga dagsmålet (kcal, protein), annars `null`. */
+  /** Andel av det personliga dagsmålet (kcal, protein, fiber), annars `null`. */
   pctGoal: number | null;
   /** Andel av referensintaget, `null` utan RI. */
   pctRi: number | null;
@@ -99,6 +99,8 @@ export interface NutrientRow {
 export interface Goals {
   targetKcal: number | null;
   proteinGoalG: number | null;
+  /** Dagens fibermål (när fibermålet är på). */
+  fiberGoalG?: number | null;
 }
 
 export interface Analysis {
@@ -110,6 +112,8 @@ export interface Analysis {
   fiberPer1000Kcal: number | null;
   /** Andel av dagens kalorimål, `null` utan mål. */
   shareOfTarget: number | null;
+  /** Andel av dagens fibermål, `null` utan fibermål eller fiberdata. */
+  shareOfFiberGoal: number | null;
   entryCount: number;
   /** Delar utan fiber-, vitamin- och mineraldata. */
   partsWithoutExtra: number;
@@ -179,7 +183,7 @@ export function analyzeEntries(
       unit: info.unit,
       group: info.group,
       amount,
-      pctGoal: null,
+      pctGoal: info.key === 'fiberG' ? pct(amount, goals.fiberGoalG ?? null) : null,
       pctRi: pct(amount, info.ri),
       ri: info.ri,
       coverage: totalGrams > 0 ? knownGrams / totalGrams : 0,
@@ -195,6 +199,7 @@ export function analyzeEntries(
     proteinPer100Kcal: totals.kcal > 0 ? (totals.proteinG / totals.kcal) * 100 : null,
     fiberPer1000Kcal: fiber && totals.kcal > 0 ? (fiber.amount / totals.kcal) * 1000 : null,
     shareOfTarget: pct(totals.kcal, goals.targetKcal),
+    shareOfFiberGoal: fiber ? fiber.pctGoal : null,
     entryCount: entries.length,
     partsWithoutExtra: parts.filter((p) => p.extra === null).length,
     parts: parts.length,

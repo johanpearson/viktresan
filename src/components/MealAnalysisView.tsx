@@ -102,6 +102,16 @@ export function MealAnalysisView({
                 : `${spaces(decimalFormat.format(analysis.fiberPer1000Kcal))} g`
             }
           />
+          {goals.fiberGoalG != null && (
+            <ListRow
+              primary="Andel av dagens fibermål"
+              secondary={`Fibermål ${formatInt(goals.fiberGoalG)} g`}
+              value={
+                analysis.shareOfFiberGoal === null ? 'Okänt' : percent(analysis.shareOfFiberGoal)
+              }
+              testId="analysis-fiber-goal"
+            />
+          )}
         </ul>
         {notes.length > 0 && (
           <ul className="analysis-notes">
@@ -184,8 +194,9 @@ export function MealAnalysisView({
           </p>
         )}
         <p className="form-note muted">
-          Mål = ditt dagsmål för kcal och protein. RI = referensintag för en genomsnittlig vuxen
-          (EU); fiber enligt de nordiska näringsrekommendationerna (NNR).
+          Mål = ditt dagsmål för kcal och protein{goals.fiberGoalG != null ? ' och fiber' : ''}. RI
+          = referensintag för en genomsnittlig vuxen (EU); fiber enligt de nordiska
+          näringsrekommendationerna (NNR).
         </p>
       </Card>
 

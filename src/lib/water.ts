@@ -16,6 +16,21 @@ export const DRINK_GOAL_ML: Readonly<Record<Sex, number>> = { man: 2000, kvinna:
 export const DRINK_GOAL_UNKNOWN_SEX_ML = 1800;
 /** Tillägg på dagar med ett genomfört pass (valfritt, `waterTrainingBonus`). */
 export const TRAINING_BONUS_ML = 500;
+/**
+ * Tillägg med GLP-1 (standard 500 ml, justerbart 0–1 000 ml i steg om 100). Mindre aptit
+ * och törst ger ofta mindre vätska från mat och dryck, och biverkningar som kräkning och
+ * diarré ökar förlusterna.
+ */
+export const GLP1_WATER_BONUS_DEFAULT_ML = 500;
+export const GLP1_WATER_BONUS_MAX_ML = 1000;
+export const GLP1_WATER_BONUS_STEP_ML = 100;
+export const GLP1_WATER_BONUS_OPTIONS: readonly number[] = Array.from(
+  { length: GLP1_WATER_BONUS_MAX_ML / GLP1_WATER_BONUS_STEP_ML + 1 },
+  (_, i) => i * GLP1_WATER_BONUS_STEP_ML,
+);
+/** Kort förklaring till GLP-1-tillägget (Inställningar, under dryckesringen). */
+export const GLP1_WATER_REASON =
+  'GLP-1 minskar ofta aptit och törst, och mindre mat ger mindre vätska från maten.';
 /** Snabbknappar: glas, flaska och kopp kaffe/te. */
 export const WATER_QUICK_ADD: readonly { ml: number; label: string }[] = [
   { ml: 250, label: 'Glas' },
@@ -42,6 +57,8 @@ export interface WaterGoal {
   baseMl: number;
   /** 0 eller `TRAINING_BONUS_ML`. */
   bonusMl: number;
+  /** Tillägget med GLP-1 (0 när GLP-1 är av eller målet är eget och tillägget inte valts). */
+  glp1BonusMl: number;
 }
 
 export interface WaterGoalProfile {
@@ -50,6 +67,10 @@ export interface WaterGoalProfile {
   waterGoalMl?: number;
   /** +500 ml på dagar med ett genomfört pass. */
   waterTrainingBonus?: boolean;
+  /** GLP-1-tillägget i ml. Saknas → 500. */
+  waterGlp1BonusMl?: number;
+  /** Lägg GLP-1-tillägget ovanpå ett eget mål. Saknas → nej. */
+  waterGlp1OnOwnGoal?: boolean;
 }
 
 export interface WaterGoalInput {
@@ -58,15 +79,32 @@ export interface WaterGoalInput {
   workouts?: readonly { date: string; status: string }[];
   /** Dagen målet gäller. Utan datum räknas inget träningstillägg. */
   date?: string;
+  /** GLP-1 är påslaget (funktionsbrytaren) – ger GLP-1-tillägget. */
+  glp1?: boolean;
+}
+
+/**
+ * GLP-1-tillägget för profilen: standardmålet får det alltid, ett eget mål bara om
+ * användaren valt att lägga det ovanpå.
+ */
+export function glp1WaterBonusMl(profile: WaterGoalProfile | null, glp1: boolean): number {
+  if (!glp1) return 0;
+  if (profile?.waterGoalMl != null && profile.waterGlp1OnOwnGoal !== true) return 0;
+  return profile?.waterGlp1BonusMl ?? GLP1_WATER_BONUS_DEFAULT_ML;
 }
 
 /**
  * Dagens dryckesmål: eget mål i profilen om det finns, annars standardmålet för
- * könet (2 000 / 1 600 ml). Kroppsvikten spelar ingen roll. Det gamla standardmålet
+ * könet (2 000 / 1 600 ml), plus ev. träningstillägg och GLP-1-tillägg. Kroppsvikten spelar ingen roll. Det gamla standardmålet
  * (33 ml × trendvikten) sparades aldrig i profilen, så en profil utan eget mål får
  * automatiskt det nya standardmålet; ett eget mål lämnas orört.
  */
-export function waterGoal({ profile, workouts = [], date }: WaterGoalInput): WaterGoal {
+export function waterGoal({
+  profile,
+  workouts = [],
+  date,
+  glp1 = false,
+}: WaterGoalInput): WaterGoal {
   const own = profile?.waterGoalMl;
   const baseMl = own ?? defaultWaterGoalMl(profile?.sex);
   const trained =
@@ -74,7 +112,14 @@ export function waterGoal({ profile, workouts = [], date }: WaterGoalInput): Wat
     date != null &&
     workouts.some((w) => w.date === date && w.status === 'genomford');
   const bonusMl = trained ? TRAINING_BONUS_ML : 0;
-  return { ml: baseMl + bonusMl, source: own == null ? 'standard' : 'egen', baseMl, bonusMl };
+  const glp1BonusMl = glp1WaterBonusMl(profile, glp1);
+  return {
+    ml: baseMl + bonusMl + glp1BonusMl,
+    source: own == null ? 'standard' : 'egen',
+    baseMl,
+    bonusMl,
+    glp1BonusMl,
+  };
 }
 
 /** Dagens mål i ml som funktion av datum (för historik och milstolpar). */

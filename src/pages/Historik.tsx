@@ -72,7 +72,11 @@ export function Historik() {
       <Feature id="vatten">
         <WaterHistory
           drinks={drinkEntries(data.water, data.foodLog)}
-          goalOn={waterGoalFor({ profile: data.profile, workouts: data.workouts })}
+          goalOn={waterGoalFor({
+            profile: data.profile,
+            workouts: data.workouts,
+            glp1: features.isEnabled('glp1'),
+          })}
           range={range}
           today={today}
         />

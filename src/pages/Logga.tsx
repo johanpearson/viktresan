@@ -43,7 +43,8 @@ interface LogType extends FeatureGated {
   /** SVG-path för ikonen (24×24, streck). */
   icon: string;
   /** Kort status på rutan, t.ex. senaste värdet. */
-  summary: (data: AppData) => string;
+  /** `glp1`: GLP-1 är på (påverkar dryckesmålet). */
+  summary: (data: AppData, glp1: boolean) => string;
   Form: ComponentType<LogFormProps>;
 }
 
@@ -92,9 +93,14 @@ const LOG_TYPES: readonly LogType[] = [
     title: 'Logga dryck',
     icon: 'M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z',
     feature: 'vatten',
-    summary: (data) => {
+    summary: (data, glp1) => {
       const today = todayIso();
-      const goal = waterGoal({ profile: data.profile, workouts: data.workouts, date: today });
+      const goal = waterGoal({
+        profile: data.profile,
+        workouts: data.workouts,
+        date: today,
+        glp1,
+      });
       const ml = formatMl(drinkOn(data.water, data.foodLog, today).ml);
       return `Idag ${ml} av ${formatMl(goal.ml)}`;
     },
@@ -202,7 +208,11 @@ export function Logga() {
                 <path d={t.icon} />
               </svg>
               <span className="log-tile-label">{t.label}</span>
-              {data && <span className="log-tile-summary">{t.summary(data)}</span>}
+              {data && (
+                <span className="log-tile-summary">
+                  {t.summary(data, features.isEnabled('glp1'))}
+                </span>
+              )}
             </button>
           </li>
         ))}

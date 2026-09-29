@@ -7,11 +7,14 @@ interface DrinkGoalNoteProps {
   foodMl: number;
 }
 
-/** Kort rad under dryckesringen: hur mycket som kommer från Mat och ev. träningstillägg. */
+/** Kort rad under dryckesringen: hur mycket som kommer från Mat och ev. tillägg (pass, GLP-1). */
 export function DrinkGoalNote({ goal, foodMl }: DrinkGoalNoteProps) {
   const parts: string[] = [];
   if (foodMl > 0) parts.push(`Varav ${formatMl(foodMl)} från Mat`);
   if (goal.bonusMl > 0) parts.push(`målet +${formatMl(goal.bonusMl)} för dagens pass`);
+  if (goal.glp1BonusMl > 0) {
+    parts.push(`målet +${formatMl(goal.glp1BonusMl)} med GLP-1 – mindre mat ger mindre vätska`);
+  }
   if (parts.length === 0) return null;
   const text = parts.join(' · ');
   return (

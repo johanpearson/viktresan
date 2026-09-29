@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FoodLogEntry } from '../db/db.ts';
+import type { DayFiber, FiberGoal } from '../lib/fiber.ts';
 import { addDays, todayIso } from '../lib/dates.ts';
 import { formatGrams, formatInt, formatKcal, formatShortDate } from '../lib/format.ts';
 import { averageKcal, dailyIntake } from '../lib/nutrition.ts';
@@ -15,10 +16,19 @@ interface IntakeHistoryProps {
   foodLog: readonly FoodLogEntry[];
   targetKcal: number | null;
   proteinGoalG: number | null;
+  /** Fiber per dag när fibermålet är på (annars `null` – ingen fiberkolumn). */
+  fiberDays?: readonly DayFiber[] | null;
+  fiberGoalOn?: (date: string) => FiberGoal | null;
 }
 
-/** Mat → Historik: intag per dag mot kalorimålet och 7-dagarssnitt. */
-export function IntakeHistory({ foodLog, targetKcal, proteinGoalG }: IntakeHistoryProps) {
+/** Mat → Historik: intag per dag mot kalorimålet och 7-dagarssnitt (och fiber med fibermålet). */
+export function IntakeHistory({
+  foodLog,
+  targetKcal,
+  proteinGoalG,
+  fiberDays = null,
+  fiberGoalOn,
+}: IntakeHistoryProps) {
   const [range, setRange] = useState<RangeId>('1m');
   const today = todayIso();
   const all = dailyIntake(foodLog);
@@ -40,6 +50,13 @@ export function IntakeHistory({ foodLog, targetKcal, proteinGoalG }: IntakeHisto
   const avgKcal = week ? Math.round(week.kcal) : 0;
   const avgProtein = week ? Math.round(week.proteinG) : 0;
   const diff = week && targetKcal != null ? avgKcal - targetKcal : null;
+  const fiberGoal = fiberDays ? (fiberGoalOn?.(today) ?? null) : null;
+  const fiberWeek = fiberDays?.filter((d) => last7.includes(d.date)) ?? [];
+  const avgFiber =
+    fiberWeek.length > 0
+      ? Math.round(fiberWeek.reduce((sum, d) => sum + d.fiberG, 0) / fiberWeek.length)
+      : 0;
+  const fiberIncomplete = fiberWeek.some((d) => d.missingEntries > 0);
 
   return (
     <>
@@ -54,7 +71,7 @@ export function IntakeHistory({ foodLog, targetKcal, proteinGoalG }: IntakeHisto
       <Card title="Senaste 7 dagarna">
         {week ? (
           <>
-            <div className="totals-row">
+            <div className={fiberGoal ? 'totals-row totals-row-fiber' : 'totals-row'}>
               <StatBar
                 tone="food"
                 value={avgKcal}
@@ -93,6 +110,22 @@ export function IntakeHistory({ foodLog, targetKcal, proteinGoalG }: IntakeHisto
                       : `${formatGrams(proteinGoalG - avgProtein)} under målet`
                 }
               />
+              {fiberGoal && (
+                <StatBar
+                  tone="fiber"
+                  value={avgFiber}
+                  goal={fiberGoal.goalG}
+                  unit="g fiber"
+                  label="Fiber i snitt per loggad dag"
+                  valueText={`${formatInt(avgFiber)} g av ${formatInt(fiberGoal.goalG)} g`}
+                  valueTestId="fiber-average"
+                  meta={
+                    avgFiber >= fiberGoal.goalG
+                      ? 'Målet nått'
+                      : `${formatGrams(fiberGoal.goalG - avgFiber)} under målet`
+                  }
+                />
+              )}
             </div>
             <p className="form-note muted" data-testid="intake-average">
               <Parts text={`Snitt per loggad dag · ${String(week.days)} av 7 dagar loggade`} />
@@ -116,6 +149,11 @@ export function IntakeHistory({ foodLog, targetKcal, proteinGoalG }: IntakeHisto
               <th scope="col" className="num">
                 Protein
               </th>
+              {fiberDays && (
+                <th scope="col" className="num">
+                  Fiber
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -132,12 +170,25 @@ export function IntakeHistory({ foodLog, targetKcal, proteinGoalG }: IntakeHisto
                       : `${dayDiff > 0 ? '+' : dayDiff < 0 ? '−' : ''}${formatInt(Math.abs(dayDiff))}`}
                   </td>
                   <td className="num">{day ? `${formatInt(Math.round(day.proteinG))} g` : '–'}</td>
+                  {fiberDays && (
+                    <td className="num">{fiberCell(fiberDays.find((d) => d.date === date))}</td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
         </table>
+        {fiberIncomplete && (
+          <p className="form-note muted" data-testid="fiber-history-incomplete">
+            * Fibern kan vara i underkant – snabbloggar och varor utan fiberdata räknas inte.
+          </p>
+        )}
       </Card>
     </>
   );
+}
+
+function fiberCell(day: DayFiber | undefined): string {
+  if (!day) return '–';
+  return `${formatInt(Math.round(day.fiberG))} g${day.missingEntries > 0 ? '*' : ''}`;
 }

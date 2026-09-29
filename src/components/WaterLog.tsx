@@ -1,4 +1,5 @@
 import { todayIso } from '../lib/dates.ts';
+import { useFeatures } from '../lib/features.ts';
 import { formatMl } from '../lib/format.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
@@ -21,7 +22,8 @@ interface WaterLogProps {
  */
 export function WaterLog({ data, onChange }: WaterLogProps) {
   const today = todayIso();
-  const goal = waterGoal({ profile: data.profile, workouts: data.workouts, date: today });
+  const glp1 = useFeatures().isEnabled('glp1');
+  const goal = waterGoal({ profile: data.profile, workouts: data.workouts, date: today, glp1 });
   const drink = drinkOn(data.water, data.foodLog, today);
   const entries = data.water.filter((w) => w.date === today).reverse();
   return (

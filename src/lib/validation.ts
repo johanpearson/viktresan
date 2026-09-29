@@ -189,12 +189,15 @@ export interface FoodFields {
   protein: string;
   carbs: string;
   fat: string;
+  /** Valfritt – tomt = okänd fiber (räknas inte i fibermålet). */
+  fiber?: string;
   ean: string;
 }
 
 export interface FoodValues {
   name: string;
   per100: Nutrients;
+  fiberG?: number;
   ean?: string;
 }
 
@@ -218,6 +221,13 @@ export function parseFoodFields(fields: FoodFields): Parsed<FoodValues> {
   if (proteinG + carbsG + fatG > 100)
     return fail('Protein, kolhydrater och fett kan inte vara mer än 100 g tillsammans.');
   const value: FoodValues = { name, per100: { kcal, proteinG, carbsG, fatG } };
+  const fiberText = fields.fiber?.trim() ?? '';
+  if (fiberText !== '') {
+    const fiberG = parseDecimal(fiberText);
+    if (fiberG == null || fiberG < 0 || fiberG > 100)
+      return fail('Ange fiber i gram per 100 g (0–100) eller lämna fältet tomt.');
+    value.fiberG = fiberG;
+  }
 
   const eanText = fields.ean.trim();
   if (eanText !== '') {

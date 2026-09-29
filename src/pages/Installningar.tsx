@@ -6,6 +6,7 @@ import { Card } from '../components/Card.tsx';
 import { DisplaySettings } from '../components/DisplaySettings.tsx';
 import { ExportBackup } from '../components/ExportBackup.tsx';
 import { FeatureSettings } from '../components/FeatureSettings.tsx';
+import { FiberGoalSettings } from '../components/FiberGoalSettings.tsx';
 import { FoodPreferencesSettings } from '../components/FoodPreferencesSettings.tsx';
 import { ImportBackup } from '../components/ImportBackup.tsx';
 import { ListRow } from '../components/ListRow.tsx';
@@ -22,6 +23,7 @@ import { decimalInput, formatInt, formatKg, formatMl } from '../lib/format.ts';
 import { useLockStatus } from '../lib/lock.ts';
 import { SIDE_LABELS } from '../lib/photoSessions.ts';
 import { usePreferences } from '../lib/preferences.ts';
+import { fiberGoalVisible, fiberReferenceG } from '../lib/fiber.ts';
 import { DEFAULT_PROTEIN_FACTOR, proteinGoalFor } from '../lib/protein.ts';
 import { getStorageStatus, type StorageStatus } from '../lib/storage.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
@@ -34,6 +36,7 @@ type PanelId =
   | 'profil'
   | 'kalorimal'
   | 'protein'
+  | 'fiber'
   | 'dryck'
   | 'matpreferenser'
   | 'funktioner'
@@ -52,6 +55,8 @@ interface Summary {
   enabledFeatures: number;
   profileSide: string;
   locked: boolean;
+  /** GLP-1 är på (fibermål och dryckestillägg). */
+  glp1: boolean;
 }
 
 interface Panel extends FeatureGated {
@@ -117,13 +122,36 @@ const GROUPS: readonly Group[] = [
         },
       },
       {
+        id: 'fiber',
+        title: 'Fibermål',
+        feature: 'mat',
+        secondary: ({ data, glp1 }) =>
+          data?.profile
+            ? glp1
+              ? 'Visas med GLP-1'
+              : data.profile.showFiberGoal
+                ? 'Visas'
+                : 'NNR 2023'
+            : NO_PROFILE,
+        value: ({ data, glp1 }) =>
+          data?.profile
+            ? fiberGoalVisible(data.profile, glp1)
+              ? `${formatInt(fiberReferenceG(data.profile.sex))} g`
+              : 'Av'
+            : null,
+      },
+      {
         id: 'dryck',
         title: 'Dryckesmål',
         feature: 'vatten',
-        secondary: ({ data }) =>
-          data?.profile ? (data.profile.waterGoalMl ? 'Eget mål' : 'Standardmål') : NO_PROFILE,
-        value: ({ data }) =>
-          data?.profile ? formatMl(waterGoal({ profile: data.profile }).ml) : null,
+        secondary: ({ data, glp1 }) =>
+          data?.profile
+            ? `${data.profile.waterGoalMl ? 'Eget mål' : 'Standardmål'}${
+                waterGoal({ profile: data.profile, glp1 }).glp1BonusMl > 0 ? ' + GLP-1' : ''
+              }`
+            : NO_PROFILE,
+        value: ({ data, glp1 }) =>
+          data?.profile ? formatMl(waterGoal({ profile: data.profile, glp1 }).ml) : null,
       },
       {
         id: 'matpreferenser',
@@ -238,6 +266,7 @@ export function Installningar() {
     enabledFeatures: FEATURES.filter((f) => features.flags[f.id]).length,
     profileSide: SIDE_LABELS[prefs.profileSide],
     locked: lock === 'locked' || lock === 'unlocked',
+    glp1: features.isEnabled('glp1'),
   };
   const groups = GROUPS.map((g) => ({ ...g, panels: features.filter(g.panels) }));
   const open = groups.flatMap((g) => g.panels).find((p) => p.id === openId);
@@ -266,6 +295,8 @@ export function Installningar() {
         return data && <CalorieModeSettings key={imports} data={data} onChange={reload} />;
       case 'protein':
         return data && <ProteinGoalSettings key={imports} data={data} onChange={reload} />;
+      case 'fiber':
+        return data && <FiberGoalSettings key={imports} data={data} onChange={reload} />;
       case 'dryck':
         return data && <WaterGoalSettings key={imports} data={data} onChange={reload} />;
       case 'matpreferenser':

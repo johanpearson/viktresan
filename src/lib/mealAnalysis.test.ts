@@ -33,6 +33,19 @@ const EXTRA: Record<string, ExtraNutrients> = {
 };
 const lookup = (id: string) => EXTRA[id];
 
+describe('analyzeEntries med fibermål', () => {
+  it('fiber i procent av dagens fibermål', () => {
+    const log = [entry('Gröt', 'lv:1', 50, HAVREGRYN)];
+    const a = analyzeEntries(log, [], lookup, {
+      targetKcal: 2000,
+      proteinGoalG: 128,
+      fiberGoalG: 25,
+    });
+    expect(a.rows.find((r) => r.key === 'fiberG')?.pctGoal).toBeCloseTo(5 / 25);
+    expect(a.shareOfFiberGoal).toBeCloseTo(0.2);
+  });
+});
+
 describe('analyzeEntries', () => {
   const log = [entry('Gröt', 'lv:1', 50, HAVREGRYN), entry('Mjölk', 'lv:2', 200, MJOLK)];
 
@@ -58,6 +71,9 @@ describe('analyzeEntries', () => {
     expect(a.rows.find((r) => r.key === 'proteinG')?.pctRi).toBeCloseTo(13.5 / 50);
     expect(a.rows.find((r) => r.key === 'calcium')?.pctRi).toBeCloseTo(240 / 800);
     expect(a.rows.find((r) => r.key === 'fiberG')?.riSource).toBe('NNR');
+    // Utan fibermål: ingen andel av målet för fiber.
+    expect(a.rows.find((r) => r.key === 'fiberG')?.pctGoal).toBeNull();
+    expect(a.shareOfFiberGoal).toBeNull();
     expect(a.shareOfTarget).toBeCloseTo(305 / 2000);
   });
 

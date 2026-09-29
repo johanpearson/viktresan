@@ -5,9 +5,10 @@ import { ReportDocument, type ReportPhoto } from '../components/ReportDocument.t
 import { ReportSettingsForm } from '../components/ReportSettingsForm.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import type { ExtraNutrients } from '../data/nutrients.ts';
-import { listMeals } from '../db/db.ts';
+import { listFoods, listMeals } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
+import type { FiberGoal } from '../lib/fiber.ts';
 import { loadLivsmedel } from '../lib/livsmedel.ts';
 import { setPreference, usePreferences } from '../lib/preferences.ts';
 import {
@@ -21,8 +22,11 @@ import {
 } from '../lib/report.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { useAppData } from '../lib/useAppData.ts';
+import { useFiber } from '../lib/useFiber.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 import { usePhotos } from '../lib/usePhotos.ts';
+
+const NO_LOG: readonly never[] = [];
 
 /**
  * Framsteg → Rapport: val av period och sektioner (`#/framsteg/rapport`) och själva
@@ -33,6 +37,7 @@ export function Rapport() {
   const { data } = useAppData();
   const { prefs } = usePreferences();
   const today = todayIso();
+  const fiber = useFiber(data?.profile ?? null, data?.foodLog ?? NO_LOG, today);
   if (data === null) return <Skeleton cards={2} lines={6} />;
   if (data.profile === null && data.weights.length === 0) {
     return (
@@ -46,7 +51,9 @@ export function Rapport() {
     );
   }
   const range = reportRange(prefs.report, data, today);
-  if (sub === 'rapport/visa' && range) return <ReportView data={data} today={today} />;
+  if (sub === 'rapport/visa' && range) {
+    return <ReportView data={data} today={today} fiberGoalOn={fiber.goalOn} />;
+  }
   return <ReportSettingsForm range={range} today={today} />;
 }
 
@@ -56,11 +63,13 @@ function useFiberSource(enabled: boolean): FiberSource | null | 'loading' {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    Promise.all([loadLivsmedel(), listMeals()])
-      .then(([livsmedel, meals]) => {
+    Promise.all([loadLivsmedel(), listMeals(), listFoods()])
+      .then(([livsmedel, meals, foods]) => {
         const extra = new Map<string, ExtraNutrients | null>(
           livsmedel.foods.map((f) => [f.id, f.extra ?? null]),
         );
+        // Egna livsmedel och Open Food Facts-produkter med fiber.
+        for (const f of foods) if (f.fiberG !== undefined) extra.set(f.id, { fiberG: f.fiberG });
         if (active) setSource({ meals, lookup: (id) => extra.get(id) });
       })
       .catch(() => {
@@ -74,7 +83,16 @@ function useFiberSource(enabled: boolean): FiberSource | null | 'loading' {
   return enabled ? source : null;
 }
 
-function ReportView({ data, today }: { data: AppData; today: string }) {
+function ReportView({
+  data,
+  today,
+  fiberGoalOn,
+}: {
+  data: AppData;
+  today: string;
+  /** Fibermålet ett datum, `null` när fibermålet är av. */
+  fiberGoalOn: (date: string) => FiberGoal | null;
+}) {
   const { prefs } = usePreferences();
   const features = useFeatures();
   const [hint, setHint] = useState(false);
@@ -89,9 +107,9 @@ function ReportView({ data, today }: { data: AppData; today: string }) {
   const report = useMemo(
     () =>
       from !== undefined && to !== undefined && fiber !== 'loading'
-        ? buildReport(data, { from, to }, today, fiber)
+        ? buildReport(data, { from, to }, today, fiber, fiberGoalOn(to)?.goalG ?? null)
         : null,
-    [data, from, to, today, fiber],
+    [data, from, to, today, fiber, fiberGoalOn],
   );
 
   function print() {

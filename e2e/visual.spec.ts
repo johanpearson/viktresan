@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { collectErrors, seed } from './helpers.ts';
-import { FROZEN_NOW, LIVSMEDEL, VISUAL_DATA, WEEKLY_EXTRA } from './visualData.ts';
+import { FROZEN_NOW, LIVSMEDEL, TODAY, VISUAL_DATA, WEEKLY_EXTRA } from './visualData.ts';
 
 /**
  * Visuella regressionstester: varje vy och de viktigaste panelerna i ljust och
@@ -507,6 +507,27 @@ for (const theme of ['light', 'dark'] as const) {
         fullPage: true,
         maxDiffPixelRatio: 0.002,
       });
+    });
+
+    test('fibermål och dryck med GLP-1', async ({ page }) => {
+      // Diarré loggad idag → påminnelsen om att dricka extra överst på Översikt.
+      await open(page, '');
+      await seed(page, {
+        symptoms: [{ date: TODAY, sideEffects: ['Diarré'], createdAt: Date.parse(FROZEN_NOW) }],
+      });
+      await page.reload();
+      await expect(page.getByTestId('hydration-reminder')).toBeVisible();
+      await expect(page.getByTestId('fiber-ring')).toBeVisible();
+      await shot(page, `${theme}-oversikt-glp1`, false);
+
+      const sheet = page.getByRole('dialog');
+      for (const id of ['fiber', 'dryck'] as const) {
+        await page.goto(`./#/installningar/${id}`);
+        await expect(sheet).toBeVisible();
+        await shot(page, `${theme}-sheet-installningar-${id}`, false);
+        await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
+        await expect(sheet).toBeHidden();
+      }
     });
 
     test('paneler: Översikt och Framsteg', async ({ page }) => {

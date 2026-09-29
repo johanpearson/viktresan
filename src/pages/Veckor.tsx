@@ -11,7 +11,9 @@ import { WeekSummaryView } from '../components/WeekSummaryView.tsx';
 import { aiContextFrom, weekSubject } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatDayMonth, formatKg } from '../lib/format.ts';
+import { useFeatures } from '../lib/features.ts';
 import { useAppData } from '../lib/useAppData.ts';
+import { fiberWeekInput, useFiber } from '../lib/useFiber.ts';
 import {
   pastWeeks,
   weekName,
@@ -21,6 +23,8 @@ import {
   type WeekSummary,
 } from '../lib/weekSummary.ts';
 
+const NO_LOG: readonly never[] = [];
+
 /**
  * Framsteg → Veckor: en rad per avslutad vecka med data, senaste först (vecka, datum,
  * loggade dagar, trendens förändring). Tryck = hela summeringen i en panel, med "Fråga AI".
@@ -29,9 +33,11 @@ export function Veckor() {
   const { data } = useAppData();
   const [open, setOpen] = useState<WeekEntry | null>(null);
   const [asking, setAsking] = useState<WeekSummary | null>(null);
-  if (!data) return <Skeleton cards={1} lines={6} />;
   const today = todayIso();
-  const weeks = pastWeeks(data, today);
+  const glp1 = useFeatures().isEnabled('glp1');
+  const fiber = useFiber(data?.profile ?? null, data?.foodLog ?? NO_LOG, today);
+  if (!data) return <Skeleton cards={1} lines={6} />;
+  const weeks = pastWeeks({ ...data, glp1, fiber: fiberWeekInput(fiber) }, today);
   if (weeks.length === 0) {
     return (
       <EmptyState

@@ -1,11 +1,12 @@
 /**
  * Färgtoner i designsystemet: en per datatyp (samma i grafer, kalender, ikoner,
- * ringar och staplar) + protein. CSS-klassen `tone-<id>` sätter `--tone`.
+ * ringar och staplar) + protein och fiber. CSS-klassen `tone-<id>` sätter `--tone`.
  */
 export type Tone =
   | 'weight'
   | 'food'
   | 'protein'
+  | 'fiber'
   | 'drink'
   | 'steps'
   | 'training'

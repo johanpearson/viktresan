@@ -320,9 +320,14 @@ export function ReportDocument({ report, sections, createdOn, photos = [] }: Rep
               <ListRow
                 primary="Fiber"
                 secondary={
-                  d.fiberG !== null && d.fiberCoverage < 0.95
-                    ? `Känt för ${share(d.fiberCoverage)} av maten – troligen i underkant`
-                    : undefined
+                  [
+                    d.fiberGoalG === null ? null : `Mål ${formatInt(d.fiberGoalG)} g`,
+                    d.fiberG !== null && d.fiberCoverage < 0.95
+                      ? `Känt för ${share(d.fiberCoverage)} av maten – troligen i underkant`
+                      : null,
+                  ]
+                    .filter((t) => t !== null)
+                    .join(' · ') || undefined
                 }
                 value={d.fiberG === null ? '–' : `${formatInt(Math.round(d.fiberG))} g`}
               />

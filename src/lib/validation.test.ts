@@ -172,6 +172,15 @@ describe('parseFoodFields', () => {
     });
   });
 
+  it('fiber är valfritt: tomt = okänt, annars 0–100 g', () => {
+    expect(parseFoodFields({ ...food, fiber: '' })).toEqual(parseFoodFields(food));
+    expect(parseFoodFields({ ...food, fiber: '4,5' })).toMatchObject({
+      ok: true,
+      value: { fiberG: 4.5 },
+    });
+    expect(parseFoodFields({ ...food, fiber: '120' })).toMatchObject({ ok: false });
+  });
+
   it('tar med streckkod', () => {
     expect(parseFoodFields({ ...food, ean: '4006381333931' })).toMatchObject({
       ok: true,
