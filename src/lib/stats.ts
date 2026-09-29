@@ -223,6 +223,11 @@ export interface ForecastInput {
   today: string;
   goalDate?: string | undefined;
   windowDays?: number;
+  /**
+   * Vikten prognosen utgår från (t.ex. trendvikten eller senaste dagsvikten). Saknas den används
+   * den anpassade linjens värde. Takten kommer alltid från linjen.
+   */
+  fromKg?: number | undefined;
 }
 
 /** Datum då målvikten nås om den nuvarande trenden (linjär, senaste 4 veckorna) håller i sig. */
@@ -232,12 +237,13 @@ export function forecastGoal({
   today,
   goalDate,
   windowDays = TREND_WINDOW_DAYS,
+  fromKg,
 }: ForecastInput): GoalForecast {
   const trend = linearTrend(daily, today, windowDays);
   if (!trend) return { kind: 'insufficient-data' };
 
   const weeklyChangeKg = trend.slopeKgPerDay * 7;
-  const remaining = goalKg - trend.fittedKg;
+  const remaining = goalKg - (fromKg ?? trend.fittedKg);
   if (roundKg(remaining) === 0) return { kind: 'reached' };
   const days = remaining / trend.slopeKgPerDay;
   if (!Number.isFinite(days) || days <= 0 || days > MAX_FORECAST_DAYS) {
