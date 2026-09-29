@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { weekBalanceText, weekBudget, weekRowShortText, weekRowText } from './weekBudget.ts';
+import { weekBudget, weekRowShortText } from './weekBudget.ts';
 
 // 2026-09-21 är en måndag. Dagsmål 2 000 kcal → veckobudget 14 000 kcal.
 const MON = '2026-09-21';
@@ -169,30 +169,21 @@ describe('weekBudget', () => {
   });
 });
 
-describe('weekRowText och weekBalanceText', () => {
-  it('veckoraden och saldot', () => {
+describe('weekRowShortText', () => {
+  it('veckoraden', () => {
     const intake = [
       { date: MON, kcal: 2500 },
       { date: TUE, kcal: 2700 },
       { date: WED, kcal: 600 },
     ];
     const w = weekBudget({ ...base, intake, today: WED });
-    expect(weekRowText(w)).toBe(
-      'Vecka: 5 800 av 14 000 kcal · kvar 8 200 kcal · ≈ 1 760 kcal/dag resten av veckan',
-    );
-    expect(weekBalanceText(w)).toBe('Saldo hittills +1 200 kcal');
     expect(weekRowShortText(w)).toBe('Vecka: 8 200 kcal kvar · ≈ 1 760/dag');
   });
 
   it('över budgeten och avslutad vecka', () => {
     const over = weekBudget({ ...base, intake: [{ date: MON, kcal: 15_000 }], today: WED });
-    expect(weekRowText(over)).toBe(
-      'Vecka: 15 000 av 14 000 kcal · över 1 000 kcal · ≈ 1 500 kcal/dag resten av veckan',
-    );
     const done = weekBudget({ ...base, intake: [], today: NEXT_MON, weekOf: WED });
     expect(weekRowShortText(over)).toBe('Vecka: 1 000 kcal över · ≈ 1 500/dag');
-    expect(weekRowText(done)).toBe('Vecka: 0 av 14 000 kcal · kvar 14 000 kcal');
     expect(weekRowShortText(done)).toBe('Vecka: 14 000 kcal kvar');
-    expect(weekBalanceText(done)).toBe('Saldo −14 000 kcal');
   });
 });

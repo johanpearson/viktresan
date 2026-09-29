@@ -150,13 +150,15 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `BarcodeElsewhere`  | `BarcodeElsewhere.tsx`  | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit       |
 | `AiLabelImport`     | `AiLabelImport.tsx`     | Prompt (kopiera/dela) → klistra in JSON → validering, förhandsvisning            |
 | `IngredientEditor`  | `IngredientEditor.tsx`  | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept        |
-| `WeekBudgetRow`     | `WeekBudgetRow.tsx`     | Veckoraden under kcal-ringen/-stapeln: intag, kvar, ≈ per dag, saldo → panel     |
+| `WeekBudgetRow`     | `WeekBudgetRow.tsx`     | Veckoraden under kcal-ringen/-stapeln: en rad, kvar och ≈ per dag → panel        |
 | `WeekBudgetSheet`   | `WeekBudgetSheet.tsx`   | Veckopanelen: sju staplar mot dagsmålet, "ej loggad", kvar, per dag och saldo    |
 | `SvgChart`          | `SvgChart.tsx`          | Statisk graf som SVG (linje, punkter, staplar) – rapporten och utskrift          |
 | `PlateauCard`       | `PlateauCard.tsx`       | Översikt: platå, jämförelsetabell, 1–2 förklaringar, Fråga AI, Stäng             |
 | `ReportDocument`    | `ReportDocument.tsx`    | Rapporten till vården: sidhuvud + en `Card` per sektion, `theme-light`           |
 | `Macros`            | `Macros.tsx`            | "P 6 g · K 30 g · F 2 g · Fi 4 g" – fiber i fiberfärg, "–" saknas, "*" underkant |
-| `FiberNote`         | `FiberNote.tsx`         | Rad under fiberringen/-stapeln: veckans fibermål, notis om saknad fiberdata      |
+| `FiberNote`         | `FiberNote.tsx`         | Rad under fiberringen/-stapeln: veckans fibermål under upptrappningen            |
+| `FiberMissingNote`  | `FiberMissingNote.tsx`  | Förklaringen bakom info-ikonen vid fibervärdet (poster utan fiberdata)           |
+| `InfoButton`        | `InfoButton.tsx`        | Liten info-ikon (16 px, 44 px tryckyta) som fäller ut en förklaring              |
 | `HydrationReminder` | `HydrationReminder.tsx` | Översikt: "Drick lite extra idag" när diarré/kräkning loggats (GLP-1)            |
 | `RingAction`        | `RingAction.tsx`        | Ring på Översikt som går att trycka på (bildtexten är knappen/länken)            |
 | `TodoCard`          | `TodoCard.tsx`          | Översikt: Att göra idag (tillskott, dos, pass, backup) eller "Allt klart"        |
@@ -237,8 +239,15 @@ button-danger-text`) – samma borttagning som svepet, så den nås utan svep (t
 </SectionAccordion>
 ```
 
-`detail` = en dämpad rad under rubriken över hela bredden (måltidernas makron och fiber). Tom sektion = smal rad
-med bara rubrik och `actions`. Innehållet glider in (200 ms, bara transform – ingen opacitet så att kontrasten alltid är full), chevronen roterar.
+Rubrikraden är ett fast rutnät: **[pil] [namn + metatext] [värde] [⋯] [+]**. Pilen står till vänster om namnet
+(pekar åt höger, roterar nedåt vid utfällning). Namnet och metatexten ("2 poster") är en rad som kortas med … –
+inget i raden bryts. Värdet (kcal) är högerställt, `nowrap`, `tabular-nums` i en kolumn med fast minbredd
+(`--accordion-value`, rymmer "1 234 kcal"), så pil och kcal står på samma x-position i alla sektioner (vaktas i
+`e2e/mealHeaders.spec.ts`). Knappen täcker hela rubriken – tryck var som helst utom ⋯ och + fäller ut/ihop; ⋯ och +
+(44 px) ligger ovanpå i sista kolumnen. `detail` = en dämpad rad under rubriken, indragen i linje med namnet
+(måltidernas makron och fiber; en decimal under 10 g, hela gram från 10 g). Tom sektion = smal rad med namnet i samma
+kolumn och bara `actions`. Innehållet glider in (200 ms, bara transform – ingen opacitet så att kontrasten alltid är
+full).
 
 ### BottomSheet
 
@@ -594,7 +603,9 @@ filter. Samma knapp (`ShowMore`) används för "Visa alla N obesvarade" på Öve
   (`valueText`, t.ex. "2 450 ml av 2 500 ml"); exakta ml visas i dryckespanelen och historiken.
 - **Fibermål** i Mat → Dag och Mat → Historik: kalori-`StatBar` över hela bredden och protein + fiber bredvid varandra
   under (`totals-row-fiber`). Under ringen/staplarna en `FiberNote` (`form-note`): "Veckans fibermål: 21 g (mål 35 g)"
-  under upptrappningen och, dämpat, "Dagens fiber kan vara i underkant – 2 poster saknar fiberdata." Ingen varningsfärg.
+  under upptrappningen. Saknar poster fiberdata får fibervärdet en asterisk (*) och en `InfoButton` bredvid; förklaringen
+  ("Dagens fiber kan vara i underkant – 2 poster saknar fiberdata …", `FiberMissingNote`) visas först efter tryck. Ingen
+  varningsfärg.
 
 ### EmptyState
 
@@ -649,11 +660,11 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
   höger). "Duplicera recept" är en ghost-textknapp ovanför den destruktiva "Ta bort receptet". Sök-sheeten öppnas
   **utanför** formuläret (syskon), eftersom den har egna formulär. Portioner loggas med chips ½ · 1 · 1½ · 2.
 - **Veckoraden** (`WeekBudgetRow`) ligger inuti summeringskortet (Mat → Dag) och Idag-kortet (Översikt) under en 1 px
-  linje – aldrig som eget kort i ett kort. På Översikt är den `compact`: en rad utan saldo och golvnotis (de finns i
-  panelen). Den är en hel rad som knapp (minst `--tap`, › till höger): veckotexten i
-  `--text-sm` med `Parts` (bryts bara vid "·") och saldot dämpat i `--text-xs` under. Saldot är **neutralt** – aldrig
-  `--success`/`--danger`, bara tecknet (+/−/±) visar riktningen. Golvnotisen (`WeekShortfallNote`) är en saklig
-  `form-note` utan varningsfärg: den föreslår att sprida resten över nästa vecka, aldrig att äta under golvet.
+  linje – aldrig som eget kort i ett kort. Samma kompakta rad på båda ställena: "Vecka: 9 441 kcal kvar · ≈ 1 804/dag"
+  som en knapp (minst `--tap-min`, › till höger) i `--text-sm` (`--text-xs` under 380 px så att den ryms på en rad).
+  Saldo, intag och golvnotis finns i veckopanelen. Saldot är **neutralt** – aldrig `--success`/`--danger`, bara
+  tecknet (+/−/±) visar riktningen. Golvnotisen (`WeekShortfallNote`) är en saklig `form-note` utan varningsfärg: den
+  föreslår att sprida resten över nästa vecka, aldrig att äta under golvet.
 - **Veckopanelen** (`WeekBudgetSheet`, `BottomSheet`): sju staplar (`week-chart`, `ol` med en `li` per dag och uppläst
   text i `visually-hidden`) i matens färg mot dagsmålet som streckad linje (`--chart-goal`). Värdet står över stapeln,
   veckodagen under (idag i fetstil). En passerad dag utan matlogg har streckad ram och "ej loggad", kommande dagar "–".

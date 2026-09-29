@@ -3,6 +3,7 @@ import { collectErrors, seed } from './helpers.ts';
 import {
   FROZEN_NOW,
   LIVSMEDEL,
+  MEAL_HEADERS,
   TODAY,
   VISUAL_DATA,
   WEEKLY_EXTRA,
@@ -528,6 +529,36 @@ for (const theme of ['light', 'dark'] as const) {
       });
       await page.setViewportSize({ width: 360, height: 800 });
       await expect(card).toHaveScreenshot(`${theme}-ringar-360.png`, { maxDiffPixelRatio: 0.002 });
+    });
+
+    test('måltidsrubriker: långa och korta namn och kcal på Pixel 7 och 360 px', async ({
+      page,
+    }) => {
+      // Mellanmål 12 poster 1 234 kcal, Lunch 85 kcal, tom Middag; egen databas (inte VISUAL_DATA).
+      await page.clock.setFixedTime(new Date(FROZEN_NOW));
+      await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+      await page.goto('./');
+      await seed(page, MEAL_HEADERS);
+      await page.goto('./#/mat');
+      await page.reload();
+      const sections = page.locator('.meal-sections');
+      await expect(page.getByTestId('meal-mellanmal').getByTestId('meal-kcal')).toHaveText(
+        '1 234 kcal',
+      );
+      await expect(page.getByTestId('meal-mellanmal').getByTestId('fiber')).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await shot(page, `${theme}-mat-maltider-pixel7`);
+      await page.setViewportSize({ width: 360, height: 800 });
+      await expect(sections).toHaveScreenshot(`${theme}-mat-maltider-360.png`, {
+        maxDiffPixelRatio: 0.002,
+      });
+      // Summeringen med veckoraden och fiberförklaringen utfälld (info-ikonen).
+      await page.getByTestId('macros').getByRole('button', { name: 'Om fibervärdet' }).tap();
+      await expect(page.getByTestId('fiber-incomplete')).toBeVisible();
+      await expect(page.locator('.day-summary')).toHaveScreenshot(
+        `${theme}-mat-summering-360.png`,
+        { maxDiffPixelRatio: 0.002 },
+      );
     });
 
     test('fibermål och dryck med GLP-1', async ({ page }) => {

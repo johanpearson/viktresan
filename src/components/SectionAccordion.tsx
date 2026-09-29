@@ -6,9 +6,9 @@ interface SectionAccordionProps {
   title: string;
   /** Liten text efter rubriken, t.ex. "3 poster". */
   meta?: ReactNode;
-  /** Högerställt värde i rubriken, t.ex. "442 kcal". */
+  /** Högerställt värde i rubriken, t.ex. "442 kcal" – i en fast kolumn, samma i alla sektioner. */
   value?: ReactNode;
-  /** Rad under rubriken (dämpad), t.ex. makron och fiber. Visas inte för en tom sektion. */
+  /** Rad under rubriken (dämpad), indragen i linje med namnet, t.ex. makron och fiber. Visas inte för en tom sektion. */
   detail?: ReactNode;
   expanded: boolean;
   onToggle: () => void;
@@ -16,16 +16,18 @@ interface SectionAccordionProps {
    * Tom sektion: en smal rad med bara rubriken och `actions` (ingen utfällning).
    */
   empty?: boolean;
-  /** Knappar till höger om rubriken (⋯, +). Alltid synliga. */
+  /** Knappar till höger om värdet (⋯, +). Alltid synliga, ligger utanför tryckytan för utfällning. */
   actions?: ReactNode;
   children?: ReactNode;
   testId?: string;
 }
 
 /**
- * Hopfällbar sektion (kort) med rubrik, metatext, värde och chevron. Innehållet
- * renderas bara när sektionen är utfälld och glider in (200 ms, av vid
- * prefers-reduced-motion).
+ * Hopfällbar sektion (kort). Rubrikraden är ett fast rutnät:
+ * [pil] [namn + metatext, kortas med …] [värde, fast minbredd] [⋯] [+] – inget bryts till en
+ * ny rad, och pilen och värdet står i samma kolumn i alla sektioner. Hela rubriken utom
+ * åtgärderna är tryckytan (knappen täcker raden, åtgärderna ligger ovanpå). Innehållet
+ * renderas bara när sektionen är utfälld och glider in (200 ms, av vid prefers-reduced-motion).
  */
 export function SectionAccordion({
   id,
@@ -50,27 +52,29 @@ export function SectionAccordion({
     >
       <div className="accordion-header">
         {empty ? (
-          <h3 className="accordion-heading accordion-heading-empty">{title}</h3>
+          <h3 className="accordion-heading accordion-heading-empty">
+            <span className="accordion-name">{title}</span>
+          </h3>
         ) : (
           <h3 className="accordion-heading">
             <button
               type="button"
-              className={
-                detail == null ? 'accordion-toggle' : 'accordion-toggle accordion-toggle-detail'
-              }
+              className="accordion-toggle"
               aria-expanded={open}
               aria-controls={bodyId}
               onClick={onToggle}
             >
-              <span className="accordion-title">{title}</span>
-              <span className="accordion-meta">{meta}</span>
-              {value != null && <span className="accordion-value">{value}</span>}
-              <span aria-hidden="true" className="chevron" />
+              <span aria-hidden="true" className="accordion-chevron" />
+              <span className="accordion-name">
+                <span className="accordion-title">{title}</span>
+                {meta != null && <span className="accordion-meta"> {meta}</span>}
+              </span>
+              <span className="accordion-value">{value}</span>
               {detail != null && <span className="accordion-detail">{detail}</span>}
             </button>
           </h3>
         )}
-        {actions}
+        {actions != null && <div className="accordion-actions">{actions}</div>}
       </div>
       {open && (
         <div className="accordion-body" id={bodyId}>

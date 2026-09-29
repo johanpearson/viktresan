@@ -111,6 +111,9 @@ test('GLP-1 på: fiberring med upptrappning, höjt dryckesmål och påminnelse v
   await expect(page.getByTestId('fiber-week-goal')).toHaveText(
     'Veckans fibermål: 15 g (mål 35 g).',
   );
+  // Snabbloggen saknar fiberdata: asterisk vid värdet, förklaringen bakom info-ikonen.
+  await expect(page.getByTestId('fiber-incomplete')).toHaveCount(0);
+  await page.getByTestId('fiber-info').tap();
   await expect(page.getByTestId('fiber-incomplete')).toContainText(
     'Dagens fiber kan vara i underkant',
   );

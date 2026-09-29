@@ -441,3 +441,56 @@ export const WORST_CASE_RINGS: SeedData = {
     lastExportAt: Date.parse(FROZEN_NOW),
   },
 };
+
+/**
+ * Måltidsrubrikerna i Mat → Dag med långa och korta namn och kcal-värden: Frukost 456 kcal,
+ * Lunch 85 kcal (1 post, makron under 10 g med en decimal), Middag tom och Mellanmål 1 234 kcal
+ * med 12 poster (en utan fiberdata → asterisk). Egen databas – inte VISUAL_DATA.
+ */
+export const MEAL_HEADERS: SeedData = {
+  profile: {
+    startDate: '2026-08-01',
+    startWeightKg: 92,
+    heightCm: 178,
+    goalWeightKg: 80,
+    sex: 'kvinna',
+    birthYear: 1985,
+    activityLevel: 'latt',
+    ratePerWeekKg: 0.5,
+  },
+  weights: [
+    { id: 'w-idag', date: TODAY, weightKg: 88, createdAt: Date.parse(`${TODAY}T07:00:00+02:00`) },
+  ],
+  foods: [
+    {
+      id: 'egen:bulle',
+      name: 'Kanelbulle',
+      source: 'egen',
+      per100: per100(189, 4, 26, 8),
+      createdAt: 1,
+    },
+  ],
+  foodLog: [
+    logEntry(0, 'frukost', 'lv:1', 'Havregryn', 60, per100(370, 13, 59, 7)),
+    logEntry(0, 'frukost', 'lv:2', 'Mjölk fett 3 %', 390, MJOLK),
+    logEntry(0, 'lunch', 'lv:7', 'Kvarg naturell', 135, KVARG),
+    ...Array.from({ length: 11 }, () =>
+      logEntry(0, 'mellanmal', 'lv:3', 'Banan', 100, BANAN, 'st', 1),
+    ),
+    logEntry(0, 'mellanmal', 'egen:bulle', 'Kanelbulle', 100, per100(189, 4, 26, 8), 'st', 1),
+  ],
+  settings: {
+    features: {
+      steg: false,
+      midja: false,
+      mat: true,
+      vatten: false,
+      traning: false,
+      glp1: false,
+      tillskott: false,
+      bilder: false,
+      version: 4,
+    },
+    lastExportAt: Date.parse(FROZEN_NOW),
+  },
+};

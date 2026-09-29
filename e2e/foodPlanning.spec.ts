@@ -268,13 +268,11 @@ test('veckoraden: loggar mat flera dagar och ser veckan i Mat, på Översikt och
   const budget = target * 7;
 
   // Innan något loggats (onsdag): mån och tis räknas som 0 kcal, så hela budgeten delas på
-  // de fem dagarna som är kvar.
+  // de fem dagarna som är kvar. Mat → Dag har samma korta veckorad som Översikt (utan saldo).
   await expect(page.getByTestId('week-row-text')).toHaveText(
-    `Vecka: 0 av ${kcalText(budget)} kcal · kvar ${kcalText(budget)} kcal · ≈ ${kcalText(Math.round(budget / 5))} kcal/dag resten av veckan`,
+    `Vecka: ${kcalText(budget)} kcal kvar · ≈ ${kcalText(Math.round(budget / 5))}/dag`,
   );
-  await expect(page.getByTestId('week-balance')).toHaveText(
-    `Saldo hittills −${kcalText(2 * target)} kcal`,
-  );
+  await expect(page.getByTestId('week-balance')).toHaveCount(0);
 
   // Måndag 3 000 kcal, tisdag inget, onsdag (idag) 600 kcal.
   await page.getByRole('button', { name: 'Föregående dag' }).tap();
@@ -282,8 +280,7 @@ test('veckoraden: loggar mat flera dagar och ser veckan i Mat, på Översikt och
   await quickLog(page, 3000);
   // En tidigare dag i veckan visar samma vecka (per dag räknas från idag).
   const perDay = Math.round((budget - 3000) / 5);
-  const row = `Vecka: 3 600 av ${kcalText(budget)} kcal · kvar ${kcalText(budget - 3600)} kcal · ≈ ${kcalText(perDay)} kcal/dag resten av veckan`;
-  const balance = `Saldo hittills −${kcalText(2 * target - 3000)} kcal`;
+  const row = `Vecka: ${kcalText(budget - 3600)} kcal kvar · ≈ ${kcalText(perDay)}/dag`;
   await page.getByRole('button', { name: 'Nästa dag' }).tap();
   await page.getByRole('button', { name: 'Nästa dag' }).tap();
   await quickLog(page, 600);
@@ -291,7 +288,6 @@ test('veckoraden: loggar mat flera dagar och ser veckan i Mat, på Översikt och
   // Mat → Dag: dagsmålet är kvar som mål, veckoraden under.
   await expect(page.getByTestId('intake')).toHaveText(`600 / ${kcalText(target)} kcal`);
   await expect(page.getByTestId('week-row-text')).toHaveText(row);
-  await expect(page.getByTestId('week-balance')).toHaveText(balance);
 
   // Tryck på veckoraden: staplar per dag, tisdag "ej loggad", saldot.
   await page.getByTestId('week-row').tap();
@@ -337,9 +333,12 @@ test('veckoraden: överskriden budget – per dag stannar på golvet och resten 
   // Dagsmålet är oförändrat.
   await expect(page.getByTestId('intake')).toHaveText(`0 / ${kcalText(target)} kcal`);
   await expect(page.getByTestId('week-row-text')).toHaveText(
-    `Vecka: 17 000 av ${kcalText(budget)} kcal · över ${kcalText(17_000 - budget)} kcal · ≈ 1 500 kcal/dag resten av veckan`,
+    `Vecka: ${kcalText(17_000 - budget)} kcal över · ≈ 1 500/dag`,
   );
-  await expect(page.getByTestId('week-shortfall')).toHaveText(
+  // Golvnotisen finns i veckopanelen.
+  await expect(page.getByTestId('week-shortfall')).toHaveCount(0);
+  await page.getByTestId('week-row').tap();
+  await expect(page.getByRole('dialog').getByTestId('week-shortfall')).toHaveText(
     `Veckobudgeten är överskriden med ${kcalText(17_000 - budget)} kcal. Ät ändå minst 1 500 kcal per dag och sprid hellre ${kcalText(over)} kcal över nästa vecka (ca ${kcalText(Math.round(over / 7))} kcal mindre per dag).`,
   );
   expect(errors).toEqual([]);

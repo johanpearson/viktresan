@@ -3118,16 +3118,8 @@ a.button {
 
 /* Veckoraden under kaloriringen/-stapeln (Mat → Dag, Översikt → Idag). Tryck = veckopanelen. */
 .week-budget {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding-top: var(--space-1);
+  margin-top: var(--space-2);
   border-top: 1px solid var(--border);
-}
-
-.week-budget .form-note {
-  margin: 0;
 }
 
 .week-budget-row {
@@ -3135,8 +3127,8 @@ a.button {
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  min-height: var(--tap);
-  padding: var(--space-2) 0;
+  min-height: var(--tap-min);
+  padding: var(--space-1) 0;
   border: 0;
   background: none;
   color: var(--text);
@@ -3154,22 +3146,15 @@ a.button {
 .week-budget-text {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.week-budget-main {
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
-/* Saldot är neutralt: dämpad text, aldrig rött/grönt. */
-.week-budget-balance {
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+/* Smala skärmar (360 px): mindre text så att veckoraden ryms på en rad. */
+@media (max-width: 380px) {
+  .week-budget-text {
+    font-size: var(--text-xs);
+  }
 }
 
 /* Veckopanelen: sju staplar mot dagsmålet (streckad linje). */
@@ -3357,6 +3342,11 @@ a.button {
 
 /* SectionAccordion: hopfällbart kort med rubrikrad och åtgärder. */
 .accordion {
+  --accordion-chevron: 10px;
+  --accordion-gap: 6px;
+  /* Rymmer "1 234 kcal" (fet, tabellsiffror) – kcal står i samma kolumn i alla sektioner. */
+  --accordion-value: 5.8em;
+  --accordion-actions: calc(2 * var(--tap-min));
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -3364,6 +3354,7 @@ a.button {
 }
 
 .accordion-header {
+  position: relative;
   display: flex;
   align-items: center;
 }
@@ -3375,23 +3366,46 @@ a.button {
   font-size: var(--text-md);
 }
 
+/* Namnet (+ metatext) på en rad, kortas med … – rubrikraden bryts aldrig. */
+.accordion-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Tom sektion: namnet i samma kolumn som i sektionerna med pil. */
 .accordion-heading-empty {
-  padding-left: var(--space-4);
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding-left: calc(var(--space-3) + var(--accordion-chevron) + var(--accordion-gap));
   color: var(--muted);
   font-weight: 600;
 }
 
+/*
+ * Rubrikraden i ett fast rutnät: [pil] [namn + antal] [kcal] [⋯ +]. Knappen täcker hela
+ * rubriken (tryckyta för att fälla ut/ihop); ⋯ och + ligger ovanpå i den sista kolumnen.
+ * Kolumnerna är lika breda i alla sektioner, så pilen och kcal står på samma x-position.
+ */
 .accordion-toggle {
-  display: flex;
+  display: grid;
+  /* Sista kolumnen = platsen för ⋯ och + minus gapet: knapparnas egen luft skiljer dem från kcal. */
+  grid-template-columns:
+    var(--accordion-chevron) minmax(0, 1fr) minmax(var(--accordion-value), max-content)
+    calc(var(--accordion-actions) - var(--accordion-gap));
   align-items: center;
-  gap: var(--space-2);
+  column-gap: var(--accordion-gap);
+  row-gap: 2px;
   width: 100%;
   min-height: 52px;
-  padding: 0 var(--space-1) 0 var(--space-4);
+  padding: 14px var(--space-1) 14px var(--space-3);
   border: 0;
   background: none;
   color: var(--text);
   font: inherit;
+  line-height: 24px;
   text-align: left;
   cursor: pointer;
 }
@@ -3401,36 +3415,70 @@ a.button {
 }
 
 .accordion-meta {
-  flex: 1;
   color: var(--muted);
   font-size: var(--text-xs);
   font-weight: 400;
-  white-space: nowrap;
-}
-
-.accordion-detail {
-  flex-basis: 100%;
-  padding-right: var(--space-3);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Med makroraden: två rader i rubriken, raden under över hela bredden. */
-.accordion-toggle-detail {
-  flex-wrap: wrap;
-  align-content: center;
-  row-gap: 2px;
-  padding-block: var(--space-2);
 }
 
 .accordion-value {
   white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Makroraden under rubriken, indragen i linje med namnet. */
+.accordion-detail {
+  grid-column: 2 / -1;
+  padding-right: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.accordion-toggle:has(.accordion-detail) {
+  padding-block: 10px;
+}
+
+/* Pilen till vänster: pekar åt höger hopfälld och roterar nedåt vid utfällning. */
+.accordion-chevron {
+  justify-self: center;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.accordion-toggle[aria-expanded='true'] > .accordion-chevron {
+  transform: rotate(45deg);
+}
+
+/* ⋯ och + ovanpå knappen, centrerade mot rubrikraden (första raden i rutnätet). */
+.accordion-actions {
+  position: absolute;
+  top: 4px;
+  right: var(--space-1);
+  display: flex;
+  justify-content: flex-end;
+  width: var(--accordion-actions);
+}
+
+.accordion-header:has(.accordion-detail) .accordion-actions {
+  top: 0;
+}
+
+.accordion-empty .accordion-actions {
+  position: static;
+  margin-right: var(--space-1);
 }
 
 .accordion-action {
   flex: none;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
   color: var(--muted);
   font-size: var(--text-lg);
   line-height: 1;
@@ -4783,6 +4831,17 @@ p.plateau-reasons {
   margin-left: 1px;
 }
 
+/* Info-ikonen vid fibervärdet (poster utan fiberdata): tryckytan får inte göra raden högre. */
+.macro-line .info-button,
+.stat-bar-value .info-button {
+  margin-block: -14px;
+  vertical-align: middle;
+}
+
+.fiber-info {
+  margin: var(--space-1) 0 0;
+}
+
 /* Översikt: viktkortet. Hela kortet är en länk till Framsteg → Historik (länkens ::after),
    info-knappen ligger ovanpå. › uppe till höger visar att kortet öppnar något. */
 .hero-card {
@@ -4884,17 +4943,6 @@ p.plateau-reasons {
 
 .rings + .today-chips {
   margin-top: calc(-1 * var(--space-1));
-}
-
-/* Veckoraden på Översikt: en rad, ingen saldorad. */
-.week-budget-compact {
-  margin-top: var(--space-2);
-  padding-top: 0;
-}
-
-.week-budget-compact .week-budget-row {
-  min-height: var(--tap-min);
-  padding: var(--space-1) 0;
 }
 
 /* Översikt → Att göra idag */

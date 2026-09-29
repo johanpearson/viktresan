@@ -182,7 +182,7 @@ export function TodayCard({ data, now, onChange }: TodayCardProps) {
           )}
         </ul>
       )}
-      {showWeek && <WeekBudgetRow week={week} compact />}
+      {showWeek && <WeekBudgetRow week={week} />}
       {sheet === 'dryck' && (
         <BottomSheet
           title="Dryck idag"

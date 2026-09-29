@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Feature } from '../components/Feature.tsx';
 import { HydrationReminder } from '../components/HydrationReminder.tsx';
+import { InfoButton } from '../components/InfoButton.tsx';
 import { MilestoneCard } from '../components/MilestoneCard.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
 import { Page } from '../components/Page.tsx';
@@ -198,23 +199,15 @@ function TrendLabel() {
     <>
       <p className="hero-label hero-label-info">
         Trendvikt
-        <button
-          type="button"
-          className="info-button"
-          aria-label="Vad är trendvikt?"
-          aria-expanded={open}
-          aria-controls={infoId}
-          data-testid="trend-info"
-          onClick={() => {
+        <InfoButton
+          label="Vad är trendvikt?"
+          expanded={open}
+          controls={infoId}
+          testId="trend-info"
+          onToggle={() => {
             setOpen((o) => !o);
           }}
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M12 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="12" cy="7.5" r="1.2" fill="currentColor" />
-          </svg>
-        </button>
+        />
       </p>
       {open && (
         <p className="hero-info" id={infoId} data-testid="trend-info-text">

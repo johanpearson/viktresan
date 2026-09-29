@@ -13,7 +13,7 @@
  *   värdering.
  */
 import { addDays } from './dates.ts';
-import { formatInt, formatKcal, formatSignedKcal } from './format.ts';
+import { formatInt, formatKcal } from './format.ts';
 import { mondayOf } from './weekSummary.ts';
 
 export interface WeekBudgetInput {
@@ -144,18 +144,7 @@ export function weekBudget({
   };
 }
 
-/** "Vecka: 6 200 av 14 000 kcal · kvar 7 800 kcal · ≈ 1 950 kcal/dag resten av veckan" */
-export function weekRowText(week: WeekBudget): string {
-  const used = `Vecka: ${formatInt(week.eatenKcal)} av ${formatKcal(week.budgetKcal)}`;
-  const left =
-    week.remainingKcal >= 0
-      ? `kvar ${formatKcal(week.remainingKcal)}`
-      : `över ${formatKcal(-week.remainingKcal)}`;
-  if (week.perDayKcal === null) return `${used} · ${left}`;
-  return `${used} · ${left} · ≈ ${formatInt(week.perDayKcal)} kcal/dag resten av veckan`;
-}
-
-/** Kort veckorad på Översikt: "Vecka: 10 132 kcal kvar · ≈ 1 804/dag" (resten i veckopanelen). */
+/** Veckoraden (Översikt, Mat → Dag): "Vecka: 10 132 kcal kvar · ≈ 1 804/dag" (saldo och detaljer i veckopanelen). */
 export function weekRowShortText(week: WeekBudget): string {
   const left =
     week.remainingKcal >= 0
@@ -163,9 +152,4 @@ export function weekRowShortText(week: WeekBudget): string {
       : `Vecka: ${formatKcal(-week.remainingKcal)} över`;
   if (week.perDayKcal === null) return left;
   return `${left} · ≈ ${formatInt(week.perDayKcal)}/dag`;
-}
-
-/** "Saldo hittills +350 kcal" – loggat mot planerat för dagarna före idag. */
-export function weekBalanceText(week: WeekBudget): string {
-  return `${week.daysLeft > 0 ? 'Saldo hittills' : 'Saldo'} ${formatSignedKcal(week.balanceKcal)}`;
 }

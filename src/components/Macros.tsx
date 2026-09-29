@@ -16,6 +16,8 @@ interface MacrosProps {
   round?: boolean;
   /** Delar före makrona i samma rad, t.ex. "2 skivor (70 g)". */
   lead?: ReactNode;
+  /** Direkt efter fibervärdet (hålls ihop med det), t.ex. en info-ikon. */
+  fiberInfo?: ReactNode;
 }
 
 const LABELS = {
@@ -28,7 +30,14 @@ const LABELS = {
  * raden bryts bara vid "·". Fibern har fiberns färg (`--macro-fiber`, samma som fiberringen);
  * saknas fiberdata visas "–", och en summa där någon post saknar fiber får en markering (*).
  */
-export function Macros({ nutrients, fiber, variant = 'short', round = false, lead }: MacrosProps) {
+export function Macros({
+  nutrients,
+  fiber,
+  variant = 'short',
+  round = false,
+  lead,
+  fiberInfo,
+}: MacrosProps) {
   const labels = LABELS[variant];
   const grams = (value: number) =>
     round ? `${formatInt(Math.round(value))} g` : formatMacroG(value);
@@ -40,16 +49,19 @@ export function Macros({ nutrients, fiber, variant = 'short', round = false, lea
   if (fiber !== undefined) {
     const { text, partial } = fiberText(fiber, round);
     parts.push(
-      <span className="macro-fiber" data-testid="fiber">
-        {labels.fiber} {text}
-        {fiber === null && <span className="visually-hidden"> (fiberdata saknas)</span>}
-        {partial && (
-          <span className="fiber-partial" data-testid="fiber-partial">
-            <span aria-hidden="true">*</span>
-            <span className="visually-hidden"> (kan vara i underkant)</span>
-          </span>
-        )}
-      </span>,
+      <>
+        <span className="macro-fiber" data-testid="fiber">
+          {labels.fiber} {text}
+          {fiber === null && <span className="visually-hidden"> (fiberdata saknas)</span>}
+          {partial && (
+            <span className="fiber-partial" data-testid="fiber-partial">
+              <span aria-hidden="true">*</span>
+              <span className="visually-hidden"> (kan vara i underkant)</span>
+            </span>
+          )}
+        </span>
+        {fiberInfo}
+      </>,
     );
   }
   return (

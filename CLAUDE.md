@@ -47,7 +47,7 @@ src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?
 src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
 src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (≥ 15 g/100 kcal)
 src/lib/fiber.ts        Fibermål (NNR 2023, upptrappning 3 g/vecka), fiber per dag ur matloggen, fiberrik-regeln (≥ 3 g/100 kcal),
-                        fiber i matloggningen (fiberForItem per mängd, fiberSum, FiberAmount: null = "–", partial = "*")
+                        fiber i matloggningen (fiberForItem per mängd, fiberSum, FiberAmount: null = "–", partial = "*"), formatMacroG
 src/lib/useFiber.ts     Hook: fibermålet + fiber per dag (läser livsmedel.json/egna livsmedel bara när målet visas), sparar trappans start
 src/data/fiberReference.ts  Referensvärden för fiber (35 g män, 25 g kvinnor, 30 g utan kön) med källa (NNR 2023)
 src/lib/milestones.ts   Milstolpar: regler (trendvikt), evaluateMilestones, kommande, diffMilestones, texter
@@ -139,7 +139,8 @@ docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kv
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
                         dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar | Rapport; `Rapport.tsx`), Inställningar
-e2e/                    Playwright-tester. overview.spec.ts = Översikt med fast data (höjd ≤ 1,5 skärmar, varje ring/kort navigerar rätt,
+e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrikernas rutnät (pil, namn, kcal i samma kolumn i alla
+                        sektioner på 412 och 360 px, ingen radbrytning, tryckyta) med MEAL_HEADERS. overview.spec.ts = Översikt med fast data (höjd ≤ 1,5 skärmar, varje ring/kort navigerar rätt,
                         Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
                         flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
@@ -250,13 +251,13 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   (halveras om skattningen kläms till 0,6–1,6 × formeln).
 - **Dag och vecka** (`weekBudget.ts`, alltid båda – ingen inställning): dagsmålet (planen) är primärt – kcal-ringen på
   Översikt → Idag och kcal-stapeln i Mat → Dag visar dagens intag mot det. Under ringen/makroraden står veckoraden
-  (`WeekBudgetRow`): "Vecka: [intag] av [7 × dagsmål] kcal · kvar [X] kcal · ≈ [Y] kcal/dag resten av veckan" (mån–sön)
-  och "Saldo hittills ±N kcal" (loggat − dagsmålet för dagarna före idag, neutral färg). Y = (budget − intag före idag) /
+  (`WeekBudgetRow`, samma korta rad på Översikt och i Mat → Dag): "Vecka: [X] kcal kvar · ≈ [Y]/dag" (mån–sön); saldot
+  ("Saldo hittills ±N kcal" = loggat − dagsmålet för dagarna före idag, neutral färg) finns i panelen. Y = (budget − intag före idag) /
   dagar kvar inkl. idag, så det står still under dagen. Dagar utan matlogg räknas som 0 kcal. Y går aldrig under golvet
-  (`floorKcal`); räcker inte budgeten (resten av veckan på golvet går över budgeten) visas `WeekShortfallNote`
+  (`floorKcal`); räcker inte budgeten (resten av veckan på golvet går över budgeten) visas i panelen `WeekShortfallNote`
   ("Veckobudgeten är överskriden med X kcal" / "räcker inte till kalorigolvet") med förslag att sprida resten över nästa
   vecka. Tryck på raden = `WeekBudgetSheet`: sju staplar mot dagsmålet (streckad linje), "ej loggad", kvar, per dag och
-  saldo. Mat → Dag visar veckan för det valda datumet (en avslutad vecka: bara saldot). Veckosummeringen har raden
+  saldo. Mat → Dag visar veckan för det valda datumet (en avslutad vecka: bara kvar/över). Veckosummeringen har raden
   `budget` (budget mot utfall) när det finns ett kalorimål.
 - **Snabblogg och recept**: sök-sheeten har raden "Snabblogg" (`QuickLogForm`); snabbval under Senaste/Favoriter
   ("≈ 700 kcal") öppnar den förifylld. Recept (Mat → Egna, `RecipeBuilder`) söks och listas under Måltider i sök-sheeten,
@@ -326,7 +327,9 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   första enheten), sökträffar/Senaste/Favoriter (per enhet eller 100 g), raderna, måltidens rubrik (`SectionAccordion`
   `detail`), dagens makrorad, egna måltider och recept (per portion och 100 g) och Egna livsmedel. Fiberkällan byggs ur
   katalogen (`catalogFiberSource`) när Livsmedelsverkets data är laddad – innan dess utelämnas fibern. Saknas fiberdata:
-  "–" (inte 0) och posten räknas inte in; en summa där någon post saknar fiber får "*" och dagens topp en kort notis.
+  "–" (inte 0) och posten räknas inte in; en summa där någon post saknar fiber får "*", och dagens fibervärde (Mat → Dag,
+  Mat → Näring) en info-ikon (`InfoButton`) som fäller ut förklaringen (`FiberMissingNote`). Makron och fiber i korta rader
+  (`formatMacroG`): alltid en decimal under 10 g ("6,0 g"), hela gram från 10 g.
 - **Översikt** (docs/DESIGN.md → Översikt): viktkortet (tryck = Framsteg → Historik), kontextkort när de är aktuella
   (`UpdateCard` – toast på övriga sidor, `MilestoneCard` – nådd senaste 7 dagarna, `preferences.milestoneCardDismissed`,
   veckokortet, platån, dryckespåminnelse, övre gränsvärden), Idag (ringar, chips för steg/träning, kort veckorad) och
@@ -422,7 +425,8 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `FoodPicker` – helskärms-sheet med sök, flikarna Senaste/Favoriter/Måltider, streckkod (Open Food Facts, cache,
   "Skapa eget livsmedel") och sedan `FoodLogForm`. Samma `FoodPicker` (`mode.kind = 'ingredient'`, utan måltidsval
   och utan måltider i listorna) lägger till ingredienser i `MealBuilder`. Dagens mat (`MealSections`): ett
-  hopfällbart kort per måltid (namn, antal poster, kcal, + som öppnar sheeten förvald till måltiden); pågående
+  hopfällbart kort per måltid (rutnät: pil, namn + antal poster (kortas med …), kcal i fast kolumn, ⋯, + som öppnar
+  sheeten förvald till måltiden; makroraden under, indragen i linje med namnet); pågående
   måltid (`currentMealSlot`, samma klockslag som `defaultMealSlot`) är utfälld vid start, en måltid man loggar i
   fälls ut; tomma måltider är en smal rad med bara +. Rader (`FoodEntryRow`): tryck = redigera i bottom sheet
   (mängd, enhet, måltid, Ta bort), svep vänster (pekarhändelser, `touch-action: pan-y`) = ta bort; båda ger
