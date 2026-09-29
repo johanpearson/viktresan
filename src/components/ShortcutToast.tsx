@@ -35,7 +35,7 @@ export function ShortcutToast({ state }: { state: ShortcutState }) {
   return (
     <section className="toast toast-shortcut" aria-label="Genväg" data-testid="shortcut-toast">
       <p className="toast-text" role="status">
-        {label} är avstängt. Slå på det för att använda genvägen ”{toast.shortcut.name}”.
+        {label} är avstängt. Slå på det för att använda ”{toast.name}”.
       </p>
       <div className="toast-actions">
         <button

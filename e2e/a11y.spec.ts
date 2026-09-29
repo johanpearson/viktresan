@@ -182,6 +182,33 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expectNoViolations(page, 'Rapport');
     });
 
+    test('receptimport: AI-steget och granskningen saknar tillgänglighetsfel', async ({ page }) => {
+      await page.goto('./#/mat/importera');
+      const sheet = page.getByRole('dialog', { name: 'Importera recept' });
+      await sheet.getByTestId('recipe-input').fill('https://www.ica.se/recept/gryta-1/');
+      await sheet.getByLabel('AI-tjänstens svar (JSON)').fill('inte json');
+      await sheet.getByRole('button', { name: 'Granska svaret' }).tap();
+      await expect(sheet.getByTestId('recipe-ai-error')).toBeVisible();
+      await expectNoViolations(page, 'Receptimport AI-steget');
+      const answer = {
+        namn: 'Gryta',
+        portioner: 4,
+        ingredienser: [
+          { original: '2 dl vetemjöl', mangd: 2, enhet: 'dl', livsmedel: 'vetemjöl' },
+          { original: '1 tsk okändört', mangd: 1, enhet: 'tsk', livsmedel: 'okändört' },
+          { original: 'salt', mangd: null, enhet: null, livsmedel: 'salt' },
+        ],
+        kallaUrl: 'https://www.ica.se/recept/gryta-1/',
+      };
+      await sheet.getByLabel('AI-tjänstens svar (JSON)').fill(JSON.stringify(answer));
+      await sheet.getByRole('button', { name: 'Granska svaret' }).tap();
+      await sheet.getByRole('button', { name: 'Granska ingredienser' }).tap();
+      await expect(sheet.getByTestId('import-row')).toHaveCount(3);
+      await expect(sheet.getByTestId('import-summary')).toBeVisible();
+      await sheet.getByRole('button', { name: 'Hoppa över salt' }).tap();
+      await expectNoViolations(page, 'Receptimport granskning');
+    });
+
     test('sidor med data saknar tillgänglighetsfel', async ({ page }) => {
       await seedData(page);
       for (const [label, path] of ROUTES) {

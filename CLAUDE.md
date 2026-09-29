@@ -86,6 +86,10 @@ src/lib/foodDay.ts      Mat → Dag: sektioner per måltid (summa, antal), påg�
 src/lib/mealAnalysis.ts Lokal analys: summor (makron, fiber, socker, salt, vitaminer, mineraler) i % av dagsmål/RI, nyckeltal
 src/lib/quickLog.ts     Snabblogg: kcal (+ protein) som matloggpost med `estimated`, id `snabb:<namn>:<kcal>:<protein>`
 src/lib/recipes.ts      Recept: utbyte (portioner/tillagad vikt), näring per portion och 100 g, kopia till loggen, duplicera
+src/lib/recipeImport.ts Receptimport: prompt (länk/text/bild), JSON-validering, ingredienstolkning ("1 burk … (400 g)"), mängd i gram
+                        med enhetssystemet (resolveAmount), matchning (matchFood) och säkerhetsnivå (hög/osäker/ingen)
+src/lib/matchMemory.ts  Minnet av manuella matchningar i receptimporten (settings `ingredientMatches`: text → livsmedels-id)
+src/lib/shareTarget.ts  Web Share Target: manifestets parametrar (SHARE_PARAMS), tolkning av delad länk/text, väntande delning
 src/lib/useIngredients.ts  Hook: ingrediensrader för egna måltider och recept (IngredientEditor)
 src/lib/weekBudget.ts   Veckoraden: 7 × dagsmål, kvar, per dag resten av veckan (golvspärr), saldo, dagar (ej loggad = 0 kcal)
 src/lib/swaps.ts        Bytesförslag: samma kategori, klart bättre protein/kcal eller fiber, aldrig mer energi
@@ -137,12 +141,13 @@ src/lib/motion.ts       prefersReducedMotion()
 docs/DESIGN.md          Designsystemet: tokens, komponenter, regler, mikrointeraktioner
 docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kvarvarande vyer
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
-                        (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
+                        (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten, `#/mat/importera` = receptimporten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
                         dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar | Rapport; `Rapport.tsx`), Inställningar
 e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrikernas rutnät (pil, namn, kcal i samma kolumn i alla
                         sektioner på 412 och 360 px, ingen radbrytning, tryckyta) med MEAL_HEADERS. overview.spec.ts = Översikt med fast data (höjd ≤ 1,5 skärmar, varje ring/kort navigerar rätt,
                         Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
-                        flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
+                        flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). recipeImport.spec.ts = receptimporten (delning via
+                        `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. rings.spec.ts = ringarnas text inom den inre cirkeln
                         med värsta fallets värden (WORST_CASE_RINGS) på 412 och 360 px. visual.spec.ts + visualData.ts = visuella regressionstester (egen
@@ -207,7 +212,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `schedule` `dagligen`/`veckodagar` (+ `weekdays`)/`vid-behov`, `dosesPerDay`, valfri `ean`; index `by-ean`),
   `supplementLog` (v10, tagna doser, id = `<tillskott>:<datum>`, en per tillskott och dag, namn och ämnen kopieras in;
   index `by-date`), `recipes` (v11, recept: ingredienser som måltider, `servings` och/eller `cookedWeightG`; livsmedels-id
-  `recept:<id>`). Matloggposter har sedan v11 (utan datamigrering) valfria `estimated: true` (snabblogg: 1 portion = 100 "g",
+  `recept:<id>`; valfri `sourceUrl` från receptimporten utan schemaändring). Matloggposter har sedan v11 (utan datamigrering) valfria `estimated: true` (snabblogg: 1 portion = 100 "g",
   `per100` = hela värdet, ingår inte i vitaminer/mineraler – `DayNutrition.estimatedEntries`) och `recipe` (`{ yieldG, items }`,
   receptet som det såg ut vid loggningen – `partsOf`/ingredienser läser kopian, så en receptändring bara påverkar nya loggar).
   `SavedMeal` har sedan v10 en valfri `ean` (ingen schemaändring – skanning hittar måltiden).
@@ -236,7 +241,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -259,6 +264,22 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   vecka. Tryck på raden = `WeekBudgetSheet`: sju staplar mot dagsmålet (streckad linje), "ej loggad", kvar, per dag och
   saldo. Mat → Dag visar veckan för det valda datumet (en avslutad vecka: bara kvar/över). Veckosummeringen har raden
   `budget` (budget mot utfall) när det finns ett kalorimål.
+- **Receptimport** (`recipeImport.ts`, `RecipeImport`, `RecipeImportReview`): ingångar Mat → Egna → Recept → raden
+  "Importera recept" och delningsmenyn (Web Share Target, `shareTarget.ts`): manifestets `share_target` (GET, action = appens
+  bas) öppnar appen med `?share-title=…&share-text=…&share-url=…`; `useShortcut` läser dem en gång, tar bort dem ur adressen,
+  sparar delningen (`setPendingShare`) och navigerar till `#/mat/importera` (Egna + importpanelen, förifylld med länken –
+  även en länk i `share-text` – annars texten). Avstängd Mat → toast med "Slå på Mat". AI-steget = `AiJsonImport` (samma
+  komponent som "Lägg in med AI från etikett"): prompten ber AI-tjänsten läsa länken/texten/bilden och svara ENDAST med JSON
+  `{ namn, portioner, ingredienser: [{ original, mangd, enhet, livsmedel }], kallaUrl? }`; `parseRecipeImport` validerar
+  (kodblock tolereras, "1/2" och "0,5" som text, saknade portioner/ogiltig källa = varning). **Appen anropar aldrig
+  receptsajten.** Granskning: en rad per ingrediens (originaltext, föreslaget livsmedel, gram, kcal, `tag-confidence-*`).
+  Mängd: AI-tjänstens mängd/enhet, vikt inom parentes i originaltexten går före en burk/förpackning; gram direkt, volym via
+  densitet (`foodProfile`, saknas den: 1 g/ml och osäker), styck och andra enheter ur `unitsFor` (gissning = osäker).
+  Matchning: minnet först (säker), sedan fuzzy-sökning bland egna livsmedel (inkl. cachade OFF) och Livsmedelsverkets –
+  hela namnet, sedan delar; säker = alla ord finns som hela ord och högst två ord till. (Fineli finns inte i appen.)
+  Tryck på en rad = sök-sheeten (`FoodPicker` med `title`, `initialQuery`, `initialUsage`, skanner); salt/peppar/vatten/
+  "efter smak" (`isSkippable`) och rader utan träff har chipet "Hoppa över". Spara = vanligt recept med portioner och
+  `sourceUrl`; manuella val sparas i matchningsminnet. Källan visas som länk i receptet (`RecipeBuilder`, `recipe-source`).
 - **Snabblogg och recept**: sök-sheeten har raden "Snabblogg" (`QuickLogForm`); snabbval under Senaste/Favoriter
   ("≈ 700 kcal") öppnar den förifylld. Recept (Mat → Egna, `RecipeBuilder`) söks och listas under Måltider i sök-sheeten,
   loggas i portioner (½, 1, 1½, 2) eller gram och kan dupliceras.

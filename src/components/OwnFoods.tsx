@@ -16,7 +16,9 @@ import { formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
 import { recipeFoodId, recipeYield, yieldText } from '../lib/recipes.ts';
 import { loggedAmountText } from '../lib/units.ts';
+import { setPendingShare } from '../lib/shareTarget.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
+import { BottomSheet } from './BottomSheet.tsx';
 import { Card } from './Card.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import type { FoodSource } from './FoodPicker.tsx';
@@ -24,12 +26,20 @@ import { ListRow } from './ListRow.tsx';
 import { Macros } from './Macros.tsx';
 import { MealBuilder } from './MealBuilder.tsx';
 import { RecipeBuilder } from './RecipeBuilder.tsx';
+import { RecipeImport } from './RecipeImport.tsx';
 import { Toast } from './Toast.tsx';
 
 interface OwnFoodsProps {
   /** Livsmedel, måltider och egna enheter – och det sök-sheeten behöver för ingredienser. */
   source: FoodSource;
   onChange: () => Promise<unknown>;
+  /**
+   * Öppna "Importera recept" direkt (`#/mat/importera`, delningsmenyn) – förifyllt med den
+   * delade länken eller texten. `null` = stängd.
+   */
+  initialImport?: string | null;
+  /** Importpanelen stängdes (så att den inte öppnas igen vid nästa flikbyte). */
+  onImportClosed?: () => void;
 }
 
 type Editing =
@@ -69,9 +79,16 @@ function nameOf(target: Removable): string {
  * Mat → Egna: sparade måltider, recept och egna livsmedel som listor. Tryck = redigera,
  * svep vänster = ta bort (med Ångra). "Ny …" är sekundärknappar i kortens rubrikrad.
  */
-export function OwnFoods({ source, onChange }: OwnFoodsProps) {
+export function OwnFoods({
+  source,
+  onChange,
+  initialImport = null,
+  onImportClosed,
+}: OwnFoodsProps) {
   const { foods, meals, favorites, foodUnits, recipes } = source.foodData;
   const [editing, setEditing] = useState<Editing>(null);
+  /** Importpanelen: förifylld länk eller text, `null` = stängd. */
+  const [importing, setImporting] = useState<string | null>(initialImport);
   const toast = useUndoToast();
   const own = useMemo(() => foods.filter((f) => f.source === 'egen'), [foods]);
   const customUnits = useMemo(
@@ -107,6 +124,12 @@ export function OwnFoods({ source, onChange }: OwnFoodsProps) {
     setEditing(null);
     await onChange();
     toast.show(message);
+  }
+
+  function closeImport() {
+    setImporting(null);
+    setPendingShare(null);
+    onImportClosed?.();
   }
 
   const toastView = toast.toast && (
@@ -231,40 +254,49 @@ export function OwnFoods({ source, onChange }: OwnFoodsProps) {
           </button>
         }
       >
-        {recipes.length === 0 ? (
+        {recipes.length === 0 && (
           <p className="muted">
             Lägg in grytor och annat du lagar i omgångar, så loggar du en portion eller vägd mängd.
           </p>
-        ) : (
-          <ul className="list">
-            {recipes.map((recipe) => {
-              const y = recipeYield(recipe);
-              return (
-                <ListRow
-                  key={recipe.id}
-                  testId="own-recipe"
-                  primary={recipe.name}
-                  secondary={yieldText(y, formatGrams)}
-                  value={
-                    <span className="kcal">
-                      {y.perPortion
-                        ? `${formatKcal(y.perPortion.kcal)}/portion`
-                        : `${formatKcal(y.per100.kcal)}/100 g`}
-                    </span>
-                  }
-                  onClick={() => {
-                    toast.close();
-                    setEditing({ kind: 'recipe', recipe });
-                  }}
-                  swipeLeft={{
-                    label: 'Ta bort',
-                    onSwipe: () => void remove({ kind: 'recipe', recipe }),
-                  }}
-                />
-              );
-            })}
-          </ul>
         )}
+        <ul className="list">
+          <ListRow
+            testId="recipe-import-open"
+            primary="Importera recept"
+            secondary="Från en länk, en receptext eller en bild – med AI"
+            chevron
+            onClick={() => {
+              toast.close();
+              setImporting('');
+            }}
+          />
+          {recipes.map((recipe) => {
+            const y = recipeYield(recipe);
+            return (
+              <ListRow
+                key={recipe.id}
+                testId="own-recipe"
+                primary={recipe.name}
+                secondary={yieldText(y, formatGrams)}
+                value={
+                  <span className="kcal">
+                    {y.perPortion
+                      ? `${formatKcal(y.perPortion.kcal)}/portion`
+                      : `${formatKcal(y.per100.kcal)}/100 g`}
+                  </span>
+                }
+                onClick={() => {
+                  toast.close();
+                  setEditing({ kind: 'recipe', recipe });
+                }}
+                swipeLeft={{
+                  label: 'Ta bort',
+                  onSwipe: () => void remove({ kind: 'recipe', recipe }),
+                }}
+              />
+            );
+          })}
+        </ul>
       </Card>
       <Card
         title="Egna livsmedel"
@@ -314,6 +346,19 @@ export function OwnFoods({ source, onChange }: OwnFoodsProps) {
         )}
       </Card>
       {toastView}
+      {importing !== null && (
+        <BottomSheet title="Importera recept" full onClose={closeImport}>
+          <RecipeImport
+            source={source}
+            initialInput={importing}
+            onSaved={(recipe) => {
+              closeImport();
+              void saved(`Sparade receptet ${recipe.name}.`);
+            }}
+            onCancel={closeImport}
+          />
+        </BottomSheet>
+      )}
     </>
   );
 }

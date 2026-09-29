@@ -2627,6 +2627,25 @@ a.button {
   font-weight: 400;
 }
 
+/* Receptimport: säkerhetsnivå per matchning (säker / osäker / ingen träff) */
+.tag-confidence {
+  margin-left: 0;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.tag-confidence-hog {
+  border-color: var(--success);
+}
+
+.tag-confidence-osaker {
+  border-color: var(--warning);
+}
+
+.tag-confidence-ingen {
+  border-color: var(--danger);
+}
+
 /* Översikt: trendvikt som huvudsiffra */
 .hero-sub {
   margin: 4px 0 0;
@@ -5004,4 +5023,24 @@ p.plateau-reasons {
 /* Kaloriringens panel: värden som rader, förklaringar under. */
 .calorie-details .plan-notes {
   margin-top: var(--space-3);
+}
+
+/* ------------------------------------------------------------------ */
+/* Receptimport (Mat → Egna → Importera recept)                        */
+/* ------------------------------------------------------------------ */
+
+/* "Hoppa över" under raden: ett litet chip, indraget i linje med texten. */
+.import-row-actions {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.chip-small {
+  min-height: var(--tap-min);
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.import-row-skipped .list-row-primary {
+  color: var(--muted);
+  text-decoration: line-through;
 }

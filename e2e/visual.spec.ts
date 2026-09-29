@@ -180,6 +180,31 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-mat-historik`);
     });
 
+    test('receptimport: granskning', async ({ page }) => {
+      await open(page, '#/mat/importera');
+      const sheet = page.getByRole('dialog', { name: 'Importera recept' });
+      await sheet.getByTestId('recipe-input').fill('https://www.ica.se/recept/gryta-1/');
+      await sheet.getByLabel('AI-tjänstens svar (JSON)').fill(
+        JSON.stringify({
+          namn: 'Kycklinggryta med potatis',
+          portioner: 4,
+          ingredienser: [
+            { original: '500 g kycklingfilé', mangd: 500, enhet: 'g', livsmedel: 'kycklingfilé' },
+            { original: '8 potatisar', mangd: 8, enhet: 'st', livsmedel: 'potatis' },
+            { original: '2 dl mjölk', mangd: 2, enhet: 'dl', livsmedel: 'mjölk' },
+            { original: '1 tsk spiskummin', mangd: 1, enhet: 'tsk', livsmedel: 'spiskummin' },
+            { original: 'salt och peppar', mangd: null, enhet: null, livsmedel: 'salt' },
+          ],
+          kallaUrl: 'https://www.ica.se/recept/gryta-1/',
+        }),
+      );
+      await sheet.getByRole('button', { name: 'Granska svaret' }).tap();
+      await sheet.getByRole('button', { name: 'Granska ingredienser' }).tap();
+      await expect(sheet.getByTestId('import-row')).toHaveCount(5);
+      await sheet.getByRole('button', { name: 'Hoppa över salt och peppar' }).tap();
+      await shot(page, `${theme}-sheet-receptimport`, false);
+    });
+
     test('snabblogg, recept och veckobudget', async ({ page }) => {
       await open(page, '#/mat');
       await seed(page, WEEKLY_EXTRA);

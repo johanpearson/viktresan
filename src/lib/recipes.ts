@@ -118,12 +118,13 @@ export function duplicateRecipe(recipe: Recipe, id: string, now = Date.now()): R
   };
   if (recipe.servings !== undefined) copy.servings = recipe.servings;
   if (recipe.cookedWeightG !== undefined) copy.cookedWeightG = recipe.cookedWeightG;
+  if (recipe.sourceUrl !== undefined) copy.sourceUrl = recipe.sourceUrl;
   return copy;
 }
 
 /**
- * Receptet att spara ur formuläret. Ett befintligt recept behåller id och `createdAt`
- * och får `updatedAt`; utbytet sätts bara när det är angivet.
+ * Receptet att spara ur formuläret. Ett befintligt recept behåller id, `createdAt` och
+ * källan och får `updatedAt`; utbytet sätts bara när det är angivet.
  */
 export function recipeToSave(
   existing: Recipe | null,
@@ -133,6 +134,8 @@ export function recipeToSave(
     items: MealIngredient[];
     servings: number | null;
     cookedWeightG: number | null;
+    /** Källan för ett importerat recept (ett befintligt behåller sin). */
+    sourceUrl?: string | undefined;
   },
   now = Date.now(),
 ): Recipe {
@@ -144,6 +147,8 @@ export function recipeToSave(
   };
   if (fields.servings !== null) saved.servings = fields.servings;
   if (fields.cookedWeightG !== null) saved.cookedWeightG = fields.cookedWeightG;
+  const sourceUrl = existing?.sourceUrl ?? fields.sourceUrl;
+  if (sourceUrl !== undefined) saved.sourceUrl = sourceUrl;
   if (existing) saved.updatedAt = now;
   return saved;
 }

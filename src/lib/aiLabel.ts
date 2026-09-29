@@ -107,7 +107,7 @@ export interface FoodLabel {
   fatG: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -115,7 +115,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * Plockar ut JSON-objektet ur svaret. AI-tjänster lägger ibland till kodblock (```json)
  * eller en mening före – det mellan första `{` och sista `}` används.
  */
-function extractJson(text: string): LabelResult<Record<string, unknown>> {
+export function extractJson(text: string): LabelResult<Record<string, unknown>> {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (text.trim() === '') return { ok: false, error: 'Klistra in AI-tjänstens svar först.' };

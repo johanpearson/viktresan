@@ -394,6 +394,7 @@ const supplementData = {
       ],
       servings: 6,
       cookedWeightG: 1800,
+      sourceUrl: 'https://www.ica.se/recept/linsgryta/',
       createdAt: 84,
     },
   ],

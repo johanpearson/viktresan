@@ -148,7 +148,9 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `BarcodeScanner`    | `BarcodeScanner.tsx`    | Kameravy för streckkoder (Mat, egna måltider, Tillskott) med reserver            |
 | `BarcodeNotFound`   | `BarcodeNotFound.tsx`   | "Hittade inte [EAN]": AI från etikett / manuellt + länk till Open Food Facts     |
 | `BarcodeElsewhere`  | `BarcodeElsewhere.tsx`  | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit       |
-| `AiLabelImport`     | `AiLabelImport.tsx`     | Prompt (kopiera/dela) → klistra in JSON → validering, förhandsvisning            |
+| `AiJsonImport`      | `AiJsonImport.tsx`      | AI-flöden med JSON-svar: prompt (kopiera/dela) → klistra in → validering         |
+| `AiLabelImport`     | `AiLabelImport.tsx`     | `AiJsonImport` för etiketter (tillskott per dos, livsmedel per 100 g)            |
+| `RecipeImport`      | `RecipeImport.tsx`      | "Importera recept": länk/text → `AiJsonImport` → granskning (`…Review.tsx`)      |
 | `IngredientEditor`  | `IngredientEditor.tsx`  | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept        |
 | `WeekBudgetRow`     | `WeekBudgetRow.tsx`     | Veckoraden under kcal-ringen/-stapeln: en rad, kvar och ≈ per dag → panel        |
 | `WeekBudgetSheet`   | `WeekBudgetSheet.tsx`   | Veckopanelen: sju staplar mot dagsmålet, "ej loggad", kvar, per dag och saldo    |
@@ -641,6 +643,21 @@ Utfallet visas i panelen under sökfältet/listan: ingen träff = `BarcodeNotFou
 en diskret länk `subtle-link`), träff på annat ställe = `BarcodeElsewhere` (en rad med länk). AI-importen
 (`AiLabelImport`) har numrerade steg (`steps`), "Kopiera prompt" som primärknapp tills svaret är granskat – då blir
 "Använd värdena" primär – och förhandsvisningen som `list list-flush` med värden till höger.
+
+### Receptimport (Mat → Egna → Recept)
+
+- Ingång: raden "Importera recept" (`ListRow` med `chevron`, överst i Recept-kortets lista – samma mönster som "Jämför
+  tillfällen") och delningsmenyn (`#/mat/importera`). Panelen är en helskärms-`BottomSheet` ("Importera recept").
+- AI-steget är `AiJsonImport` med fältet "Länk eller receptext" överst och en dämpad rad om vad som skickas med (länk,
+  text eller "bifoga en bild"). "Kopiera prompt" är primär tills svaret är granskat, sedan "Granska ingredienser".
+- Granskningen (`RecipeImportReview`): namn och portioner som fält, källan som dämpad rad med länk, `Card`
+  "Ingredienser" med en sammanfattning ("5 ingredienser · 2 att granska") och en `ListRow` per ingrediens:
+  originaltexten som `primary`, "Livsmedel · 400 g" + säkerhetsetikett som `secondary`, kcal till höger, `chevron`.
+  Etiketten är `tag tag-confidence-*` med ram i semantisk färg: `--success` Säker, `--warning` Osäker, `--danger` Ingen
+  träff – texten är alltid `--text`. Tryck = sök-sheeten (förifylld sökning och mängd, skanner). "Hoppa över" är ett
+  litet chip (`chip chip-small`, `aria-pressed`) under raden, bara för salt/peppar/vatten/"efter smak", rader utan träff
+  och överhoppade rader; en överhoppad rad är överstruken och dämpad. Under kortet "Per portion" och "Hela receptet" som
+  `list list-flush`. En primärknapp: "Spara recept"; "Tillbaka" sekundär.
 
 ### Tillskott
 

@@ -178,4 +178,13 @@ describe('redigering av recept', () => {
     expect(copy).toEqual({ ...stew, id: 'ny', name: 'Linsgryta (kopia)', createdAt: 9 });
     expect(copy.items).not.toBe(stew.items);
   });
+
+  it('källan (importerat recept) följer med vid redigering och duplicering', () => {
+    const fields = { id: 'x', name: 'Gryta', items: [lentils], servings: 4, cookedWeightG: null };
+    const imported = recipeToSave(null, { ...fields, sourceUrl: 'https://ica.se/r/1' }, 1);
+    expect(imported.sourceUrl).toBe('https://ica.se/r/1');
+    expect(recipeToSave(imported, fields, 2).sourceUrl).toBe('https://ica.se/r/1');
+    expect(duplicateRecipe(imported, 'y', 3).sourceUrl).toBe('https://ica.se/r/1');
+    expect(recipeToSave(null, fields, 1)).not.toHaveProperty('sourceUrl');
+  });
 });

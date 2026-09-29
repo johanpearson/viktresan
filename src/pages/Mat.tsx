@@ -15,6 +15,7 @@ import { useAppData } from '../lib/useAppData.ts';
 import { useFiber } from '../lib/useFiber.ts';
 import { useFoodData } from '../lib/useFoodData.ts';
 import { consumeSubPath } from '../lib/navigation.ts';
+import { pendingShare } from '../lib/shareTarget.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 
 const NO_LOG: readonly never[] = [];
@@ -33,16 +34,24 @@ export function Mat() {
   const food = useFoodData();
   const features = useFeatures();
   // "#/mat/logga" (genvägen "Logga mat") öppnar sök-sheeten direkt, "#/mat/ean/<kod>" slår
-  // upp en streckkod (från Tillskott) och "#/mat/naring" öppnar Näring.
+  // upp en streckkod (från Tillskott), "#/mat/naring" öppnar Näring och "#/mat/importera"
+  // (delningsmenyn) öppnar Egna → Importera recept med den delade länken eller texten.
   const { sub } = useHashRoute();
-  const [tab, setTab] = useState<Tab>(() => (sub === 'naring' ? 'naring' : 'dag'));
+  const [initialImport, setInitialImport] = useState<string | null>(() =>
+    sub === 'importera' ? (pendingShare()?.input ?? '') : null,
+  );
+  const [tab, setTab] = useState<Tab>(() =>
+    sub === 'naring' ? 'naring' : initialImport !== null ? 'egna' : 'dag',
+  );
   const [initialPicker] = useState(() => sub === 'logga');
   const [initialEan] = useState(() => /^ean\/(\d{8,14})$/.exec(sub)?.[1]);
-  // Delsökvägen öppnar sök-sheeten: sidans post blir "#/mat", sheetens post behåller den.
-  const opensPicker = initialPicker || initialEan !== undefined;
+  // Delsökvägen öppnar en panel: sidans post blir "#/mat", panelens post behåller den.
+  const [opensPanel] = useState(
+    () => initialPicker || initialEan !== undefined || initialImport !== null,
+  );
   useLayoutEffect(() => {
-    if (opensPicker) consumeSubPath('#/mat');
-  }, [opensPicker]);
+    if (opensPanel) consumeSubPath('#/mat');
+  }, [opensPanel]);
 
   const plan =
     data?.profile != null ? buildPlan(data.profile, data.weights, data.foodLog, todayIso()) : null;
@@ -87,7 +96,16 @@ export function Mat() {
           aiContext={aiContextFrom(data, todayIso())}
         />
       )}
-      {source && tab === 'egna' && <OwnFoods source={source} onChange={food.reload} />}
+      {source && tab === 'egna' && (
+        <OwnFoods
+          source={source}
+          onChange={food.reload}
+          initialImport={initialImport}
+          onImportClosed={() => {
+            setInitialImport(null);
+          }}
+        />
+      )}
       {data && tab === 'historik' && (
         <IntakeHistory
           foodLog={data.foodLog}

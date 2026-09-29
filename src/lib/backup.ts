@@ -78,6 +78,7 @@ import { APPETITE_MAX, APPETITE_MIN, DOSE_FREQUENCIES, isInjectionSite } from '.
 import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
 import type { FoodUnit, UnitSource } from './units.ts';
 import { isValidProteinFactor } from './protein.ts';
+import { isHttpUrl } from './recipeImport.ts';
 import { FOOD_PREFERENCES_MAX, isTime } from './validation.ts';
 import {
   GLP1_WATER_BONUS_MAX_ML,
@@ -1012,6 +1013,10 @@ function parseRecipeRecord(value: unknown, index: number): Recipe {
     recipe.cookedWeightG = value.cookedWeightG;
   }
   if (recipe.servings === undefined && recipe.cookedWeightG === undefined) throw bad();
+  if (value.sourceUrl !== undefined) {
+    if (typeof value.sourceUrl !== 'string' || !isHttpUrl(value.sourceUrl)) throw bad();
+    recipe.sourceUrl = value.sourceUrl;
+  }
   return recipe;
 }
 
