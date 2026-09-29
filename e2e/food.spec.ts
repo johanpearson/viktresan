@@ -149,8 +149,9 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
     String(Math.round((342 / target) * 100)),
   );
   // Makron: protein 7,8 + 7 g, kolhydrater 35,4 + 9,6 g, fett 4,2 + 6 g.
+  // Mockdatan saknar fiber: "–", inte 0.
   await expect(page.getByTestId('macros')).toHaveText(
-    'Protein 15 g · Kolhydrater 45 g · Fett 10 g',
+    'Protein 15 g · Kolhydrater 45 g · Fett 10 g · Fiber – (fiberdata saknas)',
   );
   await closeSheet(page);
 
@@ -275,7 +276,9 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   await page.getByRole('button', { name: 'Spara livsmedel' }).tap();
   await expect(page.getByTestId('own-food')).toHaveCount(1);
   await expect(page.getByTestId('own-food')).toContainText('380 kcal');
-  await expect(page.getByTestId('own-food')).toContainText('Per 100 g · 7 g protein');
+  await expect(page.getByTestId('own-food')).toContainText(
+    'Per 100 g · P 7 g · K 50 g · F 16 g · Fi –',
+  );
 
   // Måltid med två ingredienser.
   await page.getByRole('button', { name: 'Ny måltid' }).tap();

@@ -12,7 +12,7 @@ import { buildCatalog, entryToItem, mealToItem, storedToItem } from '../lib/food
 import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { dayTarget } from '../lib/weekBudget.ts';
-import { fiberOfEntries, type FiberGoal, type FiberSource } from '../lib/fiber.ts';
+import { catalogFiberSource, fiberOfEntries, type FiberGoal } from '../lib/fiber.ts';
 import { currentMealSlot, savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import { formatDate, formatDayMonth } from '../lib/format.ts';
@@ -42,8 +42,6 @@ interface FoodDayProps {
   proteinGoalG: number | null;
   /** Fibermålet ett datum, `null` när fibermålet inte visas. */
   fiberGoalOn?: (date: string) => FiberGoal | null;
-  /** Fiberdata för posterna, `null` medan den laddas. */
-  fiberSource?: FiberSource | null;
   /** Öppna sök-sheeten direkt (genvägen "Logga mat", `#/mat/logga`). */
   initialPicker?: boolean;
   /** Slå upp streckkoden i sök-sheeten direkt (`#/mat/ean/<ean>`, från Tillskott). */
@@ -101,7 +99,6 @@ export function FoodDay({
   weekly = null,
   proteinGoalG,
   fiberGoalOn,
-  fiberSource = null,
   initialPicker = false,
   initialEan,
   onPickerClosed,
@@ -138,6 +135,11 @@ export function FoodDay({
       ),
     [livsmedel, foodData.foods, foodData.meals, foodData.recipes],
   );
+  // Fiber per post ur katalogen – först när Livsmedelsverkets data finns (annars utelämnas fibern).
+  const fiberSource = useMemo(
+    () => (livsmedel ? catalogFiberSource(catalog, foodData.meals) : null),
+    [livsmedel, catalog, foodData.meals],
+  );
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
     [foodData.foodUnits],
@@ -147,9 +149,8 @@ export function FoodDay({
   const entries = foodLog.filter((e) => e.date === date);
   const totals = totalOf(entries);
   const fiberGoal = fiberGoalOn?.(date) ?? null;
-  const fiber = fiberGoal
-    ? { goal: fiberGoal, total: fiberSource ? fiberOfEntries(entries, fiberSource) : null }
-    : null;
+  const fiberTotal = fiberSource ? fiberOfEntries(entries, fiberSource) : null;
+  const fiber = fiberGoal ? { goal: fiberGoal, total: fiberTotal } : null;
   const { targetKcal, week } = dayTarget(
     weekly ? 'vecka' : 'dag',
     dailyTargetKcal === null
@@ -248,6 +249,7 @@ export function FoodDay({
           targetKcal={targetKcal}
           proteinGoalG={proteinGoalG}
           fiber={fiber}
+          fiberDay={fiberTotal}
           when={when}
           week={week}
         />
@@ -290,6 +292,7 @@ export function FoodDay({
         meals={foodData.meals}
         open={open}
         favoriteIds={favoriteIds}
+        fiberSource={fiberSource}
         onMenu={(slot) => {
           setMenu({ kind: 'meal', slot });
         }}
@@ -391,6 +394,7 @@ export function FoodDay({
               onCancel={() => {
                 setEditing(null);
               }}
+              fiberSource={fiberSource}
             />
           )}
         </BottomSheet>

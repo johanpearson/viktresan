@@ -1,9 +1,13 @@
 import { useState, type SyntheticEvent } from 'react';
 import { newId, putMeal, type SavedMeal } from '../db/db.ts';
+import { scaleFiber } from '../lib/fiber.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
+import { scaleNutrients } from '../lib/nutrition.ts';
 import { useIngredients } from '../lib/useIngredients.ts';
 import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
 import { IngredientEditor } from './IngredientEditor.tsx';
+import { ListRow } from './ListRow.tsx';
+import { Macros } from './Macros.tsx';
 
 interface MealBuilderProps {
   /** Måltiden som redigeras, annars skapas en ny. */
@@ -81,6 +85,37 @@ export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealB
           }}
           summary={`Totalt ${formatGrams(ingredients.totalG)} · ${formatKcal(ingredients.totals.kcal)}`}
         />
+        {ingredients.totalG > 0 && (
+          <ul className="list list-flush" data-testid="meal-nutrition">
+            <ListRow
+              testId="meal-per-portion"
+              primary="Per portion"
+              secondary={
+                <Macros
+                  lead={`Hela måltiden, ${formatGrams(Math.round(ingredients.totalG))}`}
+                  nutrients={ingredients.totals}
+                  fiber={ingredients.fiber}
+                />
+              }
+              value={<span className="kcal">{formatKcal(ingredients.totals.kcal)}</span>}
+            />
+            <ListRow
+              testId="meal-per-100"
+              primary="Per 100 g"
+              secondary={
+                <Macros
+                  nutrients={scaleNutrients(ingredients.totals, 10_000 / ingredients.totalG)}
+                  fiber={scaleFiber(ingredients.fiber, 100 / ingredients.totalG)}
+                />
+              }
+              value={
+                <span className="kcal">
+                  {formatKcal((ingredients.totals.kcal * 100) / ingredients.totalG)}
+                </span>
+              }
+            />
+          </ul>
+        )}
         {error && (
           <p className="form-error" role="alert">
             {error}

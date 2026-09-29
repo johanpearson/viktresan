@@ -189,6 +189,7 @@ export function IntakeHistory({
 }
 
 function fiberCell(day: DayFiber | undefined): string {
-  if (!day) return '–';
+  // Ingen post med fiberdata: "–", inte 0.
+  if (!day || day.knownEntries === 0) return '–';
   return `${formatInt(Math.round(day.fiberG))} g${day.missingEntries > 0 ? '*' : ''}`;
 }

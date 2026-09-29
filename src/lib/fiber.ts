@@ -13,7 +13,8 @@ import type { FoodLogEntry, SavedMeal } from '../db/db.ts';
 import { daysBetween } from './dates.ts';
 import type { Sex } from './energy.ts';
 import { formatInt } from './format.ts';
-import { partsOf } from './mealAnalysis.ts';
+import type { FoodItem } from './foodSearch.ts';
+import { partsOf, type PartsEntry } from './mealAnalysis.ts';
 
 /** Startvärde för upptrappningen när det saknas fiberdata. */
 export const FIBER_RAMP_DEFAULT_START_G = 15;
@@ -136,27 +137,123 @@ export interface FiberTotal {
   fiberG: number;
   /** Poster som helt eller delvis saknar fiberdata (snabbloggar, OFF utan värdet …). */
   missingEntries: number;
+  /** Poster där minst en del har fiberdata. */
+  knownEntries: number;
   entries: number;
 }
 
+/** Det som behövs för att räkna fiber i en post (eller en tänkt mängd av ett livsmedel). */
+export type FiberEntry = PartsEntry & Pick<FoodLogEntry, 'estimated'>;
+
 /** Fiber i posterna. Delar utan värde räknas som 0 och posten räknas som ofullständig. */
-export function fiberOfEntries(entries: readonly FoodLogEntry[], source: FiberSource): FiberTotal {
+export function fiberOfEntries(entries: readonly FiberEntry[], source: FiberSource): FiberTotal {
   let fiberG = 0;
   let missingEntries = 0;
+  let knownEntries = 0;
   for (const entry of entries) {
     if (entry.estimated) {
       missingEntries += 1;
       continue;
     }
     let missing = false;
+    let known = false;
     for (const part of partsOf(entry, source.meals, source.lookup)) {
       const value = part.extra?.fiberG;
       if (value === undefined) missing = true;
-      else fiberG += (value * part.grams) / 100;
+      else {
+        known = true;
+        fiberG += (value * part.grams) / 100;
+      }
     }
     if (missing) missingEntries += 1;
+    if (known) knownEntries += 1;
   }
-  return { fiberG, missingEntries, entries: entries.length };
+  return { fiberG, missingEntries, knownEntries, entries: entries.length };
+}
+
+// ---------------------------------------------------------------------------
+// Fiber att visa bredvid makrona (matloggningen)
+
+/**
+ * Fiber i en mängd eller en summa. `null` = ingen fiberdata alls (visas "–", inte 0).
+ * `partial` = någon post eller ingrediens saknar fiberdata, så summan kan vara i underkant.
+ */
+export interface FiberAmount {
+  fiberG: number;
+  partial: boolean;
+}
+
+/** Summan som visas: `null` när ingen post har fiberdata. */
+export function fiberAmountOf(total: FiberTotal): FiberAmount | null {
+  if (total.knownEntries === 0) return null;
+  return { fiberG: total.fiberG, partial: total.missingEntries > 0 };
+}
+
+/** Fibern i posterna som den visas (summa med markering eller "–"). */
+export function fiberSum(entries: readonly FiberEntry[], source: FiberSource): FiberAmount | null {
+  return fiberAmountOf(fiberOfEntries(entries, source));
+}
+
+/**
+ * Fiber i `grams` gram (eller ml) av ett livsmedel: eget värde (`extra.fiberG`), annars
+ * uppslag på id:t; måltider och recept räknas ur ingredienserna. Snabbloggar saknar fiber.
+ */
+export function fiberForItem(
+  item: Pick<FoodItem, 'id' | 'source' | 'per100' | 'extra' | 'recipe'>,
+  grams: number,
+  source: FiberSource,
+): FiberAmount | null {
+  const entry: FiberEntry = { foodId: item.id, grams, per100: item.per100 };
+  if (item.recipe) entry.recipe = item.recipe;
+  if (item.source === 'snabb') entry.estimated = true;
+  const own = item.extra;
+  const lookup: FiberSource['lookup'] =
+    own?.fiberG === undefined ? source.lookup : (id) => (id === item.id ? own : source.lookup(id));
+  return fiberSum([entry], { meals: source.meals, lookup });
+}
+
+/**
+ * Fiber skalad till en annan mängd (per 100 g, per portion). `null` (saknas) och
+ * `undefined` (laddas) förblir som de är.
+ */
+export function scaleFiber(
+  amount: FiberAmount | null | undefined,
+  factor: number,
+): FiberAmount | null | undefined {
+  if (amount == null) return amount;
+  return { fiberG: amount.fiberG * factor, partial: amount.partial };
+}
+
+const macroFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 });
+
+/**
+ * Gram av ett makro eller fiber i en kort rad: en decimal under 10 g, annars hela gram
+ * ("0,4 g", "4,2 g", "30 g").
+ */
+export function formatMacroG(value: number): string {
+  const rounded = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+  return `${macroFormat.format(rounded).replace(/\s/g, ' ')} g`;
+}
+
+/**
+ * Fibern som text: "–" utan fiberdata, annars gram (`round` = hela gram, som dagens summa).
+ * `partial` = markeringen (*) att summan kan vara i underkant ska visas.
+ */
+export function fiberText(
+  amount: FiberAmount | null,
+  round = false,
+): { text: string; partial: boolean } {
+  if (amount === null) return { text: '–', partial: false };
+  const text = round ? `${formatInt(Math.round(amount.fiberG))} g` : formatMacroG(amount.fiberG);
+  return { text, partial: amount.partial };
+}
+
+/** Fiberkälla ur en katalog (id → livsmedel med `extra`) och sparade måltider. */
+export function catalogFiberSource(
+  catalog: ReadonlyMap<string, Pick<FoodItem, 'extra'>>,
+  meals: readonly SavedMeal[],
+): FiberSource {
+  return { meals, lookup: (id) => catalog.get(id)?.extra };
 }
 
 export interface DayFiber extends FiberTotal {

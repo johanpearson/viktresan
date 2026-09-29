@@ -8,6 +8,8 @@ interface SectionAccordionProps {
   meta?: ReactNode;
   /** Högerställt värde i rubriken, t.ex. "442 kcal". */
   value?: ReactNode;
+  /** Rad under rubriken (dämpad), t.ex. makron och fiber. Visas inte för en tom sektion. */
+  detail?: ReactNode;
   expanded: boolean;
   onToggle: () => void;
   /**
@@ -30,6 +32,7 @@ export function SectionAccordion({
   title,
   meta,
   value,
+  detail,
   expanded,
   onToggle,
   empty = false,
@@ -52,7 +55,9 @@ export function SectionAccordion({
           <h3 className="accordion-heading">
             <button
               type="button"
-              className="accordion-toggle"
+              className={
+                detail == null ? 'accordion-toggle' : 'accordion-toggle accordion-toggle-detail'
+              }
               aria-expanded={open}
               aria-controls={bodyId}
               onClick={onToggle}
@@ -61,6 +66,7 @@ export function SectionAccordion({
               <span className="accordion-meta">{meta}</span>
               {value != null && <span className="accordion-value">{value}</span>}
               <span aria-hidden="true" className="chevron" />
+              {detail != null && <span className="accordion-detail">{detail}</span>}
             </button>
           </h3>
         )}

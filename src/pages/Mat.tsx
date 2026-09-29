@@ -78,7 +78,6 @@ export function Mat() {
           weekly={weekly}
           proteinGoalG={proteinGoalG}
           fiberGoalOn={fiber.goalOn}
-          fiberSource={fiber.source}
           initialPicker={initialPicker}
           initialEan={initialEan}
           onPickerClosed={() => {

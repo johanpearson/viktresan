@@ -44,7 +44,8 @@ src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt vec
 src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
 src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
 src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (≥ 15 g/100 kcal)
-src/lib/fiber.ts        Fibermål (NNR 2023, upptrappning 3 g/vecka), fiber per dag ur matloggen, fiberrik-regeln (≥ 3 g/100 kcal)
+src/lib/fiber.ts        Fibermål (NNR 2023, upptrappning 3 g/vecka), fiber per dag ur matloggen, fiberrik-regeln (≥ 3 g/100 kcal),
+                        fiber i matloggningen (fiberForItem per mängd, fiberSum, FiberAmount: null = "–", partial = "*")
 src/lib/useFiber.ts     Hook: fibermålet + fiber per dag (läser livsmedel.json/egna livsmedel bara när målet visas), sparar trappans start
 src/data/fiberReference.ts  Referensvärden för fiber (35 g män, 25 g kvinnor, 30 g utan kön) med källa (NNR 2023)
 src/lib/milestones.ts   Milstolpar: regler (trendvikt), evaluateMilestones, kommande, diffMilestones, texter
@@ -119,7 +120,8 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         StorageSettings (Inställningar → Lagring), ShowMore (+ useShowMore: 14 rader, sedan fler),
                         RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck),
                         PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·"),
-                        ChoiceList (valrader i stället för radioknappar), ChipGroup (val som chips)
+                        ChoiceList (valrader i stället för radioknappar), ChipGroup (val som chips),
+                        Macros ("P 6 g · K 30 g · F 2 g · Fi 4 g" i matloggningen)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
@@ -130,7 +132,8 @@ docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kv
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
                         dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar | Rapport; `Rapport.tsx`), Inställningar
-e2e/                    Playwright-tester. fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
+e2e/                    Playwright-tester. fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
+                        fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
                         veckokort, milstolpar, bilder, måltidsanalys, rapport, platå); hjälpare i helpers.ts. report.spec.ts
@@ -285,6 +288,12 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   "Dagens fiber kan vara i underkant"). Visas som fjärde ring på Översikt → Idag (`rings-4`), `StatBar` i Mat → Dag (kalorier
   överst, protein + fiber under), kolumn och snitt i Mat → Historik, raden `fiber` i veckosummeringen, "Mål" i rapportens
   kost och "Andel av dagens fibermål" i analysen. "Fiberrik" (≥ 3 g/100 kcal, `isFiberRich`) märks som "Proteinrik".
+  **Fiber i matloggningen** visas alltid (oberoende av fibermålet) bredvid makrona med `Macros` i fiberns färg
+  (`--macro-fiber`): logg-sheetens näringsrad (`log-macros`, vald mängd och enhet) och detaljer (per 100 g och per
+  första enheten), sökträffar/Senaste/Favoriter (per enhet eller 100 g), raderna, måltidens rubrik (`SectionAccordion`
+  `detail`), dagens makrorad, egna måltider och recept (per portion och 100 g) och Egna livsmedel. Fiberkällan byggs ur
+  katalogen (`catalogFiberSource`) när Livsmedelsverkets data är laddad – innan dess utelämnas fibern. Saknas fiberdata:
+  "–" (inte 0) och posten räknas inte in; en summa där någon post saknar fiber får "*" och dagens topp en kort notis.
 - **Trendvikt**: `preferences.trendHero` (på som standard, Inställningar → Visning) visar trendvikten som
   huvudsiffra och dagsvikten under (`current-weight`), med en kort förklaring. Viktgrafen: trendlinjen
   tjock, dagsvärden som svaga punkter (`--chart-point-faint`).

@@ -7,8 +7,14 @@ import {
   fiberGoal,
   fiberGoalText,
   fiberGoalVisible,
+  fiberAmountOf,
+  fiberForItem,
   fiberOfEntries,
   fiberReferenceG,
+  fiberSum,
+  fiberText,
+  formatMacroG,
+  scaleFiber,
   isFiberRich,
   rampStartG,
   weeklyFiberGoalG,
@@ -172,8 +178,8 @@ describe('fiber ur matloggen', () => {
       entry('C', '2026-09-28', 'lv:2', 100),
     ];
     expect(dailyFiber(log, source)).toEqual([
-      { date: '2026-09-27', fiberG: 2, missingEntries: 0, entries: 1 },
-      { date: '2026-09-28', fiberG: 22, missingEntries: 0, entries: 2 },
+      { date: '2026-09-27', fiberG: 2, missingEntries: 0, knownEntries: 1, entries: 1 },
+      { date: '2026-09-28', fiberG: 22, missingEntries: 0, knownEntries: 2, entries: 2 },
     ]);
   });
 });
@@ -195,5 +201,109 @@ describe('fiberrika livsmedel', () => {
     expect(isFiberRich(food(0, 3))).toBe(false);
     expect(isFiberRich(food(100))).toBe(false);
     expect(isFiberRich(food(100, 0))).toBe(false);
+  });
+});
+
+describe('fiber i matloggningen (per enhet och summa)', () => {
+  const lv = {
+    id: 'lv:1',
+    source: 'livsmedelsverket' as const,
+    per100: { kcal: 250, proteinG: 8, carbsG: 45, fatG: 3 },
+    extra: { fiberG: 6 },
+  };
+
+  it('räknar fiber för vald mängd: 2 skivor à 35 g = 70 g → 4,2 g', () => {
+    const skiva = 35;
+    expect(fiberForItem(lv, 2 * skiva, source)).toEqual({ fiberG: 4.2, partial: false });
+    expect(fiberForItem(lv, 100, source)).toEqual({ fiberG: 6, partial: false });
+    // Volymenhet: 1 dl ≈ 35 g havregryn (10 g/100 g) → 3,5 g.
+    expect(fiberForItem({ ...lv, id: 'lv:x', extra: { fiberG: 10 } }, 35, source)?.fiberG).toBe(
+      3.5,
+    );
+  });
+
+  it('slår upp fiber på id:t när livsmedlet saknar eget värde (redigering av en post)', () => {
+    const logged = { id: 'off:123', source: 'openfoodfacts' as const, per100: lv.per100 };
+    expect(fiberForItem(logged, 50, source)).toEqual({ fiberG: 3, partial: false });
+  });
+
+  it('saknas fiberdata blir det null ("–"), inte 0', () => {
+    const unknown = { id: 'off:999', source: 'openfoodfacts' as const, per100: lv.per100 };
+    expect(fiberForItem(unknown, 100, source)).toBeNull();
+    const quick = { id: 'snabb:pizza:700:30', source: 'snabb' as const, per100: lv.per100 };
+    expect(fiberForItem(quick, 100, source)).toBeNull();
+    expect(fiberText(null)).toEqual({ text: '–', partial: false });
+  });
+
+  it('en sparad måltid räknas ur ingredienserna, och en ingrediens utan fiber markeras', () => {
+    const meal = {
+      id: 'm1',
+      name: 'Frukost',
+      createdAt: 1,
+      items: [
+        { foodId: 'lv:1', name: 'Gröt', amount: 100, unit: 'g', grams: 100, per100: lv.per100 },
+        { foodId: 'off:999', name: 'Sylt', amount: 100, unit: 'g', grams: 100, per100: lv.per100 },
+      ],
+    };
+    const withMeals = { meals: [meal], lookup: source.lookup };
+    const item = { id: 'maltid:m1', source: 'maltid' as const, per100: lv.per100 };
+    // Halva måltiden (100 g av 200 g): 50 g gröt → 5 g, sylten saknar fiber.
+    expect(fiberForItem(item, 100, withMeals)).toEqual({ fiberG: 5, partial: true });
+  });
+
+  it('ett recept räknas ur receptets ingredienser', () => {
+    const item = {
+      id: 'recept:r1',
+      source: 'recept' as const,
+      per100: lv.per100,
+      recipe: {
+        yieldG: 400,
+        items: [
+          { foodId: 'lv:2', name: 'Bönor', amount: 200, unit: 'g', grams: 200, per100: lv.per100 },
+        ],
+      },
+    };
+    // En portion om 100 g av 400 g: 50 g bönor à 2 g/100 g → 1 g.
+    expect(fiberForItem(item, 100, source)).toEqual({ fiberG: 1, partial: false });
+  });
+
+  it('summan räknar inte in poster utan fiber men markerar att den kan vara i underkant', () => {
+    const log = [
+      entry('Gröt', TODAY, 'lv:1', 100), // 10 g
+      entry('Okänd', TODAY, 'off:999', 100),
+      entry('Pizza', TODAY, 'snabb:pizza:700:30', 100, { estimated: true }),
+    ];
+    const total = fiberOfEntries(log, source);
+    expect(total).toMatchObject({ fiberG: 10, missingEntries: 2, knownEntries: 1, entries: 3 });
+    expect(fiberAmountOf(total)).toEqual({ fiberG: 10, partial: true });
+    expect(fiberText(fiberAmountOf(total), true)).toEqual({ text: '10 g', partial: true });
+  });
+
+  it('en summa där alla poster har fiber saknar markering', () => {
+    const log = [entry('Gröt', TODAY, 'lv:1', 100), entry('Bröd', TODAY, 'lv:2', 50)];
+    expect(fiberSum(log, source)).toEqual({ fiberG: 11, partial: false });
+  });
+
+  it('en summa utan någon post med fiberdata är null ("–")', () => {
+    const log = [
+      entry('Okänd', TODAY, 'off:999', 100),
+      entry('Pizza', TODAY, 'snabb:pizza:700:30', 100, { estimated: true }),
+    ];
+    expect(fiberSum(log, source)).toBeNull();
+    expect(fiberSum([], source)).toBeNull();
+  });
+
+  it('skalar till per 100 g och per portion, och null/undefined förblir', () => {
+    expect(scaleFiber({ fiberG: 12, partial: true }, 1 / 4)).toEqual({ fiberG: 3, partial: true });
+    expect(scaleFiber(null, 2)).toBeNull();
+    expect(scaleFiber(undefined, 2)).toBeUndefined();
+  });
+
+  it('formaterar med en decimal under 10 g, annars hela gram', () => {
+    expect(formatMacroG(0.44)).toBe('0,4 g');
+    expect(formatMacroG(4.2)).toBe('4,2 g');
+    expect(formatMacroG(6)).toBe('6 g');
+    expect(formatMacroG(30.4)).toBe('30 g');
+    expect(fiberText({ fiberG: 4.25, partial: false })).toEqual({ text: '4,3 g', partial: false });
   });
 });
