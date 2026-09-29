@@ -21,7 +21,7 @@ import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 11;
+export const DB_VERSION = 12;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -90,11 +90,6 @@ export interface Profile {
    */
   foodPreferences?: string;
   /**
-   * Kalorimål per dag (standard) eller vecka (måndag–söndag, 7 × dagsmålet). Saknas →
-   * dag. Utan schemaändring (sedan v11).
-   */
-  calorieMode?: CalorieMode;
-  /**
    * Fibermål (utan schemaändring): visa det även utan GLP-1 (med GLP-1 visas det alltid),
    * `fiberRamp: false` = direkt på referensvärdet (saknas = gradvis upptrappning) och
    * upptrappningens start, som sparas första gången målet visas.
@@ -109,8 +104,6 @@ export interface Profile {
   waterGlp1BonusMl?: number;
   waterGlp1OnOwnGoal?: boolean;
 }
-
-export type CalorieMode = 'dag' | 'vecka';
 
 /**
  * Eget livsmedel eller cachad träff från Open Food Facts. Värden per 100 g.
@@ -806,6 +799,17 @@ async function migrateToV9(tx: UpgradeTransaction): Promise<void> {
   ]);
 }
 
+/** v11 → v12: tar bort profilens `calorieMode` (inställningen Dag/Vecka finns inte längre). */
+async function migrateToV12(tx: UpgradeTransaction): Promise<void> {
+  const store = tx.objectStore('profile');
+  const profile = (await store.get(PROFILE_KEY)) as
+    (Profile & { calorieMode?: unknown }) | undefined;
+  if (profile?.calorieMode === undefined) return;
+  const next = { ...profile };
+  delete next.calorieMode;
+  await store.put(next, PROFILE_KEY);
+}
+
 let dbPromise: Promise<Database> | null = null;
 
 /**
@@ -887,6 +891,11 @@ export function getDb(): Promise<Database> {
         // v11: recept. Ny store – befintlig data berörs inte. Snabbloggar och loggade
         // recept är matloggposter med nya valfria fält (ingen datamigrering).
         db.createObjectStore('recipes', { keyPath: 'id' });
+      }
+      if (oldVersion < 12) {
+        // v12: inställningen Dag/Vecka för kalorimålet är borttagen – dagsmålet och veckan
+        // visas alltid båda. Profilens `calorieMode` tas bort.
+        if (oldVersion >= 2) void migrateToV12(transaction);
       }
     },
     blocking() {

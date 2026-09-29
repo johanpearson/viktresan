@@ -25,11 +25,7 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
   }
 
   const { plan, adaptive } = result;
-  const weekly = profile.calorieMode === 'vecka';
   const notes = [
-    weekly
-      ? `Veckobudget ${formatKcal(Math.round(plan.targetKcal) * 7)} (måndag–söndag). Dagens förslag visas under Idag.`
-      : null,
     ...plan.limits.map((l) => limitText(l, plan)),
     goalDateText(plan, profile.goalDate),
   ].filter((n): n is string => n !== null);
@@ -43,7 +39,7 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
       </h2>
       <dl className="stats stats-compact stats-2">
         <div className="stat">
-          <dt>{weekly ? 'Dagsmål i snitt' : 'Dagens kalorimål'}</dt>
+          <dt>Dagens kalorimål</dt>
           <dd data-testid="calorie-target">{formatKcal(plan.targetKcal)}</dd>
         </div>
         <div className="stat">
@@ -77,6 +73,12 @@ export function CaloriePlanCard({ profile, result }: CaloriePlanCardProps) {
           kcal/dag ({formatRate(plan.rateKg)} × 7 700 kcal/kg ÷ 7). Högsta tillåtna takt är 1 % av
           trendvikten per vecka, högst 1 kg, och målet går aldrig under {formatKcal(plan.floorKcal)}
           .
+        </p>
+        <p>
+          Veckobudget = 7 × dagsmålet = {formatKcal(Math.round(plan.targetKcal) * 7)}{' '}
+          (måndag–söndag). Veckoraden under kaloriringen visar vad som är kvar och ungefär hur
+          mycket det blir per dag resten av veckan – aldrig under kalorigolvet. Dagar utan matlogg
+          räknas som 0 kcal.
         </p>
       </details>
     </section>

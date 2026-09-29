@@ -11,7 +11,7 @@ import { todayIso } from '../lib/dates.ts';
 import { buildCatalog, entryToItem, mealToItem, storedToItem } from '../lib/foodCatalog.ts';
 import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
-import { dayTarget } from '../lib/weekBudget.ts';
+import { weekBudget } from '../lib/weekBudget.ts';
 import { catalogFiberSource, fiberOfEntries, type FiberGoal } from '../lib/fiber.ts';
 import { currentMealSlot, savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
@@ -35,10 +35,10 @@ import { Toast } from './Toast.tsx';
 
 interface FoodDayProps {
   source: FoodSource;
-  /** Dagsmålet (planens kalorimål). I veckoläge räknas dagens förslag ur det. */
+  /** Dagsmålet (planens kalorimål). Veckobudgeten = 7 × dagsmålet. */
   targetKcal: number | null;
-  /** Veckoläge (Inställningar → Kalorimål): kalorigolvet för förslaget, annars `null`. */
-  weekly?: { floorKcal: number } | null;
+  /** Kalorigolvet – veckoradens per dag-förslag går aldrig under det. */
+  floorKcal: number | null;
   proteinGoalG: number | null;
   /** Fibermålet ett datum, `null` när fibermålet inte visas. */
   fiberGoalOn?: (date: string) => FiberGoal | null;
@@ -94,8 +94,8 @@ function itemForEntry(entry: FoodLogEntry, catalog: ReadonlyMap<string, FoodItem
  */
 export function FoodDay({
   source,
-  targetKcal: dailyTargetKcal,
-  weekly = null,
+  targetKcal,
+  floorKcal,
   proteinGoalG,
   fiberGoalOn,
   initialPicker = false,
@@ -149,14 +149,17 @@ export function FoodDay({
   const fiberGoal = fiberGoalOn?.(date) ?? null;
   const fiberTotal = fiberSource ? fiberOfEntries(entries, fiberSource) : null;
   const fiber = fiberGoal ? { goal: fiberGoal, total: fiberTotal } : null;
-  const { targetKcal, week } = dayTarget(
-    weekly ? 'vecka' : 'dag',
-    dailyTargetKcal === null
+  // Veckoraden gäller veckan som det valda datumet ligger i (en avslutad vecka visar saldot).
+  const week =
+    targetKcal === null || floorKcal === null || date > today
       ? null
-      : { targetKcal: dailyTargetKcal, floorKcal: weekly?.floorKcal ?? 0 },
-    weekly ? dailyIntake(foodLog) : [],
-    date,
-  );
+      : weekBudget({
+          dailyTargetKcal: targetKcal,
+          floorKcal,
+          intake: dailyIntake(foodLog),
+          today,
+          weekOf: date,
+        });
   const when = date === today ? 'idag' : formatDate(date);
 
   // Den fulla summeringen utom synhåll → visa miniraden i den sticky toppen.

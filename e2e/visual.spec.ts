@@ -174,12 +174,9 @@ for (const theme of ['light', 'dark'] as const) {
 
     test('snabblogg, recept och veckobudget', async ({ page }) => {
       await open(page, '#/mat');
-      await seed(page, {
-        ...WEEKLY_EXTRA,
-        profile: { ...VISUAL_DATA.profile, calorieMode: 'vecka' },
-      });
+      await seed(page, WEEKLY_EXTRA);
       await page.reload();
-      await expect(page.getByTestId('week-budget-status')).toBeVisible();
+      await expect(page.getByTestId('week-line')).toBeVisible();
       await expect(page.getByTestId('estimated-tag')).toBeVisible();
       await shot(page, `${theme}-mat-dag-vecka`);
 
@@ -202,12 +199,13 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-mat-recept-formular`);
 
       await page.goto('./');
-      await expect(page.getByTestId('today-card').getByTestId('week-budget-status')).toBeVisible();
+      await expect(page.getByTestId('today-card').getByTestId('week-line')).toBeVisible();
       await shot(page, `${theme}-oversikt-vecka`);
 
-      await page.goto('./#/installningar/kalorimal');
-      await expect(sheet).toBeVisible();
-      await shot(page, `${theme}-sheet-installningar-kalorimal`, false);
+      // Tryck på veckoraden: veckans dagar som staplar mot dagsmålet.
+      await page.getByTestId('today-card').getByTestId('week-row').tap();
+      await expect(sheet.getByTestId('week-sheet')).toBeVisible();
+      await shot(page, `${theme}-sheet-vecka`, false);
       await close();
 
       await page.goto('./#/framsteg/veckor');

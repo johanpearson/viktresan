@@ -734,9 +734,27 @@ describe('db', () => {
     raw.close();
     const db = await getDb();
     expect(db.version).toBe(DB_VERSION);
-    expect(DB_VERSION).toBe(11);
     expect(await listRecipes()).toEqual([]);
     expect((await listFoodLog()).map((e) => e.name)).toEqual(['Potatis']);
+  });
+
+  it('migrerar v11 → v12: tar bort profilens calorieMode och behåller resten', async () => {
+    const profile = {
+      startWeightKg: 90,
+      heightCm: 180,
+      goalWeightKg: 80,
+      startDate: '2026-01-01',
+      proteinFactor: 1.8,
+      calorieMode: 'vecka',
+      updatedAt: 1,
+    };
+    await createV6Database({ foods: [], meals: [], foodLog: [], profile });
+    const db = await getDb();
+    expect(db.version).toBe(DB_VERSION);
+    expect(DB_VERSION).toBe(12);
+    const migrated = await getProfile();
+    expect(migrated).not.toHaveProperty('calorieMode');
+    expect(migrated).toEqual({ ...profile, calorieMode: undefined });
   });
 
   it('recept: sparas i namnordning, borttagning tar favorit och egna enheter', async () => {

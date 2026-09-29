@@ -83,7 +83,7 @@ src/lib/mealAnalysis.ts Lokal analys: summor (makron, fiber, socker, salt, vitam
 src/lib/quickLog.ts     Snabblogg: kcal (+ protein) som matloggpost med `estimated`, id `snabb:<namn>:<kcal>:<protein>`
 src/lib/recipes.ts      Recept: utbyte (portioner/tillagad vikt), näring per portion och 100 g, kopia till loggen, duplicera
 src/lib/useIngredients.ts  Hook: ingrediensrader för egna måltider och recept (IngredientEditor)
-src/lib/weekBudget.ts   Veckobudget: 7 × dagsmål, dagens förslag = kvar / dagar kvar, golvspärr, dayTarget()
+src/lib/weekBudget.ts   Veckoraden: 7 × dagsmål, kvar, per dag resten av veckan (golvspärr), saldo, dagar (ej loggad = 0 kcal)
 src/lib/swaps.ts        Bytesförslag: samma kategori, klart bättre protein/kcal eller fiber, aldrig mer energi
 src/lib/aiPrompt.ts     "Fråga AI": kryssrutor (AI_OPTIONS), underlag (aiContextFrom), promptbyggare, ChatGPT-/Claude-länkar
 src/lib/aiPromptTemplate.ts  Promptmallen på svenska ({{amne}}, {{amneKort}}, {{underlag}}, {{kalorigolv}}) – redigera här
@@ -113,7 +113,7 @@ src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
 src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
-src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 11)
+src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 12)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, BackupReminder, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
@@ -156,7 +156,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
   filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
-  (`profil`, `kalorimal`, `protein`, `fiber`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `bilder`, `las`, `sakerhetskopia`,
+  (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `bilder`, `las`, `sakerhetskopia`,
   `lagring`, `om`) öppnar panelen direkt.
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
@@ -180,7 +180,7 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`); Tillskott också (`availableSince: 4`, `FLAGS_VERSION = 4`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 11`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 12`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
@@ -211,10 +211,11 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   och (v5) `waterGoalMl` (eget dryckesmål, sparas från Inställningar → Dryckesmål), `waterTrainingBonus`
   (+500 ml på träningsdagar, utan schemaändring) samt `proteinFactor`
   (Inställningar → Proteinmål; ingen schemaändring, följer med i säkerhetskopian) och `foodPreferences`
-  (Inställningar → Matpreferenser, fritext ≤ 1 000 tecken, bara för "Fråga AI"; ingen schemaändring) och `calorieMode`
-  (`dag`/`vecka`, Inställningar → Kalorimål; ingen schemaändring) samt fibermålet (`showFiberGoal`, `fiberRamp: false` =
+  (Inställningar → Matpreferenser, fritext ≤ 1 000 tecken, bara för "Fråga AI"; ingen schemaändring) samt fibermålet (`showFiberGoal`, `fiberRamp: false` =
   direkt på referensvärdet, `fiberRampStart` `{ date, startG }`) och GLP-1-dryckestillägget (`waterGlp1BonusMl` 0–1 000,
   saknas = 500, `waterGlp1OnOwnGoal`) – Inställningar → Fibermål/Dryckesmål, ingen schemaändring, följer med i säkerhetskopian.
+  Migreringen v11 → v12 (`migrateToV12`) tar bort profilens `calorieMode` (den borttagna inställningen Dag/Vecka);
+  säkerhetskopior version 10 med fältet importeras utan det.
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
   är det som räknas, så en senare ändrad enhet påverkar inte historiken. Migreringen v6 → v7
@@ -240,11 +241,16 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   Adaptiv TDEE: fönster ≤ 28 dagar t.o.m. igår, kräver ≥ 14 dagar med både vikt och matlogg och
   ≥ 80 % loggade dagar; regression på dagsvikterna, vikt = 0,9 × längd × täckning × precision
   (halveras om skattningen kläms till 0,6–1,6 × formeln).
-- **Veckobudget** (`weekBudget.ts`, `profile.calorieMode = 'vecka'`): budget = 7 × dagsmålet (mån–sön). Dagens förslag =
-  (budget − intag före idag) / dagar kvar inkl. idag; tidigare dagar utan matlogg räknas som dagsmålet. Förslaget går aldrig
-  under golvet (`floorKcal`) – räcker inte budgeten visas det sakligt med förslag att fördela resten över nästa vecka.
-  `dayTarget()` ger målet som Mat → Dag (`DaySummary` + `WeekBudgetStatus`) och Översikt → Idag använder. Veckosummeringen
-  har raden `budget` (loggat mot budget, bara i veckoläge).
+- **Dag och vecka** (`weekBudget.ts`, alltid båda – ingen inställning): dagsmålet (planen) är primärt – kcal-ringen på
+  Översikt → Idag och kcal-stapeln i Mat → Dag visar dagens intag mot det. Under ringen/makroraden står veckoraden
+  (`WeekBudgetRow`): "Vecka: [intag] av [7 × dagsmål] kcal · kvar [X] kcal · ≈ [Y] kcal/dag resten av veckan" (mån–sön)
+  och "Saldo hittills ±N kcal" (loggat − dagsmålet för dagarna före idag, neutral färg). Y = (budget − intag före idag) /
+  dagar kvar inkl. idag, så det står still under dagen. Dagar utan matlogg räknas som 0 kcal. Y går aldrig under golvet
+  (`floorKcal`); räcker inte budgeten (resten av veckan på golvet går över budgeten) visas `WeekShortfallNote`
+  ("Veckobudgeten är överskriden med X kcal" / "räcker inte till kalorigolvet") med förslag att sprida resten över nästa
+  vecka. Tryck på raden = `WeekBudgetSheet`: sju staplar mot dagsmålet (streckad linje), "ej loggad", kvar, per dag och
+  saldo. Mat → Dag visar veckan för det valda datumet (en avslutad vecka: bara saldot). Veckosummeringen har raden
+  `budget` (budget mot utfall) när det finns ett kalorimål.
 - **Snabblogg och recept**: sök-sheeten har raden "Snabblogg" (`QuickLogForm`); snabbval under Senaste/Favoriter
   ("≈ 700 kcal") öppnar den förifylld. Recept (Mat → Egna, `RecipeBuilder`) söks och listas under Måltider i sök-sheeten,
   loggas i portioner (½, 1, 1½, 2) eller gram och kan dupliceras.
@@ -519,6 +525,14 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
 - Tillgänglighet: semantiska element, `aria-current` i navigeringen, fokus flyttas till
   sidrubriken vid sidbyte.
 - Tester: enhetstester bredvid koden (`*.test.ts[x]`), e2e i `e2e/`. Testnamn på svenska.
+
+## PR-beskrivningar
+
+- Avsluta varje PR-beskrivning med en **checklista som speglar varje punkt i uppdraget**, en rad per punkt, bockad
+  (`- [x]`) om den är gjord.
+- Punkter som **inte gjorts eller gjorts annorlunda** markeras tydligt (`- [ ]` resp. `- [x] ⚠️ Annorlunda:`) med
+  orsaken på samma rad.
+- Lista **var nya funktioner nås i appen**, som en navigeringsväg (t.ex. "Översikt → veckoraden under kcal-ringen").
 
 ## CI/CD
 
