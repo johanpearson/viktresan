@@ -299,11 +299,16 @@ describe('fiber i matloggningen (per enhet och summa)', () => {
     expect(scaleFiber(undefined, 2)).toBeUndefined();
   });
 
-  it('formaterar med en decimal under 10 g, annars hela gram', () => {
+  it('formaterar alltid med en decimal under 10 g, annars hela gram', () => {
+    expect(formatMacroG(0)).toBe('0,0 g');
     expect(formatMacroG(0.44)).toBe('0,4 g');
     expect(formatMacroG(4.2)).toBe('4,2 g');
-    expect(formatMacroG(6)).toBe('6 g');
+    expect(formatMacroG(6)).toBe('6,0 g');
+    expect(formatMacroG(9.94)).toBe('9,9 g');
+    expect(formatMacroG(9.96)).toBe('10 g');
+    expect(formatMacroG(10)).toBe('10 g');
     expect(formatMacroG(30.4)).toBe('30 g');
+    expect(formatMacroG(1234.4)).toBe('1 234 g');
     expect(fiberText({ fiberG: 4.25, partial: false })).toEqual({ text: '4,3 g', partial: false });
   });
 });

@@ -224,15 +224,20 @@ export function scaleFiber(
   return { fiberG: amount.fiberG * factor, partial: amount.partial };
 }
 
-const macroFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 1 });
+const decimalFormat = new Intl.NumberFormat('sv-SE', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+const intFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 });
 
 /**
- * Gram av ett makro eller fiber i en kort rad: en decimal under 10 g, annars hela gram
- * ("0,4 g", "4,2 g", "30 g").
+ * Gram av ett makro eller fiber i en kort rad, alltid samma avrundning: en decimal under
+ * 10 g, annars hela gram ("0,4 g", "6,0 g", "30 g"). 9,96 g avrundas till "10 g".
  */
 export function formatMacroG(value: number): string {
-  const rounded = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
-  return `${macroFormat.format(rounded).replace(/\s/g, ' ')} g`;
+  const tenths = Math.round(value * 10) / 10;
+  const text = tenths < 10 ? decimalFormat.format(tenths) : intFormat.format(Math.round(value));
+  return `${text.replace(/\s/g, ' ')} g`;
 }
 
 /**

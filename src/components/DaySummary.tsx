@@ -1,8 +1,11 @@
+import { useId, useState } from 'react';
 import { formatGrams, formatInt, formatKcal } from '../lib/format.ts';
 import { fiberAmountOf, type FiberGoal, type FiberTotal } from '../lib/fiber.ts';
 import type { Nutrients } from '../lib/nutrition.ts';
 import type { WeekBudget } from '../lib/weekBudget.ts';
+import { FiberMissingNote } from './FiberMissingNote.tsx';
 import { FiberNote } from './FiberNote.tsx';
+import { InfoButton } from './InfoButton.tsx';
 import { Macros } from './Macros.tsx';
 import { StatBar } from './StatBar.tsx';
 import { WeekBudgetRow } from './WeekBudgetRow.tsx';
@@ -46,6 +49,14 @@ export function DaySummary({
   const protein = Math.round(totals.proteinG);
   const remaining = targetKcal == null ? null : targetKcal - kcal;
   const mini = variant === 'mini';
+  const [fiberInfo, setFiberInfo] = useState(false);
+  const fiberInfoId = useId();
+  // Poster utan fiberdata: asterisk vid fibervärdet och en info-ikon med förklaringen. Med
+  // fibermålet även när ingen post har fiberdata (värdet är då "–" och stapeln står på 0).
+  const fiberMissing =
+    fiberDay && fiberDay.missingEntries > 0 && (fiberDay.knownEntries > 0 || fiber)
+      ? fiberDay.missingEntries
+      : 0;
 
   const bars = (
     <>
@@ -122,26 +133,30 @@ export function DaySummary({
         {bars}
         {fiberBar}
       </div>
-      {/* Notisen om saknad fiberdata står under makroraden, så den visas bara en gång. */}
-      {fiber && <FiberNote goal={fiber.goal} day={null} />}
+      {fiber && <FiberNote goal={fiber.goal} />}
       <p className="macro-line" data-testid="macros">
         <Macros
           variant="long"
           round
           nutrients={totals}
           fiber={fiberDay ? fiberAmountOf(fiberDay) : undefined}
+          fiberInfo={
+            fiberMissing > 0 && (
+              <InfoButton
+                label="Om fibervärdet"
+                expanded={fiberInfo}
+                controls={fiberInfoId}
+                testId="fiber-info"
+                onToggle={() => {
+                  setFiberInfo((o) => !o);
+                }}
+              />
+            )
+          }
         />
       </p>
-      {/* Summan har markeringen (*) när någon post saknar fiber; med fibermålet visas notisen även
-          när ingen post har fiberdata (stapeln står då på 0). */}
-      {fiberDay && fiberDay.missingEntries > 0 && (fiberDay.knownEntries > 0 || fiber) && (
-        <p className="form-note muted fiber-note" data-testid="fiber-incomplete">
-          {fiberDay.knownEntries > 0 && '* '}Dagens fiber kan vara i underkant –{' '}
-          {fiberDay.missingEntries === 1
-            ? '1 post saknar'
-            : `${String(fiberDay.missingEntries)} poster saknar`}{' '}
-          fiberdata.
-        </p>
+      {fiberMissing > 0 && fiberInfo && (
+        <FiberMissingNote id={fiberInfoId} missing={fiberMissing} />
       )}
       {week && <WeekBudgetRow week={week} />}
       {targetKcal == null && (

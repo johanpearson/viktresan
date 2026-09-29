@@ -277,7 +277,7 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   await expect(page.getByTestId('own-food')).toHaveCount(1);
   await expect(page.getByTestId('own-food')).toContainText('380 kcal');
   await expect(page.getByTestId('own-food')).toContainText(
-    'Per 100 g · P 7 g · K 50 g · F 16 g · Fi –',
+    'Per 100 g · P 7,0 g · K 50 g · F 16 g · Fi –',
   );
 
   // Måltid med två ingredienser.

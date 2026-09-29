@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { NutrientGroup } from '../data/nutrients.ts';
 import { UPPER_LIMITS_SOURCE, UPPER_LIMITS_URL } from '../data/upperLimits.ts';
 import type { FoodLogEntry, SavedMeal, SupplementIntake } from '../db/db.ts';
@@ -16,7 +16,9 @@ import { totalOf } from '../lib/nutrition.ts';
 import { Card } from './Card.tsx';
 import { DateBar } from './DateBar.tsx';
 import { Disclosure } from './Disclosure.tsx';
+import { FiberMissingNote } from './FiberMissingNote.tsx';
 import { FiberNote } from './FiberNote.tsx';
+import { InfoButton } from './InfoButton.tsx';
 import { SegmentedControl } from './SegmentedControl.tsx';
 import { StatBar } from './StatBar.tsx';
 import { UpperLimitWarnings } from './UpperLimitWarnings.tsx';
@@ -127,6 +129,9 @@ export function NutritionView({
   const fiberGoal = fiber?.goalOn(date) ?? null;
   const fiberDay = fiber?.days?.find((d) => d.date === date) ?? null;
   const fiberG = Math.round(fiberDay?.fiberG ?? 0);
+  const fiberMissing = fiberDay?.missingEntries ?? 0;
+  const [fiberInfo, setFiberInfo] = useState(false);
+  const fiberInfoId = useId();
 
   return (
     <div className="nutrition" data-testid="nutrition">
@@ -169,10 +174,31 @@ export function NutritionView({
                     : `${formatInt(fiberGoal.goalG - fiberG)} g kvar`
                 }
                 valueTestId="nutrition-fiber"
+                display={
+                  fiberMissing > 0 ? (
+                    // Poster utan fiberdata: asterisk vid värdet, förklaringen bakom info-ikonen.
+                    <>
+                      <strong>{formatInt(fiberG)}</strong> / {formatInt(fiberGoal.goalG)} g fiber
+                      <span aria-hidden="true">*</span>
+                      <InfoButton
+                        label="Om fibervärdet"
+                        expanded={fiberInfo}
+                        controls={fiberInfoId}
+                        testId="fiber-info"
+                        onToggle={() => {
+                          setFiberInfo((o) => !o);
+                        }}
+                      />
+                    </>
+                  ) : undefined
+                }
               />
             )}
           </div>
-          {fiberGoal && <FiberNote goal={fiberGoal} day={fiber?.days ? fiberDay : null} />}
+          {fiberGoal && <FiberNote goal={fiberGoal} />}
+          {fiberGoal && fiberMissing > 0 && fiberInfo && (
+            <FiberMissingNote id={fiberInfoId} missing={fiberMissing} />
+          )}
         </Card>
       )}
       {day.estimatedEntries > 0 && (

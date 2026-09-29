@@ -61,7 +61,7 @@ test('fiber visas i sheeten, på raden och i summorna – "–" och markering n�
 
   // Sökträffen: makron och fiber per 100 g, fibern i fiberns färg.
   const oats = await search(page, 'havregryn', 'Havregryn');
-  await expect(oats.getByTestId('pick-macros')).toHaveText('P 13 g · K 59 g · F 7 g · Fi 10 g');
+  await expect(oats.getByTestId('pick-macros')).toHaveText('P 13 g · K 59 g · F 7,0 g · Fi 10 g');
   await expect(oats.getByTestId('fiber')).toHaveClass(/macro-fiber/);
   await oats.tap();
 
@@ -76,9 +76,9 @@ test('fiber visas i sheeten, på raden och i summorna – "–" och markering n�
   await expect(page.getByTestId('log-preview')).toHaveText('1 dl ≈ 35 g · 130 kcal');
   await expect(macros).toHaveText('P 4,6 g · K 21 g · F 2,4 g · Fi 3,5 g');
   await form.getByLabel(/^Mängd/).fill('2');
-  await expect(macros.getByTestId('fiber')).toHaveText('Fi 7 g');
+  await expect(macros.getByTestId('fiber')).toHaveText('Fi 7,0 g');
   await logGrams(page, '60');
-  await expect(macros).toHaveText('P 7,8 g · K 35 g · F 4,2 g · Fi 6 g');
+  await expect(macros).toHaveText('P 7,8 g · K 35 g · F 4,2 g · Fi 6,0 g');
   await form.getByRole('button', { name: 'Logga', exact: true }).tap();
   await expect(form).toBeHidden();
 
@@ -104,23 +104,28 @@ test('fiber visas i sheeten, på raden och i summorna – "–" och markering n�
   const breakfast = page.getByTestId('meal-frukost');
   const rows = breakfast.getByTestId('food-entry');
   await expect(rows.filter({ hasText: 'Havregryn' }).getByTestId('entry-macros')).toHaveText(
-    '60 g · P 7,8 g · K 35 g · F 4,2 g · Fi 6 g',
+    '60 g · P 7,8 g · K 35 g · F 4,2 g · Fi 6,0 g',
   );
   await expect(rows.filter({ hasText: 'Mjölk' }).getByTestId('fiber')).toContainText('Fi –');
 
   // Måltidens rubrik: summan utan mjölken, med markering att den kan vara i underkant.
   const mealMacros = breakfast.getByTestId('meal-macros');
-  await expect(mealMacros.getByTestId('fiber')).toContainText('Fi 6 g');
+  await expect(mealMacros.getByTestId('fiber')).toContainText('Fi 6,0 g');
   await expect(mealMacros.getByTestId('fiber-partial')).toBeVisible();
   // Tomma måltider har ingen makrorad.
   await expect(page.getByTestId('meal-lunch').getByTestId('meal-macros')).toHaveCount(0);
 
-  // Dagens topp: fiber i makroraden, markering och en diskret förklaring.
+  // Dagens topp: fiber i makroraden med asterisk; förklaringen bakom info-ikonen.
   const day = page.getByTestId('macros');
   await expect(day).toContainText('Protein 15 g · Kolhydrater 45 g · Fett 10 g · Fiber 6 g*');
   await expect(day.getByTestId('fiber-partial')).toBeVisible();
+  await expect(page.getByTestId('fiber-incomplete')).toHaveCount(0);
+  const info = day.getByRole('button', { name: 'Om fibervärdet' });
+  await expect(info).toHaveAttribute('aria-expanded', 'false');
+  await info.tap();
+  await expect(info).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('fiber-incomplete')).toHaveText(
-    '* Dagens fiber kan vara i underkant – 1 post saknar fiberdata.',
+    '* Dagens fiber kan vara i underkant – 1 post saknar fiberdata. Snabbloggar och livsmedel utan fibervärde räknas inte in.',
   );
   // Fibermålet är av: ingen fiberstapel.
   await expect(page.getByTestId('fiber-intake')).toHaveCount(0);

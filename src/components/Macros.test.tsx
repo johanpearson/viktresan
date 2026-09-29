@@ -9,7 +9,7 @@ describe('Macros', () => {
     const { container, getByTestId } = render(
       <Macros nutrients={nutrients} fiber={{ fiberG: 4, partial: false }} />,
     );
-    expect(container.textContent).toBe('P 6 g · K 30 g · F 2 g · Fi 4 g');
+    expect(container.textContent).toBe('P 6,0 g · K 30 g · F 2,0 g · Fi 4,0 g');
     expect(getByTestId('fiber')).toHaveClass('macro-fiber');
   });
 
@@ -31,6 +31,6 @@ describe('Macros', () => {
       <Macros lead="70 g" nutrients={nutrients} fiber={undefined} />,
     );
     expect(queryByTestId('fiber')).toBeNull();
-    expect(container.textContent).toBe('70 g · P 6 g · K 30 g · F 2 g');
+    expect(container.textContent).toBe('70 g · P 6,0 g · K 30 g · F 2,0 g');
   });
 });

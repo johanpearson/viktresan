@@ -59,10 +59,10 @@ describe('Mat → Dag', () => {
   it('summerar kcal och antal poster per måltid', () => {
     renderDay(log);
     expect(within(header('frukost')).getByRole('button', { name: /Frukost/ })).toHaveTextContent(
-      'Frukost2 poster350 kcal',
+      'Frukost 2 poster350 kcal',
     );
     expect(within(header('lunch')).getByRole('button', { name: /Lunch/ })).toHaveTextContent(
-      'Lunch1 post400 kcal',
+      'Lunch 1 post400 kcal',
     );
     // Tom måltid: bara namnet och +.
     const middag = header('middag');
