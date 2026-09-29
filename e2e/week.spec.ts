@@ -164,6 +164,22 @@ test('trendvikt som huvudsiffra, dagsvikt under och inställning för att stäng
   await expect(page.getByTestId('trend-weight')).toHaveText('85,7 kg');
   await expect(page.getByTestId('current-weight')).toHaveText('85,0 kg');
   await expect(page.getByTestId('trend-note')).toContainText('vätska och salt');
+  // Förändring, kvar, % och BMI räknas på trendvikten (85,72 kg, start 90, mål 80).
+  await expect(page.getByTestId('total-change')).toHaveText(/^[−-]4,3 kg$/);
+  await expect(page.getByTestId('remaining')).toHaveText('5,7 kg');
+  await expect(page.getByTestId('bmi')).toHaveText('26,5 (Övervikt)');
+  const progress = page.getByRole('progressbar', { name: 'Framsteg mot målvikten' });
+  await expect(progress).toHaveAttribute('aria-valuenow', '43');
+
+  // Info-knappen fäller ut en kort förklaring.
+  const info = hero.getByRole('button', { name: 'Vad är trendvikt?' });
+  await expect(info).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('trend-info-text')).toHaveCount(0);
+  await info.tap();
+  await expect(info).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByTestId('trend-info-text')).toContainText('ungefär 10 %');
+  await info.tap();
+  await expect(page.getByTestId('trend-info-text')).toHaveCount(0);
 
   await page.goto('./#/installningar/visning');
   const toggle = page.getByRole('switch', { name: /Visa trendvikt som huvudsiffra/ });
@@ -175,5 +191,11 @@ test('trendvikt som huvudsiffra, dagsvikt under och inställning för att stäng
   await expect(page.getByTestId('current-weight')).toHaveText('85,0 kg');
   await expect(page.getByTestId('trend-weight')).toHaveCount(0);
   await expect(page.getByTestId('trend-note')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Vad är trendvikt?' })).toHaveCount(0);
+  // Av: alla härledda värden räknas på dagsvikten (85,0 kg).
+  await expect(page.getByTestId('total-change')).toHaveText(/^[−-]5,0 kg$/);
+  await expect(page.getByTestId('remaining')).toHaveText('5,0 kg');
+  await expect(page.getByTestId('bmi')).toHaveText('26,2 (Övervikt)');
+  await expect(progress).toHaveAttribute('aria-valuenow', '50');
   expect(errors).toEqual([]);
 });

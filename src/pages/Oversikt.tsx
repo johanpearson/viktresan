@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { BackupReminder } from '../components/BackupReminder.tsx';
 import { CaloriePlanCard } from '../components/CaloriePlanCard.tsx';
 import { DoseDayBanner } from '../components/DoseDayBanner.tsx';
@@ -22,16 +22,8 @@ import { WeekSummaryCard } from '../components/WeekSummaryCard.tsx';
 import type { FoodLogEntry, Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatBmi, formatDate, formatKg, formatShortDate } from '../lib/format.ts';
-import {
-  bmi,
-  bmiCategory,
-  dailyWeights,
-  emaTrend,
-  forecastGoal,
-  goalProgress,
-  weeklyAverages,
-  type GoalForecast,
-} from '../lib/stats.ts';
+import { overviewStats } from '../lib/overview.ts';
+import { bmiCategory, dailyWeights, weeklyAverages, type GoalForecast } from '../lib/stats.ts';
 import { buildPlan } from '../lib/plan.ts';
 import { usePreferences } from '../lib/preferences.ts';
 import { useAppData } from '../lib/useAppData.ts';
@@ -121,22 +113,14 @@ const WEEKS_SHOWN = 4;
 function Summary({ profile, weights, foodLog, week, plateau, children }: SummaryProps) {
   const today = todayIso();
   const daily = dailyWeights(weights);
-  const latest = daily[daily.length - 1];
-  const currentKg = latest?.weightKg ?? profile.startWeightKg;
-  const trend = emaTrend(daily);
-  const trendKg = trend[trend.length - 1]?.trendKg;
-  const progress = goalProgress(profile.startWeightKg, currentKg, profile.goalWeightKg);
-  const bmiValue = bmi(currentKg, profile.heightCm);
-  const weeks = weeklyAverages(daily, today);
-  const forecast = forecastGoal({
-    daily,
-    goalKg: profile.goalWeightKg,
-    today,
-    goalDate: profile.goalDate,
-  });
-  const plan = buildPlan(profile, weights, foodLog, today);
   const { prefs } = usePreferences();
-  const trendHero = prefs.trendHero && latest !== undefined && trendKg != null;
+  // Alla härledda värden (förändring, kvar, %, BMI, prognos) räknas på samma vikt som huvudsiffran.
+  const stats = overviewStats({ profile, daily, today, preferTrend: prefs.trendHero });
+  const { progress, forecast, dailyKg: currentKg, trendKg, latestDate } = stats;
+  const bmiValue = stats.bmi;
+  const weeks = weeklyAverages(daily, today);
+  const plan = buildPlan(profile, weights, foodLog, today);
+  const trendHero = stats.source === 'trend' && trendKg != null && latestDate != null;
 
   return (
     <>
@@ -144,7 +128,7 @@ function Summary({ profile, weights, foodLog, week, plateau, children }: Summary
       <section className="card hero" data-testid="hero" aria-label="Vikt och mål">
         {trendHero ? (
           <>
-            <p className="hero-label">Trendvikt</p>
+            <TrendLabel />
             <p className="hero-value" data-testid="trend-weight">
               {formatKg(trendKg)}
             </p>
@@ -153,7 +137,7 @@ function Summary({ profile, weights, foodLog, week, plateau, children }: Summary
               <span className="num" data-testid="current-weight">
                 {formatKg(currentKg)}
               </span>
-              <span className="muted"> · {formatDate(latest.date)}</span>
+              <span className="muted"> · {formatDate(latestDate)}</span>
             </p>
             <p className="hero-note" data-testid="trend-note">
               Dagsvikten varierar normalt med vätska och salt – trenden visar den verkliga
@@ -167,8 +151,8 @@ function Summary({ profile, weights, foodLog, week, plateau, children }: Summary
               {formatKg(currentKg)}
             </p>
             <p className="hero-note">
-              {latest
-                ? `Senast loggad ${formatDate(latest.date)}`
+              {latestDate
+                ? `Senast loggad ${formatDate(latestDate)}`
                 : 'Startvikt – ingen mätning ännu'}
               {trendKg != null && daily.length > 1 ? ` · Trend ${formatKg(trendKg)}` : ''}
             </p>
@@ -242,6 +226,43 @@ function Summary({ profile, weights, foodLog, week, plateau, children }: Summary
             ))}
         </ul>
       </Card>
+    </>
+  );
+}
+
+/** Rubriken "Trendvikt" med en info-knapp som fäller ut en kort förklaring. */
+function TrendLabel() {
+  const [open, setOpen] = useState(false);
+  const infoId = useId();
+  return (
+    <>
+      <p className="hero-label hero-label-info">
+        Trendvikt
+        <button
+          type="button"
+          className="info-button"
+          aria-label="Vad är trendvikt?"
+          aria-expanded={open}
+          aria-controls={infoId}
+          data-testid="trend-info"
+          onClick={() => {
+            setOpen((o) => !o);
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M12 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="12" cy="7.5" r="1.2" fill="currentColor" />
+          </svg>
+        </button>
+      </p>
+      {open && (
+        <p className="hero-info" id={infoId} data-testid="trend-info-text">
+          Trendvikten är ett utjämnat snitt som varje dag rör sig ungefär 10 % mot dagens vikt. Den
+          släpar efter i början men filtrerar bort vätskesvängningar, så förändring, kvar till mål,
+          BMI och prognos räknas på den.
+        </p>
+      )}
     </>
   );
 }

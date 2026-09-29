@@ -69,15 +69,17 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByTestId('log-tile-vikt')).toContainText('Senast 86,0 kg');
 
-  // Översikt
+  // Översikt: trendvikten (EMA 88 → 87,48 → 86,71) är huvudsiffran och alla härledda värden
+  // räknas på den.
   await nav(page).getByRole('link', { name: 'Översikt' }).tap();
+  await expect(page.getByTestId('trend-weight')).toHaveText('86,7 kg');
   await expect(page.getByTestId('current-weight')).toHaveText('86,0 kg');
-  await expect(page.getByTestId('total-change')).toHaveText(/^[−-]4,0 kg$/);
-  await expect(page.getByTestId('remaining')).toHaveText('6,0 kg');
-  await expect(page.getByTestId('bmi')).toHaveText('26,5 (Övervikt)');
+  await expect(page.getByTestId('total-change')).toHaveText(/^[−-]3,3 kg$/);
+  await expect(page.getByTestId('remaining')).toHaveText('6,7 kg');
+  await expect(page.getByTestId('bmi')).toHaveText('26,8 (Övervikt)');
   await expect(page.getByRole('progressbar', { name: 'Framsteg mot målvikten' })).toHaveAttribute(
     'aria-valuenow',
-    '40',
+    '33',
   );
   // Nyaste veckan först: 86, 87, 88 och en tom vecka.
   const weekRows = page.getByTestId('week-average');
@@ -86,7 +88,7 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await expect(weekRows.nth(1)).toContainText('87,0 kg');
   await expect(weekRows.nth(2)).toContainText('88,0 kg');
   await expect(weekRows.nth(3)).toContainText('–');
-  // −1 kg/vecka, 6 kg kvar → 42 dagar.
+  // −1 kg/vecka från trendvikten, 6,7 kg kvar.
   await expect(page.getByTestId('forecast')).toContainText(/[−-]1,0 kg\/vecka/);
   await expect(page.getByTestId('forecast')).toContainText('når du målet omkring');
 
