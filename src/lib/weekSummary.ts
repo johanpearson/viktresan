@@ -52,6 +52,8 @@ export interface WeekSummary {
   trendChangeKg: number | null;
   /** Dagar med vägning. */
   weighDays: number;
+  /** Snitt av dagsvikterna i veckan (Framsteg → Veckor), `null` utan vägning. */
+  averageKg: number | null;
   /** Snitt per loggad matdag. */
   kcal: number | null;
   proteinG: number | null;
@@ -139,6 +141,7 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
     to,
     trendChangeKg,
     weighDays: weekTrend.length,
+    averageKg: mean(inWeek(daily, from, to).map((d) => d.weightKg)),
     kcal: mean(intake.map((d) => d.kcal)),
     proteinG: mean(intake.map((d) => d.proteinG)),
     foodDays: intake.length,

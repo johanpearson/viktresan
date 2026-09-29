@@ -152,7 +152,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.goto('./');
       await page.reload();
       await expect(page.getByTestId('ul-warning')).toBeVisible();
-      await expect(page.getByTestId('supplements-today')).toBeVisible();
+      await expect(page.getByTestId('today-card')).toBeVisible();
       await expectNoViolations(page, 'Översikt med tillskott och varning');
       await page.goto('./#/logga/tillskott');
       const sheet = page.getByRole('dialog', { name: 'Tillskott' });
@@ -392,11 +392,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
         ],
       });
       await page.reload();
-      // Översikt med "Blev passet av?", Idag (ring + pass) och Kommande.
-      await expect(page.getByTestId('missed-workouts')).toBeVisible();
-      await expect(page.getByTestId('upcoming-card').getByTestId('workout')).toHaveCount(3);
+      // Översikt med Att göra idag ("Blev passet av?" och dagens pass) och Idag (ringar).
+      await expect(page.getByTestId('todo-unanswered').first()).toBeVisible();
       await expectNoViolations(page, 'Översikt med pass och vatten');
-      await page.getByTestId('today-card').getByRole('button', { name: /^Klar/ }).tap();
+      await page.getByTestId('todo-workout').first().getByRole('button').tap();
+      await expectNoViolations(page, 'Radmeny för pass');
+      await page.getByRole('dialog').getByRole('button', { name: 'Klar' }).tap();
       await expect(page.getByRole('dialog', { name: 'Markera som klar' })).toBeVisible();
       await expectNoViolations(page, 'Markera som klar');
       await page.getByRole('button', { name: 'Stäng' }).tap();
@@ -488,8 +489,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
         symptoms: [{ date: '2026-09-16', appetite: 3, sideEffects: ['Trötthet'], createdAt: 4 }],
       });
       await page.reload();
-      await expect(page.getByTestId('dose-day-banner')).toBeVisible();
-      await expect(page.getByTestId('next-dose')).toBeVisible();
+      await expect(page.getByTestId('todo-dose')).toBeVisible();
       await expectNoViolations(page, 'Översikt med dosdag');
 
       await page.goto('./#/logga');

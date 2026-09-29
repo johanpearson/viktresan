@@ -16,6 +16,16 @@ const DATA = {
   weights: [{ id: 'w1', date: isoDaysFromToday(0), weightKg: 88, createdAt: Date.now() }],
   waist: [{ date: isoDaysFromToday(0), waistCm: 95, createdAt: Date.now() }],
   steps: [{ date: isoDaysFromToday(0), steps: 8000, createdAt: Date.now() }],
+  workouts: [
+    {
+      id: 'p1',
+      date: isoDaysFromToday(0),
+      type: 'Promenad',
+      durationMin: 30,
+      status: 'genomford',
+      createdAt: Date.now(),
+    },
+  ],
   foodLog: [
     {
       id: 'f1',
@@ -62,8 +72,16 @@ async function observe(page: Page) {
   const today = page.getByTestId('today-card');
   await expect(today).toBeVisible();
   const navLabels = await nav(page).getByRole('link').allTextContents();
-  const todayLabels = await today.locator('dt').allTextContents();
-  const calorieCard = await page.getByRole('heading', { name: 'Kalorimål' }).count();
+  // Ringarnas bildtexter och chipsen för steg och träning (bara med data idag).
+  const todayLabels = [
+    ...(await today.locator('.ring-link').allTextContents()),
+    ...((await today.getByTestId('today-steg').count()) > 0 ? ['Steg'] : []),
+    ...((await today.getByTestId('today-traning').count()) > 0 ? ['Träning'] : []),
+  ];
+  // Kaloriringen öppnar kalorimålet (tidigare ett eget kort).
+  const calorieCard = await today
+    .getByRole('button', { name: 'Kalorier – visa kalorimålet' })
+    .count();
   // Kalorier och protein visas som ringar i Idag.
   const rings = await today.getByRole('progressbar', { name: /^(Kalorier|Protein) idag$/ }).count();
 
@@ -101,7 +119,7 @@ test('allt på som standard', async ({ page }) => {
   const errors = collectErrors(page);
   const v = await observe(page);
   expect(v.navLabels).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-  expect(v.todayLabels).toEqual(['Dryck', 'Steg', 'Träning']);
+  expect(v.todayLabels).toEqual(['Dryck', 'Kalorier', 'Protein', 'Steg', 'Träning']);
   expect(v.calorieCard).toBe(1);
   expect(v.rings).toBe(2);
   expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg', 'Dryck', 'Träning']);

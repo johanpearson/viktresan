@@ -357,14 +357,19 @@ test('påminner om säkerhetskopia efter 7 dagar utan export', async ({ page }) 
   await page.reload();
   const reminder = page.getByTestId('backup-reminder');
   await expect(reminder).toContainText('Dags att säkerhetskopiera');
-  await expect(reminder).toContainText('inte exporterat någon säkerhetskopia');
+  await expect(reminder).toContainText('Ingen export ännu');
+  // Raden i Att göra idag leder till Säkerhetskopia.
+  await expect(reminder.getByRole('link')).toHaveAttribute(
+    'href',
+    '#/installningar/sakerhetskopia',
+  );
 
   // Gammal export → fortfarande påminnelse.
   await seed(page, { settings: { lastExportAt: Date.now() - 7 * DAY_MS - 1000 } });
   await page.reload();
-  await expect(reminder).toContainText('mer än 7 dagar sedan');
+  await expect(reminder).toContainText('Mer än 7 dagar sedan');
 
-  await reminder.getByRole('link', { name: 'Exportera nu' }).tap();
+  await reminder.getByRole('link').tap();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inställningar');
   await exportBackup(page);
 

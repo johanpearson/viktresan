@@ -1,36 +1,38 @@
-import { useId, useState, type ReactNode } from 'react';
-import { BackupReminder } from '../components/BackupReminder.tsx';
-import { CaloriePlanCard } from '../components/CaloriePlanCard.tsx';
-import { DoseDayBanner } from '../components/DoseDayBanner.tsx';
+import { useId, useState } from 'react';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { Feature } from '../components/Feature.tsx';
 import { HydrationReminder } from '../components/HydrationReminder.tsx';
-import { MissedWorkouts } from '../components/MissedWorkouts.tsx';
+import { MilestoneCard } from '../components/MilestoneCard.tsx';
 import { NavIcon } from '../components/NavIcon.tsx';
-import { NextDoseCard } from '../components/NextDoseCard.tsx';
-import { PlateauCard } from '../components/PlateauCard.tsx';
-import { Card } from '../components/Card.tsx';
-import { EmptyState } from '../components/EmptyState.tsx';
-import { ListRow } from '../components/ListRow.tsx';
 import { Page } from '../components/Page.tsx';
+import { PlateauCard } from '../components/PlateauCard.tsx';
 import { ProgressBar } from '../components/ProgressBar.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
-import { SupplementsToday } from '../components/SupplementsToday.tsx';
-import { TodayUpperLimits } from '../components/TodayUpperLimits.tsx';
 import { TodayCard } from '../components/TodayCard.tsx';
-import { UpcomingCard } from '../components/UpcomingCard.tsx';
+import { TodayUpperLimits } from '../components/TodayUpperLimits.tsx';
+import { TodoCard } from '../components/TodoCard.tsx';
+import { UpdateCard } from '../components/UpdateCard.tsx';
 import { WeekSummaryCard } from '../components/WeekSummaryCard.tsx';
 import type { FoodLogEntry, Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
-import { formatBmi, formatDate, formatKg, formatShortDate } from '../lib/format.ts';
-import { overviewStats } from '../lib/overview.ts';
-import { bmiCategory, dailyWeights, weeklyAverages, type GoalForecast } from '../lib/stats.ts';
+import { formatKg, formatMonthYear, formatShortDate } from '../lib/format.ts';
+import { goalEta, overviewStats, type GoalEta } from '../lib/overview.ts';
+import { useOverviewItems } from '../lib/overviewItems.ts';
 import { buildPlan } from '../lib/plan.ts';
 import { usePreferences } from '../lib/preferences.ts';
+import { dailyWeights } from '../lib/stats.ts';
 import { useAppData } from '../lib/useAppData.ts';
 
+/**
+ * Översikt: status och det som kräver handling idag – viktkortet, kontextkort när de är aktuella
+ * (ny version, milstolpe, veckosummering, platå, dryckespåminnelse, övre gränsvärden), Idag
+ * (ringar, veckoraden, chips) och Att göra idag. Detaljer ligger ett tryck bort.
+ */
 export function Oversikt() {
   const { data, reload } = useAppData();
+  const { shows } = useOverviewItems();
   const now = new Date();
+  const today = todayIso(now);
   return (
     <Page
       title="Översikt"
@@ -40,193 +42,151 @@ export function Oversikt() {
         </a>
       }
     >
-      {data === null && <Skeleton hero cards={3} />}
-      {data && (
-        <Feature id="glp1">
-          <DoseDayBanner data={data} now={now} />
-        </Feature>
+      {data === null && <Skeleton hero cards={2} />}
+      {data !== null && data.profile === null && (
+        <>
+          <UpdateCard />
+          <EmptyState
+            title="Välkommen till Viktresan"
+            action={{ label: 'Fyll i profilen', href: '#/installningar/profil' }}
+          >
+            Börja med startvikt, längd och mål – sedan fylls Översikt med trend, dagens intag och
+            prognos.
+          </EmptyState>
+        </>
       )}
-      {data && (
-        <Feature id="glp1">
-          <HydrationReminder symptoms={data.symptoms} today={todayIso(now)} />
-        </Feature>
-      )}
-      {data && (
-        <Feature id="traning">
-          <MissedWorkouts data={data} now={now} onChange={reload} />
-        </Feature>
-      )}
-      {data && <TodayUpperLimits data={data} today={todayIso(now)} />}
-      <BackupReminder />
-      {data === null ? null : data.profile === null ? (
-        <EmptyState
-          title="Välkommen till Viktresan"
-          action={{ label: 'Fyll i profilen', href: '#/installningar/profil' }}
-        >
-          Börja med startvikt, längd och mål – sedan fylls Översikt med trend, dagens intag och
-          prognos.
-        </EmptyState>
-      ) : (
-        <Summary
-          profile={data.profile}
-          weights={data.weights}
-          foodLog={data.foodLog}
-          week={<WeekSummaryCard data={data} now={now} />}
-          plateau={<PlateauCard data={data} now={now} />}
-        >
-          <TodayCard data={data} now={now} onChange={reload} />
-          <Feature id="tillskott">
-            <SupplementsToday
-              supplements={data.supplements}
-              log={data.supplementLog}
-              date={todayIso(now)}
-              onChange={reload}
-            />
-          </Feature>
+      {data?.profile && (
+        <>
+          <WeightCard
+            profile={data.profile}
+            weights={data.weights}
+            foodLog={data.foodLog}
+            today={today}
+          />
+          {/* Kontextkort: visas bara när de är aktuella och kan stängas. */}
+          <UpdateCard />
+          {shows('milstolpe') && <MilestoneCard now={now} />}
+          {shows('veckosummering') && <WeekSummaryCard data={data} now={now} />}
+          {shows('plata') && <PlateauCard data={data} now={now} />}
           <Feature id="glp1">
-            <NextDoseCard data={data} now={now} />
+            <HydrationReminder symptoms={data.symptoms} today={today} />
           </Feature>
-          <Feature id="traning">
-            <UpcomingCard data={data} now={now} onChange={reload} />
-          </Feature>
-        </Summary>
+          <TodayUpperLimits data={data} today={today} />
+          <TodayCard data={data} now={now} onChange={reload} />
+          {shows('att-gora') && <TodoCard data={data} now={now} onChange={reload} />}
+        </>
       )}
     </Page>
   );
 }
 
-interface SummaryProps {
+interface WeightCardProps {
   profile: Profile;
   weights: WeightEntry[];
   foodLog: FoodLogEntry[];
-  /** Förra veckans summering (visas efter Idag). */
-  week?: ReactNode;
-  /** Platåkortet (visas efter veckosummeringen). */
-  plateau?: ReactNode;
-  /** Visas direkt under huvudsiffran (Idag, Nästa dos, Kommande). */
-  children?: ReactNode;
+  today: string;
 }
 
-/** Så många veckor visas i "Snitt per vecka" (resten finns under Framsteg). */
-const WEEKS_SHOWN = 4;
+/** "mål ca feb. 2027" eller "mål ca feb. 2027 enligt plan". */
+function etaText(eta: GoalEta): string {
+  switch (eta.kind) {
+    case 'reached':
+      return 'Målet nått!';
+    case 'trend':
+      return `mål ca ${formatMonthYear(eta.date)}`;
+    case 'plan':
+      return `mål ca ${formatMonthYear(eta.date)} enligt plan`;
+  }
+}
 
-function Summary({ profile, weights, foodLog, week, plateau, children }: SummaryProps) {
-  const today = todayIso();
+/**
+ * Viktkortet: trendvikten stort (eller dagsvikten), dagsvikt och datum på en rad, framsteg mot
+ * målet och en rad "−X kg · Y kg kvar · mål ca [månad år]" – en enda måldatumsuppgift. Tryck på
+ * kortet = Framsteg → Historik (graf, BMI, prognosens detaljer).
+ */
+function WeightCard({ profile, weights, foodLog, today }: WeightCardProps) {
   const daily = dailyWeights(weights);
   const { prefs } = usePreferences();
-  // Alla härledda värden (förändring, kvar, %, BMI, prognos) räknas på samma vikt som huvudsiffran.
+  // Alla härledda värden (förändring, kvar, prognos) räknas på samma vikt som huvudsiffran.
   const stats = overviewStats({ profile, daily, today, preferTrend: prefs.trendHero });
-  const { progress, forecast, dailyKg: currentKg, trendKg, latestDate } = stats;
-  const bmiValue = stats.bmi;
-  const weeks = weeklyAverages(daily, today);
+  const { progress, dailyKg: currentKg, trendKg, latestDate } = stats;
   const plan = buildPlan(profile, weights, foodLog, today);
+  const eta = goalEta({
+    stats,
+    today,
+    rateKg: profile.ratePerWeekKg,
+    planDate: plan.kind === 'plan' ? plan.plan.forecastDate : null,
+  });
   const trendHero = stats.source === 'trend' && trendKg != null && latestDate != null;
 
   return (
-    <>
-      {/* Huvudkortet: vikten, vägen mot målet, nyckeltal och prognos. */}
-      <section className="card hero" data-testid="hero" aria-label="Vikt och mål">
-        {trendHero ? (
-          <>
-            <TrendLabel />
-            <p className="hero-value" data-testid="trend-weight">
-              {formatKg(trendKg)}
-            </p>
-            <p className="hero-sub">
-              Dagsvikt{' '}
-              <span className="num" data-testid="current-weight">
-                {formatKg(currentKg)}
-              </span>
-              <span className="muted"> · {formatDate(latestDate)}</span>
-            </p>
-            <p className="hero-note" data-testid="trend-note">
-              Dagsvikten varierar normalt med vätska och salt – trenden visar den verkliga
-              riktningen.
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="hero-label">Nuvarande vikt</p>
-            <p className="hero-value" data-testid="current-weight">
-              {formatKg(currentKg)}
-            </p>
-            <p className="hero-note">
-              {latestDate
-                ? `Senast loggad ${formatDate(latestDate)}`
-                : 'Startvikt – ingen mätning ännu'}
-              {trendKg != null && daily.length > 1 ? ` · Trend ${formatKg(trendKg)}` : ''}
-            </p>
-          </>
-        )}
-        <div className="hero-progress">
-          <ProgressBar
-            thin
-            tone="weight"
-            fraction={progress.fraction}
-            label="Framsteg mot målvikten"
-          />
-          <p className="progress-caption">
-            <span className="num">{Math.round(progress.fraction * 100)} %</span> av vägen från{' '}
-            <span className="num">{formatKg(profile.startWeightKg)}</span> till{' '}
-            <span className="num">{formatKg(profile.goalWeightKg)}</span>
-            {profile.goalDate ? ` till ${formatDate(profile.goalDate)}` : ''}
+    <section className="card hero hero-card" data-testid="hero" aria-label="Vikt och mål">
+      {trendHero ? (
+        <>
+          <TrendLabel />
+          <p className="hero-value" data-testid="trend-weight">
+            {formatKg(trendKg)}
           </p>
-        </div>
-        <dl className="stats stats-compact">
-          <div className="stat">
-            <dt>Förändring</dt>
-            <dd data-testid="total-change">{formatKg(progress.changeKg, { signed: true })}</dd>
-          </div>
-          <div className="stat">
-            <dt>Kvar till mål</dt>
-            <dd data-testid="remaining">
-              {progress.reached ? 'Målet nått!' : formatKg(progress.remainingKg)}
-            </dd>
-          </div>
-          <div className="stat">
-            <dt>BMI</dt>
-            <dd data-testid="bmi">
-              {bmiValue == null ? (
-                '–'
-              ) : (
-                <>
-                  <span className="num">{formatBmi(bmiValue)}</span>{' '}
-                  <span className="stat-sub">({bmiCategory(bmiValue)})</span>
-                </>
-              )}
-            </dd>
-          </div>
-        </dl>
-        <p className="hero-forecast" data-testid="forecast">
-          {forecastText(forecast, progress.reached)}
+          <p className="hero-sub">
+            Dagsvikt{' '}
+            <span className="num" data-testid="current-weight">
+              {formatKg(currentKg)}
+            </span>{' '}
+            · <span className="nowrap">{formatShortDate(latestDate)}</span>
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="hero-label">{latestDate ? 'Dagsvikt' : 'Startvikt'}</p>
+          <p className="hero-value" data-testid="current-weight">
+            {formatKg(currentKg)}
+          </p>
+          <p className="hero-sub">
+            {latestDate ? (
+              <>
+                Senast loggad <span className="nowrap">{formatShortDate(latestDate)}</span>
+              </>
+            ) : (
+              'Ingen vägning ännu'
+            )}
+          </p>
+        </>
+      )}
+      <div className="hero-progress">
+        <ProgressBar
+          thin
+          tone="weight"
+          fraction={progress.fraction}
+          label="Framsteg mot målvikten"
+        />
+        <p className="progress-caption hero-summary" data-testid="hero-summary">
+          <span className="nowrap" data-testid="hero-change">
+            {formatKg(progress.changeKg, { signed: true })}
+          </span>
+          {!progress.reached && (
+            <>
+              {' · '}
+              <span className="nowrap" data-testid="hero-remaining">
+                {formatKg(progress.remainingKg)} kvar
+              </span>
+            </>
+          )}
+          {eta && (
+            <>
+              {' · '}
+              <span className="nowrap" data-testid="goal-eta" data-kind={eta.kind}>
+                {etaText(eta)}
+              </span>
+            </>
+          )}
         </p>
-      </section>
-
-      {children}
-      {week}
-      {plateau}
-
-      <Feature id="mat">
-        <CaloriePlanCard profile={profile} result={plan} />
-      </Feature>
-
-      <Card title="Snitt per vecka">
-        <ul className="list" data-testid="weekly-averages">
-          {[...weeks]
-            .reverse()
-            .slice(0, WEEKS_SHOWN)
-            .map((w) => (
-              <ListRow
-                key={w.from}
-                testId="week-average"
-                primary={`${formatShortDate(w.from)} – ${formatShortDate(w.to)}`}
-                secondary={w.days === 1 ? '1 dag' : `${String(w.days)} dagar`}
-                value={w.averageKg == null ? '–' : formatKg(w.averageKg)}
-              />
-            ))}
-        </ul>
-      </Card>
-    </>
+      </div>
+      {/* Hela kortet är tryckytan (länkens ::after); info-knappen ligger ovanpå. */}
+      <a className="hero-link" href="#/framsteg" data-testid="hero-link">
+        <span className="visually-hidden">Visa vikthistorik</span>
+      </a>
+      <span className="list-row-chevron hero-chevron" aria-hidden="true" />
+    </section>
   );
 }
 
@@ -259,28 +219,11 @@ function TrendLabel() {
       {open && (
         <p className="hero-info" id={infoId} data-testid="trend-info-text">
           Trendvikten är ett utjämnat snitt som varje dag rör sig ungefär 10 % mot dagens vikt. Den
-          släpar efter i början men filtrerar bort vätskesvängningar, så förändring, kvar till mål,
-          BMI och prognos räknas på den.
+          släpar efter i början men filtrerar bort vätskesvängningar – dagsvikten varierar normalt
+          med vätska och salt, trenden visar den verkliga riktningen. Förändring, kvar till mål och
+          prognos räknas på trendvikten.
         </p>
       )}
     </>
   );
-}
-
-function forecastText(forecast: GoalForecast, reached: boolean): string {
-  if (reached) return 'Du har nått din målvikt. Snyggt jobbat!';
-  switch (forecast.kind) {
-    case 'reached':
-      return 'Trenden ligger på målvikten – håll i det!';
-    case 'insufficient-data':
-      return 'Logga några mätningar under minst en vecka så visas en prognos här.';
-    case 'not-progressing':
-      return `Trenden (${formatKg(forecast.weeklyChangeKg, { signed: true })}/vecka) leder inte mot målet just nu.`;
-    case 'forecast': {
-      const base = `Med nuvarande trend (${formatKg(forecast.weeklyChangeKg, { signed: true })}/vecka) når du målet omkring ${formatDate(forecast.date)}.`;
-      if (forecast.daysVsGoalDate == null) return base;
-      if (forecast.daysVsGoalDate <= 0) return `${base} Det är i tid till ditt måldatum.`;
-      return `${base} Det är ${forecast.daysVsGoalDate} dagar efter ditt måldatum.`;
-    }
-  }
 }

@@ -6,6 +6,7 @@ import {
   formatKcal,
   formatRate,
   formatDate,
+  formatMonthYear,
   formatPhotoLabel,
   formatInt,
   formatShortDate,
@@ -37,6 +38,7 @@ describe('format', () => {
 
   it('formaterar datum på svenska', () => {
     expect(formatDate('2026-09-25')).toMatch(/25 sep.* 2026/);
+    expect(formatMonthYear('2027-02-12')).toBe('feb. 2027');
     expect(formatShortDate('2026-09-25')).toMatch(/^25 sep\.?$/);
   });
 

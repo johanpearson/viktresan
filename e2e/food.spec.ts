@@ -708,14 +708,16 @@ test('historik och översikt: intag mot mål, 7-dagarssnitt och förklarade spä
   await page.goto('./');
   await seed(page, { profile, foodLog });
 
-  // Översikt: kalorimål, takt, prognos och sakliga förklaringar.
+  // Översikt → kaloriringen: kalorimål, takt och sakliga förklaringar.
   await page.goto('./');
+  await page.getByRole('button', { name: 'Kalorier – visa kalorimålet' }).tap();
   const age = new Date().getFullYear() - 1986;
   const tdee = (10 * 70 + 6.25 * 180 - 5 * age + 5) * 1.55;
   const target = Math.round(tdee - (0.7 * 7700) / 7);
   await expect(page.getByTestId('calorie-target')).toHaveText(`${kcalText(target)} kcal`);
   await expect(page.getByTestId('plan-rate')).toHaveText('0,7 kg/vecka');
-  await expect(page.getByTestId('plan-forecast')).toContainText('ca ');
+  // Måldatumet visas bara på viktkortet – panelen har inget andra datum.
+  await expect(page.getByTestId('plan-forecast')).toHaveCount(0);
   const notes = page.getByTestId('plan-notes');
   await expect(notes).toContainText('Vald takt (1 kg/vecka) är snabbare än 1 % av din trendvikt');
   await expect(notes).toContainText('Underskottet höjs inte');
@@ -765,6 +767,7 @@ test('profilen: nya fält för kalorimålet', async ({ page }) => {
     ratePerWeekKg: 0.75,
   });
   await page.goto('./');
+  await page.getByRole('button', { name: 'Kalorier – visa kalorimålet' }).tap();
   await expect(page.getByTestId('plan-rate')).toHaveText('0,75 kg/vecka');
 });
 
@@ -778,8 +781,11 @@ test('dryck: ett glas vatten och 2 dl mjölk i Mat räknas i dagens dryckessumma
   await page.goto('./');
   const ring = page.getByRole('progressbar', { name: 'Dryck idag' });
   await expect(ring).toHaveAttribute('aria-valuetext', '0 ml av 2 000 ml');
+  await page.getByRole('button', { name: 'Dryck – logga dryck' }).tap();
   await page.getByRole('button', { name: '+250 ml Glas', exact: true }).tap();
   await expect(ring).toHaveAttribute('aria-valuetext', '250 ml av 2 000 ml');
+  await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // 2 dl mjölk i Mat (≈ 206 g) räknas in som 200 ml utan att loggas en gång till.
   await page.goto('./#/mat');
@@ -788,8 +794,10 @@ test('dryck: ett glas vatten och 2 dl mjölk i Mat räknas i dagens dryckessumma
 
   await page.goto('./');
   await expect(ring).toHaveAttribute('aria-valuetext', '450 ml av 2 000 ml');
-  await expect(page.getByTestId('drink-note')).toHaveText('Varav 200 ml från Mat.');
-  await expect(page.getByTestId('today-vatten')).toContainText('450 ml');
+  await page.getByRole('button', { name: 'Dryck – logga dryck' }).tap();
+  await expect(page.getByRole('dialog').getByTestId('drink-note')).toHaveText(
+    'Varav 200 ml från Mat.',
+  );
 
   // Logga → Dryck visar vad som kommer från Mat.
   await page.goto('./#/logga/vatten');

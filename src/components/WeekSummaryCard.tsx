@@ -3,8 +3,9 @@ import { useFeatures } from '../lib/features.ts';
 import { setPreference, usePreferences } from '../lib/preferences.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { fiberWeekInput, useFiber } from '../lib/useFiber.ts';
-import { hasWeekData, lastCompletedWeek, weekTitle } from '../lib/weekSummary.ts';
-import { WeekSummaryView } from './WeekSummaryView.tsx';
+import { hasWeekData, lastCompletedWeek, weekHeadline, weekTitle } from '../lib/weekSummary.ts';
+import { Card } from './Card.tsx';
+import { ListRow } from './ListRow.tsx';
 
 interface WeekSummaryCardProps {
   data: AppData;
@@ -12,8 +13,8 @@ interface WeekSummaryCardProps {
 }
 
 /**
- * Översikt: summering av förra veckan. Visas från veckans första öppning (måndag)
- * tills den stängs; finns sedan kvar under Framsteg → Veckor.
+ * Översikt: kontextkortet för förra veckan – en rad med veckans rubrik. Visas från veckans
+ * första öppning (måndag) tills det stängs. Hela summeringen finns under Framsteg → Veckor.
  */
 export function WeekSummaryCard({ data, now }: WeekSummaryCardProps) {
   const { loaded, prefs } = usePreferences();
@@ -25,14 +26,10 @@ export function WeekSummaryCard({ data, now }: WeekSummaryCardProps) {
   if (!hasWeekData(entry.summary) || prefs.weekCardDismissed === entry.summary.from) return null;
 
   return (
-    <section className="card" aria-labelledby="week-card-title" data-testid="week-card">
-      <div className="week-card-header">
-        <div>
-          <h2 className="card-title" id="week-card-title">
-            Förra veckan
-          </h2>
-          <p className="muted hero-meta">{weekTitle(entry.summary)}</p>
-        </div>
+    <Card
+      title="Förra veckan"
+      testId="week-card"
+      action={
         <button
           type="button"
           className="button button-ghost button-small"
@@ -41,9 +38,18 @@ export function WeekSummaryCard({ data, now }: WeekSummaryCardProps) {
         >
           Stäng
         </button>
-      </div>
-      <WeekSummaryView entry={entry} profile={data.profile} />
-      <a href="#/framsteg/veckor">Alla veckor</a>
-    </section>
+      }
+    >
+      <ul className="list">
+        <ListRow
+          primary={
+            <span data-testid="week-headline">{weekHeadline(entry.summary, data.profile)}</span>
+          }
+          secondary={weekTitle(entry.summary)}
+          href="#/framsteg/veckor"
+          chevron
+        />
+      </ul>
+    </Card>
   );
 }

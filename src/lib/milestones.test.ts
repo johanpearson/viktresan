@@ -7,6 +7,7 @@ import {
   evaluateMilestones,
   milestoneMessage,
   milestoneMessages,
+  newestMilestone,
   reachedMilestones,
   upcomingMilestones,
   type Milestone,
@@ -425,5 +426,32 @@ describe('meddelanden', () => {
     const m = known('kg-5');
     expect(milestoneMessage(m, TODAY)).toBe(milestoneMessage(m, TODAY));
     expect(milestoneMessages(m)).toContain(milestoneMessage(m, TODAY));
+  });
+});
+
+describe('newestMilestone', () => {
+  const today = '2026-09-24';
+  it('senast nådda inom veckan, viktigast samma dag; stängd visas inte', () => {
+    const records = [
+      { id: 'kg-1', date: '2026-09-20' },
+      { id: 'dagar-7', date: '2026-09-23' },
+      { id: 'kg-5', date: '2026-09-23' },
+      { id: 'dagar-30', date: '2026-09-10' },
+    ];
+    expect(newestMilestone(records, { today, dismissed: null })?.milestone.id).toBe('kg-5');
+    expect(newestMilestone(records, { today, dismissed: 'kg-5' })).toBeNull();
+  });
+
+  it('äldre än en vecka eller avstängd funktion: inget kort', () => {
+    expect(
+      newestMilestone([{ id: 'kg-1', date: '2026-09-10' }], { today, dismissed: null }),
+    ).toBeNull();
+    expect(
+      newestMilestone([{ id: 'pass-1', date: today }], {
+        today,
+        dismissed: null,
+        isEnabled: (m) => m.feature !== 'traning',
+      }),
+    ).toBeNull();
   });
 });

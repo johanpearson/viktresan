@@ -119,6 +119,7 @@ test('mål nått: välj att hålla vikten (takt 0, kalorimål = förbrukningen)'
   expect(((await dump(page)).profile as { ratePerWeekKg: number }).ratePerWeekKg).toBe(0);
 
   await page.goto('./');
+  await page.getByRole('button', { name: 'Kalorier – visa kalorimålet' }).tap();
   await expect(page.getByTestId('plan-rate')).toHaveText('Håll vikten');
   await expect(page.getByTestId('calorie-target')).toHaveText(
     (await page.getByTestId('plan-tdee').textContent()) ?? '',

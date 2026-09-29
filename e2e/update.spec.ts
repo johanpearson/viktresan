@@ -105,12 +105,13 @@ test('uppdatering söks när appen blir synlig, högst var 30:e minut', async ({
   await sendToBackground(page);
   await page.waitForTimeout(1000);
   expect(await hasNewWorker(page)).toBe(false);
-  await expect(page.getByTestId('update-toast')).toHaveCount(0);
+  await expect(page.getByTestId('update-card')).toHaveCount(0);
 
-  // 31 minuter senare.
+  // 31 minuter senare. På Översikt är "Ny version finns" ett kontextkort i stället för en toast.
   await page.clock.setFixedTime(Date.now() + 31 * 60 * 1000);
   await sendToBackground(page);
-  const toast = page.getByTestId('update-toast');
+  const toast = page.getByTestId('update-card');
+  await expect(page.getByTestId('update-toast')).toHaveCount(0);
   await expect(toast).toContainText('Ny version finns');
   expect(await hasNewWorker(page)).toBe(true);
   const axe = await new AxeBuilder({ page })
@@ -118,7 +119,7 @@ test('uppdatering söks när appen blir synlig, högst var 30:e minut', async ({
     .analyze();
   expect(axe.violations.map((v) => v.id)).toEqual([]);
 
-  // "Senare" döljer toasten; den nya versionen väntar kvar.
+  // "Senare" döljer kortet; den nya versionen väntar kvar.
   await toast.getByRole('button', { name: 'Senare' }).tap();
   await expect(toast).toHaveCount(0);
   expect(await askVersion(page)).toBe('v1');
@@ -128,6 +129,9 @@ test('en väntande version visas direkt vid nästa start', async ({ page, contex
   await controlledPage(page);
   await deployNewVersion(context, baseURL);
   await page.reload();
+  await expect(page.getByTestId('update-card')).toContainText('Ny version finns');
+  // På övriga sidor är det en toast.
+  await page.goto('./#/kalender');
   await expect(page.getByTestId('update-toast')).toContainText('Ny version finns');
 });
 

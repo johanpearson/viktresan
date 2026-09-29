@@ -14,6 +14,7 @@ import {
   putPhoto,
   putPhotoSession,
   putWeight,
+  putWorkout,
 } from './db/db.ts';
 import { todayIso } from './lib/dates.ts';
 import {
@@ -96,6 +97,14 @@ async function seedToday() {
     per100: { kcal: 100, proteinG: 3, carbsG: 15, fatG: 2 },
     createdAt: 1,
   });
+  await putWorkout({
+    id: 'p1',
+    date: today,
+    type: 'Promenad',
+    durationMin: 30,
+    status: 'genomford',
+    createdAt: 1,
+  });
   await putPhotoSession({ id: 's1', date: today, createdAt: 1 });
   await putPhoto({
     id: 'p1',
@@ -159,10 +168,18 @@ describe('funktionsbrytare', () => {
   async function observe(off: FeatureId[]) {
     await seedToday();
     await renderAt('', off);
-    const today = within(await screen.findByTestId('today-card'))
-      .getAllByRole('term')
-      .map((dt) => dt.textContent);
-    const calorieCard = screen.queryByRole('heading', { name: 'Kalorimål' }) !== null;
+    // Idag: ringarnas bildtexter och chipsen för steg och träning (bara med data idag).
+    const card = await screen.findByTestId('today-card');
+    const chips = { 'today-steg': 'Steg', 'today-traning': 'Träning' } as const;
+    const today = [
+      ...Array.from(card.querySelectorAll('.ring-link'), (el) => el.textContent),
+      ...Object.entries(chips)
+        .filter(([id]) => within(card).queryByTestId(id) !== null)
+        .map(([, label]) => label),
+    ];
+    // Kaloriringen öppnar kalorimålet (tidigare ett eget kort).
+    const calorieCard =
+      screen.queryByRole('button', { name: 'Kalorier – visa kalorimålet' }) !== null;
     // Kalorier och protein visas som ringar i Idag.
     const rings = screen.queryByTestId('protein-ring') !== null;
     const nav = navLabels();
@@ -225,7 +242,7 @@ describe('funktionsbrytare', () => {
   it('allt påslaget: alla vyer visar steg, midja, mat och bilder', async () => {
     const v = await observe([]);
     expect(v.nav).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
-    expect(v.today).toEqual(['Dryck', 'Steg', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Kalorier', 'Protein', 'Steg', 'Träning']);
     expect(v.calorieCard).toBe(true);
     expect(v.rings).toBe(true);
     expect(v.tiles).toEqual([
@@ -238,7 +255,7 @@ describe('funktionsbrytare', () => {
     expect(v.tabs).toEqual(['Historik', 'Bilder']);
     expect(v.history).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
     expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Dryck', 'Träning', 'Bilder']);
-    expect(v.day).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder']);
+    expect(v.day).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Bilder', 'Promenad · 30 min']);
     expect(v.matPage).toBe('Mat');
     expect(v.bilderTab).toBe(true);
   });
@@ -251,7 +268,7 @@ describe('funktionsbrytare', () => {
       'log-tile-vatten',
       'log-tile-traning',
     ]);
-    expect(v.today).toEqual(['Dryck', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Kalorier', 'Protein', 'Träning']);
     expect(v.history).not.toContain('Steg');
     expect(v.history).toContain('Midjemått');
     expect(v.legend).not.toContain('Steg');
@@ -267,7 +284,7 @@ describe('funktionsbrytare', () => {
       'log-tile-vatten',
       'log-tile-traning',
     ]);
-    expect(v.today).toEqual(['Dryck', 'Steg', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Kalorier', 'Protein', 'Steg', 'Träning']);
     expect(v.history).not.toContain('Midjemått');
     expect(v.history).toContain('Steg');
     expect(v.legend).not.toContain('Midja');
@@ -292,13 +309,13 @@ describe('funktionsbrytare', () => {
     expect(v.bilderTab).toBe(false);
     expect(v.legend).not.toContain('Bilder');
     expect(v.day).not.toContain('Bilder');
-    expect(v.today).toEqual(['Dryck', 'Steg', 'Träning']);
+    expect(v.today).toEqual(['Dryck', 'Kalorier', 'Protein', 'Steg', 'Träning']);
   });
 
   it('vatten och träning av: döljs i Logga, Översikt, Kalender och historik', async () => {
     const v = await observe(['vatten', 'traning']);
     expect(v.tiles).toEqual(['log-tile-vikt', 'log-tile-midja', 'log-tile-steg']);
-    expect(v.today).toEqual(['Steg']);
+    expect(v.today).toEqual(['Kalorier', 'Protein', 'Steg']);
     expect(v.rings).toBe(true);
     expect(screen.queryByTestId('water-ring')).not.toBeInTheDocument();
     expect(v.history).not.toContain('Dryck');

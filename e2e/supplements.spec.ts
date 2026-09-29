@@ -356,12 +356,13 @@ test('bocka av tillskott på Översikt, summering mat + tillskott och UL-varning
     ],
   });
 
-  const card = page.getByTestId('supplements-today');
-  await expect(card).toContainText('0 av 2');
-  const vitaminD = card.getByRole('button', { name: 'D-vitamin forte' });
-  await vitaminD.tap();
-  await expect(vitaminD).toHaveAttribute('aria-pressed', 'true');
-  await expect(card).toContainText('1 av 2');
+  // Översikt → Att göra idag: en rad per otaget tillskott; tryck = tagen.
+  const todo = page.getByTestId('todo-card');
+  const rows = todo.getByTestId('todo-supplement');
+  await expect(rows).toHaveCount(2);
+  await rows.filter({ hasText: 'D-vitamin forte' }).getByRole('button').tap();
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText('Järn');
 
   // 4 000 IE = 100 µg + 22,5 µg från laxen > 100 µg → varning samma dag.
   const warning = page.getByTestId('ul-warning');
@@ -370,16 +371,16 @@ test('bocka av tillskott på Översikt, summering mat + tillskott och UL-varning
   await expect(warning).toContainText('D-vitamin forte (tillskott) 100 µg');
   await expect(warning).toContainText('Lax ugnsbakad (mat) 22,5 µg');
 
-  // Ångra en avbockning: tryck igen.
-  await vitaminD.tap();
-  await expect(vitaminD).toHaveAttribute('aria-pressed', 'false');
+  // Ångra i kvittensen: raden kommer tillbaka och varningen försvinner.
+  await page.getByTestId('supplement-toast').getByRole('button', { name: 'Ångra' }).tap();
+  await expect(rows).toHaveCount(2);
   await expect(page.getByTestId('ul-warning')).toHaveCount(0);
 
-  // "Alla tagna" bockar av båda med ett tryck.
-  await card.getByRole('button', { name: 'Alla tagna' }).tap();
-  await expect(card).toContainText('2 av 2');
-  await expect(card.getByRole('button', { name: 'Alla tagna' })).toBeDisabled();
-  expect((await dump(page)).supplementLog).toHaveLength(2);
+  // "Alla tagna" bockar av båda med ett tryck; raderna försvinner.
+  await todo.getByTestId('todo-all-taken').tap();
+  await expect(rows).toHaveCount(0);
+  await expect(todo.getByTestId('todo-all-taken')).toHaveCount(0);
+  await expect.poll(async () => (await dump(page)).supplementLog).toHaveLength(2);
 
   // Näring: mat och tillskott per ämne mot RI, varningen och notisen om saknad data.
   await warning.getByRole('link', { name: 'Visa näring' }).tap();

@@ -1,7 +1,8 @@
 /**
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
  * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
- * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort och rapportens val. Lagras i `settings`
+ * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort, rapportens val och vad Översikt
+ * döljer (ringar och kort) samt senast stängda milstolpekortet. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
@@ -31,6 +32,10 @@ export interface Preferences {
   report: ReportSettings;
   /** Instruktionen för "Spara som PDF" har visats. */
   reportPrintHintSeen: boolean;
+  /** Ringar och kort som är dolda på Översikt (`OVERVIEW_ITEMS`, Inställningar → Översikt). */
+  overviewHidden: readonly string[];
+  /** Id för milstolpen vars kort på Översikt senast stängdes. */
+  milestoneCardDismissed: string | null;
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -47,6 +52,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   plateauDismissed: null,
   report: DEFAULT_REPORT_SETTINGS,
   reportPrintHintSeen: false,
+  overviewHidden: [],
+  milestoneCardDismissed: null,
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -75,6 +82,11 @@ export function parsePreferences(raw: unknown): Preferences {
     plateauDismissed: typeof stored.plateauDismissed === 'string' ? stored.plateauDismissed : null,
     report: parseReportSettings(stored.report),
     reportPrintHintSeen: stored.reportPrintHintSeen === true,
+    overviewHidden: Array.isArray(stored.overviewHidden)
+      ? stored.overviewHidden.filter((id): id is string => typeof id === 'string')
+      : [],
+    milestoneCardDismissed:
+      typeof stored.milestoneCardDismissed === 'string' ? stored.milestoneCardDismissed : null,
   };
 }
 

@@ -26,8 +26,8 @@ import {
 const NO_LOG: readonly never[] = [];
 
 /**
- * Framsteg → Veckor: en rad per avslutad vecka med data, senaste först (vecka, datum,
- * loggade dagar, trendens förändring). Tryck = hela summeringen i en panel, med "Fråga AI".
+ * Framsteg → Veckor: en rad per avslutad vecka med data, senaste först (vecka, datum, snittvikt
+ * (tidigare "Snitt per vecka" på Översikt), loggade dagar, trendens förändring). Veckor utan data visas inte. Tryck = hela summeringen i en panel, med "Fråga AI".
  */
 export function Veckor() {
   const { data } = useAppData();
@@ -63,7 +63,11 @@ export function Veckor() {
                 primary={weekName(summary)}
                 secondary={
                   <Parts
-                    text={`${weekRange(summary)} · loggat ${String(summary.loggedDays)} av 7 dagar${change == null ? ' · ingen vägning' : ''}`}
+                    text={`${weekRange(summary)} · ${
+                      summary.averageKg == null
+                        ? 'ingen vägning'
+                        : `snitt ${formatKg(summary.averageKg)}`
+                    } · loggat ${String(summary.loggedDays)} av 7 dagar`}
                   />
                 }
                 value={
