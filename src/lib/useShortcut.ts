@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useState } from 'react';
 import { addWater, undoLastWater } from '../db/db.ts';
 import { todayIso } from './dates.ts';
 import { isEnabled, setFeature, type FeatureFlags, type Features } from './features.ts';
+import { navigate, replaceUrl } from './navigation.ts';
 import { parseShortcut, shortcutOutcome, withoutAction, type Shortcut } from './shortcuts.ts';
 
 export type ShortcutToastState =
@@ -19,19 +20,12 @@ function takeShortcut(): Shortcut | null {
   consumed = true;
   const { pathname, search, hash } = window.location;
   const shortcut = parseShortcut(search);
-  if (shortcut) window.history.replaceState(null, '', withoutAction(pathname, search, hash));
+  if (shortcut) replaceUrl(withoutAction(pathname, search, hash));
   return shortcut;
 }
 
 export function resetShortcutForTests(): void {
   consumed = false;
-}
-
-/** Byter hash utan ny historikpost och meddelar useHashRoute direkt. */
-function navigate(hash: string): void {
-  const { pathname, search } = window.location;
-  window.history.replaceState(null, '', `${pathname}${search}${hash}`);
-  window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
 export interface ShortcutState {

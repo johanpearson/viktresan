@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { Celebration } from '../lib/celebration.ts';
 import { fireConfetti } from '../lib/confetti.ts';
 import { formatDate } from '../lib/format.ts';
+import { useOverlay } from '../lib/navigation.ts';
 import { GoalReachedActions } from './GoalReachedActions.tsx';
 
 interface CelebrationOverlayProps {
@@ -18,6 +19,10 @@ export function CelebrationOverlay({ celebration, onClose }: CelebrationOverlayP
   const dialogRef = useRef<HTMLDialogElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { milestone } = celebration;
+  // Bakåt stänger firandet.
+  useOverlay(() => {
+    if (dialogRef.current?.open) close();
+  });
 
   useEffect(() => {
     const dialog = dialogRef.current;

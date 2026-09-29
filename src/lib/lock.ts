@@ -8,6 +8,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { SETTING_LOCK, deleteSetting, getSetting, setSetting } from '../db/db.ts';
+import { abandonOverlays } from './navigation.ts';
 
 export type LockStatus = 'loading' | 'off' | 'locked' | 'unlocked';
 
@@ -149,7 +150,11 @@ export async function unlock(): Promise<void> {
 }
 
 export function lockNow(): void {
-  if (config && status === 'unlocked') setStatus('locked');
+  if (!config || status !== 'unlocked') return;
+  // Appen döljs bakom låsskärmen: öppna paneler försvinner men deras poster väntar på
+  // upplåsningen (en panel från en delsökväg öppnas igen och tar över sin post).
+  abandonOverlays();
+  setStatus('locked');
 }
 
 /** Lås när appen går i bakgrunden (byter app, släcker skärmen, byter flik). */

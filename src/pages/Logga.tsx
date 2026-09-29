@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react';
+import { useLayoutEffect, useState, type ComponentType } from 'react';
 import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Glp1Log } from '../components/Glp1Log.tsx';
 import { Page } from '../components/Page.tsx';
@@ -21,6 +21,7 @@ import {
 } from '../lib/format.ts';
 import { nextDose } from '../lib/glp1.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
+import { consumeSubPath } from '../lib/navigation.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
 import { drinkOn, waterGoal } from '../lib/water.ts';
 import { supplementStatus } from '../lib/supplements.ts';
@@ -169,13 +170,19 @@ export function Logga() {
   const features = useFeatures();
   const { sub } = useHashRoute();
   const types = features.filter(LOG_TYPES);
-  // "#/logga/glp1" öppnar panelen direkt (t.ex. från dosdagsbannern på Översikt).
-  const [first = '', ...rest] = sub.split('/');
-  const [openId, setOpenId] = useState<LogTypeId | null>(
-    () => types.find((t) => t.id === first)?.id ?? null,
-  );
-  const [openSub] = useState(() => rest.join('/'));
+  // "#/logga/glp1" öppnar panelen direkt (t.ex. från dosdagsbannern på Översikt). Resten
+  // (t.ex. "ean/7310…" för Tillskott) går till panelens formulär.
+  const [initial] = useState(() => {
+    const [first = '', ...rest] = sub.split('/');
+    return { id: types.find((t) => t.id === first)?.id ?? null, sub: rest.join('/') };
+  });
+  const [openId, setOpenId] = useState<LogTypeId | null>(initial.id);
   const open = types.find((t) => t.id === openId);
+  // Delsökvägen öppnade en panel: sidans post blir "#/logga", panelens post behåller den.
+  const opensPanel = initial.id !== null;
+  useLayoutEffect(() => {
+    if (opensPanel) consumeSubPath('#/logga');
+  }, [opensPanel]);
 
   return (
     <Page title="Logga">
@@ -220,12 +227,12 @@ export function Logga() {
       {data && open && (
         <BottomSheet
           title={open.title}
+          key={open.id}
           onClose={() => {
             setOpenId(null);
-            if (sub) window.history.replaceState(null, '', '#/logga');
           }}
         >
-          <open.Form data={data} reload={reload} sub={open.id === first ? openSub : ''} />
+          <open.Form data={data} reload={reload} sub={open.id === initial.id ? initial.sub : ''} />
         </BottomSheet>
       )}
     </Page>

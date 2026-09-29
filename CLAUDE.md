@@ -39,6 +39,8 @@ src/main.tsx            Startpunkt; anropar navigator.storage.persist(), lindar 
 src/App.tsx             Layout: header, aktiv sida, uppdateringstoast, bottennavigering
 src/routes.ts           Route-tabell (id, hash-path, svensk etikett, ev. funktion), gamla adresser
 src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore → { route, sub }
+src/lib/navigation.ts   Historiken/bakåtknappen: stackregler (chainFor, planNavigation), navigate(), useOverlay() för paneler
+                        och dialoger, consumeSubPath(), "Kasta ändringar?" (DiscardPrompt), omladdning/lås (abandonOverlays)
 src/lib/features.ts     Funktionsbrytare: FEATURES, useFeatures() (filter/isEnabled), lagras i settings
 src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt veckokort, profilsida, spökbild), usePreferences()
 src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
@@ -121,7 +123,7 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck),
                         PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·"),
                         ChoiceList (valrader i stället för radioknappar), ChipGroup (val som chips),
-                        Macros ("P 6 g · K 30 g · F 2 g · Fi 4 g" i matloggningen)
+                        Macros ("P 6 g · K 30 g · F 2 g · Fi 4 g" i matloggningen), DiscardPrompt ("Kasta ändringar?")
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
@@ -132,7 +134,8 @@ docs/ui-audit.md        UI-granskningen per vy med prioritet och ordning för kv
 src/pages/              En komponent per sektion: Översikt, Logga (rutnät → bottom sheet), Mat
                         (Dag | Egna | Historik | Näring som segment i rubriken; `#/mat/logga` = sök-sheeten), Kalender (Månad | Vecka i rubriken, förklaringen hopfälld,
                         dagsvyn = CalendarDay), Framsteg (Historik | Veckor | Bilder | Milstolpar | Rapport; `Rapport.tsx`), Inställningar
-e2e/                    Playwright-tester. fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
+e2e/                    Playwright-tester. navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
+                        flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
@@ -157,6 +160,19 @@ public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), 
   `lagring`, `om`) öppnar panelen direkt.
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
+- **Bakåtknappen** (`navigation.ts`, all historik går därigenom – inga egna `pushState`/`location.hash =`): historiken
+  speglar hierarkin Översikt (rot, djup 0) → flik (1) → undervy (2, `Route.subviews`, t.ex. `rapport/visa`) → överlägg.
+  Interna länkar (`href="#/…"`) fångas globalt och går till `navigate()`: flikbyte från Översikt = ny post, mellan andra
+  flikar (och Framstegs flikar) = ersätt, Översikt = tillbaka till roten. Bakåt på Översikt lämnar appen. Postens
+  `history.state.viktresanNav` = `{ depth, page }`. Överlägg (`BottomSheet`, skanner, kamera, bildvisning, firande) anropar
+  `useOverlay(close)`: ny post med samma adress, popstate stänger; stängs de på annat sätt (knapp, svep, sparat) tas posten
+  bort med `history.go(-n)` (samlat i en mikrouppgift; ett överlägg som öppnas direkt efter tar över posten). Nästlade
+  överlägg får nivå via `OverlayLevel`. En delsökväg som öppnar en panel (`#/logga/vikt`, `#/mat/logga`, `#/mat/ean/…`,
+  `#/installningar/<panel>`, `#/framsteg/bilder/jamfor`) konsumeras av sidan (`consumeSubPath`): sidans post blir
+  `#/logga` och panelens post behåller delsökvägen. Djuplänk/genväg vid start: posten blir `#/` och målet läggs ovanpå.
+  Omladdning (ny version) och lås lägger inga poster: överläggens poster blir lediga platser som en panel som öppnas igen
+  tar över, annars tas de bort efter 2 s (`pruneOrphansSoon` när `App` monteras). Osparade ändringar: `BottomSheet`
+  följer `input`/`change` i sina formulär (inte sökfält/filval) tills `submit`; bakåt (eller Esc) ger då "Kasta ändringar?".
 - **Funktionsbrytare** (`features.ts`, Inställningar → Funktioner): steg, midja, mat, vatten,
   träning, glp1, tillskott, bilder. Lagras i `settings` under `features` med `version` (`FLAGS_VERSION`);
   lagrade värden för en funktion från före dess `availableSince` ignoreras (de var alltid "av"). Avstängd = dold överallt, datan

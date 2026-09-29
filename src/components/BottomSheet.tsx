@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { prefersReducedMotion } from '../lib/motion.ts';
+import { OverlayLevel, requestDiscard, useOverlay } from '../lib/navigation.ts';
 
 interface BottomSheetProps {
   title: string;
@@ -17,6 +18,9 @@ const CLOSE_MS = 150;
  * Esc, "Stäng" eller ett tryck utanför stänger den. Öppnas (200 ms) och stängs
  * (150 ms, glider ner och tonar ut) med en kort övergång; ingen vid prefers-reduced-motion. Innehållet
  * ligger direkt på panelen – kort inne i en panel ritas utan egen ram.
+ *
+ * Panelen har en egen post i historiken (`useOverlay`): bakåt stänger den. Har något formulär i
+ * panelen ändrats sedan det senast skickades frågar bakåt (och Esc) "Kasta ändringar?" först.
  */
 export function BottomSheet({ title, onClose, full = false, children }: BottomSheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -25,12 +29,61 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
   const titleId = useId();
   // Rubrikraden får en linje när innehållet scrollats under den (som sidhuvudet).
   const [stuck, setStuck] = useState(false);
+  // Formulär i panelen (inte i nästlade paneler) med ändringar som inte skickats.
+  const dirtyForms = useRef(new Set<HTMLFormElement>());
+
+  function isDirty(): boolean {
+    const dialog = dialogRef.current;
+    return [...dirtyForms.current].some((f) => f.isConnected && f.closest('dialog') === dialog);
+  }
+
+  const childLevel = useOverlay(
+    () => {
+      if (dialogRef.current?.open) close();
+    },
+    { dirty: isDirty },
+  );
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog || dialog.open) return;
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
+  }, []);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const forms = dirtyForms.current;
+    function ownForm(target: EventTarget | null): HTMLFormElement | null {
+      if (!(target instanceof Element) || target.closest('dialog') !== dialog) return null;
+      return target instanceof HTMLFormElement ? target : target.closest('form');
+    }
+    function onInput(event: Event) {
+      const target = event.target;
+      // Sökfält och filval är inga ändringar att förlora.
+      if (
+        target instanceof HTMLInputElement &&
+        (target.type === 'search' || target.type === 'file')
+      )
+        return;
+      const form = ownForm(target);
+      if (form) forms.add(form);
+    }
+    function onSubmit(event: Event) {
+      const form = ownForm(event.target);
+      if (form) forms.delete(form);
+    }
+    dialog.addEventListener('input', onInput);
+    dialog.addEventListener('change', onInput);
+    dialog.addEventListener('submit', onSubmit);
+    dialog.addEventListener('reset', onSubmit);
+    return () => {
+      dialog.removeEventListener('input', onInput);
+      dialog.removeEventListener('change', onInput);
+      dialog.removeEventListener('submit', onSubmit);
+      dialog.removeEventListener('reset', onSubmit);
+    };
   }, []);
 
   function close() {
@@ -74,6 +127,12 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
       className={full ? 'sheet sheet-full' : 'sheet'}
       ref={dialogRef}
       aria-labelledby={titleId}
+      onCancel={(e) => {
+        // Esc, och Androids bakåt när webbläsaren låter den stänga dialogen direkt.
+        if (e.target !== e.currentTarget || !isDirty()) return;
+        e.preventDefault();
+        requestDiscard(close);
+      }}
       onClose={(e) => {
         // React låter close bubbla genom komponentträdet: en radmeny som stängs ovanpå
         // panelen ska inte stänga panelen.
@@ -98,7 +157,7 @@ export function BottomSheet({ title, onClose, full = false, children }: BottomSh
             Stäng
           </button>
         </div>
-        {children}
+        <OverlayLevel value={childLevel}>{children}</OverlayLevel>
       </div>
     </dialog>
   );
