@@ -578,9 +578,20 @@ filter. Samma knapp (`ShowMore`) används för "Visa alla N obesvarade" på Öve
 - **Uppdelad stapel** (`ProgressBar segments`): delarna (`{ fraction, tone }`, andel av målet) ritas kant i kant
   i sina datafärger och kapas tillsammans vid 100 %. Används i Mat → Näring för mat (`food`) + tillskott
   (`supplement`) mot referensintaget, med en liten förklaring (`bar-legend`) överst i kortet.
-- `GoalRing`: 96 px, `tone`, värde i mitten och "av …" under. Tre ringar på en rad (dryck, kalorier,
-  protein) med bildtext under. På Översikt är ringen tryckbar via `RingAction`. Med fibermålet blir det fyra: `.rings-4` ger fyra lika breda kolumner där ringarna
-  krymper med skärmen (högst 96 px) och värdet får `--text-sm` – aldrig två rader ringar.
+- `GoalRing`: 96 px (`size="lg"` = 120 px, ensam ring i en panel), `tone`, siffran i mitten med enheten i mindre
+  stil (`valueUnit`, 0,8 × siffran, halvfet) och "av …" under. Tre ringar på en rad (dryck, kalorier, protein) med
+  bildtext under. På Översikt är ringen tryckbar via `RingAction`. Med fibermålet blir det fyra: `.rings-4` ger fyra
+  lika breda kolumner där ringarna krymper med skärmen (högst 96 px, raden får gå ut `--space-2` i kortets marginal)
+  och värdet utgår från `--text-sm` – aldrig två rader ringar.
+- **Text i ringar** (regel): texten ska alltid rymmas inom ringens inre cirkel med marginal. Ringar ligger alltid i
+  en `RingRow`, som mäter texten (`useRingFit`) och räknar ut en skala (`ringFit.ts`): varje textrads hörn ska ligga
+  inom den inre radien (radie 38 av 96 minus 2 px). Skalan är **samma för alla ringar i raden**, styrd av den ring
+  som behöver krympa mest, och sätts som `--ring-scale`. Ingen text går under `--ring-text-min` (11 px) – siffran
+  stannar där enheten når min-storleken. Ryms texten ändå inte (extrema värden på mycket smala skärmar) beskärs den
+  av den inre cirkeln i stället för att gå utanför ringen.
+- **Kortformat i ringar**: dryck i liter med en decimal ("1,8 l", "av 2,5"; `formatLiters`), kalorier utan enhet
+  (bildtexten säger "Kalorier"), protein och fiber i gram ("188 g", "av 210 g"). Skärmläsare får exakta värden
+  (`valueText`, t.ex. "2 450 ml av 2 500 ml"); exakta ml visas i dryckespanelen och historiken.
 - **Fibermål** i Mat → Dag och Mat → Historik: kalori-`StatBar` över hela bredden och protein + fiber bredvid varandra
   under (`totals-row-fiber`). Under ringen/staplarna en `FiberNote` (`form-note`): "Veckans fibermål: 21 g (mål 35 g)"
   under upptrappningen och, dämpat, "Dagens fiber kan vara i underkant – 2 poster saknar fiberdata." Ingen varningsfärg.

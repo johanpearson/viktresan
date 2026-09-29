@@ -1,6 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { collectErrors, seed } from './helpers.ts';
-import { FROZEN_NOW, LIVSMEDEL, TODAY, VISUAL_DATA, WEEKLY_EXTRA } from './visualData.ts';
+import {
+  FROZEN_NOW,
+  LIVSMEDEL,
+  TODAY,
+  VISUAL_DATA,
+  WEEKLY_EXTRA,
+  WORST_CASE_RINGS,
+} from './visualData.ts';
 
 /**
  * Visuella regressionstester: varje vy och de viktigaste panelerna i ljust och
@@ -505,6 +512,22 @@ for (const theme of ['light', 'dark'] as const) {
         fullPage: true,
         maxDiffPixelRatio: 0.002,
       });
+    });
+
+    test('ringar: värsta fallet på Pixel 7 och 360 px', async ({ page }) => {
+      // Långa värden i alla fyra ringar samtidigt; egen databas (inte VISUAL_DATA).
+      await page.clock.setFixedTime(new Date(FROZEN_NOW));
+      await page.goto('./');
+      await seed(page, WORST_CASE_RINGS);
+      await page.reload();
+      await page.evaluate(() => document.fonts.ready);
+      const card = page.getByTestId('today-card');
+      await expect(card.locator('.goal-ring')).toHaveCount(4);
+      await expect(card).toHaveScreenshot(`${theme}-ringar-pixel7.png`, {
+        maxDiffPixelRatio: 0.002,
+      });
+      await page.setViewportSize({ width: 360, height: 800 });
+      await expect(card).toHaveScreenshot(`${theme}-ringar-360.png`, { maxDiffPixelRatio: 0.002 });
     });
 
     test('fibermål och dryck med GLP-1', async ({ page }) => {

@@ -22,6 +22,7 @@
   --text-md: 1rem; /* 16 px – brödtext, radrubriker */
   --text-lg: 1.25rem; /* 20 px – kortrubriker, nyckeltal */
   --text-xl: 1.75rem; /* 28 px – sidrubrik, huvudsiffra */
+  --ring-text-min: 0.6875rem; /* 11 px – minsta text i en ring (GoalRing krymper hit, inte längre) */
   --leading-tight: 1.2;
 
   /* Radier */
@@ -2266,6 +2267,11 @@ a.button {
   min-width: 0;
 }
 
+.water-controls {
+  flex: 1;
+  min-width: 0;
+}
+
 .water-ring {
   position: relative;
   flex: none;
@@ -2507,7 +2513,8 @@ a.button {
   align-items: baseline;
 }
 
-/* Mål-ringar: kalorier och protein (Översikt → Idag, Mat → Dag) */
+/* Mål-ringar (Översikt → Idag, Logga → Dryck). Texten krymps av `RingRow` (useRingFit) så att den
+   ryms inom ringens inre cirkel: --ring-scale är samma för hela raden, aldrig under --ring-text-min. */
 .rings {
   display: flex;
   justify-content: space-around;
@@ -2529,10 +2536,17 @@ a.button {
 }
 
 .goal-ring {
+  --ring-value-size: var(--text-md);
   position: relative;
   flex: none;
   width: 96px;
   height: 96px;
+}
+
+.goal-ring-lg {
+  --ring-value-size: var(--text-lg);
+  width: 120px;
+  height: 120px;
 }
 
 .goal-ring svg {
@@ -2547,25 +2561,45 @@ a.button {
   stroke: var(--tone, var(--accent));
 }
 
+/* Textytan är ringens inre cirkel (radie 38 av 48 i viewBox): skulle texten ändå inte rymmas
+   (extrema värden på en mycket smal skärm) beskärs den i stället för att gå utanför ringen. */
 .goal-ring-text {
   position: absolute;
-  inset: 0;
+  inset: calc(100% * 10 / 96);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-full);
   text-align: center;
-  line-height: 1.15;
+  line-height: 1;
+}
+
+.goal-ring-line {
+  white-space: nowrap;
 }
 
 .goal-ring-value {
+  font-size: max(
+    calc(var(--ring-text-min) / 0.8),
+    calc(var(--ring-value-size) * var(--ring-scale, 1))
+  );
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
+/* Enheten ("g", "l") i mindre stil än siffran; 0,8 = RING_UNIT_RATIO i ringFit.ts. */
+.goal-ring-unit {
+  margin-left: 0.15em;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
 .goal-ring-goal {
   color: var(--muted);
-  font-size: var(--text-xs);
+  font-size: max(var(--ring-text-min), calc(var(--text-xs) * var(--ring-scale, 1)));
+  font-variant-numeric: tabular-nums;
 }
 
 /* Proteinrikt/fiberrikt livsmedel (sökträffar, favoriter) */
@@ -4705,9 +4739,12 @@ p.plateau-reasons {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-1);
+  /* Raden får gå ut i kortets marginal så att ringarna (och texten i dem) blir större. */
+  margin-inline: calc(-1 * var(--space-2));
 }
 
 .rings-4 .goal-ring {
+  --ring-value-size: var(--text-sm);
   width: 100%;
   max-width: 96px;
   height: auto;
@@ -4717,10 +4754,6 @@ p.plateau-reasons {
 .rings-4 .goal-ring svg {
   width: 100%;
   height: 100%;
-}
-
-.rings-4 .goal-ring-value {
-  font-size: var(--text-sm);
 }
 
 .fiber-note {

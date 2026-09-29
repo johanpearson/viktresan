@@ -11,6 +11,7 @@ import {
   formatInt,
   formatShortDate,
   formatKg,
+  formatLiters,
   parseDecimal,
   stepKg,
 } from './format.ts';
@@ -55,6 +56,16 @@ describe('format', () => {
     expect(stepKg(80.1, 0.1)).toBe(80.2);
     expect(stepKg(80.3, -0.1)).toBe(80.2);
     expect(stepKg(0.2, 0.1)).toBe(0.3);
+  });
+});
+
+describe('formatLiters', () => {
+  it('visar liter med en decimal och decimalkomma', () => {
+    expect(formatLiters(1800)).toBe('1,8');
+    expect(formatLiters(2450)).toBe('2,5');
+    expect(formatLiters(2000)).toBe('2,0');
+    expect(formatLiters(0)).toBe('0,0');
+    expect(formatLiters(12_340)).toBe('12,3');
   });
 });
 

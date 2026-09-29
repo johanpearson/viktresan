@@ -134,6 +134,16 @@ export function formatMl(value: number): string {
   return `${formatInt(Math.round(value))} ml`;
 }
 
+const literFormat = new Intl.NumberFormat('sv-SE', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+/** Milliliter som liter med en decimal, utan enhet (ringarna): 1800 → "1,8", 2450 → "2,5". */
+export function formatLiters(ml: number): string {
+  return normalizeSpaces(literFormat.format(Math.round(ml / 100) / 10));
+}
+
 const mgFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 });
 
 /** 0.25 → "0,25 mg", 2.4 → "2,4 mg". */
