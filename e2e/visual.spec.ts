@@ -413,6 +413,8 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(sheet.getByTestId('suggestion').first()).toBeVisible();
       await shot(page, `${theme}-sheet-mat-foresla`, false);
       await close();
+      // Vänta tills panelen tonat ut – annars syns den bakom menyn i nästa bild.
+      await expect(sheet).toHaveCount(0);
 
       await page.getByRole('button', { name: 'Fler val för lunch' }).tap();
       await shot(page, `${theme}-sheet-mat-meny`, false);
