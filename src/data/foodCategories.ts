@@ -13,7 +13,8 @@
  * Kategorin bestäms (se `foodProfile` i `src/lib/units.ts`) av, i tur och ordning:
  * 1. en regel för livsmedlet i `src/data/units.ts`,
  * 2. namnmönster i `CATEGORY_RULES` (mot det normaliserade namnet),
- * 3. Livsmedelsverkets livsmedelsgrupp via `GROUP_RULES`,
+ * 3. livsmedelsgruppen: Livsmedelsverkets via `GROUP_RULES`, Finelis
+ *    användningsklass via `FINELI_CLASSES` (fineliCategories.ts),
  * 4. annars `ovrigt`.
  * Namnen går före gruppen eftersom grupperna är breda ("Mjölk och mjölkprodukter"
  * rymmer både mjölk, fil och grädde).

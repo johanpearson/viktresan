@@ -12,6 +12,10 @@ test.use({ serviceWorkers: 'block', locale: 'sv-SE', timezoneId: 'Europe/Stockho
 async function openReport(page: Page) {
   await page.clock.setFixedTime(new Date(FROZEN_NOW));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   // Räkna utskrifter i stället för att öppna dialogen.
   await page.addInitScript(() => {
     (window as unknown as { __prints: number }).__prints = 0;

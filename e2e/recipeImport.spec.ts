@@ -80,6 +80,10 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
   });
   await page.clock.setFixedTime(new Date(`${WEDNESDAY}T18:30:00`));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, {
     profile: { startDate: '2026-09-01', startWeightKg: 90, heightCm: 180, goalWeightKg: 80 },
@@ -237,6 +241,10 @@ test('delning med avstängd Mat erbjuder att slå på den', async ({ page }) => 
   await expect(toast).toContainText('Mat är avstängt');
   await expect(toast).toContainText('Importera recept');
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await toast.getByRole('button', { name: 'Slå på Mat' }).tap();
   await expect(importSheet(page)).toBeVisible();
   await expect(importSheet(page).getByTestId('recipe-input')).toHaveValue(RECIPE_URL);

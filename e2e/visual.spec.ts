@@ -45,6 +45,10 @@ function masks(scope: Page | Locator): Locator[] {
 async function open(page: Page, hash: string) {
   await page.clock.setFixedTime(new Date(FROZEN_NOW));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, VISUAL_DATA);
   // Läs om så att funktionsbrytare och inställningar läses från den seedade datan.
@@ -181,7 +185,11 @@ for (const theme of ['light', 'dark'] as const) {
     });
 
     test('receptimport: granskning', async ({ page }) => {
-      await open(page, '#/mat/importera');
+      // Panelen öppnas efter omladdningen i open() – en djuplänk före den hinner ibland
+      // konsumeras (#/mat) innan sidan laddas om, och då öppnas ingen panel.
+      await open(page, '#/mat');
+      await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+      await page.getByRole('button', { name: /^Importera recept/ }).tap();
       const sheet = page.getByRole('dialog', { name: 'Importera recept' });
       await sheet.getByTestId('recipe-input').fill('https://www.ica.se/recept/gryta-1/');
       await sheet.getByLabel('AI-tjänstens svar (JSON)').fill(
@@ -562,6 +570,10 @@ for (const theme of ['light', 'dark'] as const) {
       // Mellanmål 12 poster 1 234 kcal, Lunch 85 kcal, tom Middag; egen databas (inte VISUAL_DATA).
       await page.clock.setFixedTime(new Date(FROZEN_NOW));
       await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+      // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+      await page.route('**/fineli.json', (route) =>
+        route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+      );
       await page.goto('./');
       await seed(page, MEAL_HEADERS);
       await page.goto('./#/mat');

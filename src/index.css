@@ -2627,6 +2627,14 @@ a.button {
   font-weight: 400;
 }
 
+/* Sökträffar: källan (LV, Fineli, OFF, Egen) före energin, dämpad ram och text */
+.tag-source {
+  margin: 0 6px 0 0;
+  border-color: var(--border);
+  color: var(--muted);
+  line-height: 1.3;
+}
+
 /* Receptimport: säkerhetsnivå per matchning (säker / osäker / ingen träff) */
 .tag-confidence {
   margin-left: 0;

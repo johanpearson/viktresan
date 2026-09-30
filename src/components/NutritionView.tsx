@@ -252,7 +252,7 @@ export function NutritionView({
         <p className="form-note muted">
           Referensintaget (RI) är EU:s värden för en genomsnittlig vuxen (förordning 1169/2011),
           samma som "% av RI" på förpackningar – inga personliga mål. Matens värden kommer från
-          Livsmedelsverkets livsmedelsdatabas.
+          Livsmedelsverkets livsmedelsdatabas och Fineli.
         </p>
         <p className="form-note muted">
           Varningarna bygger på{' '}

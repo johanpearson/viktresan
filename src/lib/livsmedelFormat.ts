@@ -1,4 +1,7 @@
-/** Filformatet för `public/livsmedel.json` (delas av appen och nedladdningsskriptet). */
+/**
+ * Filformatet för `public/livsmedel.json` (Livsmedelsverket) och `public/fineli.json`
+ * (Fineli) – delas av appen och nedladdningsskripten.
+ */
 import type { NutrientKey } from '../data/nutrients.ts';
 
 export const LIVSMEDEL_FORMAT = 'viktresan-livsmedel';
@@ -20,6 +23,8 @@ export interface LivsmedelFile {
   license: string;
   /** När datan hämtades (YYYY-MM-DD), `null` om filen är tom. */
   retrieved: string | null;
+  /** Källans version, när den har en (Fineli: "20.0"). */
+  version?: string;
   /** Näringsämnena i radernas åttonde kolumn (se `src/data/nutrients.ts`). */
   extra?: NutrientKey[];
   foods: CompactFood[];

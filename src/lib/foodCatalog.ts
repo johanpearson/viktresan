@@ -30,6 +30,7 @@ export function mealToItem(meal: SavedMeal): FoodItem {
 
 export function sourceOf(foodId: string): FoodSource {
   if (foodId.startsWith('lv:')) return 'livsmedelsverket';
+  if (foodId.startsWith('fi:')) return 'fineli';
   if (foodId.startsWith('off:')) return 'openfoodfacts';
   if (foodId.startsWith('maltid:')) return 'maltid';
   if (foodId.startsWith('recept:')) return 'recept';

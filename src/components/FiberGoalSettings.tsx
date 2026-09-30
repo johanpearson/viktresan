@@ -112,8 +112,8 @@ export function FiberGoalSettings({ data, onChange }: FiberGoalSettingsProps) {
         Referensvärde enligt {FIBER_REFERENCE_SOURCE}: minst {formatInt(FIBER_REFERENCE_G.man)} g
         per dag för män och {formatInt(FIBER_REFERENCE_G.kvinna)} g för kvinnor
         {current.sex ? '' : ' – ange kön i profilen, utan kön används 30 g'}. Fiber räknas för
-        livsmedel med fiberdata (Livsmedelsverket, Open Food Facts när värdet finns, egna livsmedel
-        där du fyllt i det) – snabbloggar räknas inte.
+        livsmedel med fiberdata (Livsmedelsverket, Fineli, Open Food Facts när värdet finns, egna
+        livsmedel där du fyllt i det) – snabbloggar räknas inte.
       </p>
     </div>
   );

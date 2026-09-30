@@ -29,6 +29,10 @@ async function launchStandalone(page: Page, path = './'): Promise<void> {
     };
   });
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto(path);
   expect(await page.evaluate(() => matchMedia('(display-mode: standalone)').matches)).toBe(true);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

@@ -53,6 +53,11 @@ test('appen fungerar i flygplansläge efter första laddningen', async ({ page, 
   const picker = page.getByRole('dialog', { name: 'Logga mat' });
   await picker.getByLabel('Sök livsmedel').fill('mjölk');
   await expect(picker.getByTestId('search-result').first()).toBeVisible();
+  // Fineli är bundlad och precachad på samma sätt.
+  await picker.getByLabel('Sök livsmedel').fill('karelsk pirog');
+  await expect(
+    picker.getByTestId('search-result').first().getByTestId('source-tag'),
+  ).toHaveAttribute('data-source', 'fineli');
   await picker.getByRole('button', { name: 'Stäng', exact: true }).tap();
   await page.getByRole('button', { name: 'Egna', exact: true }).tap();
   await page.getByRole('button', { name: 'Nytt livsmedel' }).tap();

@@ -15,6 +15,10 @@ const SLOTS = ['frukost', 'lunch', 'mellanmal'] as const;
 async function open(page: Page) {
   await page.clock.setFixedTime(new Date(FROZEN_NOW));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, MEAL_HEADERS);
   await page.goto('./#/mat');

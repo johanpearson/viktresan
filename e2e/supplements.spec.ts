@@ -107,6 +107,10 @@ async function mockOff(page: Page): Promise<string[]> {
 
 async function start(page: Page, hash: string, extra: Parameters<typeof seed>[1] = {}) {
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
+  // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
+  await page.route('**/fineli.json', (route) =>
+    route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
+  );
   await page.goto('./');
   await seed(page, { profile: PROFILE, settings: { features: FEATURES }, ...extra });
   await page.goto(`./${hash}`);
