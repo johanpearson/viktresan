@@ -19,6 +19,7 @@ import {
   AI_PLATEAU_TEMPLATE,
   AI_PROMPT_NO_CONTEXT,
   AI_PROMPT_TEMPLATE,
+  AI_SUGGEST_TEMPLATE,
 } from './aiPromptTemplate.ts';
 import {
   dailyIntake,
@@ -36,7 +37,7 @@ import { loggedAmountText } from './units.ts';
 export type AiOption =
   'personal' | 'body' | 'goal' | 'targets' | 'dayIntake' | 'content' | 'preferences' | 'glp1';
 
-export type AiScope = 'meal' | 'day' | 'week' | 'plateau';
+export type AiScope = 'meal' | 'day' | 'week' | 'plateau' | 'suggest';
 
 export interface AiOptionInfo {
   id: AiOption;
@@ -45,8 +46,8 @@ export interface AiOptionInfo {
   scopes: readonly AiScope[];
 }
 
-const ALL: readonly AiScope[] = ['meal', 'day', 'week', 'plateau'];
-const FOOD: readonly AiScope[] = ['meal', 'day', 'week'];
+const ALL: readonly AiScope[] = ['meal', 'day', 'week', 'plateau', 'suggest'];
+const FOOD: readonly AiScope[] = ['meal', 'day', 'week', 'suggest'];
 
 export const AI_OPTIONS: readonly AiOptionInfo[] = [
   { id: 'personal', label: 'Ålder och kön', scopes: ALL },
@@ -65,6 +66,7 @@ export function optionLabel(option: AiOptionInfo, scope: AiScope): string {
   if (scope === 'day') return 'Dagens mat';
   if (scope === 'week') return 'Veckans mat';
   if (scope === 'plateau') return 'Platåanalysen';
+  if (scope === 'suggest') return 'Kvar idag och vanliga livsmedel';
   return option.label;
 }
 
@@ -197,7 +199,17 @@ export type AiSubject =
       topFoods: { name: string; kcal: number }[];
     }
   /** Platåanalysen (plateau.ts) som färdiga rader. */
-  | { kind: 'plateau'; lines: string[] };
+  | { kind: 'plateau'; lines: string[] }
+  /** "Något nytt" i Föreslå: vad som är kvar idag, måltiden och det som brukar finnas hemma. */
+  | {
+      kind: 'suggest';
+      meal: MealSlot;
+      remaining: { kcal: number | null; proteinG: number | null; fiberG: number | null };
+      /** Måltidens typiska kcal (portionen förslagen ska ligga nära). */
+      typicalKcal: number;
+      /** De vanligaste livsmedlen de senaste 28 dagarna ("brukar finnas hemma"). */
+      homeFoods: string[];
+    };
 
 function promptItem(entry: FoodLogEntry, withMeal: boolean): PromptItem {
   const n = scaleNutrients(entry.per100, entry.grams);
@@ -265,6 +277,9 @@ function subjectText(subject: AiSubject): { long: string; short: string } {
   if (subject.kind === 'day')
     return { long: `min mat ${formatDayMonth(subject.date)}`, short: 'dagen' };
   if (subject.kind === 'plateau') return { long: 'min viktplatå', short: 'platån' };
+  if (subject.kind === 'suggest') {
+    return { long: `${mealLabel(subject.meal).toLowerCase()} idag`, short: 'måltiden' };
+  }
   return {
     long: `min mat veckan ${formatDayMonth(subject.from)}–${formatDayMonth(subject.to)}`,
     short: 'veckan',
@@ -275,8 +290,29 @@ function kcalProtein(n: { kcal: number; proteinG: number }): string {
   return `${formatKcal(n.kcal)}, ${formatInt(Math.round(n.proteinG))} g protein`;
 }
 
+/** "640 kcal, 45 g protein och 12 g fiber" – bara kända värden, aldrig under 0. */
+function remainingText(r: { kcal: number | null; proteinG: number | null; fiberG: number | null }) {
+  const parts: string[] = [];
+  if (r.kcal !== null) parts.push(formatKcal(Math.max(0, r.kcal)));
+  if (r.proteinG !== null)
+    parts.push(`${formatInt(Math.max(0, Math.round(r.proteinG)))} g protein`);
+  if (r.fiberG !== null) parts.push(`${formatInt(Math.max(0, Math.round(r.fiberG)))} g fiber`);
+  return parts.join(', ');
+}
+
 function contentLines(subject: AiSubject): string[] {
   if (subject.kind === 'plateau') return subject.lines;
+  if (subject.kind === 'suggest') {
+    const lines = [
+      `Måltid: ${mealLabel(subject.meal)}, min typiska portion är ca ${formatKcal(subject.typicalKcal)}.`,
+    ];
+    const left = remainingText(subject.remaining);
+    if (left !== '') lines.push(`Kvar av dagens mål: ${left}.`);
+    if (subject.homeFoods.length > 0) {
+      lines.push(`Det här brukar finnas hemma: ${subject.homeFoods.join(', ')}.`);
+    }
+    return lines;
+  }
   if (subject.kind === 'week') {
     if (subject.days.length === 0) return ['Veckans mat: inget loggat.'];
     const avg = {
@@ -363,7 +399,11 @@ export function buildAiPrompt(
   subject: AiSubject,
   context: AiContext,
   options: AiOptions,
-  template: string = subject.kind === 'plateau' ? AI_PLATEAU_TEMPLATE : AI_PROMPT_TEMPLATE,
+  template: string = subject.kind === 'plateau'
+    ? AI_PLATEAU_TEMPLATE
+    : subject.kind === 'suggest'
+      ? AI_SUGGEST_TEMPLATE
+      : AI_PROMPT_TEMPLATE,
 ): string {
   const lines = contextLines(subject, context, options);
   const { long, short } = subjectText(subject);

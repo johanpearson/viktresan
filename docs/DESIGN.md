@@ -168,6 +168,7 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `UpdateCard`        | `UpdateCard.tsx`        | Översikt: kontextkortet "Ny version finns" (toast på övriga sidor)               |
 | `CalorieDetails`    | `CalorieDetails.tsx`    | Kaloriringens panel: mål, takt, förbrukning, spärrar, "Så räknas målet ut"       |
 | `WeightDetails`     | `WeightDetails.tsx`     | Framsteg → Historik: förändring, kvar, BMI, när målet nås (viktkortet leder hit) |
+| `SuggestSheet`      | `SuggestSheet.tsx`      | Mat → Föreslå: måltid, lägesrad, tre förslag med Logga/Justera, Något nytt       |
 
 ### Page (sidhuvud)
 
@@ -690,6 +691,23 @@ Dagens tillskott är chips (`ChipGroup`, `hideLabel` när kortets rubrik redan s
 vid behov med `hint`. "Alla tagna" är en sekundär liten knapp i kortets rubrikrad och följs av en `Toast` med Ångra.
 Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (mängd, enhet – bara D-vitamin har ett val,
 µg/IE med omräkning – och "Ta bort") och "+ Lägg till näringsämne" som en `select`.
+
+### Föreslå (Mat → Dag)
+
+- **Ingångar**: ikonknappen Föreslå (glödlampa, `SuggestIcon`, tillgängligt namn "Föreslå") sist i sökraden – samma form
+  som skannerknappen (`icon-button scan-button`, 48 px) – och raden "Föreslå" (`ListRow` med `chevron` och förklaring) överst i måltidens ⋯-meny. Idag visas ⋯ även på
+  tomma måltider (menyn har då bara Föreslå). Bara för dagens datum.
+- **Panelen** (`BottomSheet` "Föreslå"): `SegmentedControl` med de fyra måltiderna (`suggest-slots`: kolumner efter innehållet,
+  `--text-sm`, så att "Mellanmål" ryms på 360 px), lägesraden i fetstil ("Lite lågt på protein idag · 640 kcal kvar"), sedan en
+  lista kant i kant (`suggest-list`, linje mellan förslagen). Varje förslag: namn med näringsetiketter och – för startlistan – den
+  dämpade etiketten "Allmänt förslag" (`tag tag-source tag-general`), kcal till höger (`kcal`), mängd dämpat och effekten
+  ("+28 g protein · +3 g fiber · 268 kcal kvar efteråt") i `--text-xs`. Under: "Logga" (sekundär, liten), "Justera" (ghost) och
+  "Inte intresserad" (ghost, dämpad, högerställd). Ingen primärknapp i listan – Logga är ett snabbval med Ångra.
+- "Visa fler" (`ShowMore`) visar nästa tre; "Något nytt" (sekundär, full bredd) öppnar `AskAi` i helskärm ovanpå. Toasten
+  (Loggade …/Visar inte … med Ångra) ligger i panelen. Justera staplar logg-sheeten ovanpå ("Justera (1 av 2)" för en kombination).
+- **Lågt läge**: lägesraden "Du har nått dagens mål. Är du hungrig finns lätta alternativ här." och bara energisnåla förslag –
+  ingen text om protein eller fiber och ingen "kvar efteråt". Sent på kvällen (från 20) nämns aldrig protein eller fiber.
+- **Tomt läge**: `EmptyState` "Inga förslag just nu" med förklaring och "Något nytt".
 
 ### Snabblogg, recept och veckoraden
 

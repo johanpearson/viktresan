@@ -2,7 +2,8 @@
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
  * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
  * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort, rapportens val och vad Översikt
- * döljer (ringar och kort), senast stängda milstolpekortet och dolda näringsetiketter. Lagras i `settings`
+ * döljer (ringar och kort), senast stängda milstolpekortet, dolda näringsetiketter och förslag i Föreslå
+ * som användaren inte är intresserad av. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
@@ -11,6 +12,7 @@ import { DEFAULT_AI_OPTIONS, parseAiOptions, type AiOptions } from './aiPrompt.t
 import { isClaimId, type ClaimId } from '../data/nutritionClaims.ts';
 import { isProfileSide, type ProfileSide } from './photoSessions.ts';
 import { DEFAULT_REPORT_SETTINGS, parseReportSettings, type ReportSettings } from './report.ts';
+import type { HiddenSuggestion } from './suggestions.ts';
 
 export interface Preferences {
   /** Översikt visar trendvikten stort och dagsvikten litet under. */
@@ -39,6 +41,8 @@ export interface Preferences {
   milestoneCardDismissed: string | null;
   /** Näringsetiketter som inte visas (Inställningar → Visning). Alla visas som standard. */
   claimsHidden: readonly ClaimId[];
+  /** Förslag i Mat → Föreslå som användaren inte är intresserad av (återställs i Inställningar → Visning). */
+  suggestionsHidden: readonly HiddenSuggestion[];
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -58,7 +62,24 @@ export const DEFAULT_PREFERENCES: Preferences = {
   overviewHidden: [],
   milestoneCardDismissed: null,
   claimsHidden: [],
+  suggestionsHidden: [],
 };
+
+/** Högst så många dolda förslag sparas (de äldsta faller bort). */
+export const MAX_HIDDEN_SUGGESTIONS = 200;
+
+function parseHiddenSuggestions(raw: unknown): HiddenSuggestion[] {
+  if (!Array.isArray(raw)) return [];
+  const result = new Map<string, HiddenSuggestion>();
+  for (const item of raw as unknown[]) {
+    if (typeof item !== 'object' || item === null) continue;
+    const { key, name } = item as Record<string, unknown>;
+    if (typeof key === 'string' && key !== '' && typeof name === 'string') {
+      result.set(key, { key, name });
+    }
+  }
+  return [...result.values()].slice(-MAX_HIDDEN_SUGGESTIONS);
+}
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
 export function parsePreferences(raw: unknown): Preferences {
@@ -94,6 +115,7 @@ export function parsePreferences(raw: unknown): Preferences {
     claimsHidden: Array.isArray(stored.claimsHidden)
       ? [...new Set(stored.claimsHidden.filter(isClaimId))]
       : [],
+    suggestionsHidden: parseHiddenSuggestions(stored.suggestionsHidden),
   };
 }
 
