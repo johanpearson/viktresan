@@ -67,8 +67,8 @@ interface Adjusting {
 const SLOT_OPTIONS = MEAL_SLOTS.map((m) => ({ id: m.id, label: m.label }));
 
 /**
- * "Föreslå" (Mat): upp till tre förslag i taget för en måltid utifrån det man brukar äta och
- * dagens kvarvarande kcal, protein och fiber. Logga direkt (Ångra i toasten), Justera i
+ * "Föreslå" (Mat): upp till tre förslag i taget för en måltid utifrån dagens största näringsgap
+ * (protein, fiber), kvarvarande kcal och det man brukar äta – med en kort rad om varför. Logga direkt (Ångra i toasten), Justera i
  * logg-sheeten, "Inte intresserad" döljer förslaget. "Något nytt" bygger en AI-prompt.
  * Allt räknas lokalt (`suggestions.ts`).
  */
@@ -348,7 +348,7 @@ interface SuggestionItemProps {
   onHide: () => void;
 }
 
-/** Ett förslag: namn med etiketter, mängd, kcal och effekt, sedan Logga · Justera · Inte intresserad. */
+/** Ett förslag: namn med etiketter, mängd, kcal, förklaring och effekt, sedan Logga · Justera · Inte intresserad. */
 function SuggestionItem({ suggestion: s, effect, onLog, onAdjust, onHide }: SuggestionItemProps) {
   return (
     <li
@@ -373,6 +373,11 @@ function SuggestionItem({ suggestion: s, effect, onLog, onAdjust, onHide }: Sugg
         </span>
       </div>
       <p className="suggest-amount">{amountText(s.parts)}</p>
+      {s.reason !== '' && (
+        <p className="suggest-reason" data-testid="suggestion-reason">
+          {s.reason}
+        </p>
+      )}
       {effect !== '' && (
         <p className="suggest-effect" data-testid="suggestion-effect">
           {effect}

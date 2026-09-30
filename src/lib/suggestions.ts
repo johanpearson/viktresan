@@ -1,26 +1,31 @@
 /**
- * "Föreslå" i Mat: förslag på vad man kan äta i en måltid utifrån det man brukar äta och det
- * som är kvar av dagens mål. Helt lokalt – rena funktioner utan I/O.
+ * "Föreslå" i Mat: förslag på vad man kan äta i en måltid utifrån dagens största näringsgap
+ * (protein, fiber), det som är kvar av kalorierna och det man brukar äta. Helt lokalt – rena
+ * funktioner utan I/O.
  *
+ * - **Gap**: proteingapet = max(0, proteinmål − intag), fibergapet likadant mot veckans fibermål.
+ *   Ett gap är "stort" när mer än 10 % av målet återstår (`GAP_SMALL_SHARE`).
  * - **Kandidater**: livsmedel loggade de senaste 28 dagarna, favoriter, egna måltider och
- *   recept. Mängden är användarens typiska (median av tidigare loggar), annars standardportionen.
- *   Har måltiden färre än 5 egna kandidater fylls det på med startlistan (`src/data/suggestions.ts`),
- *   med en vikt som minskar när historiken växer.
- * - **Vikt**: hur ofta och hur nyligen det loggats, och hur stor del av loggarna som var i just
- *   den måltiden. "Inte intresserad" döljer förslaget och nedviktar liknande (samma kategori).
- * - **Kombinationer**: två kandidater som ofta loggats ihop i måltiden, eller en proteinrik och
- *   en fiberrik som kompletterar varandra.
- * - **Poäng**: belönar det som fyller det näringsämne (protein, fiber) som ligger lägst i procent
- *   av målet, räknat per kcal. Portionstak = användarens typiska kcal för måltiden (median de
- *   senaste 28 dagarna), aldrig mer än det som är kvar. Förslag som går över dagens kcal-mål
- *   straffas och visas inte.
+ *   recept. Mängden är användarens typiska (median av loggar där livsmedlet var en huvudkomponent),
+ *   annars standardportionen. Har måltiden färre än 5 egna kandidater fylls det på med startlistan
+ *   (`src/data/suggestions.ts`), med en vikt som minskar när historiken växer.
+ * - **Portioner**: proteinkällor (≥ 20 % energi från protein) skalas inom 0,5–2 × portionen för att
+ *   fylla proteingapet så långt kalorierna räcker. Ingen portion under kategorins minsta rimliga
+ *   (kött/fisk 75 g, ägg 1 st, kvarg/yoghurt 1 dl …).
+ * - **Poäng** (stort gap): näringspoängen (andel av gapen som fylls, viktad efter hur mycket av
+ *   respektive mål som återstår) står för minst 70 %, vanan för högst 20 % och lätthet för resten.
+ *   Straff för att gå över det som är kvar och över måltidens typiska kcal. Små gap: lätthet + vana.
+ * - **Kombinationer**: en protein- eller fiberkälla + något användaren brukar äta till den.
+ *   Etiketterna räknas på kombinationens totala näring.
+ * - **Variation**: ett livsmedel förekommer i högst ett av de tre förslag som visas samtidigt.
  * - **Lågt läge**: under 150 kcal kvar (eller över målet) föreslås bara energisnåla alternativ,
  *   med en saklig rad – aldrig uppmaningar att äta för att nå protein- eller fibermål.
  */
-import type { ClaimId } from '../data/nutritionClaims.ts';
+import type { FoodCategory } from '../data/foodCategories.ts';
+import { PROTEIN_KCAL_PER_G, type ClaimId } from '../data/nutritionClaims.ts';
 import { START_SUGGESTIONS, type StartSuggestion } from '../data/suggestions.ts';
 import type { Favorite, FoodLogEntry } from '../db/db.ts';
-import { claimsFor } from './claims.ts';
+import { claimsFor, nutritionClaims } from './claims.ts';
 import { addDays, daysBetween } from './dates.ts';
 import { fiberForItem, fiberOfEntries, type FiberSource } from './fiber.ts';
 import { entryToItem } from './foodCatalog.ts';
@@ -107,7 +112,8 @@ function roundCount(count: number): number {
 
 /**
  * Användarens typiska mängd av ett livsmedel: medianen av de loggade gram, i den enhet som
- * använts oftast (vid lika: den senaste). `null` utan loggar.
+ * använts oftast (vid lika: den senaste). `null` utan loggar. Skicka bara loggar där livsmedlet
+ * var en huvudkomponent (`mainComponentEntries`).
  */
 export function typicalAmount(
   entries: readonly (Amount & { createdAt?: number })[],
@@ -138,6 +144,51 @@ export function typicalAmount(
   }
   const amount = roundCount(grams / perUnit);
   return { amount, unit, grams: round1(amount * perUnit) };
+}
+
+/** Andel av måltidens kcal som gör en post till en huvudkomponent. */
+export const MAIN_COMPONENT_SHARE = 0.25;
+
+function entryKcal(e: Pick<FoodLogEntry, 'per100' | 'grams'>): number {
+  return scaleNutrients(e.per100, e.grams).kcal;
+}
+
+function mealKey(e: Pick<FoodLogEntry, 'date' | 'meal'>): string {
+  return `${e.date}|${e.meal}`;
+}
+
+/**
+ * Var posten en huvudkomponent i sin måltid? Ja i en måltid med högst två poster, när den är
+ * måltidens största post eller står för minst 25 % av måltidens kcal. 15 g kyckling i en sallad
+ * med sex poster är det inte – den ska inte bli "typisk mängd".
+ */
+export function isMainComponent(
+  entry: Pick<FoodLogEntry, 'id' | 'per100' | 'grams'>,
+  meal: readonly Pick<FoodLogEntry, 'id' | 'per100' | 'grams'>[],
+): boolean {
+  if (meal.length <= 2) return true;
+  const kcal = meal.map(entryKcal);
+  const total = kcal.reduce((a, b) => a + b, 0);
+  const mine = entryKcal(entry);
+  if (!(total > 0)) return true;
+  return mine >= MAIN_COMPONENT_SHARE * total || mine >= Math.max(...kcal);
+}
+
+/** Loggarna (av `entries`) där livsmedlet var en huvudkomponent i måltiden (ur hela `log`). */
+export function mainComponentEntries<T extends FoodLogEntry>(
+  entries: readonly T[],
+  log: readonly FoodLogEntry[],
+): T[] {
+  const meals = new Map<string, FoodLogEntry[]>();
+  const keys = new Set(entries.map(mealKey));
+  for (const e of log) {
+    const key = mealKey(e);
+    if (!keys.has(key)) continue;
+    const list = meals.get(key) ?? [];
+    list.push(e);
+    meals.set(key, list);
+  }
+  return entries.filter((e) => isMainComponent(e, meals.get(mealKey(e)) ?? [e]));
 }
 
 /** Standardportionen: första enheten med känd vikt (portion, st, skiva …), annars 100 g. */
@@ -254,6 +305,8 @@ export interface Candidate {
   origin: Origin;
   /** Från startlistan ("Allmänt förslag"). */
   general: boolean;
+  /** Antal loggar i måltiden de senaste 28 dagarna (för förklaringen "Du brukar …"). */
+  inSlot: number;
 }
 
 /** Ett förslag som användaren inte är intresserad av. */
@@ -372,20 +425,37 @@ export function candidatesFor(input: CandidateInput): Candidate[] {
   const stats = historyStats(log, today);
   const result = new Map<string, Candidate>();
 
-  function add(food: FoodItem, amount: Amount, weight: number, origin: Origin, general: boolean) {
+  function add(
+    food: FoodItem,
+    amount: Amount,
+    weight: number,
+    origin: Origin,
+    general: boolean,
+    inSlot = 0,
+  ) {
     if (hiddenKeys.has(food.id) || loggedNow.has(food.id) || result.has(food.id)) return;
     if (!worthSuggesting(food, amount)) return;
     const w = weight * dislikeFactor(food, hidden);
-    result.set(food.id, { key: food.id, parts: [{ food, ...amount }], weight: w, origin, general });
+    result.set(food.id, {
+      key: food.id,
+      parts: [{ food, ...amount }],
+      weight: w,
+      origin,
+      general,
+      inSlot,
+    });
   }
 
   for (const s of stats.values()) {
     const last = s.entries[s.entries.length - 1];
     if (!last) continue;
     const food = catalog.get(s.foodId) ?? entryToItem(last);
-    const amount = typicalAmount(s.entries) ?? standardAmount(food, custom(food.id));
+    // Typisk mängd bara ur loggar där livsmedlet var en huvudkomponent.
+    const amount =
+      typicalAmount(mainComponentEntries(s.entries, log)) ?? standardAmount(food, custom(food.id));
     const favorite = favoriteIds.has(s.foodId) ? FAVORITE_BONUS : 0;
-    add(food, amount, OWN_BONUS + historyWeight(s, slot, today) + favorite, 'history', false);
+    const weight = OWN_BONUS + historyWeight(s, slot, today) + favorite;
+    add(food, amount, weight, 'history', false, s.slots[slot]);
   }
   for (const fav of input.favorites) {
     const food = catalog.get(fav.foodId);
@@ -421,87 +491,7 @@ export function ownSlotCount(log: readonly FoodLogEntry[], slot: MealSlot, today
 }
 
 // ---------------------------------------------------------------------------
-// Kombinationer
-
-/** Par av livsmedel loggade i samma måltid samma dag, med antal (nyckel "a+b", sorterad). */
-export function coLogged(
-  log: readonly FoodLogEntry[],
-  slot: MealSlot,
-  today: string,
-): Map<string, number> {
-  const groups = new Map<string, Set<string>>();
-  for (const e of recentEntries(log, today)) {
-    if (e.meal !== slot) continue;
-    const set = groups.get(e.date) ?? new Set<string>();
-    set.add(e.foodId);
-    groups.set(e.date, set);
-  }
-  const pairs = new Map<string, number>();
-  for (const ids of groups.values()) {
-    const list = [...ids].sort();
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const key = `${list[i] ?? ''}+${list[j] ?? ''}`;
-        pairs.set(key, (pairs.get(key) ?? 0) + 1);
-      }
-    }
-  }
-  return pairs;
-}
-
-function comboOf(a: Candidate, b: Candidate, weight: number): Candidate {
-  const [first, second] = a.key < b.key ? [a, b] : [b, a];
-  return {
-    key: `${first.key}+${second.key}`,
-    parts: [...first.parts, ...second.parts],
-    weight,
-    origin: a.origin === 'start' && b.origin === 'start' ? 'start' : 'history',
-    general: a.general || b.general,
-  };
-}
-
-/**
- * Kombinationer av två kandidater: par som loggats ihop i måltiden minst två gånger, och par
- * där den ena är proteinrik och den andra fiberrik (t.ex. kvarg och bär) bland de sex mest
- * relevanta. Högst `limit` stycken.
- */
-export function combinations(
-  candidates: readonly Candidate[],
-  log: readonly FoodLogEntry[],
-  slot: MealSlot,
-  today: string,
-  fiberSource: FiberSource | null,
-  hiddenKeys: ReadonlySet<string> = new Set(),
-  limit = 6,
-): Candidate[] {
-  const single = candidates.filter((c) => c.parts.length === 1);
-  const byId = new Map(single.map((c) => [c.key, c]));
-  const result = new Map<string, Candidate>();
-  for (const [key, count] of coLogged(log, slot, today)) {
-    if (count < 2) continue;
-    const [a, b] = keyFoods(key).map((id) => byId.get(id));
-    if (!a || !b) continue;
-    const combo = comboOf(a, b, (a.weight + b.weight) / 2 + 0.1 * Math.min(count, 5));
-    if (!hiddenKeys.has(combo.key)) result.set(combo.key, combo);
-  }
-  const top = [...single].sort((x, y) => y.weight - x.weight).slice(0, 6);
-  const tagged = top.map((c) => ({ c, claims: claimsOfParts(c.parts, fiberSource) }));
-  for (const p of tagged) {
-    if (!p.claims.includes('proteinrik') || p.claims.includes('fiberrik')) continue;
-    for (const f of tagged) {
-      if (f === p || !f.claims.includes('fiberrik') || f.claims.includes('proteinrik')) continue;
-      const pFood = p.c.parts[0]?.food;
-      const fFood = f.c.parts[0]?.food;
-      if (!pFood || !fFood || foodProfile(pFood).category === foodProfile(fFood).category) continue;
-      const combo = comboOf(p.c, f.c, ((p.c.weight + f.c.weight) / 2) * 0.85);
-      if (!hiddenKeys.has(combo.key) && !result.has(combo.key)) result.set(combo.key, combo);
-    }
-  }
-  return [...result.values()].sort((x, y) => y.weight - x.weight).slice(0, limit);
-}
-
-// ---------------------------------------------------------------------------
-// Näring, portionstak och poäng
+// Etiketter och näring
 
 export interface Goals {
   targetKcal: number | null;
@@ -536,13 +526,6 @@ export function isLowMode(remaining: Remaining): boolean {
   return remaining.kcal !== null && remaining.kcal < LOW_KCAL_LIMIT;
 }
 
-/** Portionstaket: måltidens typiska kcal, men aldrig mer än det som är kvar (lågt läge: 100 kcal). */
-export function portionCap(typicalKcal: number, remaining: Remaining): number {
-  if (isLowMode(remaining)) return 100;
-  const left = remaining.kcal ?? Infinity;
-  return Math.max(50, Math.min(typicalKcal, left));
-}
-
 export interface Values {
   kcal: number;
   proteinG: number;
@@ -575,96 +558,447 @@ export function valuesOf(
 }
 
 /**
+ * Förslagets etiketter. Ett livsmedel: dess egna. En kombination räknas på den totala näringen
+ * (kcal, protein och känd fiber per 100 g av hela kombinationen) – aldrig ärvda från delarna:
+ * cappuccino + äpple är inte Proteinrik bara för att mjölken är det. Saknar någon del fiberdata
+ * är fibern i underkant, och Fiberrik ges bara om den ändå når gränsen.
+ */
+export function claimsOfParts(
+  parts: readonly SuggestionPart[],
+  fiberSource: FiberSource | null,
+): ClaimId[] {
+  const [only] = parts;
+  if (parts.length === 1 && only) return claimsFor(only.food, fiberSource ?? NO_FIBER);
+  const grams = parts.reduce((s, p) => s + p.grams, 0);
+  if (!(grams > 0) || parts.some((p) => p.food.source === 'snabb')) return [];
+  const v = valuesOf(parts, fiberSource);
+  const per100 = (x: number) => (x / grams) * 100;
+  return nutritionClaims({
+    kcal: per100(v.kcal),
+    proteinG: per100(v.proteinG),
+    fiberG: v.fiberG === null ? null : per100(v.fiberG),
+    liquid: parts.every((p) => p.food.per100Unit === 'ml' || isLiquid(p.food)),
+  });
+}
+
+function isLiquid(food: FoodItem): boolean {
+  const category = foodProfile(food).category;
+  return category === 'dryck' || category === 'mjolk';
+}
+
+/** En proteinkälla ger minst så här mycket protein per 100 g (gurka är "Proteinrik" men ingen källa). */
+export const PROTEIN_SOURCE_MIN_G = 5;
+
+/**
+ * Proteinkälla: minst 20 % av energin från protein (samma regel som etiketten Proteinrik) och
+ * minst 5 g protein per 100 g.
+ */
+export function isProteinSource(food: FoodItem, fiberSource: FiberSource | null): boolean {
+  return (
+    food.per100.proteinG >= PROTEIN_SOURCE_MIN_G &&
+    claimsFor(food, fiberSource ?? NO_FIBER).includes('proteinrik')
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Gap
+
+/** Ett gap är litet när högst så stor andel av målet återstår. */
+export const GAP_SMALL_SHARE = 0.1;
+
+export interface Gap {
+  /** Gram kvar till målet, aldrig negativt. */
+  grams: number;
+  /** Andel av målet som återstår, 0–1 (0 utan mål). */
+  share: number;
+}
+
+export interface Gaps {
+  protein: Gap;
+  fiber: Gap;
+}
+
+function gapOf(eaten: number, goal: number | null): Gap {
+  if (goal === null || !(goal > 0)) return { grams: 0, share: 0 };
+  const grams = Math.max(0, goal - eaten);
+  return { grams, share: Math.min(1, grams / goal) };
+}
+
+/** Dagens gap: proteingapet mot proteinmålet, fibergapet mot (veckans) fibermål. */
+export function gapsOf(eaten: Eaten, goals: Goals): Gaps {
+  return {
+    protein: gapOf(eaten.proteinG, goals.proteinGoalG),
+    fiber: gapOf(eaten.fiberG, goals.fiberGoalG),
+  };
+}
+
+/** Något gap är större än 10 % av sitt mål. */
+export function hasLargeGap(gaps: Gaps): boolean {
+  return gaps.protein.share > GAP_SMALL_SHARE || gaps.fiber.share > GAP_SMALL_SHARE;
+}
+
+/**
+ * Vikterna för protein och fiber: proportionella mot andelen av respektive mål som återstår.
+ * Ett litet gap (högst 10 % kvar) räknas som nått och får vikten 0 när det andra är stort.
+ */
+export function gapWeights(gaps: Gaps): { protein: number; fiber: number } {
+  const large = hasLargeGap(gaps);
+  const share = (g: Gap) => (large && g.share <= GAP_SMALL_SHARE ? 0 : g.share);
+  const p = share(gaps.protein);
+  const f = share(gaps.fiber);
+  if (!(p + f > 0)) return { protein: 0, fiber: 0 };
+  return { protein: p / (p + f), fiber: f / (p + f) };
+}
+
+/** Hur stor del av gapet förslaget fyller, 0–1 (0 utan gap). */
+function fill(gain: number, gap: Gap): number {
+  return gap.grams > 0 ? Math.min(Math.max(0, gain), gap.grams) / gap.grams : 0;
+}
+
+/**
+ * Näringspoängen, 0–1: wP × min(protein, proteingap)/proteingap + wF × min(fiber, fibergap)/fibergap,
+ * där vikterna är proportionella mot hur stor andel av respektive mål som återstår.
+ */
+export function nutritionScore(values: Values, gaps: Gaps): number {
+  const w = gapWeights(gaps);
+  return (
+    w.protein * fill(values.proteinG, gaps.protein) + w.fiber * fill(values.fiberG ?? 0, gaps.fiber)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Portioner
+
+/** Portionstaket: måltidens typiska kcal, men aldrig mer än det som är kvar (lågt läge: 100 kcal). */
+export function portionCap(typicalKcal: number, remaining: Remaining): number {
+  if (isLowMode(remaining)) return 100;
+  const left = remaining.kcal ?? Infinity;
+  return Math.max(50, Math.min(typicalKcal, left));
+}
+
+/**
+ * Minsta rimliga portion per kategori i gram (ungefärliga): kött och fisk 75 g, ägg 1 st (≈ 50 g),
+ * kvarg/yoghurt/fil 1 dl (≈ 100 g) … så att förslag som "15 g kyckling" aldrig visas.
+ */
+export const MIN_PORTION_G: Readonly<Partial<Record<FoodCategory, number>>> = {
+  kott: 75,
+  fisk: 75,
+  korv: 50,
+  agg: 50,
+  fil: 100,
+  ost: 20,
+  palagg: 20,
+};
+
+/** Kategorins minsta rimliga portion i gram (`null` = ingen gräns). */
+export function minPortionGrams(food: FoodItem): number | null {
+  if (/^(maltid|recept):/.test(food.id)) return null;
+  return MIN_PORTION_G[foodProfile(food).category] ?? null;
+}
+
+/** Styck räknas i hela (3 ägg, inte 3,5), andra enheter i halvor. */
+function unitStep(unit: string): number {
+  return unit === 'st' ? 1 : 0.5;
+}
+
+function perUnitOf(part: SuggestionPart): number {
+  return part.amount > 0 ? part.grams / part.amount : part.grams;
+}
+
+/** Delen med en ny vikt: gram i steg om 5 g, enheter i halvor (`floor` = aldrig uppåt). */
+function withGrams(part: SuggestionPart, grams: number, floor = false): SuggestionPart {
+  if (part.unit === GRAM) {
+    const g = floor && grams >= 20 ? Math.max(5, Math.floor(grams / 5) * 5) : roundGrams(grams);
+    return { ...part, amount: g, grams: g };
+  }
+  const perUnit = perUnitOf(part);
+  const step = unitStep(part.unit);
+  const steps = grams / perUnit / step;
+  const amount = Math.max(step, (floor ? Math.floor(steps) : Math.round(steps)) * step);
+  return { ...part, amount, grams: round1(amount * perUnit) };
+}
+
+/** Höjer en för liten portion till kategorins minsta (ägg: 1 st, kvarg: 1 dl, kyckling: 75 g). */
+export function atLeastMinPortion(part: SuggestionPart): SuggestionPart {
+  const min = minPortionGrams(part.food);
+  if (min === null || part.grams >= min) return part;
+  if (part.unit === GRAM) {
+    const g = Math.ceil(min / 5) * 5;
+    return { ...part, amount: g, grams: g };
+  }
+  const perUnit = perUnitOf(part);
+  const step = unitStep(part.unit);
+  const amount = Math.max(step, Math.ceil(min / perUnit / step - 1e-9) * step);
+  return { ...part, amount, grams: round1(amount * perUnit) };
+}
+
+/**
+ * Proteinkällans portion: så mycket som fyller proteingapet, inom 0,5–2 × portionen och så långt
+ * `kcalLimit` räcker – men aldrig under kategorins minsta rimliga portion.
+ */
+export function scaleProteinPortion(
+  part: SuggestionPart,
+  proteinGapG: number,
+  kcalLimit: number,
+): SuggestionPart {
+  const { kcal, proteinG } = part.food.per100;
+  if (!(proteinG > 0) || !(part.grams > 0) || !(proteinGapG > 0)) return atLeastMinPortion(part);
+  const lo = part.grams * 0.5;
+  const hi = part.grams * 2;
+  const wanted = Math.min(hi, Math.max(lo, (proteinGapG / proteinG) * 100));
+  const allowed = kcal > 0 ? (kcalLimit / kcal) * 100 : Infinity;
+  const grams = Math.max(lo, Math.min(wanted, allowed));
+  const limited = allowed < wanted;
+  const scaled = Math.abs(grams - part.grams) < 1e-9 ? part : withGrams(part, grams, limited);
+  return atLeastMinPortion(scaled);
+}
+
+/**
  * Skalar ner en kandidat som är mycket större än portionstaket (mer än 25 % över) så att den
- * ryms: gram i steg om 5 g, enheter i halvor. Aldrig under hälften av mängden.
+ * ryms: gram i steg om 5 g, enheter i halvor. Aldrig under hälften av mängden eller under
+ * kategorins minsta rimliga portion.
  */
 export function fitPortion(
   parts: readonly SuggestionPart[],
   kcal: number,
   cap: number,
 ): SuggestionPart[] {
-  if (!(kcal > cap * 1.25) || !(kcal > 0)) return [...parts];
+  if (!(kcal > cap * 1.25) || !(kcal > 0)) return parts.map(atLeastMinPortion);
   const factor = Math.max(0.5, cap / kcal);
   return parts.map((p) => {
     if (p.unit === GRAM) {
       const g = roundGrams(p.grams * factor);
-      return { ...p, amount: g, grams: g };
+      return atLeastMinPortion({ ...p, amount: g, grams: g });
     }
-    const perUnit = p.amount > 0 ? p.grams / p.amount : p.grams;
+    const perUnit = perUnitOf(p);
     const amount = Math.max(roundCount(p.amount * factor), p.amount >= 1 ? 0.5 : p.amount);
-    return { ...p, amount, grams: round1(amount * perUnit) };
+    return atLeastMinPortion({ ...p, amount, grams: round1(amount * perUnit) });
   });
 }
 
+// ---------------------------------------------------------------------------
+// Poäng
+
+export type ScoreMode = 'gap' | 'small' | 'low';
+
 export interface ScoreContext {
-  eaten: Eaten;
-  goals: Goals;
+  mode: ScoreMode;
+  gaps: Gaps;
+  /** Den högsta näringspoängen bland kandidaterna (näringen normeras mot den). */
+  bestNutrition: number;
   remaining: Remaining;
-  /** Portionstaket i kcal. */
-  cap: number;
-  low: boolean;
+  /** Måltidens typiska kcal. */
+  typicalKcal: number;
 }
 
-/** Andel av målet som ätits (0 = inget, 1 = nått). `null` utan mål. */
-function progress(eaten: number, goal: number | null): number | null {
-  return goal === null || !(goal > 0) ? null : eaten / goal;
+/** Näringens minsta andel av totalpoängen när något gap är stort. */
+export const NUTRITION_MIN_SHARE = 0.7;
+/** Vanans största andel av totalpoängen. */
+export const HABIT_MAX_SHARE = 0.2;
+
+/** Näringens vikt när något gap är stort. */
+export const NUTRITION_WEIGHT = 0.7;
+/** Vanans vikt. */
+export const HABIT_WEIGHT = 0.2;
+/** Lätthetens vikt med stora gap. */
+export const LIGHT_WEIGHT = 0.1;
+
+/** Vanan 0–1: hur ofta, nyligen och i vilken måltid (kandidatens vikt, mättad vid 1). */
+export function habitScore(weight: number): number {
+  return Math.min(1, Math.max(0, weight));
 }
 
 /**
- * Hur väl förslaget fyller det som ligger lågt: för protein och fiber, andelen av det som är
- * kvar till målet som förslaget fyller, jämfört med andelen av dagens kcal det kostar (mättas
- * vid dubbla). Viktas med hur långt från målet man är; det näringsämne som ligger lägst i procent
- * väger 1,5 gånger mer.
+ * Lätthet 0–1 ur energitätheten: 1 vid ≤ 40 kcal/100 g (Energisnål), 0 vid ≥ 400 kcal/100 g.
  */
-export function nutritionScore(values: Values, ctx: ScoreContext): number {
-  const dayKcal = ctx.goals.targetKcal ?? DEFAULT_DAY_KCAL;
-  const kcalShare = Math.max(values.kcal / dayKcal, 0.02);
-  const nutrients = [
-    { goal: ctx.goals.proteinGoalG, eaten: ctx.eaten.proteinG, gain: values.proteinG },
-    { goal: ctx.goals.fiberGoalG, eaten: ctx.eaten.fiberG, gain: values.fiberG ?? 0 },
-  ]
-    .map((n) => ({ ...n, p: progress(n.eaten, n.goal) }))
-    .filter((n): n is typeof n & { goal: number; p: number } => n.p !== null && n.goal !== null);
-  const lowest = Math.min(...nutrients.map((n) => n.p));
-  let score = 0;
-  for (const n of nutrients) {
-    const lag = Math.min(1, Math.max(0, 1 - n.p));
-    if (lag === 0) continue;
-    const filled = Math.min(n.gain, n.goal - n.eaten) / n.goal;
-    const density = Math.min(2, filled / kcalShare) / 2;
-    score += lag * density * (n.p === lowest ? 1.5 : 1);
-  }
-  return score;
+export function lightScore(kcal: number, grams: number): number {
+  if (!(grams > 0)) return 0;
+  const density = (kcal / grams) * 100;
+  return Math.min(1, Math.max(0, (400 - density) / 360));
 }
 
-/** Straff för en portion långt från portionstaket: mycket över straffas hårt, lite under milt. */
-export function portionPenalty(kcal: number, cap: number): number {
-  const ratio = kcal / cap;
-  if (ratio > 1.2) return (ratio - 1.2) * 1.5;
-  if (ratio < 0.3) return (0.3 - ratio) * 0.8;
-  return 0;
+export interface ScoreParts {
+  nutrition: number;
+  habit: number;
+  light: number;
+  penalty: number;
+  total: number;
 }
 
-/** Straff för att gå över dagens kcal-mål (eller komma mycket nära det). */
+/**
+ * Poängens delar med stora gap. `nutrition` är näringspoängen normerad mot dagens bästa kandidat
+ * (0–1), `habit` och `light` 0–1. Vikterna är 0,7 / 0,2 / 0,1, och för varje förslag kapas vanan
+ * och lättheten så att näringen står för minst 70 % och vanan för högst 20 % av totalpoängen: ett
+ * förslag som inte fyller något gap lyfts inte av att man brukar äta det.
+ */
+export function gapScoreParts(
+  nutrition: number,
+  habit: number,
+  light: number,
+): Omit<ScoreParts, 'penalty' | 'total'> {
+  const n = NUTRITION_WEIGHT * Math.min(1, Math.max(0, nutrition));
+  // h + l ≤ 3/7 × n ⇔ näringen ≥ 70 %; h ≤ 1/4 × (n + l) ⇔ vanan ≤ 20 %.
+  const rest = (n * (1 - NUTRITION_MIN_SHARE)) / NUTRITION_MIN_SHARE;
+  const l = Math.min(LIGHT_WEIGHT * Math.max(0, light), rest / 3);
+  const h = Math.min(
+    HABIT_WEIGHT * Math.max(0, habit),
+    ((n + l) * HABIT_MAX_SHARE) / (1 - HABIT_MAX_SHARE),
+    rest - l,
+  );
+  return { nutrition: n, habit: Math.max(0, h), light: l };
+}
+
+/**
+ * Straff för en portion över måltidens typiska kcal (mer än 10 % över). För små portioner straffas
+ * inte – de höjs i stället till kategorins minsta rimliga portion.
+ */
+export function portionPenalty(kcal: number, typicalKcal: number): number {
+  if (!(typicalKcal > 0)) return 0;
+  const ratio = kcal / typicalKcal;
+  return ratio > 1.1 ? (ratio - 1.1) * 0.8 : 0;
+}
+
+/** Straff för att gå över det som är kvar av dagens kcal (eller komma mycket nära). */
 export function overBudgetPenalty(kcal: number, remainingKcal: number | null): number {
   if (remainingKcal === null) return 0;
   if (kcal > remainingKcal) return 1 + (kcal - remainingKcal) / 100;
-  if (remainingKcal > 0 && kcal > remainingKcal * 0.8) return 0.2;
+  if (remainingKcal > 0 && kcal > remainingKcal * 0.9) return 0.05;
   return 0;
 }
 
 /**
- * Förslagets poäng: vikt (vana) + näring − portion − över målet. Vanan väger tyngst, så att egen
- * historik går före startlistan när näringen är likvärdig. Lågt läge: vana + lätthet.
+ * Förslagets poäng. Stort gap: näringen (vikt 0,7, normerad mot bästa kandidaten, minst 70 %) +
+ * vana (högst 20 %) + lätthet − straff.
+ * Små gap och lågt läge: lätthet + vana − straff (som tidigare: energisnålt och det man brukar).
  */
-export function scoreCandidate(weight: number, values: Values, ctx: ScoreContext): number {
-  if (ctx.low) return 0.6 * weight - values.kcal / 200;
-  return (
-    0.9 * weight +
-    0.6 * nutritionScore(values, ctx) -
-    portionPenalty(values.kcal, ctx.cap) -
-    overBudgetPenalty(values.kcal, ctx.remaining.kcal)
-  );
+export function scoreCandidate(
+  weight: number,
+  values: Values,
+  grams: number,
+  ctx: ScoreContext,
+): ScoreParts {
+  const habit = habitScore(weight);
+  const light = lightScore(values.kcal, grams);
+  const penalty =
+    ctx.mode === 'low'
+      ? 0
+      : portionPenalty(values.kcal, ctx.typicalKcal) +
+        overBudgetPenalty(values.kcal, ctx.remaining.kcal);
+  if (ctx.mode === 'gap') {
+    const best = ctx.bestNutrition > 0 ? ctx.bestNutrition : 1;
+    const parts = gapScoreParts(nutritionScore(values, ctx.gaps) / best, habit, light);
+    return { ...parts, penalty, total: parts.nutrition + parts.habit + parts.light - penalty };
+  }
+  const h = 0.5 * habit;
+  const l = 0.5 * light;
+  return { nutrition: 0, habit: h, light: l, penalty, total: h + l - penalty };
+}
+
+// ---------------------------------------------------------------------------
+// Kombinationer
+
+/** Par av livsmedel loggade i samma måltid samma dag, med antal (nyckel "a+b", sorterad). */
+export function coLogged(
+  log: readonly FoodLogEntry[],
+  slot: MealSlot,
+  today: string,
+): Map<string, number> {
+  const groups = new Map<string, Set<string>>();
+  for (const e of recentEntries(log, today)) {
+    if (e.meal !== slot) continue;
+    const set = groups.get(e.date) ?? new Set<string>();
+    set.add(e.foodId);
+    groups.set(e.date, set);
+  }
+  const pairs = new Map<string, number>();
+  for (const ids of groups.values()) {
+    const list = [...ids].sort();
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const key = `${list[i] ?? ''}+${list[j] ?? ''}`;
+        pairs.set(key, (pairs.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  return pairs;
+}
+
+function comboOf(a: Candidate, b: Candidate, weight: number, inSlot: number): Candidate {
+  const [first, second] = a.key < b.key ? [a, b] : [b, a];
+  return {
+    key: `${first.key}+${second.key}`,
+    parts: [...first.parts, ...second.parts],
+    weight,
+    origin: a.origin === 'start' && b.origin === 'start' ? 'start' : 'history',
+    general: a.general || b.general,
+    inSlot,
+  };
+}
+
+/** Vilka källor som behövs: ett stort protein- respektive fibergap (små gap: båda). */
+export interface Needs {
+  protein: boolean;
+  fiber: boolean;
+}
+
+/**
+ * Kombinationer som kompletterar: en protein- eller fiberkälla (etiketten Proteinrik/Fiberrik)
+ * + något användaren brukar äta till den – loggat ihop i måltiden minst två gånger, eller en
+ * proteinkälla och en fiberkälla där minst den ena är användarens egen (loggad i måltiden).
+ * Källan ska fylla ett stort gap (`needs`): med bara fibergap blir kvarg + äpple ingen kombination.
+ * Två livsmedel ur samma kategori (två sorters bär) blir ingen kombination. Högst `limit` stycken.
+ */
+export function combinations(
+  candidates: readonly Candidate[],
+  log: readonly FoodLogEntry[],
+  slot: MealSlot,
+  today: string,
+  fiberSource: FiberSource | null,
+  hiddenKeys: ReadonlySet<string> = new Set(),
+  needs: Needs = { protein: true, fiber: true },
+  limit = 6,
+): Candidate[] {
+  const single = candidates.filter((c) => c.parts.length === 1);
+  const byId = new Map(single.map((c) => [c.key, c]));
+  const claims = new Map(single.map((c) => [c.key, claimsOfParts(c.parts, fiberSource)]));
+  const isSource = (c: Candidate) => {
+    const list = claims.get(c.key) ?? [];
+    return (
+      (needs.protein && list.includes('proteinrik')) || (needs.fiber && list.includes('fiberrik'))
+    );
+  };
+  const category = (c: Candidate) => {
+    const f = c.parts[0]?.food;
+    return f ? foodProfile(f).category : 'ovrigt';
+  };
+  const result = new Map<string, Candidate>();
+  const put = (combo: Candidate) => {
+    if (!hiddenKeys.has(combo.key) && !result.has(combo.key)) result.set(combo.key, combo);
+  };
+
+  // Något användaren brukar äta till källan: loggat ihop i måltiden minst två gånger.
+  for (const [key, count] of coLogged(log, slot, today)) {
+    if (count < 2) continue;
+    const [a, b] = keyFoods(key).map((id) => byId.get(id));
+    if (!a || !b || (!isSource(a) && !isSource(b))) continue;
+    if (category(a) === category(b) && category(a) !== 'ovrigt') continue;
+    // En kombination är lika mycket vana som sin minst vanliga del, plus att de äts ihop.
+    put(comboOf(a, b, Math.min(a.weight, b.weight) + 0.05 * Math.min(count, 5), count));
+  }
+
+  // Protein + fiber där minst den ena är användarens egen i måltiden (kvarg + bär).
+  const has = (c: Candidate, id: ClaimId) => (claims.get(c.key) ?? []).includes(id);
+  const top = [...single].sort((x, y) => y.weight - x.weight).slice(0, 8);
+  for (const p of needs.protein && needs.fiber ? top : []) {
+    if (!has(p, 'proteinrik') || has(p, 'fiberrik')) continue;
+    for (const f of top) {
+      if (f === p || !has(f, 'fiberrik') || has(f, 'proteinrik')) continue;
+      if (p.inSlot === 0 && f.inSlot === 0) continue;
+      if (category(p) === category(f)) continue;
+      put(comboOf(p, f, ((p.weight + f.weight) / 2) * 0.85, Math.min(p.inSlot, f.inSlot)));
+    }
+  }
+  return [...result.values()].sort((x, y) => y.weight - x.weight).slice(0, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -676,6 +1010,10 @@ export interface Suggestion extends Candidate {
   values: Values & Nutrients;
   claims: ClaimId[];
   score: number;
+  /** Poängens delar (för tester och felsökning). */
+  scoreParts: ScoreParts;
+  /** Kort förklaring: "Mycket protein per kcal", "Fyller fibergapet" … */
+  reason: string;
 }
 
 export interface SuggestInput extends CandidateInput {
@@ -688,10 +1026,13 @@ export type SuggestMode = 'normal' | 'low' | 'empty';
 
 export interface SuggestResult {
   mode: SuggestMode;
-  /** Lägesraden överst, t.ex. "Lite lågt på protein idag · 640 kcal kvar". */
+  /** Lägesraden överst, t.ex. "41 g protein och 6 g fiber kvar · 302 kcal kvar". */
   status: string;
   eaten: Eaten;
   remaining: Remaining;
+  gaps: Gaps;
+  /** Rangordnat efter näringsgap (stort gap) eller lätthet + vana (små gap, lågt läge). */
+  scoreMode: ScoreMode;
   /** Måltidens typiska kcal (portionstakets utgångspunkt). */
   typicalKcal: number;
   cap: number;
@@ -712,57 +1053,142 @@ export function eatenToday(
 }
 
 /**
- * Lägesraden. Lågt läge: `LOW_TEXT`. Annars nämns protein eller fiber när de ligger klart efter
- * kalorierna (mer än 15 procentenheter och under 90 % av målet) – men inte från klockan 20.
+ * Lägesraden, byggd på dagens största gap: "41 g protein och 6 g fiber kvar · 302 kcal kvar"
+ * (gap över 10 % av målet, störst andel först). "Du ligger bra till idag" bara när både protein
+ * och fiber är inom 10 % av målet. Lågt läge: `LOW_TEXT`. Från klockan 20 nämns aldrig protein
+ * eller fiber.
  */
 export function statusText(eaten: Eaten, goals: Goals, remaining: Remaining, hour: number): string {
   if (isLowMode(remaining)) return LOW_TEXT;
-  if (remaining.kcal === null) return 'Förslag utifrån det du brukar äta.';
-  const left = `${formatKcal(Math.max(0, remaining.kcal))} kvar`;
-  const pK = progress(eaten.kcal, goals.targetKcal) ?? 0;
-  const lagging: string[] = [];
-  if (hour < LATE_HOUR) {
-    const pP = progress(eaten.proteinG, goals.proteinGoalG);
-    const pF = progress(eaten.fiberG, goals.fiberGoalG);
-    if (pP !== null && pP < 0.9 && pP < pK - 0.15) lagging.push('protein');
-    if (pF !== null && pF < 0.9 && pF < pK - 0.15) lagging.push('fiber');
+  const left = remaining.kcal === null ? null : `${formatKcal(Math.max(0, remaining.kcal))} kvar`;
+  const gaps = gapsOf(eaten, goals);
+  const large = [
+    { label: 'protein', gap: gaps.protein },
+    { label: 'fiber', gap: gaps.fiber },
+  ]
+    .filter((g) => g.gap.share > GAP_SMALL_SHARE)
+    .sort((a, b) => b.gap.share - a.gap.share);
+  if (large.length === 0) {
+    return left === null
+      ? 'Förslag utifrån det du brukar äta.'
+      : `Du ligger bra till idag · ${left}`;
   }
-  if (lagging.length > 0) return `Lite lågt på ${lagging.join(' och ')} idag · ${left}`;
-  return `Du ligger bra till idag · ${left}`;
-}
-
-/**
- * Förslagets etiketter. En kombination får de som någon del har (proteinrik kvarg + fiberrika
- * bär), utom Energisnål som bara gäller om alla delar är energisnåla.
- */
-export function claimsOfParts(
-  parts: readonly SuggestionPart[],
-  fiberSource: FiberSource | null,
-): ClaimId[] {
-  const all = parts.map((p) => claimsFor(p.food, fiberSource ?? NO_FIBER));
-  if (all.length === 1) return all[0] ?? [];
-  return [...new Set(all.flat())].filter(
-    (c) => c !== 'energisnal' || all.every((l) => l.includes(c)),
-  );
+  if (hour >= LATE_HOUR)
+    return left === null ? 'Förslag utifrån det du brukar äta.' : `${left} idag`;
+  const text = `${large.map((g) => `${formatInt(Math.round(g.gap.grams))} g ${g.label}`).join(' och ')} kvar`;
+  return left === null ? text : `${text} · ${left}`;
 }
 
 function nameOf(parts: readonly SuggestionPart[]): string {
   return parts.map((p) => p.food.name).join(' + ');
 }
 
+function gramsOf(parts: readonly SuggestionPart[]): number {
+  return parts.reduce((s, p) => s + p.grams, 0);
+}
+
+/** Andel av gapet – eller gram – som räknas som ett bidrag värt att nämna i förklaringen. */
+const REASON_MIN_FILL = 0.15;
+const REASON_MIN_PROTEIN_G = 10;
+const REASON_MIN_FIBER_G = 3;
+/** … och bara för en källa: minst 15 % av energin från protein, minst 1,5 g fiber per 100 kcal. */
+const REASON_MIN_PROTEIN_SHARE = 0.15;
+const REASON_MIN_FIBER_PER_100_KCAL = 1.5;
+
 /**
- * Förslagen för en måltid, rangordnade. I lågt läge bara energisnåla alternativ; annars aldrig
- * något som går över det som är kvar av dagens kcal-mål. Ett livsmedel ingår i högst en
- * kombination, så att listan blir varierad.
+ * Förklaringen, en kort rad: varför förslaget står där. Stort gap: protein ("Mycket protein per
+ * kcal" när ≥ 30 % av energin är protein, annars "Fyller proteingapet") eller fiber ("Mycket fiber
+ * per kcal" vid ≥ 3 g/100 kcal, annars "Fyller fibergapet"). Annars lätthet eller vana. Från
+ * klockan 20 nämns inte protein eller fiber.
+ */
+export function reasonFor(
+  s: Pick<Suggestion, 'values' | 'claims' | 'origin' | 'general' | 'inSlot' | 'parts'>,
+  ctx: { mode: ScoreMode; gaps: Gaps; slot: MealSlot; late: boolean },
+): string {
+  const { values } = s;
+  if (ctx.mode === 'gap' && !ctx.late) {
+    const w = gapWeights(ctx.gaps);
+    const p = fill(values.proteinG, ctx.gaps.protein);
+    const f = fill(values.fiberG ?? 0, ctx.gaps.fiber);
+    const proteinShare = values.kcal > 0 ? (values.proteinG * PROTEIN_KCAL_PER_G) / values.kcal : 0;
+    const fiberPer100kcal = values.kcal > 0 ? ((values.fiberG ?? 0) / values.kcal) * 100 : 0;
+    // Bara när förslaget faktiskt är en källa: en kanelbulle "fyller" inte proteingapet.
+    const pOk =
+      w.protein > 0 &&
+      proteinShare >= REASON_MIN_PROTEIN_SHARE &&
+      (p >= REASON_MIN_FILL || values.proteinG >= REASON_MIN_PROTEIN_G);
+    const fOk =
+      w.fiber > 0 &&
+      fiberPer100kcal >= REASON_MIN_FIBER_PER_100_KCAL &&
+      (f >= REASON_MIN_FILL || (values.fiberG ?? 0) >= REASON_MIN_FIBER_G);
+    if (pOk && fOk) return 'Fyller både protein- och fibergapet';
+    if (pOk && (!fOk || w.protein * p >= w.fiber * f)) {
+      return proteinShare >= 0.3 ? 'Mycket protein per kcal' : 'Fyller proteingapet';
+    }
+    if (fOk) {
+      return fiberPer100kcal >= 3 ? 'Mycket fiber per kcal' : 'Fyller fibergapet';
+    }
+  }
+  if (s.claims.includes('energisnal')) return 'Energisnålt – lätt att få plats med';
+  const slotName = mealLabel(ctx.slot).toLowerCase();
+  if (s.inSlot >= 2) return `Du brukar äta det till ${slotName}`;
+  const [only] = s.parts;
+  if (s.origin === 'dish' && only) {
+    return only.food.source === 'recept' ? 'Ett av dina recept' : 'En av dina måltider';
+  }
+  if (s.origin === 'favorite') return 'En av dina favoriter';
+  if (s.origin === 'history') return 'Något du ätit nyligen';
+  return `Passar till ${slotName}`;
+}
+
+/**
+ * Variation: ett livsmedel förekommer i högst ett av förslagen på samma sida (tre som visas
+ * samtidigt). Ett förslag som krockar flyttas till en senare sida. Kan en sida inte fyllas
+ * slutar listan där.
+ */
+export function diversify<T extends { parts: readonly { food: { id: string } }[] }>(
+  ranked: readonly T[],
+  page = SUGGESTION_PAGE,
+  max = MAX_SUGGESTIONS,
+): T[] {
+  const rest = [...ranked];
+  const out: T[] = [];
+  while (rest.length > 0 && out.length < max) {
+    const used = new Set<string>();
+    let taken = 0;
+    for (let i = 0; i < rest.length && taken < page && out.length < max;) {
+      const item = rest[i];
+      const ids = item ? item.parts.map((p) => p.food.id) : [];
+      if (!item || ids.some((id) => used.has(id))) {
+        i += 1;
+        continue;
+      }
+      for (const id of ids) used.add(id);
+      out.push(item);
+      rest.splice(i, 1);
+      taken += 1;
+    }
+    if (taken < page) break;
+  }
+  return out;
+}
+
+/**
+ * Förslagen för en måltid, rangordnade. Stort gap: efter näringsgapen (proteinkällor skalas mot
+ * proteingapet). Små gap: lätthet + vana. Lågt läge: bara energisnåla alternativ. Aldrig något som
+ * går över det som är kvar av dagens kcal-mål. Ett livsmedel ingår i högst en kombination och i
+ * högst ett av de tre förslag som visas samtidigt.
  */
 export function buildSuggestions(input: SuggestInput): SuggestResult {
   const eaten = eatenToday(input.log, input.today, input.fiberSource);
   const remaining = remainingOf(eaten, input.goals);
   const low = isLowMode(remaining);
+  const gaps = gapsOf(eaten, input.goals);
+  const gapMode = !low && hasLargeGap(gaps);
   const typicalKcal = typicalSlotKcal(input.log, input.slot, input.today, input.goals.targetKcal);
   const cap = portionCap(typicalKcal, remaining);
-  const ctx: ScoreContext = { eaten, goals: input.goals, remaining, cap, low };
   const hiddenKeys = new Set((input.hidden ?? []).map((h) => h.key));
+  const late = input.hour >= LATE_HOUR;
 
   let singles = candidatesFor({ ...input, lowEnergyOnly: low });
   if (low) {
@@ -772,42 +1198,69 @@ export function buildSuggestions(input: SuggestInput): SuggestResult {
   }
   const combos = low
     ? []
-    : combinations(singles, input.log, input.slot, input.today, input.fiberSource, hiddenKeys);
+    : combinations(singles, input.log, input.slot, input.today, input.fiberSource, hiddenKeys, {
+        protein: !gapMode || gaps.protein.share > GAP_SMALL_SHARE,
+        fiber: !gapMode || gaps.fiber.share > GAP_SMALL_SHARE,
+      });
 
-  const scored: Suggestion[] = [];
-  for (const c of [...singles, ...combos]) {
-    const before = valuesOf(c.parts, input.fiberSource);
-    const parts = fitPortion(c.parts, before.kcal, cap);
+  // Portioner och värden först: näringen normeras mot den bästa kandidaten.
+  const sized = [...singles, ...combos].flatMap((c) => {
+    const [only] = c.parts;
+    const protein =
+      gapMode &&
+      only !== undefined &&
+      c.parts.length === 1 &&
+      gaps.protein.grams > 0 &&
+      isProteinSource(only.food, input.fiberSource);
+    const parts = protein
+      ? [scaleProteinPortion(only, gaps.protein.grams, cap)]
+      : fitPortion(c.parts, valuesOf(c.parts, input.fiberSource).kcal, cap);
     const values = valuesOf(parts, input.fiberSource);
-    if (!low && remaining.kcal !== null && values.kcal > remaining.kcal) continue;
-    scored.push({
+    if (!low && remaining.kcal !== null && values.kcal > remaining.kcal) return [];
+    return [{ c, parts, values }];
+  });
+  const bestNutrition = Math.max(0, ...sized.map((x) => nutritionScore(x.values, gaps)));
+  const mode: ScoreMode = gapMode && bestNutrition > 0 ? 'gap' : low ? 'low' : 'small';
+  const ctx: ScoreContext = { mode, gaps, bestNutrition, remaining, typicalKcal };
+
+  const scored = sized.map(({ c, parts, values }): Suggestion => {
+    const claims = claimsOfParts(parts, input.fiberSource);
+    const scoreParts = scoreCandidate(c.weight, values, gramsOf(parts), ctx);
+    const suggestion: Suggestion = {
       ...c,
       parts,
       name: nameOf(parts),
       values,
-      claims: claimsOfParts(parts, input.fiberSource),
-      score: scoreCandidate(c.weight, values, ctx),
-    });
-  }
+      claims,
+      score: scoreParts.total,
+      scoreParts,
+      reason: '',
+    };
+    suggestion.reason = reasonFor(suggestion, { mode, gaps, slot: input.slot, late });
+    return suggestion;
+  });
   scored.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
 
+  // Ett livsmedel ingår i högst en kombination.
   const inCombo = new Set<string>();
-  const suggestions: Suggestion[] = [];
+  const ranked: Suggestion[] = [];
   for (const s of scored) {
     if (s.parts.length > 1) {
       const ids = s.parts.map((p) => p.food.id);
       if (ids.some((id) => inCombo.has(id))) continue;
       for (const id of ids) inCombo.add(id);
     }
-    suggestions.push(s);
-    if (suggestions.length >= MAX_SUGGESTIONS) break;
+    ranked.push(s);
   }
+  const suggestions = diversify(ranked);
 
   return {
     mode: suggestions.length === 0 ? 'empty' : low ? 'low' : 'normal',
     status: statusText(eaten, input.goals, remaining, input.hour),
     eaten,
     remaining,
+    gaps,
+    scoreMode: mode,
     typicalKcal,
     cap,
     suggestions,

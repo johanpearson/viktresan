@@ -698,15 +698,24 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
   som skannerknappen (`icon-button scan-button`, 48 px) – och raden "Föreslå" (`ListRow` med `chevron` och förklaring) överst i måltidens ⋯-meny. Idag visas ⋯ även på
   tomma måltider (menyn har då bara Föreslå). Bara för dagens datum.
 - **Panelen** (`BottomSheet` "Föreslå"): `SegmentedControl` med de fyra måltiderna (`suggest-slots`: kolumner efter innehållet,
-  `--text-sm`, så att "Mellanmål" ryms på 360 px), lägesraden i fetstil ("Lite lågt på protein idag · 640 kcal kvar"), sedan en
-  lista kant i kant (`suggest-list`, linje mellan förslagen). Varje förslag: namn med näringsetiketter och – för startlistan – den
-  dämpade etiketten "Allmänt förslag" (`tag tag-source tag-general`), kcal till höger (`kcal`), mängd dämpat och effekten
-  ("+28 g protein · +3 g fiber · 268 kcal kvar efteråt") i `--text-xs`. Under: "Logga" (sekundär, liten), "Justera" (ghost) och
+  `--text-sm`, så att "Mellanmål" ryms på 360 px), lägesraden i fetstil, sedan en lista kant i kant (`suggest-list`, linje mellan
+  förslagen). Varje förslag: namn med näringsetiketter (räknade på förslagets totala näring – en kombination ärver aldrig en
+  dels etikett) och – för startlistan – den dämpade etiketten "Allmänt förslag" (`tag tag-source tag-general`), kcal till höger
+  (`kcal`), mängd dämpat, förklaringen (`suggest-reason`, fetstil) och effekten ("+28 g protein · +3 g fiber · 268 kcal kvar
+  efteråt"), alla tre i `--text-xs`. Under: "Logga" (sekundär, liten), "Justera" (ghost) och
   "Inte intresserad" (ghost, dämpad, högerställd). Ingen primärknapp i listan – Logga är ett snabbval med Ångra.
+- **Lägesraden** bygger på dagens största gap: "41 g protein och 6 g fiber kvar · 302 kcal kvar" – gap över 10 % av målet,
+  störst andel först. "Du ligger bra till idag · 302 kcal kvar" bara när både protein och fiber är inom 10 % av målet.
+  Saklig ton: gapen är information, inte uppmaningar.
+- **Förklaringen** är en kort rad per förslag om varför det står där: "Mycket protein per kcal", "Fyller proteingapet",
+  "Mycket fiber per kcal", "Fyller fibergapet", "Fyller både protein- och fibergapet", "Energisnålt – lätt att få plats med",
+  "Du brukar äta det till mellanmål", "En av dina favoriter" … Inga utropstecken, ingen värdering av användaren.
+- **Variation**: samma livsmedel förekommer i högst ett av de tre förslag som visas samtidigt (även som del i en kombination).
 - "Visa fler" (`ShowMore`) visar nästa tre; "Något nytt" (sekundär, full bredd) öppnar `AskAi` i helskärm ovanpå. Toasten
   (Loggade …/Visar inte … med Ångra) ligger i panelen. Justera staplar logg-sheeten ovanpå ("Justera (1 av 2)" för en kombination).
 - **Lågt läge**: lägesraden "Du har nått dagens mål. Är du hungrig finns lätta alternativ här." och bara energisnåla förslag –
-  ingen text om protein eller fiber och ingen "kvar efteråt". Sent på kvällen (från 20) nämns aldrig protein eller fiber.
+  ingen text om protein eller fiber och ingen "kvar efteråt". Sent på kvällen (från 20) nämns aldrig protein eller fiber – varken
+  i lägesraden ("302 kcal kvar idag") eller i förklaringarna.
 - **Tomt läge**: `EmptyState` "Inga förslag just nu" med förklaring och "Något nytt".
 
 ### Snabblogg, recept och veckoraden
