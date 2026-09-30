@@ -1,5 +1,5 @@
 /**
- * Finelis användningsklasser (FUCLASS, `fuclass_SV.csv`) → appens kategorier
+ * Finelis användningsklasser (FUCLASS, `fuclass_SV.csv`, version 18 och 20) → appens kategorier
  * för enheter och densitet (se foodCategories.ts). Används för livsmedel från
  * Fineli (`fi:`) när namnet inte gav någon kategori – samma ordning som för
  * Livsmedelsverkets grupper. Klasser som saknas här (övergripande klasser,
@@ -118,6 +118,58 @@ export const FINELI_CLASSES: Readonly<Record<string, FoodCategory>> = {
   SPICES: 'kryddor', // Kryddor
   SNACK: 'godis', // Snacks
   SPISAUCE: 'sas', // Kryddsåser
+  // Klasser som tillkom i version 20
+  FRUBDISH: 'efterratt', // Frukt- och bärrätter med undantag pajer
+  LEGUMES: 'gronsak', // Baljväxter
+  LEGUPROD: 'kott', // Baljväxtprodukter (tofu, sojafärs – som vegetariska proteinprodukter)
+  LEGUDISH: 'ratt', // Baljväxträtter
+  LEGUSOUP: 'soppa', // Baljväxtsoppor
+  LEGUSAUC: 'sas', // Baljväxtsåser
+  VEGSAUC: 'sas', // Grönsakssåser
+  SALADMAY: 'ratt', // Majonnässallader
+  POTAFRIE: 'potatis', // Stekt potatis, pommes frites
+  PANCAKE: 'bakverk', // Pannkakor
+  BISCUSWE: 'bakverk', // Söta kex och småbröd
+  BISCUSAV: 'brod', // Smörgåskex
+  CERBAR: 'godis', // Spannmålsstänger
+  FLOUR: 'mjol', // Mjöl
+  CREAM: 'gradde', // Grädde
+  CURD: 'fil', // Kvarg
+  SOUCREAM: 'fil', // Syrade mjölkprodukter
+  CHEESCUR: 'ost', // Ost, mogen
+  CHEESUNC: 'ost', // Färskost
+  CHEESPRO: 'ost', // Smältost
+  BUTTER: 'matfett', // Smör, mjölkfett
+  FATANIM: 'matfett', // Animaliskt fett
+  BUTTEHIG: 'matfett', // Matfettsblandning >= 55 %
+  BUTTELOW: 'matfett', // Matfettsblandning < 55 %
+  VEGFATLO: 'matfett', // Margarin och matfett <55 %
+  VEGFATHI: 'matfett', // Margarin och matfett >= 55 %
+  FATCOOK: 'matfett', // Matlagningsfett och industriellt fett
+  SALADDRE: 'sas', // Salladsdressing och majonnäser
+  OIL: 'olja', // Olja
+  FISHDISH: 'ratt', // Fiskrätter
+  FISHSAUC: 'sas', // Fisksåser
+  SEAFOOD: 'fisk', // Skaldjur och mollusker
+  SEAFDISH: 'ratt', // Skaldjursrätter
+  SEAFSOUP: 'soppa', // Skaldjursoppa
+  SEAFSAUC: 'sas', // Skaldjurssås
+  MEATDISH: 'ratt', // Kötträtter
+  POULTRY: 'kott', // Kycklingar och övriga fåglar
+  POULTDIS: 'ratt', // Fågelrätter
+  POULTSOU: 'soppa', // Fågelsoppor
+  POULSAUC: 'sas', // Fågelsåser
+  MEATPROD: 'kott', // Köttprodukter
+  MEATSAUC: 'sas', // Köttsåser
+  SAUSCUTS: 'palagg', // Korvpålägg (korv känns igen på namnet)
+  MEATCUTS: 'palagg', // Köttpålägg
+  DRINKOTH: 'dryck', // Övriga drycker
+  CIDER: 'dryck', // Cider (alkohol räknas inte – se isAlcoholic)
+  SAVSAUCE: 'sas', // Såser och buljonger
+  DESSAUCE: 'sas', // Dessertsåser
+  SNACKTOT: 'godis', // Snacks
+  SNACKSAV: 'godis', // Salta snacks
+  SNACKVEG: 'notter', // Nötter, frön och torkade frukter
   // Barnmat: bara grötarna har en tydlig kategori
   BABMILPO: 'grot', // Barngröt med mjölk
   BABWATPO: 'grot', // Barngröt med vatten
