@@ -12,7 +12,9 @@ const LIVSMEDEL = {
   retrieved: '2026-09-01',
   foods: [
     [1, 'Kvarg naturell', 65, 11, 4, 0.2],
+    // Ost (31 % av energin från protein) är proteinrik enligt EU:s regel – smör är det inte.
     [2, 'Ost hårdost', 350, 27, 0, 27],
+    [3, 'Smör', 740, 0.6, 0, 82],
   ],
 };
 
@@ -106,8 +108,11 @@ test('genvägen Logga mat öppnar sök, med proteinrik-etikett', async ({ page }
   await expect(kvarg.getByTestId('protein-rich')).toHaveText('Proteinrik');
   await sheet.getByLabel('Sök livsmedel').fill('ost');
   const ost = sheet.getByTestId('search-result').filter({ hasText: 'Ost hårdost' });
-  await expect(ost).toBeVisible();
-  await expect(ost.getByTestId('protein-rich')).toHaveCount(0);
+  await expect(ost.getByTestId('protein-rich')).toHaveText('Proteinrik');
+  await sheet.getByLabel('Sök livsmedel').fill('smör');
+  const smor = sheet.getByTestId('search-result').filter({ hasText: 'Smör' });
+  await expect(smor).toBeVisible();
+  await expect(smor.getByTestId('protein-rich')).toHaveCount(0);
 
   await sheet.getByLabel('Sök livsmedel').fill('kvarg');
   await kvarg.tap();

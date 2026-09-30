@@ -46,8 +46,8 @@ src/lib/features.ts     Funktionsbrytare: FEATURES, useFeatures() (filter/isEnab
 src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt veckokort, profilsida, spökbild), usePreferences()
 src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
 src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
-src/lib/protein.ts      Proteinmål (faktor × målvikt) och proteinrik-regeln (≥ 15 g/100 kcal)
-src/lib/fiber.ts        Fibermål (NNR 2023, upptrappning 3 g/vecka), fiber per dag ur matloggen, fiberrik-regeln (≥ 3 g/100 kcal),
+src/lib/protein.ts      Proteinmål (faktor × målvikt)
+src/lib/fiber.ts        Fibermål (NNR 2023, upptrappning 3 g/vecka), fiber per dag ur matloggen,
                         fiber i matloggningen (fiberForItem per mängd, fiberSum, FiberAmount: null = "–", partial = "*"), formatMacroG
 src/lib/useFiber.ts     Hook: fibermålet + fiber per dag (läser livsmedel.json/egna livsmedel bara när målet visas), sparar trappans start
 src/data/fiberReference.ts  Referensvärden för fiber (35 g män, 25 g kvinnor, 30 g utan kön) med källa (NNR 2023)
@@ -96,6 +96,10 @@ src/lib/weekBudget.ts   Veckoraden: 7 × dagsmål, kvar, per dag resten av vecka
 src/lib/swaps.ts        Bytesförslag: samma kategori, klart bättre protein/kcal eller fiber, aldrig mer energi
 src/lib/aiPrompt.ts     "Fråga AI": kryssrutor (AI_OPTIONS), underlag (aiContextFrom), promptbyggare, ChatGPT-/Claude-länkar
 src/lib/aiPromptTemplate.ts  Promptmallen på svenska ({{amne}}, {{amneKort}}, {{underlag}}, {{kalorigolv}}) – redigera här
+src/data/nutritionClaims.ts  Näringsetiketternas regler med källa (EU 1924/2006): Proteinrik, Fiberrik, Energisnål (CLAIM_RULES)
+src/lib/claims.ts       Etikettreglerna (isProteinRich/isFiberRich/isLowEnergy), underlag per livsmedel/måltid/recept (claimFactsFor)
+src/lib/foodNutrition.ts  Näringsvärdenas status (kcal, P, K, F, fiber, socker; saknas/källa/eget), egna värden ovanpå källan
+                        (applyOverride/withoutOverride, mergeOverride), uppdatering av tidigare loggposter (logEntriesToUpdate)
 src/data/nutrients.ts   Övriga näringsämnen: nyckel, enhet, RI (EU 1169/2011; fiber NNR), EuroFIR-kod/namn för importen
 src/lib/units.ts        Enheter: volym via densitet, kategori (foodProfile), relevanta enheter, gissningar, förval, OFF-portion/förpackning
 src/data/units.ts       Kuraterad tabell per livsmedel (Livsmedelsverket): styckvikter, egen densitet/kategori (ungefärliga)
@@ -112,7 +116,8 @@ src/lib/barcode.ts      EAN-validering + Open Food Facts-uppslag (injicerbar fet
 src/lib/barcodeDetector.ts  Typning/fabrik för BarcodeDetector
 src/lib/barcodeLookup.ts  Uppslag av en skannad kod: lokalt (livsmedel, måltider, tillskott) före OFF, korsträff Mat/Tillskott
 src/lib/scanner.ts      Skannerns kameralogik: ljusnivå (luma, hysteres), ficklampa/zoom/fokus ur capabilities
-src/lib/aiLabel.ts      "Lägg in med AI från etikett": prompter och JSON-validering (tillskott per dos, livsmedel per 100 g)
+src/lib/aiLabel.ts      "Lägg in med AI från etikett": prompter och JSON-validering (tillskott per dos, livsmedel per 100 g med
+                        valfri fiber, socker och portion)
 src/lib/clipboard.ts    copyText (med execCommand-reserv) och shareText (Web Share)
 src/lib/supplements.ts  Tillskott: former, scheman, dagens tillskott, tagna doser (intakeFor), mängder per ämne
 src/lib/nutrientUnits.ts  Enheter för vitaminer/mineraler: g/mg/µg och IE (D-vitamin, 1 µg = 40 IE), tillåtna ämnen
@@ -126,7 +131,7 @@ src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
 src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
-src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 12)
+src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 13)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, TodoCard, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
@@ -155,7 +160,8 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). fineli.spec.ts = sökträff från den bundlade
                         Fineli-filen (etikett, loggning), källan i Om appen och deduplicering med mockade filer; specar som mockar
-                        livsmedel.json mockar också en tom fineli.json så att resultaten inte beror på Finelis data. supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
+                        livsmedel.json mockar också en tom fineli.json så att resultaten inte beror på Finelis data. nutritionData.spec.ts = skannad vara utan fiber (mockad OFF) → Komplettera
+                        → uppdatera tidigare logg → skanna igen (eget värde, Fiberrik), filter Proteinrik och dolda etiketter. supplements.spec.ts mockar getUserMedia (spår med/utan torch/zoom),
                         BarcodeDetector (kod via `window.__ean`) och OFF. rings.spec.ts = ringarnas text inom den inre cirkeln
                         med värsta fallets värden (WORST_CASE_RINGS) på 412 och 360 px. visual.spec.ts + visualData.ts = visuella regressionstester (egen
                         Playwright-projekt `visual`, fryst datum, fast data, baslinjer i e2e/__screenshots__). Övriga (inkl. axe, offline, backup, lås, mat, träning, GLP-1, genvägar,
@@ -201,7 +207,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`); Tillskott också (`availableSince: 4`, `FLAGS_VERSION = 4`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 12`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 13`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
@@ -220,7 +226,10 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   `schedule` `dagligen`/`veckodagar` (+ `weekdays`)/`vid-behov`, `dosesPerDay`, valfri `ean`; index `by-ean`),
   `supplementLog` (v10, tagna doser, id = `<tillskott>:<datum>`, en per tillskott och dag, namn och ämnen kopieras in;
   index `by-date`), `recipes` (v11, recept: ingredienser som måltider, `servings` och/eller `cookedWeightG`; livsmedels-id
-  `recept:<id>`; valfri `sourceUrl` från receptimporten utan schemaändring). Matloggposter har sedan v11 (utan datamigrering) valfria `estimated: true` (snabblogg: 1 portion = 100 "g",
+  `recept:<id>`; valfri `sourceUrl` från receptimporten utan schemaändring), `foodOverrides` (v13, egna näringsvärden per
+  livsmedel från OFF/Livsmedelsverket/Fineli, nyckel = `foodId`, valfri `ean`, `values` = kcal/proteinG/carbsG/fatG/fiberG/sugarG
+  per 100 g/ml; `putFoodOverride` utan värden tar bort posten). `StoredFood` har utan schemaändring valfria `sugarG` och
+  `missing` (makron som saknades i OFF och sparades som 0). Matloggposter har sedan v11 (utan datamigrering) valfria `estimated: true` (snabblogg: 1 portion = 100 "g",
   `per100` = hela värdet, ingår inte i vitaminer/mineraler – `DayNutrition.estimatedEntries`) och `recipe` (`{ yieldG, items }`,
   receptet som det såg ut vid loggningen – `partsOf`/ingredienser läser kopian, så en receptändring bara påverkar nya loggar).
   `SavedMeal` har sedan v10 en valfri `ean` (ingen schemaändring – skanning hittar måltiden).
@@ -249,7 +258,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -340,7 +349,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   Ringar för kalorier och protein i Översikt → Idag (`RingAction`: kalorier → panelen `CalorieDetails` med mål,
   takt, förbrukning/adaptiv TDEE och "Så räknas målet ut"; protein och fiber → Mat → Näring, kortet "Protein och fiber"),
   StatBar i Mat → Dag; proteinkolumn och
-  snitt i Mat → Historik. "Proteinrik" (≥ 15 g protein per 100 kcal) märks i sökträffar och favoriter.
+  snitt i Mat → Historik.
 - **Fibermål** (`fiber.ts`, `useFiber`, `data/fiberReference.ts`): referensvärde NNR 2023, 35 g (man) / 25 g (kvinna) /
   30 g utan kön. Visas automatiskt när GLP-1 är på, annars med `profile.showFiberGoal` (Inställningar → Fibermål, bakom
   `mat`). Gradvis upptrappning (på som standard): start = snitt av de senaste 7 loggade dagarna med fiber före idag
@@ -350,7 +359,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   (`extra.fiberG`), egna/OFF (`StoredFood.fiberG`); snabbloggar och poster utan värde räknas inte (`missingEntries` →
   "Dagens fiber kan vara i underkant"). Visas som fjärde ring på Översikt → Idag (`rings-4`; `FiberNote` med veckans mål och saknad fiberdata i Mat → Näring), `StatBar` i Mat → Dag (kalorier
   överst, protein + fiber under), kolumn och snitt i Mat → Historik, raden `fiber` i veckosummeringen, "Mål" i rapportens
-  kost och "Andel av dagens fibermål" i analysen. "Fiberrik" (≥ 3 g/100 kcal, `isFiberRich`) märks som "Proteinrik".
+  kost och "Andel av dagens fibermål" i analysen.
   **Fiber i matloggningen** visas alltid (oberoende av fibermålet) bredvid makrona med `Macros` i fiberns färg
   (`--macro-fiber`): logg-sheetens näringsrad (`log-macros`, vald mängd och enhet) och detaljer (per 100 g och per
   första enheten), sökträffar/Senaste/Favoriter (per enhet eller 100 g), raderna, måltidens rubrik (`SectionAccordion`
@@ -414,6 +423,24 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   ger `BarcodeElsewhere` med länk (`#/logga/tillskott/ean/<kod>` resp. `#/mat/ean/<kod>`, som slår upp koden direkt).
   Ingen träff → `BarcodeNotFound`: "Lägg in med AI från etikett" / "Lägg in manuellt" (EAN förifylld och sparad) och
   länken "Bidra till Open Food Facts" (`/product/<ean>`).
+- **Näringsvärden och komplettering** (`foodNutrition.ts`, `NutritionStatus`, `NutritionCompleteForm`, `LogUpdateOffer`): logg-sheeten
+  (`FoodLogForm`, efter skanning och vid sök) visar för livsmedel från OFF, Livsmedelsverket, Fineli och egna kcal, protein,
+  kolhydrater, fett, fiber och socker per 100 g/ml med ursprung per värde (källan eller "Eget värde"); saknas något: "saknas",
+  etiketten "Ofullständig näringsdata" (`tag-incomplete`) och "Komplettera" (annars "Rätta näringsvärden" i den hopfällda listan).
+  Formuläret förifylls (märkt "Från Open Food Facts"/"Eget värde"/"Saknas"), alla värden kan rättas, och "Fota etiketten med AI"
+  (`AiLabelImport` livsmedel: per 100 g/ml + `fiberG`, `sockerG`, `portionG`) fyller fälten efter förhandsvisning. Sparas som
+  `FoodOverride` (bara värden som skiljer sig från källan; tömt eget värde = källans igen); ett eget livsmedel ändras direkt
+  (`completeStoredFood`). En portion från AI blir egen enhet "portion". Egna värden läggs på i `useFoodData` (livsmedel) och
+  `storedItems` (egna/OFF) och i fiberuppslagen (`overlayExtras`: `useFiber`, rapporten, UL-varningen) – nästa skanning (lokalt
+  först) visar dem. Efter sparning: `LogUpdateOffer` ("Bara idag", "Senaste 7 dagarna" = idag + 6, "Alla") skriver nya kcal/makron
+  i tidigare poster (`putFoodLogEntries`); fiber och socker slås alltid upp på livsmedlet. Inte vid redigering av en post.
+- **Näringsetiketter** (`data/nutritionClaims.ts`, `claims.ts`, `ClaimTags`): EU 1924/2006 – Proteinrik = ≥ 20 % av energin från
+  protein (4 kcal/g), Fiberrik = ≥ 6 g/100 g eller ≥ 3 g/100 kcal, Energisnål = ≤ 40 kcal/100 g (≤ 20 kcal/100 ml för drycker:
+  `per100Unit` ml eller kategori `dryck`/`mjolk`). Saknat underlag (t.ex. ingen fiber, OFF utan protein) = ingen etikett;
+  snabbloggar har inga. Måltider och recept: andelarna per portion, fiber ur ingredienserna (`fiberForItem`, summa i underkant).
+  Visas (`tag tag-claim tag-protein|fiber|food`) i sökträffar, Senaste, Favoriter, Måltider, logg-sheeten och Mat → Egna.
+  Filterchips i sök-sheeten (`claim-filter-*`, alla valda måste gälla; sökningen tar 400 träffar och visar 20). Inställningar →
+  Visning → Näringsetiketter döljer etiketter och chips (`preferences.claimsHidden`).
 - **Tillskott** (`supplements.ts`, bakom brytaren `tillskott`, av som standard): Logga → Tillskott (`SupplementsLog`):
   dagens chips, "Lägg till" (skanna, AI från etikett, manuellt) och "Mina tillskott" (tryck = formulär, svep = ta bort
   med Ångra). `SupplementForm`: namn, enhet (tablett, kapsel, droppe, ml, brustablett), mängd per dos, näringsämnen ur
@@ -530,16 +557,16 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 10`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 11`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`, `foodOverrides`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
     har portioner i stället för enheter och uppgraderas med `upgradeFoodData`; version 1–6 saknar milstolpar
     (tom lista – efter importen markeras passerade milstolpar utan firande); version 1–7 saknar fototillfällen och
-    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor); version 1–9 saknar recept (tom lista). En bild vars `sessionId` saknas bland tillfällena avvisas.
+    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor); version 1–9 saknar recept (tom lista); version 1–10 saknar egna näringsvärden (tom lista). En bild vars `sessionId` saknas bland tillfällena avvisas.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.

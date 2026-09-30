@@ -1,6 +1,6 @@
 /**
- * Fibermål (NNR 2023) med gradvis upptrappning, fiber per dag ur matloggen och
- * fiberrika livsmedel. Rena funktioner utan I/O.
+ * Fibermål (NNR 2023) med gradvis upptrappning och fiber per dag ur matloggen. Rena
+ * funktioner utan I/O. (Etiketten Fiberrik: `claims.ts`.)
  *
  * Fiber finns för Livsmedelsverkets livsmedel (även som ingredienser i måltider och
  * recept), för Open Food Facts-produkter som har värdet och för egna livsmedel där det
@@ -22,8 +22,6 @@ export const FIBER_RAMP_DEFAULT_START_G = 15;
 export const FIBER_RAMP_STEP_G = 3;
 /** Startvärdet = snittet av så här många senast loggade dagar. */
 export const FIBER_RAMP_WINDOW_DAYS = 7;
-/** Minst så här många gram fiber per 100 kcal räknas som fiberrikt. */
-export const FIBER_RICH_G_PER_100_KCAL = 3;
 
 /** Referensvärdet per dag för ett kön (NNR 2023), 30 g utan kön. */
 export function fiberReferenceG(sex: Sex | undefined): number {
@@ -276,14 +274,4 @@ export function dailyFiber(foodLog: readonly FoodLogEntry[], source: FiberSource
   return [...byDate.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([date, entries]) => ({ date, ...fiberOfEntries(entries, source) }));
-}
-
-/** Fiberrikt = minst 3 g fiber per 100 kcal. Livsmedel utan energi eller fiberdata räknas inte. */
-export function isFiberRich(food: {
-  per100: { kcal: number };
-  extra?: { fiberG?: number } | undefined;
-}): boolean {
-  const fiber = food.extra?.fiberG;
-  if (fiber === undefined || !(food.per100.kcal > 0) || !(fiber > 0)) return false;
-  return (fiber / food.per100.kcal) * 100 >= FIBER_RICH_G_PER_100_KCAL;
 }

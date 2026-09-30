@@ -19,7 +19,9 @@
  *                      profilens `calorieMode` från version 10 släpps vid import – inställningen
  *                      Dag/Vecka är borttagen; senare utan versionsbyte: profilens
  *                      fibermål och GLP-1-dryckestillägg, `fiberG` på livsmedel – äldre
- *                      versioner av appen släpper dem vid import)
+ *                      versioner av appen släpper dem vid import),
+ *                      foodOverrides – egna näringsvärden per livsmedel (sedan version 11;
+ *                      äldre filer ger en tom lista), `sugarG`/`missing` på livsmedel
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -40,6 +42,9 @@ import {
   type LegacyStoredFood,
   type Favorite,
   type FoodLogEntry,
+  type FoodOverride,
+  type MacroField,
+  type NutritionField,
   type Injection,
   type LegacyMeasurement,
   type LegacyPhotoEntry,
@@ -89,9 +94,9 @@ import {
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 10;
+export const BACKUP_VERSION = 11;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -152,6 +157,8 @@ export interface BackupSummary {
   supplementLog: number;
   /** Recept. */
   recipes: number;
+  /** Livsmedel med egna näringsvärden. */
+  foodOverrides: number;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -195,6 +202,7 @@ interface PlainManifest {
   supplements: Supplement[];
   supplementLog: SupplementIntake[];
   recipes: Recipe[];
+  foodOverrides: FoodOverride[];
 }
 
 interface EncryptedManifest {
@@ -257,6 +265,7 @@ export async function createBackup(
     supplements: snapshot.supplements,
     supplementLog: snapshot.supplementLog,
     recipes: snapshot.recipes,
+    foodOverrides: snapshot.foodOverrides,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -385,6 +394,7 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     supplements: snapshot.supplements.length,
     supplementLog: snapshot.supplementLog.length,
     recipes: snapshot.recipes.length,
+    foodOverrides: snapshot.foodOverrides.length,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -481,6 +491,8 @@ function parsePlain(
       ...(version >= 9 ? parseSupplementData(manifest) : { supplements: [], supplementLog: [] }),
       // Version 1–9 saknar recept.
       recipes: version >= 10 ? parseRecipes(manifest) : [],
+      // Version 1–10 saknar egna näringsvärden.
+      foodOverrides: version >= 11 ? parseFoodOverrides(manifest) : [],
     },
   };
 }
@@ -664,6 +676,14 @@ function parseRecipes(manifest: Record<string, unknown>): Recipe[] {
   if (!Array.isArray(recipes)) throw invalid('Recept saknas.');
   const result = recipes.map((r, i) => parseRecipeRecord(r, i));
   assertUniqueKeys(result, (r) => r.id, 'recept');
+  return result;
+}
+
+function parseFoodOverrides(manifest: Record<string, unknown>): FoodOverride[] {
+  const { foodOverrides } = manifest;
+  if (!Array.isArray(foodOverrides)) throw invalid('Egna näringsvärden saknas.');
+  const result = foodOverrides.map((o, i) => parseFoodOverrideRecord(o, i));
+  assertUniqueKeys(result, (o) => o.foodId, 'livsmedel med egna näringsvärden');
   return result;
 }
 
@@ -949,7 +969,48 @@ function parseFoodRecord(value: unknown, index: number): LegacyStoredFood {
     if (!isAmount(value.fiberG)) throw bad();
     food.fiberG = value.fiberG;
   }
+  if (value.sugarG !== undefined) {
+    if (!isAmount(value.sugarG)) throw bad();
+    food.sugarG = value.sugarG;
+  }
+  if (value.missing !== undefined) {
+    if (!Array.isArray(value.missing) || !value.missing.every(isMacroField)) throw bad();
+    food.missing = [...new Set(value.missing)];
+  }
   return food;
+}
+
+const MACRO_FIELDS: readonly MacroField[] = ['kcal', 'proteinG', 'carbsG', 'fatG'];
+const NUTRITION_FIELDS: readonly NutritionField[] = [...MACRO_FIELDS, 'fiberG', 'sugarG'];
+
+function isMacroField(value: unknown): value is MacroField {
+  return (MACRO_FIELDS as readonly unknown[]).includes(value);
+}
+
+function parseFoodOverrideRecord(value: unknown, index: number): FoodOverride {
+  const bad = () => invalid(`Egna näringsvärden nr ${index + 1} i säkerhetskopian är ogiltiga.`);
+  if (!isRecord(value) || !isId(value.foodId) || !isName(value.name) || !isRecord(value.values)) {
+    throw bad();
+  }
+  const values: FoodOverride['values'] = {};
+  for (const key of NUTRITION_FIELDS) {
+    const v = value.values[key];
+    if (v === undefined) continue;
+    if (!isAmount(v)) throw bad();
+    values[key] = v;
+  }
+  if (Object.keys(values).length === 0) throw bad();
+  const override: FoodOverride = {
+    foodId: value.foodId,
+    name: value.name,
+    values,
+    ...parseTimes(value, bad),
+  };
+  if (value.ean !== undefined) {
+    if (typeof value.ean !== 'string' || !/^\d{8,14}$/.test(value.ean)) throw bad();
+    override.ean = value.ean;
+  }
+  return override;
 }
 
 function parseIngredient(value: unknown, bad: () => BackupError): LegacyMealIngredient {

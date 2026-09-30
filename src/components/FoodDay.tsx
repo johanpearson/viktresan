@@ -8,7 +8,7 @@ import {
 } from '../db/db.ts';
 import { daySubject, mealSubject, type AiContext } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';
-import { buildCatalog, entryToItem, mealToItem, storedToItem } from '../lib/foodCatalog.ts';
+import { buildCatalog, entryToItem, mealToItem, storedItems } from '../lib/foodCatalog.ts';
 import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { weekBudget } from '../lib/weekBudget.ts';
@@ -127,11 +127,11 @@ export function FoodDay({
     () =>
       buildCatalog(
         livsmedel?.foods ?? NO_FOODS,
-        foodData.foods.map(storedToItem),
+        storedItems(foodData),
         foodData.meals.map(mealToItem),
         foodData.recipes.map(recipeToItem),
       ),
-    [livsmedel, foodData.foods, foodData.meals, foodData.recipes],
+    [livsmedel, foodData],
   );
   // Fiber per post ur katalogen – först när Livsmedelsverkets data finns (annars utelämnas fibern).
   const fiberSource = useMemo(

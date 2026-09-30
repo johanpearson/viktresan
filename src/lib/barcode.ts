@@ -3,7 +3,7 @@
  * Endast streckkoden skickas till Open Food Facts – inga andra uppgifter.
  */
 import type { NutrientKey } from '../data/nutrients.ts';
-import type { SupplementNutrient } from '../db/db.ts';
+import type { MacroField, SupplementNutrient } from '../db/db.ts';
 import type { FoodItem } from './foodSearch.ts';
 import { convertAmount, nutrientInfo } from './nutrientUnits.ts';
 import { PACKAGE_UNIT, parsePackage, parseServing, type BaseUnit, type FoodUnit } from './units.ts';
@@ -78,6 +78,9 @@ export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
   const kcal = num(n['energy-kcal_100g']) ?? (kj === null ? null : kj / 4.184);
   if (kcal === null) return null;
   const label = productName(ean, p);
+  const protein = num(n.proteins_100g);
+  const carbs = num(n.carbohydrates_100g);
+  const fat = num(n.fat_100g);
   const item: FoodItem = {
     id: `off:${ean}`,
     name: label,
@@ -85,14 +88,25 @@ export function parseOffProduct(ean: string, body: unknown): FoodItem | null {
     ean,
     per100: {
       kcal: Math.round(kcal),
-      proteinG: num(n.proteins_100g) ?? 0,
-      carbsG: num(n.carbohydrates_100g) ?? 0,
-      fatG: num(n.fat_100g) ?? 0,
+      proteinG: protein ?? 0,
+      carbsG: carbs ?? 0,
+      fatG: fat ?? 0,
     },
   };
-  // Fiber saknas ofta i Open Food Facts – då är den okänd (inte 0).
+  // Makron som saknas räknas som 0 men märks, så att de kan kompletteras.
+  const missing: MacroField[] = [];
+  if (protein === null) missing.push('proteinG');
+  if (carbs === null) missing.push('carbsG');
+  if (fat === null) missing.push('fatG');
+  if (missing.length > 0) item.missing = missing;
+  // Fiber och socker saknas ofta i Open Food Facts – då är de okända (inte 0).
   const fiber = num(n.fiber_100g);
-  if (fiber !== null) item.extra = { fiberG: fiber };
+  const sugar = num(n.sugars_100g);
+  if (fiber !== null || sugar !== null) {
+    item.extra = {};
+    if (fiber !== null) item.extra.fiberG = fiber;
+    if (sugar !== null) item.extra.sugarG = sugar;
+  }
   const base = offBaseUnit(p);
   if (base === 'ml') item.per100Unit = 'ml';
   const units: FoodUnit[] = [];

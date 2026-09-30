@@ -52,6 +52,8 @@ export interface SeedData {
   supplementLog?: Record<string, unknown>[];
   /** Recept (sedan v11). */
   recipes?: Record<string, unknown>[];
+  /** Egna näringsvärden (sedan v13); nyckel = `foodId`. */
+  foodOverrides?: Record<string, unknown>[];
 }
 
 /**
@@ -93,6 +95,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
         'supplements',
         'supplementLog',
         'recipes',
+        'foodOverrides',
       ],
       'readwrite',
     );
@@ -120,6 +123,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
     for (const x of data.supplements ?? []) tx.objectStore('supplements').put(x);
     for (const x of data.supplementLog ?? []) tx.objectStore('supplementLog').put(x);
     for (const x of data.recipes ?? []) tx.objectStore('recipes').put(x);
+    for (const x of data.foodOverrides ?? []) tx.objectStore('foodOverrides').put(x);
     for (const [key, value] of Object.entries(data.settings ?? {})) {
       tx.objectStore('settings').put(value, key);
     }
@@ -158,6 +162,7 @@ export interface Dump {
   supplements: unknown[];
   supplementLog: unknown[];
   recipes: unknown[];
+  foodOverrides: unknown[];
 }
 
 /** Läser ut all data ur IndexedDB (bilder som byte-arrayer), sorterat på id. */
@@ -218,6 +223,7 @@ export async function dump(page: Page): Promise<Dump> {
       supplements,
       supplementLog,
       recipes,
+      foodOverrides,
     ] = await Promise.all([
       all('profile'),
       all('weights'),
@@ -242,6 +248,7 @@ export async function dump(page: Page): Promise<Dump> {
       all('supplements'),
       all('supplementLog'),
       all('recipes'),
+      all('foodOverrides'),
     ]);
     db.close();
     return {
@@ -275,11 +282,12 @@ export async function dump(page: Page): Promise<Dump> {
       supplements: supplements.sort(byId),
       supplementLog: supplementLog.sort(byId),
       recipes: recipes.sort(byId),
+      foodOverrides,
     };
   });
 }
 
-/** Tömmer profil, mätningar (vikt, midja, steg), bilder och fototillfällen, mat (inkl. egna enheter), vatten, träning, GLP-1, milstolpar, tillskott och recept – som en ny enhet. */
+/** Tömmer profil, mätningar (vikt, midja, steg), bilder och fototillfällen, mat (inkl. egna enheter), vatten, träning, GLP-1, milstolpar, tillskott, recept och egna näringsvärden – som en ny enhet. */
 export async function wipe(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -313,6 +321,7 @@ export async function wipe(page: Page): Promise<void> {
       'supplements',
       'supplementLog',
       'recipes',
+      'foodOverrides',
     ];
     const tx = db.transaction(stores, 'readwrite');
     for (const store of stores) tx.objectStore(store).clear();

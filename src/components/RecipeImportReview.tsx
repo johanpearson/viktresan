@@ -1,6 +1,6 @@
 import { useMemo, useState, type SyntheticEvent } from 'react';
 import { newId, putRecipe, type MealIngredient, type Recipe } from '../db/db.ts';
-import { buildCatalog, storedToItem } from '../lib/foodCatalog.ts';
+import { buildCatalog, storedItems } from '../lib/foodCatalog.ts';
 import { buildIndex, type FoodItem } from '../lib/foodSearch.ts';
 import { decimalInput, formatGrams, formatKcal, parseDecimal } from '../lib/format.ts';
 import { saveMatches, type MatchMemory } from '../lib/matchMemory.ts';
@@ -92,7 +92,7 @@ export function RecipeImportReview({
   const [saving, setSaving] = useState(false);
 
   // Kandidater: egna livsmedel (även cachade Open Food Facts-träffar) och Livsmedelsverkets.
-  const custom = useMemo(() => foodData.foods.map(storedToItem), [foodData.foods]);
+  const custom = useMemo(() => storedItems(foodData), [foodData]);
   const lvFoods = livsmedel?.foods ?? NO_FOODS;
   const catalog = useMemo(() => buildCatalog(lvFoods, custom), [lvFoods, custom]);
   const index = useMemo(() => buildIndex([...custom, ...lvFoods]), [custom, lvFoods]);

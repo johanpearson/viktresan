@@ -96,6 +96,17 @@ function FoodPreview({ value }: { value: FoodLabel }) {
       <ListRow primary="Protein" value={formatGrams(value.proteinG)} />
       <ListRow primary="Kolhydrater" value={formatGrams(value.carbsG)} />
       <ListRow primary="Fett" value={formatGrams(value.fatG)} />
+      <ListRow
+        primary="Fiber"
+        value={value.fiberG === undefined ? 'saknas' : formatGrams(value.fiberG)}
+      />
+      <ListRow
+        primary="Socker"
+        value={value.sugarG === undefined ? 'saknas' : formatGrams(value.sugarG)}
+      />
+      {value.portionG !== undefined && (
+        <ListRow primary="Portion" value={formatGrams(value.portionG)} />
+      )}
     </>
   );
 }

@@ -644,6 +644,23 @@ en diskret länk `subtle-link`), träff på annat ställe = `BarcodeElsewhere` (
 (`AiLabelImport`) har numrerade steg (`steps`), "Kopiera prompt" som primärknapp tills svaret är granskat – då blir
 "Använd värdena" primär – och förhandsvisningen som `list list-flush` med värden till höger.
 
+### Näringsetiketter och näringsvärden
+
+- **Etiketterna** Proteinrik, Fiberrik och Energisnål (`ClaimTags`, EU:s näringspåståenden – `src/data/nutritionClaims.ts`)
+  har samma form överallt: `tag tag-claim` efter namnet, texten i `--text` och ramen i datatypens färg – `--macro-protein`
+  (Proteinrik), `--macro-fiber` (Fiberrik), `--data-food` (Energisnål, energi = mat). De visas i sökträffar, Senaste,
+  Favoriter, Måltider, logg-sheeten (efter källan) och i Mat → Egna. Ingen etikett utan underlag.
+- **Filter** i sök-sheeten: en rad `chip chip-small` (`aria-pressed`, `claim-filter`) direkt under sökfältet – samma chips
+  som övriga val, ingen segmentkontroll. Dolda etiketter (Inställningar → Visning) får inget chip.
+- **Status i logg-sheeten** (`NutritionStatus`): saknas något visas en rad med `tag tag-incomplete` ("Ofullständig
+  näringsdata", ram i `--warning`, texten `--text`), en dämpad "Saknas: fiber, socker" och "Komplettera" som liten
+  sekundärknapp till höger. Under den en hopfälld `plan-details` "Näringsvärden per 100 g" (utfälld när något saknas) med
+  en `ListRow` per värde: namnet, källan eller "Eget värde" som `secondary`, värdet till höger – "saknas" dämpat.
+- **Komplettera** (`NutritionCompleteForm`) ersätter loggformuläret i panelen: "Fota etiketten med AI" som `ListRow` med
+  `chevron` överst, sex fält i två kolumner med ursprunget som dämpad rad under fältet, en primärknapp "Spara värden".
+  Efteråt ligger erbjudandet att uppdatera tidigare loggar (`LogUpdateOffer`) som eget kort ovanför formuläret: chips för
+  perioden med antal poster, "Uppdatera N poster" sekundär (loggformulärets Logga är primär) och "Inte nu" som ghost.
+
 ### Källetikett i sökträffar
 
 Sökträffar och snabbval (`FoodList`) visar källan som en liten etikett först i detaljraden: `tag tag-source` med

@@ -1,6 +1,11 @@
 /** Validering av formulärinmatning. Returnerar värdet eller ett felmeddelande på svenska. */
 import type { NutrientKey } from '../data/nutrients.ts';
-import type { SupplementForm, SupplementNutrient, SupplementSchedule } from '../db/db.ts';
+import type {
+  NutritionField,
+  SupplementForm,
+  SupplementNutrient,
+  SupplementSchedule,
+} from '../db/db.ts';
 import { isIsoDate } from './dates.ts';
 import {
   ACTIVITY_LEVELS,
@@ -19,6 +24,7 @@ import {
   type InjectionSite,
 } from './glp1.ts';
 import { parseDecimal } from './format.ts';
+import type { EnteredValues } from './foodNutrition.ts';
 import { isUnitAllowed, nutrientInfo, type AmountUnit } from './nutrientUnits.ts';
 import { DOSES_PER_DAY_MAX } from './supplements.ts';
 import type { Nutrients } from './nutrition.ts';
@@ -191,6 +197,8 @@ export interface FoodFields {
   fat: string;
   /** Valfritt – tomt = okänd fiber (räknas inte i fibermålet). */
   fiber?: string;
+  /** Valfritt – tomt = okänt socker. */
+  sugar?: string;
   ean: string;
 }
 
@@ -198,6 +206,7 @@ export interface FoodValues {
   name: string;
   per100: Nutrients;
   fiberG?: number;
+  sugarG?: number;
   ean?: string;
 }
 
@@ -228,12 +237,55 @@ export function parseFoodFields(fields: FoodFields): Parsed<FoodValues> {
       return fail('Ange fiber i gram per 100 g (0–100) eller lämna fältet tomt.');
     value.fiberG = fiberG;
   }
+  const sugarText = fields.sugar?.trim() ?? '';
+  if (sugarText !== '') {
+    const sugarG = parseDecimal(sugarText);
+    if (sugarG == null || sugarG < 0 || sugarG > 100)
+      return fail('Ange socker i gram per 100 g (0–100) eller lämna fältet tomt.');
+    value.sugarG = sugarG;
+  }
 
   const eanText = fields.ean.trim();
   if (eanText !== '') {
     const ean = normalizeEan(eanText);
     if (!ean) return fail('Streckkoden är inte giltig (8 eller 13 siffror).');
     value.ean = ean;
+  }
+  return { ok: true, value };
+}
+
+/** Kompletteringsformuläret: text per näringsvärde (tomt = inget värde). */
+export type NutritionFieldTexts = Record<NutritionField, string>;
+
+/**
+ * Näringsvärden per 100 g/ml att komplettera: tal ≥ 0 eller tomt (`null`). Energi högst
+ * 900 kcal, övriga högst 100 g; protein, kolhydrater och fett högst 100 g tillsammans och
+ * socker högst kolhydraterna.
+ */
+export function parseNutritionFields(fields: NutritionFieldTexts): Parsed<EnteredValues> {
+  const value: EnteredValues = {};
+  for (const [key, text] of Object.entries(fields) as [NutritionField, string][]) {
+    if (text.trim() === '') {
+      value[key] = null;
+      continue;
+    }
+    const n = parseDecimal(text);
+    const max = key === 'kcal' ? 900 : 100;
+    if (n == null || n < 0 || n > max) {
+      return fail(
+        key === 'kcal'
+          ? 'Ange energi i kcal per 100 g (0–900) eller lämna fältet tomt.'
+          : 'Ange gram per 100 g (0–100) eller lämna fältet tomt.',
+      );
+    }
+    value[key] = n;
+  }
+  const macros = (value.proteinG ?? 0) + (value.carbsG ?? 0) + (value.fatG ?? 0);
+  if (macros > 100) {
+    return fail('Protein, kolhydrater och fett kan inte vara mer än 100 g tillsammans.');
+  }
+  if (value.sugarG != null && value.carbsG != null && value.sugarG > value.carbsG) {
+    return fail('Socker ingår i kolhydraterna och kan inte vara mer än dem.');
   }
   return { ok: true, value };
 }

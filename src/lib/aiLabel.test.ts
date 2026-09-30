@@ -152,6 +152,38 @@ describe('parseFoodLabel', () => {
     });
   });
 
+  it('valfria fält: fiber, socker och portion (null = saknas)', () => {
+    expect(
+      parseFoodLabel(
+        '{"namn":"Knäcke","energiKcal":350,"proteinG":9,"kolhydraterG":62,"fettG":2,"fiberG":"16,5","sockerG":1.5,"portionG":12}',
+      ),
+    ).toEqual({
+      ok: true,
+      value: {
+        name: 'Knäcke',
+        kcal: 350,
+        proteinG: 9,
+        carbsG: 62,
+        fatG: 2,
+        fiberG: 16.5,
+        sugarG: 1.5,
+        portionG: 12,
+      },
+      warnings: [],
+    });
+    const partial = parseFoodLabel(
+      '{"namn":"X","energiKcal":50,"proteinG":1,"kolhydraterG":10,"fettG":0,"fiberG":null,"sockerG":"mycket","portionG":0}',
+    );
+    expect(partial).toEqual({
+      ok: true,
+      value: { name: 'X', kcal: 50, proteinG: 1, carbsG: 10, fatG: 0 },
+      warnings: [
+        'Hoppade över "sockerG" – inte ett tal.',
+        'Hoppade över "portionG" – orimlig portion.',
+      ],
+    });
+  });
+
   it('saknade fält och orimliga värden', () => {
     expect(parseFoodLabel('{"namn":"X","energiKcal":1}')).toEqual({
       ok: false,

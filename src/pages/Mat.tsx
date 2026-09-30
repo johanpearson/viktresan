@@ -66,6 +66,7 @@ export function Mat() {
           livsmedel: food.livsmedel,
           foodLog: data.foodLog,
           reloadFood: food.reload,
+          reloadLog: reload,
         }
       : null;
 

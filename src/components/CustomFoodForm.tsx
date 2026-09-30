@@ -34,7 +34,8 @@ function fieldsFor(
     protein: text(values?.proteinG),
     carbs: text(values?.carbsG),
     fat: text(values?.fatG),
-    fiber: text(food?.fiberG),
+    fiber: text(food?.fiberG ?? prefill?.fiberG),
+    sugar: text(food?.sugarG ?? prefill?.sugarG),
     ean: food?.ean ?? ean ?? '',
   };
 }
@@ -45,6 +46,7 @@ const NUTRIENT_FIELDS: readonly { key: keyof FoodFields; label: string }[] = [
   { key: 'carbs', label: 'Kolhydrater (g)' },
   { key: 'fat', label: 'Fett (g)' },
   { key: 'fiber', label: 'Fiber (g, valfritt)' },
+  { key: 'sugar', label: 'Socker (g, valfritt)' },
 ];
 
 const NO_UNITS: readonly FoodUnit[] = [];
@@ -60,7 +62,12 @@ export function CustomFoodForm({
   onDelete,
 }: CustomFoodFormProps) {
   const [fields, setFields] = useState<FoodFields>(() => fieldsFor(food, ean, prefill));
-  const [units, setUnits] = useState<FoodUnit[]>(() => [...customUnits]);
+  // En portion från AI-importen blir en egen enhet (kan tas bort under Enheter).
+  const [units, setUnits] = useState<FoodUnit[]>(() =>
+    prefill?.portionG !== undefined && !customUnits.some((u) => u.name === 'portion')
+      ? [...customUnits, { name: 'portion', grams: prefill.portionG, source: 'egen' }]
+      : [...customUnits],
+  );
   const [error, setError] = useState<string | null>(null);
 
   function update(key: keyof FoodFields, value: string) {

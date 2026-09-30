@@ -21,7 +21,7 @@ import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 12;
+export const DB_VERSION = 13;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -122,6 +122,34 @@ export interface StoredFood {
   ean?: string;
   /** Fiber per 100 g (eller ml), när det är känt (OFF, eget livsmedel). Utan schemaändring. */
   fiberG?: number;
+  /** Socker per 100 g (eller ml), när det är känt (OFF, eget livsmedel). Utan schemaändring. */
+  sugarG?: number;
+  /**
+   * Makron som saknades i Open Food Facts (sparade som 0 i `per100`). Utan schemaändring;
+   * äldre cachade produkter saknar fältet (makrona räknas då som kända).
+   */
+  missing?: MacroField[];
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** Energi och makron (fälten i `Nutrients`). */
+export type MacroField = 'kcal' | 'proteinG' | 'carbsG' | 'fatG';
+/** Näringsvärdena som visas och kan kompletteras per livsmedel. */
+export type NutritionField = MacroField | 'fiberG' | 'sugarG';
+
+/**
+ * Egna näringsvärden för ett livsmedel från Open Food Facts, Livsmedelsverket eller Fineli
+ * (sedan v13), nyckel = `foodId`. Värden per 100 g (eller ml, som livsmedlet). Går före
+ * källans värden överallt där livsmedlet visas eller loggas; källans data ändras inte.
+ */
+export interface FoodOverride {
+  foodId: string;
+  /** Streckkoden, för produkter från Open Food Facts. */
+  ean?: string;
+  /** Livsmedlets namn när värdena sparades (för säkerhetskopian och felsökning). */
+  name: string;
+  values: Partial<Record<NutritionField, number>>;
   createdAt: number;
   updatedAt?: number;
 }
@@ -559,6 +587,11 @@ export interface ViktresanDB extends DBSchema {
     key: string;
     value: Recipe;
   };
+  /** Sedan v13. Egna näringsvärden per livsmedel, nyckel = `foodId`. */
+  foodOverrides: {
+    key: string;
+    value: FoodOverride;
+  };
 }
 
 export type Database = IDBPDatabase<ViktresanDB>;
@@ -898,6 +931,11 @@ export function getDb(): Promise<Database> {
         // v12: inställningen Dag/Vecka för kalorimålet är borttagen – dagsmålet och veckan
         // visas alltid båda. Profilens `calorieMode` tas bort.
         if (oldVersion >= 2) void migrateToV12(transaction);
+      }
+      if (oldVersion < 13) {
+        // v13: egna näringsvärden (komplettering av OFF/Livsmedelsverket/Fineli). Ny store –
+        // befintlig data berörs inte.
+        db.createObjectStore('foodOverrides', { keyPath: 'foodId' });
       }
     },
     blocking() {
@@ -1407,6 +1445,42 @@ export async function putRecipe(recipe: Recipe): Promise<void> {
   await db.put('recipes', recipe);
 }
 
+/** Egna näringsvärden för ett livsmedel, eller null. */
+export async function getFoodOverride(foodId: string): Promise<FoodOverride | null> {
+  const db = await getDb();
+  return (await db.get('foodOverrides', foodId)) ?? null;
+}
+
+/** Ett eget livsmedel eller en cachad produkt, eller null. */
+export async function getFood(id: string): Promise<StoredFood | null> {
+  const db = await getDb();
+  return (await db.get('foods', id)) ?? null;
+}
+
+/** Alla egna näringsvärden. */
+export async function listFoodOverrides(): Promise<FoodOverride[]> {
+  const db = await getDb();
+  return db.getAll('foodOverrides');
+}
+
+/** Sparar egna näringsvärden för ett livsmedel; utan värden tas posten bort. */
+export async function putFoodOverride(override: FoodOverride): Promise<void> {
+  const db = await getDb();
+  if (Object.keys(override.values).length === 0) await db.delete('foodOverrides', override.foodId);
+  else await db.put('foodOverrides', override);
+  notifyChange();
+}
+
+/** Skriver flera matloggposter i en transaktion (t.ex. uppdaterade näringsvärden). */
+export async function putFoodLogEntries(entries: readonly FoodLogEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('foodLog', 'readwrite');
+  await Promise.all(entries.map((e) => tx.store.put(e)));
+  await tx.done;
+  notifyChange();
+}
+
 export async function deleteRecipe(id: string): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(['recipes', 'favorites', 'foodUnits'], 'readwrite');
@@ -1509,6 +1583,7 @@ export interface Snapshot {
   supplements: Supplement[];
   supplementLog: SupplementIntake[];
   recipes: Recipe[];
+  foodOverrides: FoodOverride[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -1534,6 +1609,7 @@ export function emptySnapshot(): Snapshot {
     supplements: [],
     supplementLog: [],
     recipes: [],
+    foodOverrides: [],
   };
 }
 
@@ -1560,6 +1636,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     supplements,
     supplementLog,
     recipes,
+    foodOverrides,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -1582,6 +1659,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listSupplements(),
     listSupplementLog(),
     listRecipes(),
+    listFoodOverrides(),
   ]);
   return {
     profile,
@@ -1606,6 +1684,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     supplements,
     supplementLog,
     recipes,
+    foodOverrides,
   };
 }
 
@@ -1639,6 +1718,7 @@ const DATA_STORES = [
   'supplements',
   'supplementLog',
   'recipes',
+  'foodOverrides',
 ] as const;
 
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
@@ -1666,6 +1746,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const supplements = tx.objectStore('supplements');
   const supplementLog = tx.objectStore('supplementLog');
   const recipes = tx.objectStore('recipes');
+  const foodOverrides = tx.objectStore('foodOverrides');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -1690,6 +1771,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.supplements.map((s) => supplements.put(s)),
       ...snapshot.supplementLog.map((i) => supplementLog.put(i)),
       ...snapshot.recipes.map((r) => recipes.put(r)),
+      ...snapshot.foodOverrides.map((o) => foodOverrides.put(o)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -1770,6 +1852,10 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     for (const r of snapshot.recipes) {
       const existing = await recipes.get(r.id);
       if (!existing || changedAt(r) > changedAt(existing)) await recipes.put(r);
+    }
+    for (const o of snapshot.foodOverrides) {
+      const existing = await foodOverrides.get(o.foodId);
+      if (!existing || changedAt(o) > changedAt(existing)) await foodOverrides.put(o);
     }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);

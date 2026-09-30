@@ -4,7 +4,8 @@
  * svaret som användaren klistrar in. Appen gör inga anrop själv – användaren kopierar
  * eller delar prompten, fotar etiketten i AI-tjänsten och klistrar in svaret.
  *
- * Två scheman: tillskott (näringsämnen per dos) och livsmedel (per 100 g).
+ * Två scheman: tillskott (näringsämnen per dos) och livsmedel (per 100 g/ml, med valfri fiber,
+ * socker och portionsstorlek).
  */
 import type { NutrientKey } from '../data/nutrients.ts';
 import type { SupplementForm, SupplementNutrient } from '../db/db.ts';
@@ -32,6 +33,9 @@ const FOOD_EXAMPLE = {
   proteinG: 9,
   kolhydraterG: 62,
   fettG: 2,
+  fiberG: 16,
+  sockerG: 1.5,
+  portionG: 12,
 };
 
 /** Prompt för ett tillskott. Tillåtna ämnen och enheter räknas upp i prompten. */
@@ -73,10 +77,13 @@ export function foodLabelPrompt(ean?: string): string {
     '  "energiKcal": tal (kcal per 100 g),',
     '  "proteinG": tal (gram per 100 g),',
     '  "kolhydraterG": tal (gram per 100 g),',
-    '  "fettG": tal (gram per 100 g)',
+    '  "fettG": tal (gram per 100 g),',
+    '  "fiberG": tal eller null (gram fiber per 100 g, null om det inte står på etiketten),',
+    '  "sockerG": tal eller null (varav sockerarter, gram per 100 g, null om det saknas),',
+    '  "portionG": tal eller null (en portion i gram eller ml enligt etiketten, null om den saknas)',
     '}',
     '',
-    'Värdena gäller per 100 g (för drycker per 100 ml), inte per portion. Använd punkt som decimaltecken.',
+    'Värdena gäller per 100 g (för drycker per 100 ml), inte per portion – bara portionG gäller en portion. Använd punkt som decimaltecken.',
     ean ? `Streckkoden är ${ean} (för din information, ta inte med den).` : '',
     '',
     `Exempel: ${JSON.stringify(FOOD_EXAMPLE)}`,
@@ -105,6 +112,11 @@ export interface FoodLabel {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  /** Fiber och socker per 100 g när etiketten anger dem. */
+  fiberG?: number;
+  sugarG?: number;
+  /** En portion i gram (eller ml) enligt etiketten. */
+  portionG?: number;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -258,9 +270,32 @@ export function parseFoodLabel(text: string): LabelResult<FoodLabel> {
       error: 'Värdena verkar inte gälla per 100 g (för höga). Be AI-tjänsten räkna om per 100 g.',
     };
   }
-  return {
-    ok: true,
-    value: { name: productName, kcal: Math.round(kcal), proteinG, carbsG, fatG },
-    warnings: [],
-  };
+  const value: FoodLabel = { name: productName, kcal: Math.round(kcal), proteinG, carbsG, fatG };
+  const warnings: string[] = [];
+  // Valfria fält: saknas eller null = står inte på etiketten.
+  const optional = [
+    ['fiberG', 'fiberG'],
+    ['sockerG', 'sugarG'],
+    ['portionG', 'portionG'],
+  ] as const;
+  for (const [field, key] of optional) {
+    const raw = v[field];
+    if (raw === undefined || raw === null) continue;
+    const n = number(raw);
+    if (n === null) {
+      warnings.push(`Hoppade över "${field}" – inte ett tal.`);
+      continue;
+    }
+    if (key === 'portionG') {
+      if (n > 0 && n <= 5000) value.portionG = n;
+      else warnings.push('Hoppade över "portionG" – orimlig portion.');
+      continue;
+    }
+    if (n > 100) {
+      warnings.push(`Hoppade över "${field}" – över 100 g per 100 g.`);
+      continue;
+    }
+    value[key] = n;
+  }
+  return { ok: true, value, warnings };
 }

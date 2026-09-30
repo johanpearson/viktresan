@@ -37,7 +37,7 @@ test('sökning ger träff från den inbyggda Fineli-databasen och den kan loggas
   await hit.tap();
   const form = page.getByTestId('food-log-form');
   await expect(form).toBeVisible();
-  await expect(form.getByText('Fineli', { exact: true })).toBeVisible();
+  await expect(form.getByText('Fineli', { exact: true }).first()).toBeVisible();
   // Finelis fiber visas i näringsraden.
   await expect(form.getByTestId('log-macros')).toContainText('Fi');
   await form.getByRole('button', { name: 'Logga', exact: true }).tap();

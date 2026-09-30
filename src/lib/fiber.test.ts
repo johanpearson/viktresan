@@ -15,7 +15,6 @@ import {
   fiberText,
   formatMacroG,
   scaleFiber,
-  isFiberRich,
   rampStartG,
   weeklyFiberGoalG,
 } from './fiber.ts';
@@ -181,26 +180,6 @@ describe('fiber ur matloggen', () => {
       { date: '2026-09-27', fiberG: 2, missingEntries: 0, knownEntries: 1, entries: 1 },
       { date: '2026-09-28', fiberG: 22, missingEntries: 0, knownEntries: 2, entries: 2 },
     ]);
-  });
-});
-
-describe('fiberrika livsmedel', () => {
-  const food = (kcal: number, fiberG?: number) => ({
-    per100: { kcal },
-    ...(fiberG === undefined ? {} : { extra: { fiberG } }),
-  });
-
-  it('minst 3 g fiber per 100 kcal', () => {
-    expect(isFiberRich(food(100, 3))).toBe(true); // precis på gränsen
-    expect(isFiberRich(food(34, 2.6))).toBe(true); // broccoli
-    expect(isFiberRich(food(370, 10))).toBe(false); // havregryn: 2,7 g/100 kcal
-    expect(isFiberRich(food(100, 2.9))).toBe(false);
-  });
-
-  it('utan energi eller fiberdata räknas inget som fiberrikt', () => {
-    expect(isFiberRich(food(0, 3))).toBe(false);
-    expect(isFiberRich(food(100))).toBe(false);
-    expect(isFiberRich(food(100, 0))).toBe(false);
   });
 });
 

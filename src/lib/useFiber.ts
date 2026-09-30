@@ -3,6 +3,7 @@ import type { ExtraNutrients } from '../data/nutrients.ts';
 import {
   getProfile,
   listFoods,
+  listFoodOverrides,
   listMeals,
   saveProfile,
   type FoodLogEntry,
@@ -21,6 +22,7 @@ import {
   type FiberRampStart,
   type FiberSource,
 } from './fiber.ts';
+import { overlayExtras } from './foodNutrition.ts';
 import { loadLivsmedel, type Livsmedel } from './livsmedel.ts';
 
 let extraCache: { livsmedel: Livsmedel; map: Map<string, ExtraNutrients | null> } | null = null;
@@ -46,11 +48,14 @@ export function useFiberSource(enabled: boolean, version?: unknown): FiberSource
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    Promise.all([loadLivsmedel(), listMeals(), listFoods()])
-      .then(([livsmedel, meals, foods]) => {
+    Promise.all([loadLivsmedel(), listMeals(), listFoods(), listFoodOverrides()])
+      .then(([livsmedel, meals, foods, overrides]) => {
         const extras = livsmedelExtras(livsmedel);
-        const own = new Map<string, ExtraNutrients>();
+        const own = new Map<string, ExtraNutrients | null | undefined>();
         for (const f of foods) if (f.fiberG !== undefined) own.set(f.id, { fiberG: f.fiberG });
+        // Egna näringsvärden går före källans (även Livsmedelsverkets och Finelis).
+        for (const o of overrides) if (!own.has(o.foodId)) own.set(o.foodId, extras.get(o.foodId));
+        overlayExtras(own, overrides);
         if (active) setSource({ meals, lookup: (id) => own.get(id) ?? extras.get(id) });
       })
       .catch(() => {

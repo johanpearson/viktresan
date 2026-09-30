@@ -398,6 +398,16 @@ const supplementData = {
       createdAt: 84,
     },
   ],
+  foodOverrides: [
+    {
+      foodId: 'off:7310865004703',
+      ean: '7310865004703',
+      name: 'Havregryn',
+      values: { fiberG: 10, sugarG: 1.2 },
+      createdAt: 85,
+    },
+    { foodId: 'lv:3', name: 'Linser', values: { sugarG: 0.5 }, createdAt: 86, updatedAt: 87 },
+  ],
 };
 
 const weights: WeightEntry[] = [
@@ -613,6 +623,7 @@ describe('backup validering', () => {
     supplements: [],
     supplementLog: [],
     recipes: [],
+    foodOverrides: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -714,6 +725,21 @@ describe('backup validering', () => {
       { ...valid, foods: [{ ...foods[0], ean: '<script>' }] },
       { ...valid, meals: [{ ...meals[0], items: [{ foodId: 'x', name: 'x', grams: -1 }] }] },
       { ...valid, favorites: [{ foodId: 'x' }] },
+      { ...valid, foods: [{ ...foods[0], missing: ['fiberG'] }] },
+      // Version 11: egna näringsvärden.
+      { ...valid, foodOverrides: undefined },
+      { ...valid, foodOverrides: [{ foodId: 'lv:1', name: 'X', values: {}, createdAt: 1 }] },
+      {
+        ...valid,
+        foodOverrides: [{ foodId: 'lv:1', name: 'X', values: { fiberG: -1 }, createdAt: 1 }],
+      },
+      {
+        ...valid,
+        foodOverrides: [
+          { foodId: 'lv:1', name: 'X', values: { fiberG: 1 }, createdAt: 1 },
+          { foodId: 'lv:1', name: 'X', values: { sugarG: 1 }, createdAt: 2 },
+        ],
+      },
       { ...valid, profile: { ...profile, sex: 'annat' } },
       { ...valid, profile: { ...profile, ratePerWeekKg: 2 } },
       { ...valid, profile: { ...profile, activityLevel: 'extrem' } },
@@ -900,6 +926,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
     supplements: [],
     supplementLog: [],
     recipes: [],
+    foodOverrides: [],
     foods: [],
     meals: [],
     foodLog: [],
@@ -1458,6 +1485,17 @@ describe('import slå ihop', () => {
       ],
       supplementLog: [],
       recipes: [],
+      foodOverrides: [
+        // Nyare version → ersätter; nytt livsmedel läggs till.
+        {
+          foodId: 'lv:3',
+          name: 'Linser',
+          values: { sugarG: 0.7, fiberG: 4 },
+          createdAt: 86,
+          updatedAt: 90,
+        },
+        { foodId: 'fi:11', name: 'Rågbröd', values: { fiberG: 8 }, createdAt: 91 },
+      ],
     };
     await applySnapshot(imported, 'merge');
 
@@ -1489,6 +1527,15 @@ describe('import slå ihop', () => {
     ]);
     expect(after.foods.map((f) => f.name)).toEqual(['Havregryn 1 kg', 'Mormors gröt']);
     expect(after.meals.map((m) => m.name)).toEqual(['Frukostgröt']);
+    expect(
+      after.foodOverrides
+        .map((o) => [o.foodId, o.values])
+        .sort((a, b) => (a[0] as string).localeCompare(b[0] as string)),
+    ).toEqual([
+      ['fi:11', { fiberG: 8 }],
+      ['lv:3', { sugarG: 0.7, fiberG: 4 }],
+      ['off:7310865004703', { fiberG: 10, sugarG: 1.2 }],
+    ]);
     expect(after.foodLog.map((e) => e.id)).toEqual(['f1', 'f2', 'q1', 'f3', 'r1:log']);
     expect(after.favorites).toEqual([
       { foodId: 'lv:2', createdAt: 11 },
@@ -1577,6 +1624,7 @@ describe('summarizeBackup', () => {
       supplements: 2,
       supplementLog: 1,
       recipes: 1,
+      foodOverrides: 2,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,
