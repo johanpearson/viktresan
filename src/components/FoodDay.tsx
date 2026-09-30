@@ -30,6 +30,8 @@ import { MealAnalysisView } from './MealAnalysisView.tsx';
 import { MealSections } from './MealSections.tsx';
 import { QuickLogForm } from './QuickLogForm.tsx';
 import { SaveMealForm } from './SaveMealForm.tsx';
+import { SuggestIcon } from './SuggestIcon.tsx';
+import { SuggestSheet } from './SuggestSheet.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
 import { Toast } from './Toast.tsx';
 
@@ -49,6 +51,8 @@ interface FoodDayProps {
   reloadLog: () => Promise<unknown>;
   /** Det som kan tas med i "Fråga AI" (profil, mål, GLP-1 …), `null` tills datan är läst. */
   aiContext?: AiContext | null;
+  /** Fiber att sikta på i Föreslå när fibermålet inte visas (referensvärdet, NNR 2023). */
+  fiberReferenceG?: number | null;
 }
 
 /** Vad menyn, analysen och "Fråga AI" gäller: en måltid eller hela dagen. */
@@ -102,6 +106,7 @@ export function FoodDay({
   initialEan,
   reloadLog,
   aiContext = null,
+  fiberReferenceG = null,
 }: FoodDayProps) {
   const { foodData, livsmedel, foodLog, reloadFood } = source;
   const today = todayIso();
@@ -118,6 +123,8 @@ export function FoodDay({
   const [menu, setMenu] = useState<Target | null>(null);
   const [saving, setSaving] = useState<MealSlot | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null);
+  // Föreslå: måltiden sheeten öppnas för.
+  const [suggest, setSuggest] = useState<MealSlot | null>(null);
   // Pågående måltid (efter klockslaget) är utfälld från start, övriga ihopfällda.
   const [open, setOpen] = useState<ReadonlySet<MealSlot>>(() => new Set([currentMealSlot()]));
   const [compact, setCompact] = useState(false);
@@ -161,6 +168,9 @@ export function FoodDay({
           weekOf: date,
         });
   const when = date === today ? 'idag' : formatDate(date);
+  // Föreslå gäller dagens kvarvarande mål – bara idag.
+  const canSuggest = date === today;
+  const fiberGoalG = fiberGoal?.goalG ?? fiberReferenceG;
 
   // Den fulla summeringen utom synhåll → visa miniraden i den sticky toppen.
   useEffect(() => {
@@ -274,7 +284,7 @@ export function FoodDay({
             }}
           >
             <span aria-hidden="true" className="search-icon" />
-            Sök och logga mat
+            <span className="search-open-text">Sök och logga mat</span>
           </button>
           <button
             type="button"
@@ -286,6 +296,20 @@ export function FoodDay({
           >
             <ScanIcon />
           </button>
+          {canSuggest && (
+            <button
+              type="button"
+              className="icon-button scan-button suggest-open"
+              aria-label="Föreslå"
+              aria-haspopup="dialog"
+              title="Föreslå"
+              onClick={() => {
+                setSuggest(currentMealSlot());
+              }}
+            >
+              <SuggestIcon />
+            </button>
+          )}
         </div>
       </div>
       <MealSections
@@ -294,6 +318,7 @@ export function FoodDay({
         open={open}
         favoriteIds={favoriteIds}
         fiberSource={fiberSource}
+        menuAlways={canSuggest}
         onMenu={(slot) => {
           setMenu({ kind: 'meal', slot });
         }}
@@ -407,24 +432,39 @@ export function FoodDay({
           }}
         >
           <ul className="list action-list">
-            {menu.kind === 'meal' && (
+            {menu.kind === 'meal' && canSuggest && (
               <ListRow
-                primary="Spara som egen måltid"
+                primary="Föreslå"
+                secondary="Förslag utifrån det du brukar äta och dagens mål"
                 chevron
                 onClick={() => {
                   setMenu(null);
-                  setSaving(menu.slot);
+                  setSuggest(menu.slot);
                 }}
               />
             )}
-            <ListRow
-              primary="Analysera"
-              chevron
-              onClick={() => {
-                setMenu(null);
-                setAnalysis({ target: menu, view: 'analysis' });
-              }}
-            />
+            {entriesFor(menu).length > 0 && (
+              <>
+                {menu.kind === 'meal' && (
+                  <ListRow
+                    primary="Spara som egen måltid"
+                    chevron
+                    onClick={() => {
+                      setMenu(null);
+                      setSaving(menu.slot);
+                    }}
+                  />
+                )}
+                <ListRow
+                  primary="Analysera"
+                  chevron
+                  onClick={() => {
+                    setMenu(null);
+                    setAnalysis({ target: menu, view: 'analysis' });
+                  }}
+                />
+              </>
+            )}
           </ul>
         </BottomSheet>
       )}
@@ -505,6 +545,29 @@ export function FoodDay({
             </>
           )}
         </BottomSheet>
+      )}
+      {suggest && (
+        <SuggestSheet
+          initialSlot={suggest}
+          date={today}
+          source={source}
+          catalog={catalog}
+          customUnits={customUnits}
+          fiberSource={fiberSource}
+          goals={{ targetKcal, proteinGoalG, fiberGoalG }}
+          aiContext={aiContext}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={(foodId) => void toggleFavorite(foodId)}
+          onUnitsChange={async (foodId, units) => {
+            await saveCustomUnits(foodId, units);
+            await reloadFood();
+          }}
+          reloadLog={reloadLog}
+          onLogged={expand}
+          onClose={() => {
+            setSuggest(null);
+          }}
+        />
       )}
       {toast && (
         <Toast

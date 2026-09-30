@@ -19,8 +19,10 @@ interface MealSectionsProps {
   fiberSource?: FiberSource | null;
   onToggle: (slot: MealSlot) => void;
   onAdd: (slot: MealSlot) => void;
-  /** Menyn (⋯) för en måltid med poster: spara som egen måltid, analysera. */
+  /** Menyn (⋯) för en måltid: föreslå, spara som egen måltid, analysera. */
   onMenu: (slot: MealSlot) => void;
+  /** Visa ⋯ även för tomma måltider (idag: menyn har Föreslå). */
+  menuAlways?: boolean;
   onEdit: (entry: FoodLogEntry) => void;
   onDelete: (entry: FoodLogEntry) => void;
   onToggleFavorite: (entry: FoodLogEntry) => void;
@@ -29,7 +31,7 @@ interface MealSectionsProps {
 /**
  * Dagens mat per måltid som `SectionAccordion`: namn, kcal och antal poster i
  * rubriken, makron och fiber under, ⋯ för fler val och + för att lägga till. Tomma måltider är en smal
- * rad med bara +.
+ * rad med + (och ⋯ med Föreslå idag).
  */
 export function MealSections({
   entries,
@@ -37,6 +39,7 @@ export function MealSections({
   open,
   favoriteIds,
   fiberSource = null,
+  menuAlways = false,
   onToggle,
   onAdd,
   onMenu,
@@ -78,7 +81,7 @@ export function MealSections({
             }}
             actions={
               <>
-                {section.count > 0 && (
+                {(section.count > 0 || menuAlways) && (
                   <button
                     type="button"
                     className="icon-button accordion-action"

@@ -213,6 +213,31 @@ describe('buildAiPrompt – platå', () => {
   });
 });
 
+describe('buildAiPrompt – Något nytt (Föreslå)', () => {
+  const suggest = {
+    kind: 'suggest' as const,
+    meal: 'mellanmal' as const,
+    remaining: { kcal: 640.4, proteinG: 45.2, fiberG: -2 },
+    typicalKcal: 250,
+    homeFoods: ['Kvarg naturell', 'Banan', 'Knäckebröd'],
+  };
+
+  it('tar med kvarvarande värden, måltid, typisk portion och det som brukar finnas hemma', () => {
+    const prompt = buildAiPrompt(suggest, context(), DEFAULT_AI_OPTIONS);
+    expect(prompt).toContain('nya idéer till mellanmål idag');
+    expect(prompt).toContain('Måltid: Mellanmål, min typiska portion är ca 250 kcal.');
+    expect(prompt).toContain('Kvar av dagens mål: 640 kcal, 45 g protein, 0 g fiber.');
+    expect(prompt).toContain('Det här brukar finnas hemma: Kvarg naturell, Banan, Knäckebröd.');
+    expect(prompt).toContain('Mina matpreferenser: Gillar fisk');
+    expect(prompt).toContain('under 1 500 kcal');
+  });
+
+  it('underlaget kan väljas bort', () => {
+    const prompt = buildAiPrompt(suggest, context(), { ...DEFAULT_AI_OPTIONS, content: false });
+    expect(prompt).not.toContain('brukar finnas hemma:');
+  });
+});
+
 describe('aiContextFrom', () => {
   it('utan profil är allt okänt', () => {
     const ctx = aiContextFrom(

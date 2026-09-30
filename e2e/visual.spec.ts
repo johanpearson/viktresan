@@ -408,6 +408,12 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-sheet-mat-redigera`, false);
       await close();
 
+      // Föreslå: pågående måltid (12:30 = lunch) med förslag, etiketter och Allmänt förslag.
+      await page.getByRole('button', { name: 'Föreslå' }).tap();
+      await expect(sheet.getByTestId('suggestion').first()).toBeVisible();
+      await shot(page, `${theme}-sheet-mat-foresla`, false);
+      await close();
+
       await page.getByRole('button', { name: 'Fler val för lunch' }).tap();
       await shot(page, `${theme}-sheet-mat-meny`, false);
       await sheet.getByRole('button', { name: 'Analysera' }).tap();

@@ -9,6 +9,7 @@ import { Skeleton } from '../components/Skeleton.tsx';
 import { aiContextFrom } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
+import { fiberReferenceG } from '../lib/fiber.ts';
 import { buildPlan } from '../lib/plan.ts';
 import { proteinGoalFor } from '../lib/protein.ts';
 import { useAppData } from '../lib/useAppData.ts';
@@ -95,6 +96,7 @@ export function Mat() {
           initialEan={initialEan}
           reloadLog={reload}
           aiContext={aiContextFrom(data, todayIso())}
+          fiberReferenceG={fiberReferenceG(data.profile?.sex)}
         />
       )}
       {source && tab === 'egna' && (

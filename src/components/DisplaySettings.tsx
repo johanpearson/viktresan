@@ -87,6 +87,30 @@ export function DisplaySettings() {
             </li>
           ))}
         </ul>
+        <h3 className="subheading" id="suggest-heading">
+          Förslag i Mat
+        </h3>
+        {prefs.suggestionsHidden.length === 0 ? (
+          <p className="form-note muted" data-testid="suggestions-hidden-none">
+            Förslag du markerar med "Inte intresserad" i Föreslå döljs och kan visas igen här.
+          </p>
+        ) : (
+          <>
+            <p className="form-note muted" data-testid="suggestions-hidden">
+              {prefs.suggestionsHidden.length === 1
+                ? '1 förslag är dolt'
+                : `${String(prefs.suggestionsHidden.length)} förslag är dolda`}{' '}
+              ("Inte intresserad"): {prefs.suggestionsHidden.map((h) => h.name).join(', ')}.
+            </p>
+            <button
+              type="button"
+              className="button button-secondary button-small"
+              onClick={() => void setPreference('suggestionsHidden', [])}
+            >
+              Visa alla förslag igen
+            </button>
+          </>
+        )}
       </Feature>
     </>
   );

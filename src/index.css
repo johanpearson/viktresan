@@ -3342,6 +3342,18 @@ a.button {
   cursor: text;
 }
 
+/* Texten stannar på en rad även bredvid Föreslå på smala skärmar. */
+.search-open {
+  min-width: 0;
+}
+
+.search-open-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .search-open:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
@@ -3376,6 +3388,105 @@ a.button {
 
 .icon-button.scan-button[aria-pressed='true'] {
   border-color: var(--accent);
+}
+
+/* Föreslå-panelen: måltid, lägesrad, förslag med åtgärder under, Visa fler och Något nytt. */
+.suggest {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* Fyra måltider på en rad även på 360 px: kolumner efter innehållet, mindre text. */
+.suggest-slots {
+  grid-auto-columns: auto;
+  gap: 2px;
+}
+
+.suggest-slots .segmented-button {
+  min-width: 0;
+  padding: 0 var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.suggest > * {
+  min-width: 0;
+}
+
+.suggest-status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.suggest-list {
+  margin: 0 calc(-1 * var(--space-4));
+  padding: 0;
+  list-style: none;
+}
+
+.suggest-item {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.suggest-item:first-child {
+  border-top: 0;
+}
+
+.suggest-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.suggest-name {
+  min-width: 0;
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.suggest-main > .kcal {
+  flex: none;
+}
+
+.suggest-amount,
+.suggest-effect {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.suggest-amount {
+  color: var(--muted);
+}
+
+.suggest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.suggest-actions > .button-ghost {
+  padding: 0 var(--space-2);
+}
+
+.suggest-dismiss {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+/* "Allmänt förslag" (startlistan): som källetiketten, efter namnet. */
+.tag-source.tag-general {
+  margin: 0 0 0 6px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.suggest .show-more {
+  justify-self: center;
 }
 
 .meal-sections {
