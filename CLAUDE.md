@@ -93,8 +93,9 @@ src/lib/matchMemory.ts  Minnet av manuella matchningar i receptimporten (setting
 src/lib/shareTarget.ts  Web Share Target: manifestets parametrar (SHARE_PARAMS), tolkning av delad länk/text, väntande delning
 src/lib/useIngredients.ts  Hook: ingrediensrader för egna måltider och recept (IngredientEditor)
 src/lib/weekBudget.ts   Veckoraden: 7 × dagsmål, kvar, per dag resten av veckan (golvspärr), saldo, dagar (ej loggad = 0 kcal)
-src/lib/suggestions.ts  Föreslå (Mat): kandidater (historik 28 d, favoriter, måltider, recept, startlistan), typisk mängd
-                        (median), måltidsvikt, kombinationer, portionstak, poäng mot kvar kcal/protein/fiber, lågt läge, texter
+src/lib/suggestions.ts  Föreslå (Mat): gap (protein/fiber kvar), kandidater (historik 28 d, favoriter, måltider, recept, startlistan),
+                        typisk mängd (median av loggar som huvudkomponent), proteinportioner (0,5–2 ×, minsta portion per kategori),
+                        kompletterande kombinationer, poäng (näring ≥ 70 %, vana ≤ 20 %), variation, förklaringar och texter
 src/data/suggestions.ts Startlistan för Föreslå (~40 livsmedel `lv:`/`fi:` med standardportion och måltider, reservvärden)
 src/lib/swaps.ts        Bytesförslag: samma kategori, klart bättre protein/kcal eller fiber, aldrig mer energi
 src/lib/aiPrompt.ts     "Fråga AI": kryssrutor (AI_OPTIONS), underlag (aiContextFrom), promptbyggare, ChatGPT-/Claude-länkar
@@ -160,7 +161,7 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         sektioner på 412 och 360 px, ingen radbrytning, tryckyta) med MEAL_HEADERS. overview.spec.ts = Översikt med fast data (höjd ≤ 1,5 skärmar, varje ring/kort navigerar rätt,
                         Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
                         flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). suggestions.spec.ts = Föreslå
-                        med fast historik (15:30 = mellanmål, page.clock): under kvarvarande kcal, logga + Ångra, ⋯ på tom måltid, Justera,
+                        med fast historik (15:30 = mellanmål, page.clock): rubrik med gapen, förklaring, under kvarvarande kcal, logga + Ångra, ⋯ på tom måltid, Justera,
                         kallstart, Inte intresserad + återställning, lågt läge, Något nytt och axe. recipeImport.spec.ts = receptimporten (delning via
                         `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). fineli.spec.ts = sökträff från den bundlade
@@ -502,19 +503,30 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   `SuggestIcon`) bredvid skannern i Mat → Dag (pågående måltid efter klockslaget) och "Föreslå" överst i måltidens ⋯-meny (⋯ visas då även för tomma
   måltider); bara för idag. Måltiden byts i panelen (`SegmentedControl`). Kandidater: livsmedel loggade de senaste 28 dagarna
   (före idag, inte snabbloggar), favoriter, egna måltider och recept – inte det som redan loggats i måltiden idag eller är dolt.
-  Mängd = median av tidigare loggar i den vanligaste enheten (`typicalAmount`), annars standardportionen (`standardAmount`).
-  Vikt (`historyWeight`) = hur ofta och hur nyligen × andelen loggar i just måltiden, +0,25 för egen data. Färre än 5 egna
+  Mängd = median av tidigare loggar där livsmedlet var en huvudkomponent (`mainComponentEntries`: måltid med ≤ 2 poster, största
+  posten eller ≥ 25 % av måltidens kcal) i den vanligaste enheten (`typicalAmount`), annars standardportionen (`standardAmount`).
+  Vana (`historyWeight`) = hur ofta och hur nyligen × andelen loggar i just måltiden, +0,25 för egen data. Färre än 5 egna
   kandidater i måltiden → startlistan fyller på med vikt 0,3 × (1 − n/10), märkt "Allmänt förslag"; en egen variant (samma första
-  ord) går före. Kombinationer (`combinations`): loggade ihop i måltiden ≥ 2 gånger, eller proteinrik + fiberrik bland de sex
-  främsta; ett livsmedel ingår i högst en kombination. Poäng (`scoreCandidate`) = 0,9 × vikt + 0,6 × `nutritionScore` (andel av
-  protein-/fibermålet som fylls per andel av dagens kcal, viktat med hur långt från målet, lägsta procenten × 1,5) −
-  `portionPenalty` − `overBudgetPenalty`. Portionstak (`portionCap`) = måltidens typiska kcal (median per dag, 28 dagar, minst
-  3 dagar; annars 25/30/30/15 % av dagsmålet), högst det som är kvar; större förslag skalas ner (`fitPortion`, högst till hälften).
-  Förslag över kvarvarande kcal visas inte. Fibermålet = veckans fibermål, annars referensvärdet. Lågt läge (< 150 kcal kvar eller
-  över målet): bara Energisnål (även startlistans oavsett måltid), `LOW_TEXT`, ingen "kvar efteråt". Lägesraden nämner protein/fiber
-  bara när de ligger > 15 procentenheter efter kalorierna och aldrig från kl. 20. Tre förslag i taget ("Visa fler"), högst 12.
-  Logga = en post per del i vald måltid + toast med Ångra; Justera = `FoodLogForm` förifylld (`last`, `defaultMeal`), en del i taget;
-  "Inte intresserad" = `preferences.suggestionsHidden` (`{ key, name }`, Ångra i toasten, "Visa alla förslag igen" i
+  ord) går före. **Gap** (`gapsOf`): proteingap = max(0, proteinmål − intag), fibergap likadant mot veckans fibermål (annars
+  referensvärdet); stort = mer än 10 % av målet kvar (`GAP_SMALL_SHARE`). **Stort gap** (`scoreMode` `gap`): näringspoäng
+  (`nutritionScore`) = wP × min(protein, proteingap)/proteingap + wF × min(fiber, fibergap)/fibergap, vikterna proportionella mot
+  andelen av målet som återstår (ett litet gap får vikt 0). Poäng (`gapScoreParts`) = 0,7 × näring (normerad mot bästa kandidaten)
+  plus vana (högst 0,2) + lätthet (högst 0,1, energitäthet), kapade per förslag så att näringen är ≥ 70 % och vanan ≤ 20 % av
+  summan; minus straff för att gå över det som är kvar (`overBudgetPenalty`) och över måltidens typiska kcal (`portionPenalty`).
+  **Små gap** (`small`): 0,5 × lätthet + 0,5 × vana − straff. Proteinkällor (`isProteinSource`: ≥ 20 % energi från protein och ≥ 5
+  g/100 g) skalas inom 0,5–2 × portionen mot proteingapet så långt portionstaket räcker (`scaleProteinPortion`); övriga skalas ner
+  mot taket (`fitPortion`, högst till hälften). Ingen portion under kategorins minsta (`MIN_PORTION_G`: kött/fisk 75 g, ägg 1 st,
+  fil/kvarg 1 dl …, `atLeastMinPortion`); styck i hela. Portionstak (`portionCap`) = måltidens typiska kcal (median per dag, 28
+  dagar, minst 3 dagar; annars 25/30/30/15 % av dagsmålet), högst det som är kvar. Förslag över kvarvarande kcal visas inte.
+  Kombinationer (`combinations`) kompletterar: en protein- eller fiberkälla för ett stort gap + något som loggats ihop med den i
+  måltiden ≥ 2 gånger, eller proteinrik + fiberrik (båda gapen stora) där minst den ena ätits i måltiden; ett livsmedel ingår i
+  högst en kombination. Etiketter (`claimsOfParts`) räknas på kombinationens totala näring, aldrig ärvda. Variation (`diversify`):
+  ett livsmedel i högst ett av tre förslag som visas samtidigt. Förklaring per förslag (`reasonFor`, `suggest-reason`). Lägesraden
+  (`statusText`): "41 g protein och 6 g fiber kvar · 302 kcal kvar" (gap > 10 %, störst först), "Du ligger bra till idag" bara när
+  båda är inom 10 %; från kl. 20 nämns inte protein/fiber ("302 kcal kvar idag"). Lågt läge (< 150 kcal kvar eller över målet):
+  bara Energisnål (även startlistans oavsett måltid), `LOW_TEXT`, ingen "kvar efteråt". Tre förslag i taget ("Visa fler"),
+  högst 12. Logga = en post per del i vald måltid + toast med Ångra; Justera = `FoodLogForm` förifylld (`last`, `defaultMeal`), en del i
+  taget; "Inte intresserad" = `preferences.suggestionsHidden` (`{ key, name }`, Ångra i toasten, "Visa alla förslag igen" i
   Inställningar → Visning) och nedviktar liknande (`dislikeFactor`: samma första ord ×0,4, samma kategori ×0,75). "Något nytt" =
   `AskAi` med ämnet `suggest` (`AI_SUGGEST_TEMPLATE`: måltid, typisk portion, kvar idag, 15 vanligaste livsmedlen). Tomt läge
   (`EmptyState`) med "Något nytt". Startlistans värden kontrolleras mot public/*.json i `suggestions.test.ts`.

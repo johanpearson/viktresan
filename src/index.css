@@ -3453,9 +3453,15 @@ a.button {
 }
 
 .suggest-amount,
+.suggest-reason,
 .suggest-effect {
   margin: 0;
   font-size: var(--text-xs);
+}
+
+/* Förklaringen ("Mycket protein per kcal"): varför förslaget står där. */
+.suggest-reason {
+  font-weight: 600;
 }
 
 .suggest-amount {

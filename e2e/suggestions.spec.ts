@@ -130,6 +130,10 @@ test('Föreslå för mellanmål: förslag under kvarvarande kcal, logga och ång
     'true',
   );
   await expect(panel.getByTestId('suggest-status')).toHaveAttribute('data-mode', 'normal');
+  // Rubriken bygger på dagens största gap: fiber (9 av 25 g) och protein (64 av 128 g).
+  await expect(panel.getByTestId('suggest-status')).toHaveText(
+    /^\d+ g fiber och \d+ g protein kvar · [\d  ]+ kcal kvar$/,
+  );
 
   const remaining = await remainingKcal(page);
   expect(remaining).toBeGreaterThan(150);
@@ -141,9 +145,12 @@ test('Föreslå för mellanmål: förslag under kvarvarande kcal, logga och ång
   for (const item of await items.all()) {
     expect(Number(await item.getAttribute('data-kcal'))).toBeLessThanOrEqual(remaining);
   }
-  // Egen historik först: kvargen (loggad varje dag som mellanmål) är inget allmänt förslag.
-  await expect(items.first()).toHaveAttribute('data-general', 'false');
+  // Näringsgapet styr: det första förslaget fyller fibergapet och säger varför.
+  await expect(items.first().getByTestId('suggestion-reason')).toHaveText(/fiber/);
   await expect(items.first().getByTestId('suggestion-effect')).toContainText('kvar efteråt');
+  // Vanan väger högst 20 %: startlistans chiapudding, sojabönor och tonfisk fyller gapen bättre
+  // än kvargen som loggas varje dag.
+  await expect(panel.locator('[data-key="lv:7"]')).toHaveCount(0);
 
   // Logga det första förslaget direkt i mellanmålet.
   const name = (await items.first().getByTestId('suggestion-name').textContent()) ?? '';
@@ -200,14 +207,20 @@ test('måltidens ⋯ öppnar Föreslå för måltiden, även när den är tom', 
 test('Justera öppnar logg-sheeten förifylld med förslagets mängd och måltid', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Föreslå' }).tap();
-  // Kvargen: 150 g som mellanmål varje dag (typisk mängd = medianen).
-  const kvarg = sheet(page).locator('[data-key="lv:7"]');
-  await expect(kvarg.getByText('150 g', { exact: true })).toBeVisible();
-  await kvarg.getByRole('button', { name: /^Justera / }).tap();
+  // Kycklingen (150 g till lunch) är en proteinkälla: skalad mot mellanmålets typiska kcal, men
+  // aldrig under 75 g.
+  await sheet(page).getByRole('button', { name: 'Visa fler' }).tap();
+  const kyckling = sheet(page).locator('[data-key="lv:6"]');
+  await expect(kyckling.getByTestId('suggestion-reason')).toHaveText('Mycket protein per kcal');
+  const amount = (await kyckling.locator('.suggest-amount').textContent()) ?? '';
+  const grams = /^(\d+) g$/.exec(amount)?.[1] ?? '';
+  expect(Number(grams)).toBeGreaterThanOrEqual(75);
+  expect(Number(grams)).toBeLessThanOrEqual(300);
+  await kyckling.getByRole('button', { name: /^Justera / }).tap();
   const form = page.getByTestId('food-log-form');
   await expect(form).toBeVisible();
   await expect(form.getByLabel('Måltid')).toHaveValue('mellanmal');
-  await expect(form.getByLabel(/Mängd/)).toHaveValue('150');
+  await expect(form.getByLabel(/Mängd/)).toHaveValue(grams);
   await form.getByLabel(/Mängd/).fill('100');
   await form.getByRole('button', { name: 'Logga', exact: true }).tap();
   await expect(sheet(page).getByTestId('suggest-toast')).toContainText('100 g');
