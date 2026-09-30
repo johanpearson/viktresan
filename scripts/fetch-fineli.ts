@@ -169,7 +169,7 @@ const text = (name: FineliFileName | 'descript.txt') => {
   return data ? latin1.decode(data) : '';
 };
 
-const { rows, withoutName, withoutEnergy } = fineliRows({
+const { rows, withoutName, withoutEnergy, archived } = fineliRows({
   food: parseFineliCsv(text('food.csv')),
   names: parseFineliCsv(text('foodname_SV.csv')),
   components: parseFineliCsv(text('component.csv')),
@@ -184,6 +184,7 @@ const file = fineliFile(rows, retrieved, release);
 await writeFile(out, serializeCompactFile(file));
 console.log(
   `Skrev ${String(rows.length)} livsmedel till public/fineli.json (Fineli ${release ?? 'okänd version'}; ` +
-    `${String(withoutName)} utan svenskt namn, ${String(withoutEnergy)} utan energivärde).`,
+    `${String(withoutName)} utan svenskt namn, ${String(withoutEnergy)} utan energivärde, ` +
+    `${String(archived)} arkiverade).`,
 );
 console.log(`Övriga näringsämnen: ${file.extra?.join(', ') ?? 'inga'}.`);

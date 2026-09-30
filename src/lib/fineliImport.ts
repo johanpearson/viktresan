@@ -166,12 +166,28 @@ export interface FineliTables {
   values: readonly Record<string, string>[];
 }
 
+/** Arkiverade livsmedel (utgångna produkter) har prefixet "(ARC)" i namnet (version 20). */
+const ARCHIVED = /^\(ARC\)/i;
+
+/**
+ * Namnet som det skrivs i appen. Version 20 har namnen i versaler ("BANAN, SKALAD");
+ * de skrivs då med gemener och stor första bokstav ("Banan, skalad"), som i version 18.
+ */
+export function fineliName(raw: string): string {
+  const name = raw.replace(/\s+/g, ' ').trim();
+  if (name === '' || /\p{Ll}/u.test(name)) return name;
+  const lower = name.toLocaleLowerCase('sv');
+  return lower.charAt(0).toLocaleUpperCase('sv') + lower.slice(1);
+}
+
 export interface FineliRowsResult {
   rows: CompactRow[];
   /** Livsmedel utan svenskt namn (hoppas över). */
   withoutName: number;
   /** Livsmedel utan energivärde (hoppas över). */
   withoutEnergy: number;
+  /** Arkiverade livsmedel, "(ARC)" (hoppas över). */
+  archived: number;
 }
 
 /**
@@ -182,7 +198,7 @@ export function fineliRows(tables: FineliTables): FineliRowsResult {
   const svNames = new Map<string, string>();
   for (const row of tables.names) {
     const id = row.FOODID ?? '';
-    const name = (row.FOODNAME ?? '').replace(/\s+/g, ' ').trim();
+    const name = (row.FOODNAME ?? '').trim();
     if (id !== '' && name !== '' && (row.LANG === undefined || row.LANG.toUpperCase() === 'SV')) {
       svNames.set(id, name);
     }
@@ -208,15 +224,21 @@ export function fineliRows(tables: FineliTables): FineliRowsResult {
   const rows: CompactRow[] = [];
   let withoutName = 0;
   let withoutEnergy = 0;
+  let archived = 0;
   for (const food of tables.food) {
     const id = food.FOODID ?? '';
     const nummer = Number(id);
     if (!Number.isInteger(nummer) || nummer <= 0) continue;
-    const namn = svNames.get(id);
-    if (namn === undefined) {
+    const raw = svNames.get(id);
+    if (raw === undefined) {
       withoutName++;
       continue;
     }
+    if (ARCHIVED.test(raw) || ARCHIVED.test(food.FOODNAME ?? '')) {
+      archived++;
+      continue;
+    }
+    const namn = fineliName(raw);
     const v = values.get(id) ?? new Map<string, number>();
     const energy = v.get('ENERC');
     if (energy === undefined) {
@@ -250,7 +272,7 @@ export function fineliRows(tables: FineliTables): FineliRowsResult {
     if (Object.keys(extra).length > 0) row.extra = extra;
     rows.push(row);
   }
-  return { rows, withoutName, withoutEnergy };
+  return { rows, withoutName, withoutEnergy, archived };
 }
 
 /** Hela filen `public/fineli.json`. */

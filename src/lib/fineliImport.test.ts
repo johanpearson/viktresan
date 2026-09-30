@@ -4,6 +4,7 @@ import {
   FINELI_SOURCE,
   fineliFile,
   fineliNumber,
+  fineliName,
   fineliRelease,
   fineliRows,
   parseFineliCsv,
@@ -136,6 +137,26 @@ describe('fineliRows', () => {
   it('läser bara svenska namn när språket anges', () => {
     const names = parseFineliCsv('FOODID;FOODNAME;LANG\n11049;Banaani;FI');
     expect(fineliRows({ ...tables(), names }).rows).toEqual([]);
+  });
+});
+
+describe('version 20: versalnamn och arkiverade livsmedel', () => {
+  it('skriver versalnamn med gemener och stor första bokstav', () => {
+    expect(fineliName('BANAN, SKALAD')).toBe('Banan, skalad');
+    expect(fineliName('ÄGG, KOKT,  UTAN SALT')).toBe('Ägg, kokt, utan salt');
+    // Namn som redan har gemener (version 18) lämnas orörda.
+    expect(fineliName('Mjölk, 1 ug vitamin D')).toBe('Mjölk, 1 ug vitamin D');
+  });
+
+  it('hoppar över arkiverade livsmedel ("(ARC)") och räknar dem', () => {
+    const result = fineliRows({
+      ...tables(),
+      names: parseFineliCsv(
+        ['FOODID;FOODNAME;LANG', '11049;BANAN, SKALAD;SV', '707;(ARC)BACON, FET;SV'].join('\r\n'),
+      ),
+    });
+    expect(result.rows.map((r) => r.namn)).toEqual(['Banan, skalad']);
+    expect(result.archived).toBe(1);
   });
 });
 

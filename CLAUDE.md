@@ -480,7 +480,10 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   med svenska namn (`foodname_SV.csv`). `npm run fineli` hämtar första paketet på fineli.fi/fineli/sv/avoin-data med alla
   filer (eller `FINELI_ZIP_URL`, eller ett nedladdat paket via `FINELI_DIR=<mapp|zip>`) och skriver `public/fineli.json`
   i samma format som Livsmedelsverkets (energi kJ → kcal, CHOAVL, FIBC, VITPYRID = B6, NACL mg → g; grupp = FUCLASS,
-  `version` ur descript.txt). Workflowet `fineli.yml` kör skriptet när det ändras eller manuellt och checkar in filen.
+  `version` ur descript.txt; version 20:s versalnamn skrivs om med `fineliName`, arkiverade "(ARC)"-livsmedel hoppas över).
+  Incheckad: version 20.0 (baspaket 1). Workflowet `fineli.yml` kör skriptet när det ändras eller manuellt och checkar in
+  filen – fineli.fi nekar (403) anrop från GitHub Actions, så då blir det en varning (kod 2) och filen lämnas orörd;
+  uppdatera i så fall lokalt med `FINELI_DIR=<zip> npm run fineli`.
   Livsmedel `fi:<FOODID>`, källa `fineli`; `loadLivsmedel()` laddar båda filerna, så Fineli ingår överallt där
   Livsmedelsverkets data används (sök, fiber, vitaminer/mineraler, analys, rapport, receptimport). Kategorin: namnet,
   sedan `FINELI_CLASSES[FUCLASS]` (Livsmedelsverkets `GROUP_RULES` gäller inte `fi:`). Appen anropar aldrig Fineli.
