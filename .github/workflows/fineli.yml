@@ -31,8 +31,21 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run fineli
+      # Kod 2 = fineli.fi gick inte att nå eller hade inget paket: varning, filen lämnas orörd.
+      - name: Hämta Fineli
+        id: fetch
+        run: |
+          set +e
+          npm run fineli
+          code=$?
+          if [ "$code" -eq 2 ]; then
+            echo "::warning::fineli.fi gick inte att nå – public/fineli.json lämnas oförändrad. Kör workflowet manuellt senare eller ange FINELI_ZIP_URL."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$code"
       - name: Kontrollera filen
+        if: steps.fetch.outputs.skip != 'true'
         run: |
           node -e '
             const f = JSON.parse(require("fs").readFileSync("public/fineli.json", "utf8"));
@@ -40,6 +53,7 @@ jobs:
             if (f.foods.length < 1000) throw new Error("Orimligt få livsmedel – checkar inte in.");
           '
       - name: Checka in om livsmedlen ändrats
+        if: steps.fetch.outputs.skip != 'true'
         id: commit
         run: |
           if git diff --quiet -I '"retrieved"' -- public/fineli.json; then

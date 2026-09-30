@@ -7,7 +7,8 @@
 // Resultatet checkas in och precachas av service workern – appen gör aldrig
 // egna anrop till Fineli.
 //
-// Källan väljs så här:
+// Källan väljs så här (utan källa som svarar avslutas skriptet med kod 2 och
+// public/fineli.json lämnas orörd):
 //   FINELI_DIR=<mapp eller .zip>  ett nedladdat paket (t.ex. utan nätverk)
 //   FINELI_ZIP_URL=<adress>       ett visst paket
 //   annars                        första paketet på sidan med öppna data som
@@ -29,7 +30,24 @@ import {
 } from '../src/lib/fineliImport.ts';
 import { serializeCompactFile } from '../src/lib/livsmedelImport.ts';
 
-const PAGE = process.env.FINELI_PAGE ?? 'https://fineli.fi/fineli/sv/avoin-data';
+// Sidorna med öppna data (svenska, engelska, finska) – den första som svarar används.
+const PAGES = process.env.FINELI_PAGE
+  ? [process.env.FINELI_PAGE]
+  : ['sv', 'en', 'fi'].map((lang) => `https://fineli.fi/fineli/${lang}/avoin-data`);
+// Paketen ligger som /fineli/content/file/<n>; provas i tur och ordning om sidorna inte ger länkar.
+const FILE_URL = 'https://fineli.fi/fineli/content/file/';
+const MAX_FILE_ID = 80;
+// Fineli nekar (403) anrop utan vanliga webbläsarhuvuden.
+const HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36 viktresan-data',
+  Accept:
+    'text/html,application/xhtml+xml,application/zip,application/octet-stream;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'sv,en;q=0.8',
+};
+
+/** Fineli gick inte att nå eller hade inget paket – workflowet lämnar filen orörd (exit 2). */
+class FineliUnavailable extends Error {}
 
 /** Filerna i paketet (namn utan mapp, gemener) → innehåll. */
 type Package = Map<string, Uint8Array>;
@@ -56,21 +74,61 @@ function isComplete(pkg: Package): boolean {
 }
 
 async function download(url: string): Promise<Uint8Array> {
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: HEADERS });
   if (!res.ok) throw new Error(`${String(res.status)} ${res.statusText} – ${url}`);
   return new Uint8Array(await res.arrayBuffer());
 }
 
-/** Paketlänkarna på sidan med öppna data (zip-filer och /content/file/…). */
+/** Zip-filer börjar med "PK". */
+function isZip(bytes: Uint8Array): boolean {
+  return bytes[0] === 0x50 && bytes[1] === 0x4b;
+}
+
+/** Paketlänkarna på sidorna med öppna data (zip-filer och /content/file/…). Fel loggas. */
 async function packageLinks(): Promise<string[]> {
-  const res = await fetch(PAGE);
-  if (!res.ok) throw new Error(`${String(res.status)} ${res.statusText} – ${PAGE}`);
-  const html = await res.text();
-  const links = [...html.matchAll(/href="([^"]+)"/g)]
-    .map((m) => m[1] ?? '')
-    .filter((href) => /\.zip($|\?)|\/content\/file\//i.test(href))
-    .map((href) => new URL(href.replaceAll('&amp;', '&'), PAGE).toString());
+  const links: string[] = [];
+  for (const page of PAGES) {
+    try {
+      const res = await fetch(page, { headers: HEADERS });
+      if (!res.ok) throw new Error(`${String(res.status)} ${res.statusText}`);
+      const html = await res.text();
+      links.push(
+        ...[...html.matchAll(/href="([^"]+)"/g)]
+          .map((m) => m[1] ?? '')
+          .filter((href) => /\.zip($|\?)|\/content\/file\//i.test(href))
+          .map((href) => new URL(href.replaceAll('&amp;', '&'), page).toString()),
+      );
+      if (links.length > 0) break;
+      console.log(`Inga paketlänkar på ${page} (sidan kan vara renderad med JavaScript).`);
+    } catch (err) {
+      console.log(`Kunde inte läsa ${page}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   return [...new Set(links)];
+}
+
+/** Första paketet bland adresserna som har alla filer, annars `null`. */
+async function firstComplete(urls: Iterable<string>, quiet = false): Promise<Package | null> {
+  for (const url of urls) {
+    try {
+      const bytes = await download(url);
+      if (!isZip(bytes)) continue;
+      const pkg = fromZip(bytes);
+      if (isComplete(pkg)) {
+        console.log(`Paket: ${url}`);
+        return pkg;
+      }
+    } catch (err) {
+      if (!quiet) {
+        console.log(`Hoppar över ${url}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+  return null;
+}
+
+function* fileIds(): Generator<string> {
+  for (let id = 1; id <= MAX_FILE_ID; id++) yield `${FILE_URL}${String(id)}`;
 }
 
 async function loadPackage(): Promise<Package> {
@@ -80,26 +138,32 @@ async function loadPackage(): Promise<Package> {
     if (!isComplete(pkg)) throw new Error(`${dir} saknar någon av ${FINELI_FILES.join(', ')}.`);
     return pkg;
   }
-  const candidates = process.env.FINELI_ZIP_URL
-    ? [process.env.FINELI_ZIP_URL]
-    : await packageLinks();
-  for (const url of candidates) {
-    try {
-      const pkg = fromZip(await download(url));
-      if (isComplete(pkg)) {
-        console.log(`Paket: ${url}`);
-        return pkg;
-      }
-    } catch (err) {
-      console.log(`Hoppar över ${url}: ${err instanceof Error ? err.message : String(err)}`);
-    }
+  if (process.env.FINELI_ZIP_URL) {
+    const pkg = await firstComplete([process.env.FINELI_ZIP_URL]);
+    if (pkg) return pkg;
+    throw new Error(`${process.env.FINELI_ZIP_URL} saknar någon av ${FINELI_FILES.join(', ')}.`);
   }
-  throw new Error(`Hittade inget paket med ${FINELI_FILES.join(', ')} på ${PAGE}.`);
+  const linked = await firstComplete(await packageLinks());
+  if (linked) return linked;
+  console.log(`Provar ${FILE_URL}1–${String(MAX_FILE_ID)} …`);
+  const pkg = await firstComplete(fileIds(), true);
+  if (pkg) return pkg;
+  throw new FineliUnavailable(
+    `Hittade inget paket med ${FINELI_FILES.join(', ')} på fineli.fi. ` +
+      'Ange FINELI_ZIP_URL eller ladda ner paketet och kör med FINELI_DIR.',
+  );
 }
 
 // Filerna är ISO-8859-1 (latin1).
 const latin1 = new TextDecoder('latin1');
-const pkg = await loadPackage();
+let pkg: Package;
+try {
+  pkg = await loadPackage();
+} catch (err) {
+  if (!(err instanceof FineliUnavailable)) throw err;
+  console.error(err.message);
+  process.exit(2);
+}
 const text = (name: FineliFileName | 'descript.txt') => {
   const data = pkg.get(name.toLowerCase());
   return data ? latin1.decode(data) : '';
