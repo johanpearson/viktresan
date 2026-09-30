@@ -12,14 +12,18 @@ import {
   type SavedMeal,
   type StoredFood,
 } from '../db/db.ts';
+import { claimsFor } from '../lib/claims.ts';
+import { catalogFiberSource } from '../lib/fiber.ts';
+import { buildCatalog, mealToItem, storedItems, storedToItem } from '../lib/foodCatalog.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
-import { recipeFoodId, recipeYield, yieldText } from '../lib/recipes.ts';
+import { recipeFoodId, recipeToItem, recipeYield, yieldText } from '../lib/recipes.ts';
 import { loggedAmountText } from '../lib/units.ts';
 import { setPendingShare } from '../lib/shareTarget.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
 import { BottomSheet } from './BottomSheet.tsx';
 import { Card } from './Card.tsx';
+import { ClaimTags } from './ClaimTags.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import type { FoodSource } from './FoodPicker.tsx';
 import { ListRow } from './ListRow.tsx';
@@ -94,6 +98,15 @@ export function OwnFoods({
   const customUnits = useMemo(
     () => new Map(foodUnits.map((u) => [u.foodId, u.units])),
     [foodUnits],
+  );
+  // Fiber i måltider och recept (för etiketterna) – först när livsmedelsdatabaserna är laddade.
+  const { livsmedel } = source;
+  const fiberSource = useMemo(
+    () =>
+      livsmedel
+        ? catalogFiberSource(buildCatalog(livsmedel.foods, storedItems(source.foodData)), meals)
+        : null,
+    [livsmedel, source.foodData, meals],
   );
 
   /**
@@ -223,7 +236,12 @@ export function OwnFoods({
               <ListRow
                 key={meal.id}
                 testId="own-meal"
-                primary={meal.name}
+                primary={
+                  <>
+                    {meal.name}
+                    <ClaimTags claims={claimsFor(mealToItem(meal), fiberSource)} />
+                  </>
+                }
                 secondary={meal.items.map((i) => `${i.name} ${loggedAmountText(i)}`).join(', ')}
                 value={<span className="kcal">{formatKcal(totalOf(meal.items).kcal)}</span>}
                 onClick={() => {
@@ -276,7 +294,12 @@ export function OwnFoods({
               <ListRow
                 key={recipe.id}
                 testId="own-recipe"
-                primary={recipe.name}
+                primary={
+                  <>
+                    {recipe.name}
+                    <ClaimTags claims={claimsFor(recipeToItem(recipe), fiberSource)} />
+                  </>
+                }
                 secondary={yieldText(y, formatGrams)}
                 value={
                   <span className="kcal">
@@ -321,7 +344,12 @@ export function OwnFoods({
               <ListRow
                 key={food.id}
                 testId="own-food"
-                primary={food.name}
+                primary={
+                  <>
+                    {food.name}
+                    <ClaimTags claims={claimsFor(storedToItem(food), null)} />
+                  </>
+                }
                 secondary={
                   <Macros
                     lead="Per 100 g"

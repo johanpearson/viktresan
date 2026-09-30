@@ -2,12 +2,13 @@
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
  * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
  * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort, rapportens val och vad Översikt
- * döljer (ringar och kort) samt senast stängda milstolpekortet. Lagras i `settings`
+ * döljer (ringar och kort), senast stängda milstolpekortet och dolda näringsetiketter. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
 import { SETTING_PREFERENCES, getSetting, setSetting } from '../db/db.ts';
 import { DEFAULT_AI_OPTIONS, parseAiOptions, type AiOptions } from './aiPrompt.ts';
+import { isClaimId, type ClaimId } from '../data/nutritionClaims.ts';
 import { isProfileSide, type ProfileSide } from './photoSessions.ts';
 import { DEFAULT_REPORT_SETTINGS, parseReportSettings, type ReportSettings } from './report.ts';
 
@@ -36,6 +37,8 @@ export interface Preferences {
   overviewHidden: readonly string[];
   /** Id för milstolpen vars kort på Översikt senast stängdes. */
   milestoneCardDismissed: string | null;
+  /** Näringsetiketter som inte visas (Inställningar → Visning). Alla visas som standard. */
+  claimsHidden: readonly ClaimId[];
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -54,6 +57,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   reportPrintHintSeen: false,
   overviewHidden: [],
   milestoneCardDismissed: null,
+  claimsHidden: [],
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -87,6 +91,9 @@ export function parsePreferences(raw: unknown): Preferences {
       : [],
     milestoneCardDismissed:
       typeof stored.milestoneCardDismissed === 'string' ? stored.milestoneCardDismissed : null,
+    claimsHidden: Array.isArray(stored.claimsHidden)
+      ? [...new Set(stored.claimsHidden.filter(isClaimId))]
+      : [],
   };
 }
 

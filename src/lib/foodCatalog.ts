@@ -2,7 +2,8 @@
  * Gör om lagrade livsmedel, måltider och loggposter till `FoodItem` och tar
  * fram snabbval (senaste, favoriter). Rena funktioner.
  */
-import type { Favorite, FoodLogEntry, SavedMeal, StoredFood } from '../db/db.ts';
+import type { Favorite, FoodLogEntry, FoodOverride, SavedMeal, StoredFood } from '../db/db.ts';
+import { applyOverride, overrideMap } from './foodNutrition.ts';
 import type { FoodItem, FoodSource } from './foodSearch.ts';
 import { combineIngredients } from './nutrition.ts';
 import { isGram, round1, type FoodUnit, type UnitSource } from './units.ts';
@@ -12,8 +13,22 @@ export function storedToItem(food: StoredFood): FoodItem {
   if (food.units !== undefined && food.units.length > 0) item.units = food.units;
   if (food.per100Unit !== undefined) item.per100Unit = food.per100Unit;
   if (food.ean !== undefined) item.ean = food.ean;
-  if (food.fiberG !== undefined) item.extra = { fiberG: food.fiberG };
+  if (food.fiberG !== undefined || food.sugarG !== undefined) {
+    item.extra = {};
+    if (food.fiberG !== undefined) item.extra.fiberG = food.fiberG;
+    if (food.sugarG !== undefined) item.extra.sugarG = food.sugarG;
+  }
+  if (food.missing !== undefined && food.missing.length > 0) item.missing = [...food.missing];
   return item;
+}
+
+/** Egna livsmedel och cachade produkter som `FoodItem`, med egna näringsvärden inlagda. */
+export function storedItems(data: {
+  foods: readonly StoredFood[];
+  overrides: readonly FoodOverride[];
+}): FoodItem[] {
+  const overrides = overrideMap(data.overrides);
+  return data.foods.map((f) => applyOverride(storedToItem(f), overrides.get(f.id)));
 }
 
 export function mealFoodId(mealId: string): string {

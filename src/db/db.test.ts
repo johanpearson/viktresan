@@ -12,7 +12,11 @@ import {
   deleteWaist,
   deleteWeight,
   getDb,
+  getFoodOverride,
   getOldestEntryTime,
+  listFoodOverrides,
+  putFoodLogEntries,
+  putFoodOverride,
   findMealByEan,
   findSupplementByEan,
   listSupplementLog,
@@ -221,6 +225,7 @@ describe('db', () => {
     expect([...db.objectStoreNames].sort()).toEqual([
       'favorites',
       'foodLog',
+      'foodOverrides',
       'foodUnits',
       'foods',
       'injections',
@@ -241,6 +246,50 @@ describe('db', () => {
       'weights',
       'workoutPlans',
       'workouts',
+    ]);
+  });
+
+  it('egna näringsvärden: sparas per livsmedel, tomma värden tar bort posten', async () => {
+    await putFoodOverride({
+      foodId: 'off:7310865004703',
+      ean: '7310865004703',
+      name: 'Havregryn',
+      values: { fiberG: 10 },
+      createdAt: 1,
+    });
+    expect((await getFoodOverride('off:7310865004703'))?.values).toEqual({ fiberG: 10 });
+    await putFoodOverride({ foodId: 'lv:1', name: 'Äpple', values: {}, createdAt: 1 });
+    expect(await listFoodOverrides()).toHaveLength(1);
+    await putFoodOverride({
+      foodId: 'off:7310865004703',
+      name: 'Havregryn',
+      values: {},
+      createdAt: 1,
+    });
+    expect(await listFoodOverrides()).toEqual([]);
+  });
+
+  it('uppdaterar flera loggposter i en transaktion', async () => {
+    const base = {
+      meal: 'frukost' as const,
+      foodId: 'lv:1',
+      name: 'Äpple',
+      amount: 1,
+      unit: 'st',
+      grams: 150,
+      per100: { kcal: 52, proteinG: 0.3, carbsG: 11, fatG: 0.2 },
+      createdAt: 1,
+    };
+    await putFoodLog({ ...base, id: 'a', date: '2026-09-29' });
+    await putFoodLog({ ...base, id: 'b', date: '2026-09-30' });
+    const per100 = { kcal: 55, proteinG: 0.3, carbsG: 12, fatG: 0.2 };
+    await putFoodLogEntries([
+      { ...base, id: 'a', date: '2026-09-29', per100, updatedAt: 2 },
+      { ...base, id: 'b', date: '2026-09-30', per100, updatedAt: 2 },
+    ]);
+    expect((await listFoodLog()).map((e) => [e.id, e.per100.kcal, e.grams])).toEqual([
+      ['a', 55, 150],
+      ['b', 55, 150],
     ]);
   });
 
@@ -751,7 +800,7 @@ describe('db', () => {
     await createV6Database({ foods: [], meals: [], foodLog: [], profile });
     const db = await getDb();
     expect(db.version).toBe(DB_VERSION);
-    expect(DB_VERSION).toBe(12);
+    expect(DB_VERSION).toBe(13);
     const migrated = await getProfile();
     expect(migrated).not.toHaveProperty('calorieMode');
     expect(migrated).toEqual({ ...profile, calorieMode: undefined });

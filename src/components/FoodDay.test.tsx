@@ -22,7 +22,14 @@ function entry(id: string, meal: FoodLogEntry['meal'], grams: number): FoodLogEn
   };
 }
 
-const foodData: FoodData = { foods: [], meals: [], favorites: [], foodUnits: [], recipes: [] };
+const foodData: FoodData = {
+  foods: [],
+  meals: [],
+  favorites: [],
+  foodUnits: [],
+  recipes: [],
+  overrides: [],
+};
 
 function renderDay(foodLog: FoodLogEntry[]) {
   return render(

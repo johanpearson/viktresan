@@ -2,7 +2,7 @@
  * Livsmedel från olika källor i ett gemensamt format, och fuzzy-sökning på svenska.
  */
 import type { ExtraNutrients } from '../data/nutrients.ts';
-import type { LoggedRecipe } from '../db/db.ts';
+import type { LoggedRecipe, MacroField, NutritionField } from '../db/db.ts';
 import type { Nutrients } from './nutrition.ts';
 import type { BaseUnit, FoodUnit } from './units.ts';
 
@@ -37,6 +37,15 @@ export interface FoodItem {
   ean?: string;
   /** Recept: ingredienserna och rättens vikt, som kopieras in i loggposten. */
   recipe?: LoggedRecipe;
+  /**
+   * Energi/makron som saknas i källan (Open Food Facts) – står som 0 i `per100` men visas
+   * som "saknas". Fiber och socker saknas när de inte finns i `extra`.
+   */
+  missing?: MacroField[];
+  /** Värden som kommer från användarens egna näringsvärden (`FoodOverride`), inte källan. */
+  own?: NutritionField[];
+  /** Källans värden för `own` (`null` = saknades i källan). */
+  base?: Partial<Record<NutritionField, number | null>>;
 }
 
 export const SOURCE_LABELS: Record<FoodSource, string> = {

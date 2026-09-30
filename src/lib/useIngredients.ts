@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { newId, type MealIngredient } from '../db/db.ts';
 import { catalogFiberSource, fiberSum, type FiberAmount } from './fiber.ts';
-import { buildCatalog, entryUnit, sourceOf, storedToItem } from './foodCatalog.ts';
+import { buildCatalog, entryUnit, sourceOf, storedItems } from './foodCatalog.ts';
 import type { FoodItem } from './foodSearch.ts';
 import { decimalInput } from './format.ts';
 import { totalOf, type Nutrients } from './nutrition.ts';
@@ -55,8 +55,8 @@ export function useIngredients(
   livsmedel: Livsmedel | null,
 ): Ingredients {
   const catalog = useMemo(
-    () => buildCatalog(livsmedel?.foods ?? [], foodData.foods.map(storedToItem)),
-    [livsmedel, foodData.foods],
+    () => buildCatalog(livsmedel?.foods ?? [], storedItems(foodData)),
+    [livsmedel, foodData],
   );
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),

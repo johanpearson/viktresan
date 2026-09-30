@@ -9,7 +9,9 @@ import {
   type FoodLogEntry,
   type StoredFood,
 } from '../db/db.ts';
+import { CLAIM_RULES, type ClaimId } from '../data/nutritionClaims.ts';
 import type { FoodLabel } from '../lib/aiLabel.ts';
+import { claimsFor } from '../lib/claims.ts';
 import { lookupBarcode } from '../lib/barcodeLookup.ts';
 import { useFeatures } from '../lib/features.ts';
 import { catalogFiberSource } from '../lib/fiber.ts';
@@ -18,11 +20,14 @@ import {
   favoriteFoods,
   mealToItem,
   recentFoods,
+  storedItems,
   storedToItem,
 } from '../lib/foodCatalog.ts';
+import { applyOverride, overrideMap } from '../lib/foodNutrition.ts';
 import { buildIndex, searchIndex, type FoodItem } from '../lib/foodSearch.ts';
 import type { Livsmedel } from '../lib/livsmedel.ts';
 import { mealLabel, type MealSlot } from '../lib/nutrition.ts';
+import { usePreferences } from '../lib/preferences.ts';
 import { quickValuesOf, type QuickValues } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { lastUsage, type FoodUnit, type Usage } from '../lib/units.ts';
@@ -45,6 +50,8 @@ export interface FoodSource {
   livsmedel: Livsmedel | null;
   foodLog: readonly FoodLogEntry[];
   reloadFood: () => Promise<FoodData>;
+  /** Läser om matloggen (efter att tidigare poster fått kompletterade värden). */
+  reloadLog?: () => Promise<unknown>;
 }
 
 export type PickerMode =
@@ -100,6 +107,9 @@ interface Creating {
 
 const NO_FOODS: readonly FoodItem[] = [];
 const NO_UNITS: readonly FoodUnit[] = [];
+/** Sökträffar som filtreras på etiketter: sök bland fler och visa de första som matchar. */
+const SEARCH_LIMIT = 20;
+const FILTERED_SEARCH_LIMIT = 400;
 
 /** Måltider, recept och snabbloggar kan inte vara ingredienser. */
 function isIngredient(food: FoodItem): boolean {
@@ -123,7 +133,8 @@ export function FoodPicker({
   onClose,
 }: FoodPickerProps) {
   const features = useFeatures();
-  const { foodData, livsmedel, foodLog, reloadFood } = source;
+  const { prefs } = usePreferences();
+  const { foodData, livsmedel, foodLog, reloadFood, reloadLog } = source;
   const forLog = mode.kind === 'log';
   const [query, setQuery] = useState(initialQuery);
   const deferred = useDeferredValue(query);
@@ -135,8 +146,13 @@ export function FoodPicker({
   /** Snabbloggens formulär: tomt eller förifyllt från ett snabbval. */
   const [quick, setQuick] = useState<{ initial: QuickValues | null } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  /** Filterchips: bara livsmedel med alla valda etiketter. */
+  const [filters, setFilters] = useState<ReadonlySet<ClaimId>>(() => new Set());
+  const claimFilters = CLAIM_RULES.filter((c) => !prefs.claimsHidden.includes(c.id));
+  const activeFilters = claimFilters.filter((c) => filters.has(c.id)).map((c) => c.id);
+  const overrides = useMemo(() => overrideMap(foodData.overrides), [foodData.overrides]);
 
-  const custom = useMemo(() => foodData.foods.map(storedToItem), [foodData.foods]);
+  const custom = useMemo(() => storedItems(foodData), [foodData]);
   // En måltid som ingrediens i en måltid vore förvirrande – bara vid loggning.
   const mealItems = useMemo(
     () => (forLog ? foodData.meals.map(mealToItem) : NO_FOODS),
@@ -160,7 +176,19 @@ export function FoodPicker({
     () => buildIndex([...recipeItems, ...mealItems, ...custom, ...lvFoods]),
     [recipeItems, mealItems, custom, lvFoods],
   );
-  const results = useMemo(() => searchIndex(index, deferred, 20), [index, deferred]);
+  const filtering = activeFilters.length > 0;
+  const hits = useMemo(
+    () => searchIndex(index, deferred, filtering ? FILTERED_SEARCH_LIMIT : SEARCH_LIMIT),
+    [index, deferred, filtering],
+  );
+  const byFilter = (items: readonly FoodItem[]): readonly FoodItem[] =>
+    activeFilters.length === 0
+      ? items
+      : items.filter((item) => {
+          const claims = claimsFor(item, fiberSource);
+          return activeFilters.every((id) => claims.includes(id));
+        });
+  const results = filtering ? byFilter(hits).slice(0, SEARCH_LIMIT) : hits;
   const recent = useMemo(
     () => recentFoods(foodLog, catalog).filter((f) => forLog || isIngredient(f)),
     [foodLog, catalog, forLog],
@@ -211,7 +239,8 @@ export function FoodPicker({
     });
     switch (result.kind) {
       case 'food':
-        pick(storedToItem(result.food));
+        // Egna näringsvärden går före (samma uppslagsordning: lokalt först).
+        pick(applyOverride(storedToItem(result.food), overrides.get(result.food.id)));
         return;
       case 'meal':
         if (forLog) pick(mealToItem(result.meal));
@@ -236,9 +265,11 @@ export function FoodPicker({
         if (food.units) stored.units = food.units;
         if (food.per100Unit === 'ml') stored.per100Unit = 'ml';
         if (food.extra?.fiberG !== undefined) stored.fiberG = food.extra.fiberG;
+        if (food.extra?.sugarG !== undefined) stored.sugarG = food.extra.sugarG;
+        if (food.missing) stored.missing = food.missing;
         await putFood(stored);
         await reloadFood();
-        pick(food);
+        pick(applyOverride(food, overrides.get(food.id)));
         return;
       }
       case 'elsewhere':
@@ -359,6 +390,13 @@ export function FoodPicker({
           setSelected(null);
         }}
         fiberSource={fiberSource}
+        onFoodChange={(updated) => {
+          setSelected(updated);
+          void reloadFood();
+        }}
+        onLogUpdated={() => {
+          void reloadLog?.();
+        }}
       />
     );
   } else {
@@ -404,6 +442,28 @@ export function FoodPicker({
             <ScanIcon />
           </button>
         </div>
+        {claimFilters.length > 0 && (
+          <div className="claim-filter" role="group" aria-label="Filtrera på etikett">
+            {claimFilters.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="chip chip-small"
+                aria-pressed={filters.has(c.id)}
+                data-testid={`claim-filter-${c.id}`}
+                onClick={() => {
+                  setFilters((prev) => {
+                    const next = new Set(prev);
+                    if (!next.delete(c.id)) next.add(c.id);
+                    return next;
+                  });
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="form-ok status-line" role="status">
           {status}
         </p>
@@ -442,9 +502,14 @@ export function FoodPicker({
           <FoodList
             items={results}
             onPick={pick}
-            empty={livsmedel === null ? 'Laddar livsmedelsdatabasen …' : 'Inga träffar.'}
+            empty={
+              livsmedel === null
+                ? 'Laddar livsmedelsdatabasen …'
+                : activeFilters.length > 0
+                  ? 'Inga träffar med de valda etiketterna.'
+                  : 'Inga träffar.'
+            }
             testId="search-result"
-            markRich
             fiberSource={fiberSource}
           />
         ) : (
@@ -482,7 +547,7 @@ export function FoodPicker({
               <div className="quick-list">
                 {tab === 'senaste' && (
                   <FoodList
-                    items={recent}
+                    items={byFilter(recent)}
                     onPick={pick}
                     empty="Inget loggat ännu. Sök efter ett livsmedel ovan."
                     testId="quick-pick"
@@ -491,17 +556,16 @@ export function FoodPicker({
                 )}
                 {tab === 'favoriter' && (
                   <FoodList
-                    items={favorites}
+                    items={byFilter(favorites)}
                     onPick={pick}
                     empty="Inga favoriter ännu. Tryck på stjärnan när du loggar."
                     testId="quick-pick"
-                    markRich
                     fiberSource={fiberSource}
                   />
                 )}
                 {tab === 'maltider' && forLog && (
                   <FoodList
-                    items={ownDishes}
+                    items={byFilter(ownDishes)}
                     onPick={pick}
                     empty="Inga sparade måltider eller recept. Skapa dem under Egna."
                     testId="quick-pick"

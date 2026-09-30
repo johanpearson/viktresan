@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ExtraNutrients } from '../data/nutrients.ts';
-import { listMeals, type SavedMeal } from '../db/db.ts';
+import { listFoodOverrides, listMeals, type SavedMeal } from '../db/db.ts';
 import { useFeatures } from '../lib/features.ts';
+import { overlayExtras } from '../lib/foodNutrition.ts';
 import { loadLivsmedel } from '../lib/livsmedel.ts';
 import { dayNutrition, upperLimitWarnings } from '../lib/micronutrients.ts';
 import type { AppData } from '../lib/useAppData.ts';
@@ -31,10 +32,13 @@ export function TodayUpperLimits({ data, today }: TodayUpperLimitsProps) {
   useEffect(() => {
     if (!hasFood) return;
     let active = true;
-    void Promise.all([loadLivsmedel(), listMeals()]).then(([livsmedel, meals]) => {
-      if (!active) return;
-      setLookup({ extra: new Map(livsmedel.foods.map((f) => [f.id, f.extra ?? null])), meals });
-    });
+    void Promise.all([loadLivsmedel(), listMeals(), listFoodOverrides()]).then(
+      ([livsmedel, meals, overrides]) => {
+        if (!active) return;
+        const extra = new Map(livsmedel.foods.map((f) => [f.id, f.extra ?? null]));
+        setLookup({ extra: overlayExtras(extra, overrides), meals });
+      },
+    );
     return () => {
       active = false;
     };

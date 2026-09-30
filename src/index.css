@@ -2602,7 +2602,8 @@ a.button {
   font-variant-numeric: tabular-nums;
 }
 
-/* Proteinrikt/fiberrikt livsmedel (sökträffar, favoriter) */
+/* Små etiketter. Näringsetiketterna (`tag-claim`) har ram i datatypens färg:
+   Proteinrik = protein, Fiberrik = fiber, Energisnål = mat (energi). */
 .tag {
   display: inline-block;
   margin-left: 6px;
@@ -2616,8 +2617,24 @@ a.button {
   vertical-align: 0.1em;
 }
 
+.tag-protein {
+  border-color: var(--macro-protein);
+}
+
 .tag-fiber {
   border-color: var(--macro-fiber);
+}
+
+.tag-food {
+  border-color: var(--data-food);
+}
+
+/* Livsmedlets näringsvärden: saknade värden */
+.tag-incomplete {
+  margin-left: 0;
+  border-color: var(--warning);
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 /* Snabblogg i dagsvyn: uppskattade kcal (dämpad, ingen datafärg) */
@@ -5051,4 +5068,50 @@ p.plateau-reasons {
 .import-row-skipped .list-row-primary {
   color: var(--muted);
   text-decoration: line-through;
+}
+
+/* Livsmedlets näringsvärden (logg-sheeten): status per värde och "Komplettera" */
+.nutrition-status {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.nutrition-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.nutrition-status-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+/* Fältets ursprung under inmatningen (Från Open Food Facts / Eget värde / Saknas) */
+.field-hint {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.origin-ai {
+  color: var(--text);
+}
+
+/* Erbjudandet att uppdatera tidigare loggposter efter en komplettering */
+.update-offer .chip-grid {
+  margin: var(--space-2) 0;
+}
+
+/* Filter på näringsetiketter under sökfältet i sök-sheeten */
+.claim-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }

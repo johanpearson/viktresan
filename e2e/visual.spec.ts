@@ -389,6 +389,13 @@ for (const theme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
       await expect(sheet).toBeVisible();
       await shot(page, `${theme}-sheet-mat-sok`, false);
+      // Loggformuläret med näringsvärdenas status och kompletteringen.
+      await sheet.getByTestId('quick-pick').filter({ hasText: 'Potatis kokt' }).tap();
+      await expect(sheet.getByTestId('nutrition-status')).toBeVisible();
+      await shot(page, `${theme}-sheet-mat-logga`, false);
+      await sheet.getByTestId('nutrition-complete').first().tap();
+      await expect(sheet.getByTestId('nutrition-complete-form')).toBeVisible();
+      await shot(page, `${theme}-sheet-mat-komplettera`, false);
       await close();
 
       await page

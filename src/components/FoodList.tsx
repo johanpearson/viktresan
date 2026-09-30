@@ -1,9 +1,10 @@
 import { SOURCE_LABELS, SOURCE_TAGS, type FoodItem } from '../lib/foodSearch.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
-import { fiberForItem, isFiberRich, type FiberSource } from '../lib/fiber.ts';
+import { claimsFor } from '../lib/claims.ts';
+import { fiberForItem, type FiberSource } from '../lib/fiber.ts';
 import { scaleNutrients } from '../lib/nutrition.ts';
-import { isProteinRich } from '../lib/protein.ts';
 import { quickDetail } from '../lib/quickLog.ts';
+import { ClaimTags } from './ClaimTags.tsx';
 import { Macros } from './Macros.tsx';
 
 interface FoodListProps {
@@ -12,9 +13,10 @@ interface FoodListProps {
   /** Visas när listan är tom. */
   empty: string;
   testId?: string;
-  /** Visa etiketterna "Proteinrik" (≥ 15 g protein per 100 kcal) och "Fiberrik" (≥ 3 g fiber per 100 kcal). */
-  markRich?: boolean;
-  /** Fiberdata för raderna, `null` medan den laddas (då visas ingen fiber). */
+  /**
+   * Fiberdata för raderna, `null` medan den laddas (då visas ingen fiber). Används även för
+   * näringsetiketterna (Proteinrik, Fiberrik, Energisnål – `claims.ts`) på måltider och recept.
+   */
   fiberSource?: FiberSource | null;
 }
 
@@ -47,7 +49,6 @@ export function FoodList({
   onPick,
   empty,
   testId = 'food-option',
-  markRich = false,
   fiberSource = null,
 }: FoodListProps) {
   if (items.length === 0) return <p className="muted">{empty}</p>;
@@ -65,16 +66,7 @@ export function FoodList({
           >
             <span className="pick-name">
               {item.name}
-              {markRich && item.source !== 'snabb' && isProteinRich(item.per100) && (
-                <span className="tag" data-testid="protein-rich">
-                  Proteinrik
-                </span>
-              )}
-              {markRich && item.source !== 'snabb' && isFiberRich(item) && (
-                <span className="tag tag-fiber" data-testid="fiber-rich">
-                  Fiberrik
-                </span>
-              )}
+              <ClaimTags claims={claimsFor(item, fiberSource)} />
             </span>
             <span className="pick-detail">
               <SourceTag item={item} />
