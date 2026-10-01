@@ -21,7 +21,7 @@ import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 13;
+export const DB_VERSION = 14;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -845,6 +845,19 @@ async function migrateToV12(tx: UpgradeTransaction): Promise<void> {
   await store.put(next, PROFILE_KEY);
 }
 
+/**
+ * v13 → v14: Föreslå är borttagen. Förslagen användaren markerat "Inte intresserad"
+ * (`suggestionsHidden` i visningsinställningarna) tas bort; övriga inställningar behålls.
+ */
+async function migrateToV14(tx: UpgradeTransaction): Promise<void> {
+  const store = tx.objectStore('settings');
+  const prefs: unknown = await store.get(SETTING_PREFERENCES);
+  if (typeof prefs !== 'object' || prefs === null || !('suggestionsHidden' in prefs)) return;
+  const next = { ...(prefs as Record<string, unknown>) };
+  delete next.suggestionsHidden;
+  await store.put(next, SETTING_PREFERENCES);
+}
+
 let dbPromise: Promise<Database> | null = null;
 
 /**
@@ -936,6 +949,10 @@ export function getDb(): Promise<Database> {
         // v13: egna näringsvärden (komplettering av OFF/Livsmedelsverket/Fineli). Ny store –
         // befintlig data berörs inte.
         db.createObjectStore('foodOverrides', { keyPath: 'foodId' });
+      }
+      if (oldVersion < 14) {
+        // v14: Föreslå är borttagen – sparade "Inte intresserad"-förslag rensas ur inställningarna.
+        if (oldVersion >= 1) void migrateToV14(transaction);
       }
     },
     blocking() {

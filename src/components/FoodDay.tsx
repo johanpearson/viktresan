@@ -19,6 +19,7 @@ import { formatDate, formatDayMonth } from '../lib/format.ts';
 import { haptic } from '../lib/haptics.ts';
 import { dailyIntake, mealLabel, totalOf, type MealSlot } from '../lib/nutrition.ts';
 import type { FoodUnit } from '../lib/units.ts';
+import { gapClaims, gapText, largeGaps, whatToEatSubject } from '../lib/whatToEat.ts';
 import { AskAi } from './AskAi.tsx';
 import { BottomSheet } from './BottomSheet.tsx';
 import { DateBar } from './DateBar.tsx';
@@ -30,8 +31,6 @@ import { MealAnalysisView } from './MealAnalysisView.tsx';
 import { MealSections } from './MealSections.tsx';
 import { QuickLogForm } from './QuickLogForm.tsx';
 import { SaveMealForm } from './SaveMealForm.tsx';
-import { SuggestIcon } from './SuggestIcon.tsx';
-import { SuggestSheet } from './SuggestSheet.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
 import { Toast } from './Toast.tsx';
 
@@ -51,7 +50,7 @@ interface FoodDayProps {
   reloadLog: () => Promise<unknown>;
   /** Det som kan tas med i "Fråga AI" (profil, mål, GLP-1 …), `null` tills datan är läst. */
   aiContext?: AiContext | null;
-  /** Fiber att sikta på i Föreslå när fibermålet inte visas (referensvärdet, NNR 2023). */
+  /** Fiber att sikta på (gapraden, Vad ska jag äta?) när fibermålet inte visas (referensvärdet, NNR 2023). */
   fiberReferenceG?: number | null;
 }
 
@@ -123,12 +122,13 @@ export function FoodDay({
   const [menu, setMenu] = useState<Target | null>(null);
   const [saving, setSaving] = useState<MealSlot | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null);
-  // Föreslå: måltiden sheeten öppnas för.
-  const [suggest, setSuggest] = useState<MealSlot | null>(null);
+  // "Vad ska jag äta?": måltiden prompten byggs för.
+  const [eat, setEat] = useState<MealSlot | null>(null);
   // Pågående måltid (efter klockslaget) är utfälld från start, övriga ihopfällda.
   const [open, setOpen] = useState<ReadonlySet<MealSlot>>(() => new Set([currentMealSlot()]));
   const [compact, setCompact] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
 
   const catalog = useMemo(
     () =>
@@ -168,9 +168,15 @@ export function FoodDay({
           weekOf: date,
         });
   const when = date === today ? 'idag' : formatDate(date);
-  // Föreslå gäller dagens kvarvarande mål – bara idag.
-  const canSuggest = date === today;
-  const fiberGoalG = fiberGoal?.goalG ?? fiberReferenceG;
+  // Gapraden och "Vad ska jag äta?" gäller det som är kvar av dagens mål – bara idag.
+  const isToday = date === today;
+  const goals = { targetKcal, proteinGoalG, fiberGoalG: fiberGoal?.goalG ?? fiberReferenceG };
+  const eaten = {
+    kcal: totals.kcal,
+    proteinG: totals.proteinG,
+    fiberG: fiberTotal?.fiberG ?? null,
+  };
+  const gaps = isToday ? largeGaps(eaten, goals) : [];
 
   // Den fulla summeringen utom synhåll → visa miniraden i den sticky toppen.
   useEffect(() => {
@@ -188,6 +194,12 @@ export function FoodDay({
       observer.disconnect();
     };
   }, []);
+
+  // Analys → Fråga AI byter innehåll i samma panel: börja överst, inte där analysen var scrollad.
+  const analysisView = analysis?.view;
+  useEffect(() => {
+    if (analysisView === 'ai') backRef.current?.closest('dialog')?.scrollTo({ top: 0 });
+  }, [analysisView]);
 
   const closeToast = useCallback(() => {
     setToast(null);
@@ -263,6 +275,14 @@ export function FoodDay({
           fiberDay={fiberTotal}
           when={when}
           week={week}
+          gapText={gapText(gaps)}
+          onWhatToEat={
+            isToday
+              ? () => {
+                  setEat(currentMealSlot());
+                }
+              : undefined
+          }
         />
       </div>
       <div className="food-sticky" data-compact={compact ? 'true' : 'false'}>
@@ -296,20 +316,6 @@ export function FoodDay({
           >
             <ScanIcon />
           </button>
-          {canSuggest && (
-            <button
-              type="button"
-              className="icon-button scan-button suggest-open"
-              aria-label="Föreslå"
-              aria-haspopup="dialog"
-              title="Föreslå"
-              onClick={() => {
-                setSuggest(currentMealSlot());
-              }}
-            >
-              <SuggestIcon />
-            </button>
-          )}
         </div>
       </div>
       <MealSections
@@ -318,7 +324,7 @@ export function FoodDay({
         open={open}
         favoriteIds={favoriteIds}
         fiberSource={fiberSource}
-        menuAlways={canSuggest}
+        menuAlways={isToday}
         onMenu={(slot) => {
           setMenu({ kind: 'meal', slot });
         }}
@@ -342,6 +348,7 @@ export function FoodDay({
           scan={picker.scan}
           focusSearch={picker.focus}
           ean={picker.ean}
+          firstClaims={gapClaims(gaps)}
           mode={{
             kind: 'log',
             date,
@@ -432,14 +439,14 @@ export function FoodDay({
           }}
         >
           <ul className="list action-list">
-            {menu.kind === 'meal' && canSuggest && (
+            {menu.kind === 'meal' && isToday && (
               <ListRow
-                primary="Föreslå"
-                secondary="Förslag utifrån det du brukar äta och dagens mål"
+                primary="Vad ska jag äta?"
+                secondary="En fråga till AI utifrån det som är kvar idag"
                 chevron
                 onClick={() => {
                   setMenu(null);
-                  setSuggest(menu.slot);
+                  setEat(menu.slot);
                 }}
               />
             )}
@@ -523,6 +530,7 @@ export function FoodDay({
             <>
               <button
                 type="button"
+                ref={backRef}
                 className="button button-secondary button-small back-button"
                 onClick={() => {
                   setAnalysis({ ...analysis, view: 'analysis' });
@@ -546,28 +554,23 @@ export function FoodDay({
           )}
         </BottomSheet>
       )}
-      {suggest && (
-        <SuggestSheet
-          initialSlot={suggest}
-          date={today}
-          source={source}
-          catalog={catalog}
-          customUnits={customUnits}
-          fiberSource={fiberSource}
-          goals={{ targetKcal, proteinGoalG, fiberGoalG }}
-          aiContext={aiContext}
-          favoriteIds={favoriteIds}
-          onToggleFavorite={(foodId) => void toggleFavorite(foodId)}
-          onUnitsChange={async (foodId, units) => {
-            await saveCustomUnits(foodId, units);
-            await reloadFood();
-          }}
-          reloadLog={reloadLog}
-          onLogged={expand}
+      {eat && (
+        <BottomSheet
+          full
+          title={`Vad ska jag äta till ${mealLabel(eat).toLowerCase()}?`}
           onClose={() => {
-            setSuggest(null);
+            setEat(null);
           }}
-        />
+        >
+          {aiContext ? (
+            <AskAi
+              subject={whatToEatSubject({ meal: eat, today, log: foodLog, eaten, goals })}
+              context={aiContext}
+            />
+          ) : (
+            <p className="muted">Laddar …</p>
+          )}
+        </BottomSheet>
       )}
       {toast && (
         <Toast
