@@ -128,6 +128,7 @@ export function FoodDay({
   const [open, setOpen] = useState<ReadonlySet<MealSlot>>(() => new Set([currentMealSlot()]));
   const [compact, setCompact] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
 
   const catalog = useMemo(
     () =>
@@ -193,6 +194,12 @@ export function FoodDay({
       observer.disconnect();
     };
   }, []);
+
+  // Analys → Fråga AI byter innehåll i samma panel: börja överst, inte där analysen var scrollad.
+  const analysisView = analysis?.view;
+  useEffect(() => {
+    if (analysisView === 'ai') backRef.current?.closest('dialog')?.scrollTo({ top: 0 });
+  }, [analysisView]);
 
   const closeToast = useCallback(() => {
     setToast(null);
@@ -523,6 +530,7 @@ export function FoodDay({
             <>
               <button
                 type="button"
+                ref={backRef}
                 className="button button-secondary button-small back-button"
                 onClick={() => {
                   setAnalysis({ ...analysis, view: 'analysis' });
