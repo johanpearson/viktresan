@@ -213,28 +213,43 @@ describe('buildAiPrompt – platå', () => {
   });
 });
 
-describe('buildAiPrompt – Något nytt (Föreslå)', () => {
-  const suggest = {
-    kind: 'suggest' as const,
+describe('buildAiPrompt – Vad ska jag äta?', () => {
+  const eat = {
+    kind: 'eat' as const,
     meal: 'mellanmal' as const,
     remaining: { kcal: 640.4, proteinG: 45.2, fiberG: -2 },
     typicalKcal: 250,
     homeFoods: ['Kvarg naturell', 'Banan', 'Knäckebröd'],
   };
 
-  it('tar med kvarvarande värden, måltid, typisk portion och det som brukar finnas hemma', () => {
-    const prompt = buildAiPrompt(suggest, context(), DEFAULT_AI_OPTIONS);
-    expect(prompt).toContain('nya idéer till mellanmål idag');
+  it('tar med måltid, kvarvarande värden, typisk portion, det som brukar finnas hemma och matpreferenser', () => {
+    const prompt = buildAiPrompt(eat, context(), DEFAULT_AI_OPTIONS);
+    expect(prompt).toContain('vad jag ska äta till mellanmål idag');
     expect(prompt).toContain('Måltid: Mellanmål, min typiska portion är ca 250 kcal.');
     expect(prompt).toContain('Kvar av dagens mål: 640 kcal, 45 g protein, 0 g fiber.');
     expect(prompt).toContain('Det här brukar finnas hemma: Kvarg naturell, Banan, Knäckebröd.');
     expect(prompt).toContain('Mina matpreferenser: Gillar fisk');
+    expect(prompt).toContain('3 realistiska förslag som passar måltiden');
+    expect(prompt).toContain('ungefärliga mängder och ungefärliga näringsvärden');
+    expect(prompt).toContain('på svenska');
     expect(prompt).toContain('under 1 500 kcal');
   });
 
-  it('underlaget kan väljas bort', () => {
-    const prompt = buildAiPrompt(suggest, context(), { ...DEFAULT_AI_OPTIONS, content: false });
+  it('utan historik för måltiden nämns ingen typisk portion', () => {
+    const prompt = buildAiPrompt({ ...eat, typicalKcal: null }, context(), DEFAULT_AI_OPTIONS);
+    expect(prompt).toContain('Måltid: Mellanmål.');
+    expect(prompt).not.toContain('typiska portion är');
+  });
+
+  it('kryssrutorna styr: underlaget och matpreferenserna kan väljas bort', () => {
+    const prompt = buildAiPrompt(eat, context(), {
+      ...DEFAULT_AI_OPTIONS,
+      content: false,
+      preferences: false,
+    });
     expect(prompt).not.toContain('brukar finnas hemma:');
+    expect(prompt).not.toContain('Kvar av dagens mål');
+    expect(prompt).not.toContain('Mina matpreferenser');
   });
 });
 

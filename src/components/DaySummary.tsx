@@ -29,11 +29,15 @@ interface DaySummaryProps {
   variant?: 'full' | 'mini';
   /** Veckan som dagen ligger i: veckoraden under makrona (inte i miniraden). */
   week?: WeekBudget | null;
+  /** Gapraden under staplarna ("41 g protein och 6 g fiber kvar"), `null` när allt är inom 10 %. */
+  gapText?: string | null;
+  /** Knappen "Vad ska jag äta?" (bara idag). */
+  onWhatToEat?: (() => void) | undefined;
 }
 
 /**
  * Mat → Dag: kalorier och protein mot målen som StatBar på en rad (med fibermålet: kalorier
- * överst, protein och fiber under), makron som text och veckoraden.
+ * överst, protein och fiber under), gapraden med "Vad ska jag äta?", makron som text och veckoraden.
  */
 export function DaySummary({
   totals,
@@ -44,6 +48,8 @@ export function DaySummary({
   when,
   variant = 'full',
   week = null,
+  gapText = null,
+  onWhatToEat,
 }: DaySummaryProps) {
   const kcal = Math.round(totals.kcal);
   const protein = Math.round(totals.proteinG);
@@ -133,6 +139,25 @@ export function DaySummary({
         {bars}
         {fiberBar}
       </div>
+      {(gapText !== null || onWhatToEat) && (
+        <div className="gap-row">
+          {gapText !== null && (
+            <p className="gap-line" data-testid="gap-line">
+              {gapText}
+            </p>
+          )}
+          {onWhatToEat && (
+            <button
+              type="button"
+              className="button button-secondary button-small what-to-eat"
+              aria-haspopup="dialog"
+              onClick={onWhatToEat}
+            >
+              Vad ska jag äta?
+            </button>
+          )}
+        </div>
+      )}
       {fiber && <FiberNote goal={fiber.goal} />}
       <p className="macro-line" data-testid="macros">
         <Macros

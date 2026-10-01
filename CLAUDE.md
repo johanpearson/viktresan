@@ -93,10 +93,8 @@ src/lib/matchMemory.ts  Minnet av manuella matchningar i receptimporten (setting
 src/lib/shareTarget.ts  Web Share Target: manifestets parametrar (SHARE_PARAMS), tolkning av delad länk/text, väntande delning
 src/lib/useIngredients.ts  Hook: ingrediensrader för egna måltider och recept (IngredientEditor)
 src/lib/weekBudget.ts   Veckoraden: 7 × dagsmål, kvar, per dag resten av veckan (golvspärr), saldo, dagar (ej loggad = 0 kcal)
-src/lib/suggestions.ts  Föreslå (Mat): gap (protein/fiber kvar), kandidater (historik 28 d, favoriter, måltider, recept, startlistan),
-                        typisk mängd (median av loggar som huvudkomponent), proteinportioner (0,5–2 ×, minsta portion per kategori),
-                        kompletterande kombinationer, poäng (näring ≥ 70 %, vana ≤ 20 %), variation, förklaringar och texter
-src/data/suggestions.ts Startlistan för Föreslå (~40 livsmedel `lv:`/`fi:` med standardportion och måltider, reservvärden)
+src/lib/whatToEat.ts    Gapraden (protein/fiber > 10 % kvar, `largeGaps`/`gapText`), chips först i sök-sheeten (`gapClaims`) och
+                        underlaget till "Vad ska jag äta?" (typisk kcal för måltiden, 20 vanligaste livsmedlen, `whatToEatSubject`)
 src/lib/swaps.ts        Bytesförslag: samma kategori, klart bättre protein/kcal eller fiber, aldrig mer energi
 src/lib/aiPrompt.ts     "Fråga AI": kryssrutor (AI_OPTIONS), underlag (aiContextFrom), promptbyggare, ChatGPT-/Claude-länkar
 src/lib/aiPromptTemplate.ts  Promptmallen på svenska ({{amne}}, {{amneKort}}, {{underlag}}, {{kalorigolv}}) – redigera här
@@ -135,7 +133,7 @@ src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
 src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
-src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 13)
+src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 14)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, TodoCard, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
@@ -160,9 +158,9 @@ src/pages/              En komponent per sektion: Översikt, Logga (rutnät → 
 e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrikernas rutnät (pil, namn, kcal i samma kolumn i alla
                         sektioner på 412 och 360 px, ingen radbrytning, tryckyta) med MEAL_HEADERS. overview.spec.ts = Översikt med fast data (höjd ≤ 1,5 skärmar, varje ring/kort navigerar rätt,
                         Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
-                        flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). suggestions.spec.ts = Föreslå
-                        med fast historik (15:30 = mellanmål, page.clock): rubrik med gapen, förklaring, under kvarvarande kcal, logga + Ångra, ⋯ på tom måltid, Justera,
-                        kallstart, Inte intresserad + återställning, lågt läge, Något nytt och axe. recipeImport.spec.ts = receptimporten (delning via
+                        flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). whatToEat.spec.ts = gapraden
+                        (visas/döljs, inte andra dagar), chipsens ordning i sök-sheeten och "Vad ska jag äta?" (12:30 = lunch, page.clock; toppen och ⋯ på
+                        tom måltid, promptens värden, Dela/Kopiera mockade, kryssrutor, axe). recipeImport.spec.ts = receptimporten (delning via
                         `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). fineli.spec.ts = sökträff från den bundlade
                         Fineli-filen (etikett, loggning), källan i Om appen och deduplicering med mockade filer; specar som mockar
@@ -213,7 +211,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`); Tillskott också (`availableSince: 4`, `FLAGS_VERSION = 4`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 13`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 14`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
@@ -252,6 +250,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   saknas = 500, `waterGlp1OnOwnGoal`) – Inställningar → Fibermål/Dryckesmål, ingen schemaändring, följer med i säkerhetskopian.
   Migreringen v11 → v12 (`migrateToV12`) tar bort profilens `calorieMode` (den borttagna inställningen Dag/Vecka);
   säkerhetskopior version 10 med fältet importeras utan det.
+  Migreringen v13 → v14 (`migrateToV14`) tar bort `suggestionsHidden` ur inställningen `preferences` (Föreslå är borttagen).
   Matloggposter och måltidsingredienser kopierar in namn och värden per 100 g – loggen ändras inte
   om livsmedlet ändras. Sedan v7 har de `amount` + `unit` (`g` = gram) och uträknade `grams`; gram
   är det som räknas, så en senare ändrad enhet påverkar inte historiken. Migreringen v6 → v7
@@ -264,7 +263,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `suggestionsHidden` – förslag i Föreslå som inte är intressanta), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -499,37 +498,17 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   datumraden för hela dagen) öppnar en meny: "Spara som egen måltid" (`SaveMealForm`, namn "Frukost 26 sep", posterna
   med mängd och enhet – loggade måltider delas upp i ingredienser i gram; syns direkt under Måltider i sök-sheeten) och
   "Analysera" (`MealAnalysisView`).
-- **Föreslå** (`suggestions.ts`, `SuggestSheet`, `data/suggestions.ts`, helt lokalt): ingångar = ikonknappen Föreslå (glödlampa,
-  `SuggestIcon`) bredvid skannern i Mat → Dag (pågående måltid efter klockslaget) och "Föreslå" överst i måltidens ⋯-meny (⋯ visas då även för tomma
-  måltider); bara för idag. Måltiden byts i panelen (`SegmentedControl`). Kandidater: livsmedel loggade de senaste 28 dagarna
-  (före idag, inte snabbloggar), favoriter, egna måltider och recept – inte det som redan loggats i måltiden idag eller är dolt.
-  Mängd = median av tidigare loggar där livsmedlet var en huvudkomponent (`mainComponentEntries`: måltid med ≤ 2 poster, största
-  posten eller ≥ 25 % av måltidens kcal) i den vanligaste enheten (`typicalAmount`), annars standardportionen (`standardAmount`).
-  Vana (`historyWeight`) = hur ofta och hur nyligen × andelen loggar i just måltiden, +0,25 för egen data. Färre än 5 egna
-  kandidater i måltiden → startlistan fyller på med vikt 0,3 × (1 − n/10), märkt "Allmänt förslag"; en egen variant (samma första
-  ord) går före. **Gap** (`gapsOf`): proteingap = max(0, proteinmål − intag), fibergap likadant mot veckans fibermål (annars
-  referensvärdet); stort = mer än 10 % av målet kvar (`GAP_SMALL_SHARE`). **Stort gap** (`scoreMode` `gap`): näringspoäng
-  (`nutritionScore`) = wP × min(protein, proteingap)/proteingap + wF × min(fiber, fibergap)/fibergap, vikterna proportionella mot
-  andelen av målet som återstår (ett litet gap får vikt 0). Poäng (`gapScoreParts`) = 0,7 × näring (normerad mot bästa kandidaten)
-  plus vana (högst 0,2) + lätthet (högst 0,1, energitäthet), kapade per förslag så att näringen är ≥ 70 % och vanan ≤ 20 % av
-  summan; minus straff för att gå över det som är kvar (`overBudgetPenalty`) och över måltidens typiska kcal (`portionPenalty`).
-  **Små gap** (`small`): 0,5 × lätthet + 0,5 × vana − straff. Proteinkällor (`isProteinSource`: ≥ 20 % energi från protein och ≥ 5
-  g/100 g) skalas inom 0,5–2 × portionen mot proteingapet så långt portionstaket räcker (`scaleProteinPortion`); övriga skalas ner
-  mot taket (`fitPortion`, högst till hälften). Ingen portion under kategorins minsta (`MIN_PORTION_G`: kött/fisk 75 g, ägg 1 st,
-  fil/kvarg 1 dl …, `atLeastMinPortion`); styck i hela. Portionstak (`portionCap`) = måltidens typiska kcal (median per dag, 28
-  dagar, minst 3 dagar; annars 25/30/30/15 % av dagsmålet), högst det som är kvar. Förslag över kvarvarande kcal visas inte.
-  Kombinationer (`combinations`) kompletterar: en protein- eller fiberkälla för ett stort gap + något som loggats ihop med den i
-  måltiden ≥ 2 gånger, eller proteinrik + fiberrik (båda gapen stora) där minst den ena ätits i måltiden; ett livsmedel ingår i
-  högst en kombination. Etiketter (`claimsOfParts`) räknas på kombinationens totala näring, aldrig ärvda. Variation (`diversify`):
-  ett livsmedel i högst ett av tre förslag som visas samtidigt. Förklaring per förslag (`reasonFor`, `suggest-reason`). Lägesraden
-  (`statusText`): "41 g protein och 6 g fiber kvar · 302 kcal kvar" (gap > 10 %, störst först), "Du ligger bra till idag" bara när
-  båda är inom 10 %; från kl. 20 nämns inte protein/fiber ("302 kcal kvar idag"). Lågt läge (< 150 kcal kvar eller över målet):
-  bara Energisnål (även startlistans oavsett måltid), `LOW_TEXT`, ingen "kvar efteråt". Tre förslag i taget ("Visa fler"),
-  högst 12. Logga = en post per del i vald måltid + toast med Ångra; Justera = `FoodLogForm` förifylld (`last`, `defaultMeal`), en del i
-  taget; "Inte intresserad" = `preferences.suggestionsHidden` (`{ key, name }`, Ångra i toasten, "Visa alla förslag igen" i
-  Inställningar → Visning) och nedviktar liknande (`dislikeFactor`: samma första ord ×0,4, samma kategori ×0,75). "Något nytt" =
-  `AskAi` med ämnet `suggest` (`AI_SUGGEST_TEMPLATE`: måltid, typisk portion, kvar idag, 15 vanligaste livsmedlen). Tomt läge
-  (`EmptyState`) med "Något nytt". Startlistans värden kontrolleras mot public/*.json i `suggestions.test.ts`.
+- **Gapraden och "Vad ska jag äta?"** (`whatToEat.ts`, `DaySummary`, bara idag): under staplarna i Mat → Dag står de
+  näringsämnen som har mer än 10 % kvar av målet (`GAP_SHARE`), störst andel först: "41 g protein och 6 g fiber kvar"
+  (`gap-line`); inom 10 % = ingen rad. Proteinmålet, fiber mot veckans fibermål (annars referensvärdet, `fiberReferenceG`) och
+  först när fiberdatan är läst. Knappen "Vad ska jag äta?" (sekundär, på gapraden; pågående måltid efter klockslaget) och samma
+  val överst i måltidens ⋯-meny (vald måltid; ⋯ visas idag även för tomma måltider) öppnar `AskAi` med ämnet `eat`
+  (`AI_WHAT_TO_EAT_TEMPLATE`, samma kryssrutor): måltid, kvar av dagens kcal/protein/fiber, måltidens typiska kcal (median per dag
+  de senaste 28 dagarna, minst 3 dagar, annars utelämnad – `typicalMealKcal`), de 20 vanligaste livsmedlen de senaste 28 dagarna
+  som "brukar finnas hemma" (`commonFoods`, inte måltider/recept/snabbloggar) och matpreferenser; prompten ber om 3 realistiska
+  förslag med ungefärliga mängder och näringsvärden på svenska. Sök-sheeten: vid stort protein-/fibergap visas Proteinrik/Fiberrik
+  först bland filterchipsen (`FoodPicker` `firstClaims`), inte förvalda. Ersätter Föreslå (borttagen; migreringen v13 → v14,
+  `migrateToV14`, tar bort `suggestionsHidden` ur `preferences`).
 - **Analys** (`mealAnalysis.ts`, `swaps.ts`, ingen AI, offline): energi och makron ur loggposterna; fiber, socker, salt,
   vitaminer och mineraler slås upp i Livsmedelsverkets data per `lv:`-id (även ingredienser i sparade måltider) –
   egna/OFF-livsmedel saknar dem (`coverage`, markeras med *). % av dagsmål (kcal, protein) och av RI. Nyckeltal:

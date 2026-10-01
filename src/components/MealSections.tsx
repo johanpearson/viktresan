@@ -19,9 +19,9 @@ interface MealSectionsProps {
   fiberSource?: FiberSource | null;
   onToggle: (slot: MealSlot) => void;
   onAdd: (slot: MealSlot) => void;
-  /** Menyn (⋯) för en måltid: föreslå, spara som egen måltid, analysera. */
+  /** Menyn (⋯) för en måltid: Vad ska jag äta?, spara som egen måltid, analysera. */
   onMenu: (slot: MealSlot) => void;
-  /** Visa ⋯ även för tomma måltider (idag: menyn har Föreslå). */
+  /** Visa ⋯ även för tomma måltider (idag: menyn har Vad ska jag äta?). */
   menuAlways?: boolean;
   onEdit: (entry: FoodLogEntry) => void;
   onDelete: (entry: FoodLogEntry) => void;
@@ -31,7 +31,7 @@ interface MealSectionsProps {
 /**
  * Dagens mat per måltid som `SectionAccordion`: namn, kcal och antal poster i
  * rubriken, makron och fiber under, ⋯ för fler val och + för att lägga till. Tomma måltider är en smal
- * rad med + (och ⋯ med Föreslå idag).
+ * rad med + (och ⋯ med "Vad ska jag äta?" idag).
  */
 export function MealSections({
   entries,

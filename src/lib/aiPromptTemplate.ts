@@ -42,18 +42,18 @@ Gör så här:
 `;
 
 /**
- * Mallen för "Något nytt" i Föreslå (Mat). `{{amne}}` = "mellanmål idag"; `{{underlag}}` innehåller
- * måltiden, typisk portion, vad som är kvar av dagens mål och det som brukar finnas hemma.
+ * Mallen för "Vad ska jag äta?" (Mat). `{{amne}}` = "lunch idag"; `{{underlag}}` innehåller måltiden,
+ * typisk portion, vad som är kvar av dagens mål och det som brukar finnas hemma.
  */
-export const AI_SUGGEST_TEMPLATE = `
-Hej! Jag följer min vikt och mat i en app och vill ha nya idéer till {{amne}}.
+export const AI_WHAT_TO_EAT_TEMPLATE = `
+Hej! Jag följer min vikt och mat i en app och undrar vad jag ska äta till {{amne}}.
 
 {{underlag}}
 
 Gör så här:
-1. Föreslå 3 konkreta alternativ med ungefärlig mängd, kcal, gram protein och gram fiber för varje.
+1. Ge mig 3 realistiska förslag som passar måltiden, med ungefärliga mängder och ungefärliga näringsvärden (kcal, gram protein och gram fiber) för varje.
 2. Håll varje förslag nära min typiska portion för måltiden – fyll inte hela det som är kvar av dagen.
-3. Utgå gärna från det som brukar finnas hemma, men ge mig också något nytt att prova. Vanliga svenska matvaror, enkla att laga.
+3. Utgå gärna från det som brukar finnas hemma. Vanliga svenska matvaror, enkla att laga.
 4. Föreslå aldrig något som gör att mitt dagsintag hamnar under {{kalorigolv}}, och uppmana mig inte att äta för att nå ett mål om jag inte är hungrig.
 5. Svara kort och på svenska, gärna i punktform.
 `;

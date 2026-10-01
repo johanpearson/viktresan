@@ -12,6 +12,9 @@ import {
   deleteWaist,
   deleteWeight,
   getDb,
+  getSetting,
+  SETTING_LAST_EXPORT,
+  SETTING_PREFERENCES,
   getFoodOverride,
   getOldestEntryTime,
   listFoodOverrides,
@@ -175,6 +178,7 @@ async function createV6Database(data: {
   foodLog: Record<string, unknown>[];
   profile?: Record<string, unknown>;
   weights?: Record<string, unknown>[];
+  settings?: Record<string, unknown>;
 }): Promise<void> {
   const raw = await new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 6);
@@ -208,6 +212,8 @@ async function createV6Database(data: {
       for (const e of data.foodLog) foodLog.put(e);
       if (data.profile) req.transaction?.objectStore('profile').put(data.profile, 'current');
       for (const w of data.weights ?? []) weights.put(w);
+      const settings = req.transaction?.objectStore('settings');
+      for (const [key, value] of Object.entries(data.settings ?? {})) settings?.put(value, key);
     };
     req.onsuccess = () => {
       resolve(req.result);
@@ -800,10 +806,39 @@ describe('db', () => {
     await createV6Database({ foods: [], meals: [], foodLog: [], profile });
     const db = await getDb();
     expect(db.version).toBe(DB_VERSION);
-    expect(DB_VERSION).toBe(13);
     const migrated = await getProfile();
     expect(migrated).not.toHaveProperty('calorieMode');
     expect(migrated).toEqual({ ...profile, calorieMode: undefined });
+  });
+
+  it('migrerar v13 → v14: rensar Föreslås dolda förslag och behåller övriga inställningar', async () => {
+    await createV6Database({
+      foods: [],
+      meals: [],
+      foodLog: [],
+      settings: {
+        [SETTING_PREFERENCES]: {
+          trendHero: false,
+          claimsHidden: ['energisnal'],
+          suggestionsHidden: [{ key: 'lv:1', name: 'Kvarg' }],
+        },
+        [SETTING_LAST_EXPORT]: 123,
+      },
+    });
+    const db = await getDb();
+    expect(db.version).toBe(DB_VERSION);
+    expect(DB_VERSION).toBe(14);
+    expect(await getSetting(SETTING_PREFERENCES)).toEqual({
+      trendHero: false,
+      claimsHidden: ['energisnal'],
+    });
+    expect(await getSetting(SETTING_LAST_EXPORT)).toBe(123);
+  });
+
+  it('migrerar v13 → v14 utan sparade inställningar', async () => {
+    await createV6Database({ foods: [], meals: [], foodLog: [] });
+    await getDb();
+    expect(await getSetting(SETTING_PREFERENCES)).toBeUndefined();
   });
 
   it('recept: sparas i namnordning, borttagning tar favorit och egna enheter', async () => {

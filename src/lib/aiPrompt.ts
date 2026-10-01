@@ -19,7 +19,7 @@ import {
   AI_PLATEAU_TEMPLATE,
   AI_PROMPT_NO_CONTEXT,
   AI_PROMPT_TEMPLATE,
-  AI_SUGGEST_TEMPLATE,
+  AI_WHAT_TO_EAT_TEMPLATE,
 } from './aiPromptTemplate.ts';
 import {
   dailyIntake,
@@ -37,7 +37,7 @@ import { loggedAmountText } from './units.ts';
 export type AiOption =
   'personal' | 'body' | 'goal' | 'targets' | 'dayIntake' | 'content' | 'preferences' | 'glp1';
 
-export type AiScope = 'meal' | 'day' | 'week' | 'plateau' | 'suggest';
+export type AiScope = 'meal' | 'day' | 'week' | 'plateau' | 'eat';
 
 export interface AiOptionInfo {
   id: AiOption;
@@ -46,8 +46,8 @@ export interface AiOptionInfo {
   scopes: readonly AiScope[];
 }
 
-const ALL: readonly AiScope[] = ['meal', 'day', 'week', 'plateau', 'suggest'];
-const FOOD: readonly AiScope[] = ['meal', 'day', 'week', 'suggest'];
+const ALL: readonly AiScope[] = ['meal', 'day', 'week', 'plateau', 'eat'];
+const FOOD: readonly AiScope[] = ['meal', 'day', 'week', 'eat'];
 
 export const AI_OPTIONS: readonly AiOptionInfo[] = [
   { id: 'personal', label: 'Ålder och kön', scopes: ALL },
@@ -66,7 +66,7 @@ export function optionLabel(option: AiOptionInfo, scope: AiScope): string {
   if (scope === 'day') return 'Dagens mat';
   if (scope === 'week') return 'Veckans mat';
   if (scope === 'plateau') return 'Platåanalysen';
-  if (scope === 'suggest') return 'Kvar idag och vanliga livsmedel';
+  if (scope === 'eat') return 'Kvar idag och vanliga livsmedel';
   return option.label;
 }
 
@@ -200,13 +200,13 @@ export type AiSubject =
     }
   /** Platåanalysen (plateau.ts) som färdiga rader. */
   | { kind: 'plateau'; lines: string[] }
-  /** "Något nytt" i Föreslå: vad som är kvar idag, måltiden och det som brukar finnas hemma. */
+  /** "Vad ska jag äta?" (Mat): vad som är kvar idag, måltiden och det som brukar finnas hemma. */
   | {
-      kind: 'suggest';
+      kind: 'eat';
       meal: MealSlot;
       remaining: { kcal: number | null; proteinG: number | null; fiberG: number | null };
-      /** Måltidens typiska kcal (portionen förslagen ska ligga nära). */
-      typicalKcal: number;
+      /** Måltidens typiska kcal (portionen förslagen ska ligga nära), `null` utan historik. */
+      typicalKcal: number | null;
       /** De vanligaste livsmedlen de senaste 28 dagarna ("brukar finnas hemma"). */
       homeFoods: string[];
     };
@@ -277,7 +277,7 @@ function subjectText(subject: AiSubject): { long: string; short: string } {
   if (subject.kind === 'day')
     return { long: `min mat ${formatDayMonth(subject.date)}`, short: 'dagen' };
   if (subject.kind === 'plateau') return { long: 'min viktplatå', short: 'platån' };
-  if (subject.kind === 'suggest') {
+  if (subject.kind === 'eat') {
     return { long: `${mealLabel(subject.meal).toLowerCase()} idag`, short: 'måltiden' };
   }
   return {
@@ -302,9 +302,11 @@ function remainingText(r: { kcal: number | null; proteinG: number | null; fiberG
 
 function contentLines(subject: AiSubject): string[] {
   if (subject.kind === 'plateau') return subject.lines;
-  if (subject.kind === 'suggest') {
+  if (subject.kind === 'eat') {
     const lines = [
-      `Måltid: ${mealLabel(subject.meal)}, min typiska portion är ca ${formatKcal(subject.typicalKcal)}.`,
+      subject.typicalKcal === null
+        ? `Måltid: ${mealLabel(subject.meal)}.`
+        : `Måltid: ${mealLabel(subject.meal)}, min typiska portion är ca ${formatKcal(subject.typicalKcal)}.`,
     ];
     const left = remainingText(subject.remaining);
     if (left !== '') lines.push(`Kvar av dagens mål: ${left}.`);
@@ -401,8 +403,8 @@ export function buildAiPrompt(
   options: AiOptions,
   template: string = subject.kind === 'plateau'
     ? AI_PLATEAU_TEMPLATE
-    : subject.kind === 'suggest'
-      ? AI_SUGGEST_TEMPLATE
+    : subject.kind === 'eat'
+      ? AI_WHAT_TO_EAT_TEMPLATE
       : AI_PROMPT_TEMPLATE,
 ): string {
   const lines = contextLines(subject, context, options);

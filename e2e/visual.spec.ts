@@ -408,10 +408,11 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-sheet-mat-redigera`, false);
       await close();
 
-      // Föreslå: pågående måltid (12:30 = lunch) med förslag, etiketter och Allmänt förslag.
-      await page.getByRole('button', { name: 'Föreslå' }).tap();
-      await expect(sheet.getByTestId('suggestion').first()).toBeVisible();
-      await shot(page, `${theme}-sheet-mat-foresla`, false);
+      // Vad ska jag äta?: pågående måltid (12:30 = lunch), kryssrutor och prompten.
+      await page.getByRole('button', { name: 'Vad ska jag äta?' }).tap();
+      await expect(sheet).toHaveAccessibleName('Vad ska jag äta till lunch?');
+      await expect(sheet.getByTestId('ai-prompt')).toBeVisible();
+      await shot(page, `${theme}-sheet-mat-vad-ata`, false);
       await close();
       // Vänta tills panelen tonat ut – annars syns den bakom menyn i nästa bild.
       await expect(sheet).toHaveCount(0);

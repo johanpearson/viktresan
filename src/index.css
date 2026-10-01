@@ -3149,6 +3149,28 @@ a.button {
   height: 8px;
 }
 
+/* Gapraden under staplarna (Mat → Dag): det som är kvar av protein/fiber och "Vad ska jag äta?". */
+.gap-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.gap-line {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.gap-row + .form-note {
+  margin-top: var(--space-2);
+}
+
 .macro-line {
   margin: var(--space-2) 0 0;
   color: var(--muted);
@@ -3342,7 +3364,7 @@ a.button {
   cursor: text;
 }
 
-/* Texten stannar på en rad även bredvid Föreslå på smala skärmar. */
+/* Texten stannar på en rad även bredvid skannerknappen på smala skärmar. */
 .search-open {
   min-width: 0;
 }
@@ -3388,111 +3410,6 @@ a.button {
 
 .icon-button.scan-button[aria-pressed='true'] {
   border-color: var(--accent);
-}
-
-/* Föreslå-panelen: måltid, lägesrad, förslag med åtgärder under, Visa fler och Något nytt. */
-.suggest {
-  display: grid;
-  gap: var(--space-3);
-}
-
-/* Fyra måltider på en rad även på 360 px: kolumner efter innehållet, mindre text. */
-.suggest-slots {
-  grid-auto-columns: auto;
-  gap: 2px;
-}
-
-.suggest-slots .segmented-button {
-  min-width: 0;
-  padding: 0 var(--space-1);
-  font-size: var(--text-sm);
-}
-
-.suggest > * {
-  min-width: 0;
-}
-
-.suggest-status {
-  margin: 0;
-  font-weight: 600;
-}
-
-.suggest-list {
-  margin: 0 calc(-1 * var(--space-4));
-  padding: 0;
-  list-style: none;
-}
-
-.suggest-item {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border);
-}
-
-.suggest-item:first-child {
-  border-top: 0;
-}
-
-.suggest-main {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.suggest-name {
-  min-width: 0;
-  margin: 0;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.suggest-main > .kcal {
-  flex: none;
-}
-
-.suggest-amount,
-.suggest-reason,
-.suggest-effect {
-  margin: 0;
-  font-size: var(--text-xs);
-}
-
-/* Förklaringen ("Mycket protein per kcal"): varför förslaget står där. */
-.suggest-reason {
-  font-weight: 600;
-}
-
-.suggest-amount {
-  color: var(--muted);
-}
-
-.suggest-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-top: var(--space-1);
-}
-
-.suggest-actions > .button-ghost {
-  padding: 0 var(--space-2);
-}
-
-.suggest-dismiss {
-  margin-left: auto;
-  color: var(--muted);
-}
-
-/* "Allmänt förslag" (startlistan): som källetiketten, efter namnet. */
-.tag-source.tag-general {
-  margin: 0 0 0 6px;
-  font-weight: 400;
-  white-space: nowrap;
-}
-
-.suggest .show-more {
-  justify-self: center;
 }
 
 .meal-sections {

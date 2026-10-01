@@ -86,6 +86,8 @@ interface FoodPickerProps {
   initialUsage?: Usage | null;
   /** Egen rubrik (annars "Logga mat" / "Lägg till ingrediens"). */
   title?: string;
+  /** Etiketter vars filterchip visas först (stort protein-/fibergap idag) – inte förvalda. */
+  firstClaims?: readonly ClaimId[];
   onClose: () => void;
 }
 
@@ -107,6 +109,13 @@ interface Creating {
 
 const NO_FOODS: readonly FoodItem[] = [];
 const NO_UNITS: readonly FoodUnit[] = [];
+const NO_CLAIMS: readonly ClaimId[] = [];
+
+/** Sorteringsnyckel: etiketter i `first` i den ordningen, övriga efter. */
+function claimOrder(first: readonly ClaimId[], id: ClaimId): number {
+  const index = first.indexOf(id);
+  return index === -1 ? first.length : index;
+}
 /** Sökträffar som filtreras på etiketter: sök bland fler och visa de första som matchar. */
 const SEARCH_LIMIT = 20;
 const FILTERED_SEARCH_LIMIT = 400;
@@ -130,6 +139,7 @@ export function FoodPicker({
   initialQuery = '',
   initialUsage = null,
   title: customTitle,
+  firstClaims = NO_CLAIMS,
   onClose,
 }: FoodPickerProps) {
   const features = useFeatures();
@@ -148,7 +158,10 @@ export function FoodPicker({
   const searchRef = useRef<HTMLInputElement>(null);
   /** Filterchips: bara livsmedel med alla valda etiketter. */
   const [filters, setFilters] = useState<ReadonlySet<ClaimId>>(() => new Set());
-  const claimFilters = CLAIM_RULES.filter((c) => !prefs.claimsHidden.includes(c.id));
+  // Chips för stora gap först (i gapens ordning), sedan resten i vanlig ordning.
+  const claimFilters = CLAIM_RULES.filter((c) => !prefs.claimsHidden.includes(c.id)).sort(
+    (a, b) => claimOrder(firstClaims, a.id) - claimOrder(firstClaims, b.id),
+  );
   const activeFilters = claimFilters.filter((c) => filters.has(c.id)).map((c) => c.id);
   const overrides = useMemo(() => overrideMap(foodData.overrides), [foodData.overrides]);
 
