@@ -5207,6 +5207,11 @@ p.plateau-reasons {
   color: var(--accent);
 }
 
+.list-flush.reorder-list {
+  margin-top: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
 .reorder-add {
   margin-top: var(--space-4);
 }

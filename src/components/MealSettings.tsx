@@ -65,14 +65,14 @@ export function MealSettings() {
 
   const list = slots ?? [];
   const ids = list.map((s) => s.id);
-  const reorder = useDragReorder(ids, (next) => {
+  const reorder = useDragReorder(ids, (next, movedId) => {
     const now = Date.now();
     const reordered = applyMealOrder(list, next, now);
     setSlots(reordered);
-    const moved = reordered.find((s, i) => list[i]?.id !== s.id);
+    const at = reordered.findIndex((s) => s.id === movedId);
+    const moved = reordered[at];
     if (moved) {
-      const at = reordered.findIndex((s) => s.id === moved.id) + 1;
-      setAnnouncement(`${moved.name}: plats ${String(at)} av ${String(reordered.length)}.`);
+      setAnnouncement(`${moved.name}: plats ${String(at + 1)} av ${String(reordered.length)}.`);
     }
     void putMealSlots(reordered.filter((s) => s.updatedAt === now)).then(reload);
   });

@@ -5,12 +5,12 @@ import { FROZEN_NOW, LIVSMEDEL, MEAL_HEADERS } from './visualData.ts';
 /**
  * Måltidsrubrikerna i Mat → Dag: fast rutnät [pil] [namn + antal] [kcal] [⋯] [+]. Pilen, namnet
  * och kcal står på samma x-position i alla sektioner, och inget i rubrikraden bryts till en ny
- * rad – även med "Mellanmål" + 12 poster + 1 234 kcal på en 360 px bred skärm.
+ * rad – även med "Eftermiddagsmellanmål" + 12 poster + 1 234 kcal på en 360 px bred skärm.
  */
 
 test.use({ locale: 'sv-SE', timezoneId: 'Europe/Stockholm', serviceWorkers: 'block' });
 
-const SLOTS = ['frukost', 'lunch', 'mellanmal'] as const;
+const SLOTS = ['frukost', 'lunch', 'eftermiddag'] as const;
 
 async function open(page: Page) {
   await page.clock.setFixedTime(new Date(FROZEN_NOW));
@@ -23,7 +23,7 @@ async function open(page: Page) {
   await seed(page, MEAL_HEADERS);
   await page.goto('./#/mat');
   await page.reload();
-  await expect(page.getByTestId('meal-mellanmal').getByTestId('meal-kcal')).toHaveText(
+  await expect(page.getByTestId('meal-eftermiddag').getByTestId('meal-kcal')).toHaveText(
     '1 234 kcal',
   );
   await page.evaluate(() => document.fonts.ready);
@@ -58,7 +58,7 @@ for (const width of [412, 360]) {
     );
     // Kanelbullen saknar fiberdata: asterisk vid mellanmålets fiber.
     await expect(
-      page.getByTestId('meal-mellanmal').getByTestId('meal-macros').getByTestId('fiber-partial'),
+      page.getByTestId('meal-eftermiddag').getByTestId('meal-macros').getByTestId('fiber-partial'),
     ).toBeVisible();
 
     const geometry = [];
@@ -119,7 +119,7 @@ for (const width of [412, 360]) {
 
     // Långt namn + antal kortas med … i stället för att brytas.
     const truncated = await page
-      .locator('[data-testid="meal-mellanmal"] .accordion-name')
+      .locator('[data-testid="meal-eftermiddag"] .accordion-name')
       .evaluate((el) => ({
         overflow: getComputedStyle(el).textOverflow,
         wrap: getComputedStyle(el).whiteSpace,

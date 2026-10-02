@@ -105,7 +105,7 @@ const foodLog = [
     logEntry(days, 'lunch', 'lv:6', 'Kycklingfilé stekt', 150 + (days % 3) * 25, KYCKLING),
     logEntry(days, 'lunch', 'lv:4', 'Potatis kokt', 200, POTATIS),
     logEntry(days, 'middag', 'lv:6', 'Kycklingfilé stekt', 180, KYCKLING),
-    logEntry(days, 'mellanmal', 'lv:7', 'Kvarg naturell', 250, KVARG),
+    logEntry(days, 'eftermiddag', 'lv:7', 'Kvarg naturell', 250, KVARG),
   ]),
 ];
 
@@ -361,6 +361,8 @@ export const VISUAL_DATA: SeedData = {
   supplements,
   supplementLog,
   settings: {
+    // Namnet på "Vad ska jag äta?"-ikonen är redan visat (ingen tooltip i skärmdumparna).
+    preferences: { whatToEatTipSeen: true },
     // Alla funktioner på (GLP-1 är annars av som standard).
     features: {
       steg: true,
@@ -427,6 +429,8 @@ export const WORST_CASE_RINGS: SeedData = {
   ],
   water: [{ id: 'v1', date: TODAY, ml: 2450, createdAt: Date.parse(`${TODAY}T11:00:00+02:00`) }],
   settings: {
+    // Namnet på "Vad ska jag äta?"-ikonen är redan visat (ingen tooltip i skärmdumparna).
+    preferences: { whatToEatTipSeen: true },
     features: {
       steg: false,
       midja: false,
@@ -444,7 +448,7 @@ export const WORST_CASE_RINGS: SeedData = {
 
 /**
  * Måltidsrubrikerna i Mat → Dag med långa och korta namn och kcal-värden: Frukost 456 kcal,
- * Lunch 85 kcal (1 post, makron under 10 g med en decimal), Middag tom och Mellanmål 1 234 kcal
+ * Lunch 85 kcal (1 post, makron under 10 g med en decimal), Middag tom och Eftermiddagsmellanmål 1 234 kcal
  * med 12 poster (en utan fiberdata → asterisk). Egen databas – inte VISUAL_DATA.
  */
 export const MEAL_HEADERS: SeedData = {
@@ -475,11 +479,13 @@ export const MEAL_HEADERS: SeedData = {
     logEntry(0, 'frukost', 'lv:2', 'Mjölk fett 3 %', 390, MJOLK),
     logEntry(0, 'lunch', 'lv:7', 'Kvarg naturell', 135, KVARG),
     ...Array.from({ length: 11 }, () =>
-      logEntry(0, 'mellanmal', 'lv:3', 'Banan', 100, BANAN, 'st', 1),
+      logEntry(0, 'eftermiddag', 'lv:3', 'Banan', 100, BANAN, 'st', 1),
     ),
-    logEntry(0, 'mellanmal', 'egen:bulle', 'Kanelbulle', 100, per100(189, 4, 26, 8), 'st', 1),
+    logEntry(0, 'eftermiddag', 'egen:bulle', 'Kanelbulle', 100, per100(189, 4, 26, 8), 'st', 1),
   ],
   settings: {
+    // Namnet på "Vad ska jag äta?"-ikonen är redan visat (ingen tooltip i skärmdumparna).
+    preferences: { whatToEatTipSeen: true },
     features: {
       steg: false,
       midja: false,

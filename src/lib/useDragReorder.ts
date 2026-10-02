@@ -21,10 +21,13 @@ export interface DragHandleProps {
 
 /**
  * Ändra ordning med ett dra-handtag (pekarhändelser) eller piltangenterna på handtaget. Raden byter
- * plats med grannen när den dragits över halva radhöjden; `onCommit` får den nya ordningen när
+ * plats med grannen när den dragits över halva radhöjden; `onCommit` får den nya ordningen (och raden som flyttades) när
  * handtaget släpps (eller direkt vid piltangent). Radhöjden läses från `li` närmast handtaget.
  */
-export function useDragReorder(ids: readonly string[], onCommit: (ids: string[]) => void) {
+export function useDragReorder(
+  ids: readonly string[],
+  onCommit: (ids: string[], movedId: string) => void,
+) {
   const [order, setOrder] = useState<string[] | null>(null);
   const [dragging, setDragging] = useState<{ id: string; offset: number } | null>(null);
   const drag = useRef<Drag | null>(null);
@@ -35,7 +38,7 @@ export function useDragReorder(ids: readonly string[], onCommit: (ids: string[])
     drag.current = null;
     setDragging(null);
     setOrder(null);
-    if (commit && d?.moved && d.list.join('\n') !== ids.join('\n')) onCommit(d.list);
+    if (commit && d?.moved && d.list.join('\n') !== ids.join('\n')) onCommit(d.list, d.id);
   }
 
   function handleProps(id: string): DragHandleProps {
@@ -45,7 +48,11 @@ export function useDragReorder(ids: readonly string[], onCommit: (ids: string[])
         e.stopPropagation();
         if (e.button !== 0) return;
         const row = e.currentTarget.closest('li');
-        e.currentTarget.setPointerCapture(e.pointerId);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // Pekaren är redan släppt – dragningen avslutas vid pointerup ändå.
+        }
         drag.current = {
           id,
           pointerId: e.pointerId,
@@ -100,7 +107,7 @@ export function useDragReorder(ids: readonly string[], onCommit: (ids: string[])
         const index = ids.indexOf(id);
         const to = e.key === 'ArrowUp' ? index - 1 : index + 1;
         if (index === -1 || to < 0 || to >= ids.length) return;
-        onCommit(swap([...ids], index, to));
+        onCommit(swap([...ids], index, to), id);
       },
     };
   }

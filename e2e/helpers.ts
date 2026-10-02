@@ -54,6 +54,8 @@ export interface SeedData {
   recipes?: Record<string, unknown>[];
   /** Egna näringsvärden (sedan v13); nyckel = `foodId`. */
   foodOverrides?: Record<string, unknown>[];
+  /** Dagens måltider (sedan v15); ersätter standardmåltiderna helt. */
+  mealSlots?: Record<string, unknown>[];
 }
 
 /**
@@ -96,6 +98,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
         'supplementLog',
         'recipes',
         'foodOverrides',
+        'mealSlots',
       ],
       'readwrite',
     );
@@ -124,6 +127,11 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
     for (const x of data.supplementLog ?? []) tx.objectStore('supplementLog').put(x);
     for (const x of data.recipes ?? []) tx.objectStore('recipes').put(x);
     for (const x of data.foodOverrides ?? []) tx.objectStore('foodOverrides').put(x);
+    if (data.mealSlots) {
+      const store = tx.objectStore('mealSlots');
+      store.clear();
+      for (const x of data.mealSlots) store.put(x);
+    }
     for (const [key, value] of Object.entries(data.settings ?? {})) {
       tx.objectStore('settings').put(value, key);
     }
@@ -163,6 +171,7 @@ export interface Dump {
   supplementLog: unknown[];
   recipes: unknown[];
   foodOverrides: unknown[];
+  mealSlots: { id: string; name: string; time: string; kind: string; order: number }[];
 }
 
 /** Läser ut all data ur IndexedDB (bilder som byte-arrayer), sorterat på id. */
@@ -224,6 +233,7 @@ export async function dump(page: Page): Promise<Dump> {
       supplementLog,
       recipes,
       foodOverrides,
+      mealSlots,
     ] = await Promise.all([
       all('profile'),
       all('weights'),
@@ -249,6 +259,7 @@ export async function dump(page: Page): Promise<Dump> {
       all('supplementLog'),
       all('recipes'),
       all('foodOverrides'),
+      all('mealSlots'),
     ]);
     db.close();
     return {
@@ -283,6 +294,7 @@ export async function dump(page: Page): Promise<Dump> {
       supplementLog: supplementLog.sort(byId),
       recipes: recipes.sort(byId),
       foodOverrides,
+      mealSlots: (mealSlots as Dump['mealSlots']).sort((a, b) => a.order - b.order),
     };
   });
 }

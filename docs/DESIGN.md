@@ -119,55 +119,57 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 
 ## Komponenter
 
-| Komponent           | Fil                     | Används till                                                                     |
-| ------------------- | ----------------------- | -------------------------------------------------------------------------------- |
-| `Page`              | `Page.tsx`              | Sidan: sticky rubrikrad som krymper vid scroll, fokus på rubriken vid sidbyte    |
-| `Card`              | `Card.tsx`              | Yta med rubrik (+ valfri åtgärd och `tone`). Nästlat kort → grupp utan ram       |
-| `ListRow`           | `ListRow.tsx`           | Rad: primär/sekundär text, högerställt värde, tryck, svep vänster/höger          |
-| `SectionAccordion`  | `SectionAccordion.tsx`  | Hopfällbar sektion med rubrik, metatext, värde och åtgärder (måltider)           |
-| `BottomSheet`       | `BottomSheet.tsx`       | Panel nerifrån (eller helskärm) som modal `<dialog>`                             |
-| `ActionSheet`       | `ActionSheet.tsx`       | Radmeny: liten panel med ett val per rad, destruktiva val i fel-färg             |
-| `DateBar`           | `DateBar.tsx`           | ‹ Idag › – datumrad med osynligt datumfält (Mat → Dag, formulär i paneler)       |
-| Inställningslista   | `Card` + `ListRow`      | Grupp av rader med status och › som var och en öppnar en panel                   |
-| `SegmentedControl`  | `SegmentedControl.tsx`  | Flikar/filter med `aria-pressed`; `size="small"` i sidhuvudet                    |
-| `ChoiceList`        | `ChoiceList.tsx`        | Valrader: ett val av flera (radioknappar) med förklaring och egen markering      |
-| `ChipGroup`         | `ChipGroup.tsx`         | Val som chips med fältetikett: biverkningar, veckodagar, injektionsställe        |
-| `StatBar`           | `StatBar.tsx`           | "827 / 1 680 kcal" + tunn stapel i datatypens färg + metarad                     |
-| `GoalRing` (Ring)   | `GoalRing.tsx`          | Ring mot dagsmål (dryck, kalorier, protein) med `tone`                           |
-| `ProgressBar`       | `ProgressBar.tsx`       | Stapel med `tone`, `thin`, `decorative`; `segments` = uppdelad stapel            |
-| `EmptyState`        | `EmptyState.tsx`        | Tomt läge: rubrik, förklaring och **en** knapp för nästa steg                    |
-| `Toast`             | `Toast.tsx`             | Kvittens ovanför navigeringen med valfri Ångra; försvinner efter 8 s             |
-| `useUndoToast`      | `lib/useUndoToast.ts`   | Tillstånd för en Toast med Ångra efter borttagning i en lista                    |
-| `Skeleton`          | `Skeleton.tsx`          | Platshållare medan IndexedDB läses (ingen layout som hoppar)                     |
-| `ShowMore`          | `ShowMore.tsx`          | "Visa fler" under en begränsad lista (med `useShowMore`)                         |
-| `RangeFilter`       | `RangeFilter.tsx`       | Tidsfilter 1 mån / 3 mån / Allt som chips                                        |
-| `DailyBarChart`     | `DailyBarChart.tsx`     | Stapelgraf, ett värde per dag i datatypens färg, valfri mållinje                 |
-| `PeriodBar`         | `PeriodBar.tsx`         | ‹ Månad/vecka › – som `DateBar` men med en rubrik i mitten (Kalender)            |
-| `Disclosure`        | `Disclosure.tsx`        | Hopfälld hjälptext bakom en liten dämpad textknapp (kalenderns förklaring)       |
-| `Parts`             | `Parts.tsx`             | "6 000 steg · 827 kcal" – delarna hålls ihop, texten bryts bara vid "·"          |
-| `BarcodeScanner`    | `BarcodeScanner.tsx`    | Kameravy för streckkoder (Mat, egna måltider, Tillskott) med reserver            |
-| `BarcodeNotFound`   | `BarcodeNotFound.tsx`   | "Hittade inte [EAN]": AI från etikett / manuellt + länk till Open Food Facts     |
-| `BarcodeElsewhere`  | `BarcodeElsewhere.tsx`  | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit       |
-| `AiJsonImport`      | `AiJsonImport.tsx`      | AI-flöden med JSON-svar: prompt (kopiera/dela) → klistra in → validering         |
-| `AiLabelImport`     | `AiLabelImport.tsx`     | `AiJsonImport` för etiketter (tillskott per dos, livsmedel per 100 g)            |
-| `RecipeImport`      | `RecipeImport.tsx`      | "Importera recept": länk/text → `AiJsonImport` → granskning (`…Review.tsx`)      |
-| `IngredientEditor`  | `IngredientEditor.tsx`  | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept        |
-| `WeekBudgetRow`     | `WeekBudgetRow.tsx`     | Veckoraden under kcal-ringen/-stapeln: en rad, kvar och ≈ per dag → panel        |
-| `WeekBudgetSheet`   | `WeekBudgetSheet.tsx`   | Veckopanelen: sju staplar mot dagsmålet, "ej loggad", kvar, per dag och saldo    |
-| `SvgChart`          | `SvgChart.tsx`          | Statisk graf som SVG (linje, punkter, staplar) – rapporten och utskrift          |
-| `PlateauCard`       | `PlateauCard.tsx`       | Översikt: platå, jämförelsetabell, 1–2 förklaringar, Fråga AI, Stäng             |
-| `ReportDocument`    | `ReportDocument.tsx`    | Rapporten till vården: sidhuvud + en `Card` per sektion, `theme-light`           |
-| `Macros`            | `Macros.tsx`            | "P 6 g · K 30 g · F 2 g · Fi 4 g" – fiber i fiberfärg, "–" saknas, "*" underkant |
-| `FiberNote`         | `FiberNote.tsx`         | Rad under fiberringen/-stapeln: veckans fibermål under upptrappningen            |
-| `FiberMissingNote`  | `FiberMissingNote.tsx`  | Förklaringen bakom info-ikonen vid fibervärdet (poster utan fiberdata)           |
-| `InfoButton`        | `InfoButton.tsx`        | Liten info-ikon (16 px, 44 px tryckyta) som fäller ut en förklaring              |
-| `HydrationReminder` | `HydrationReminder.tsx` | Översikt: "Drick lite extra idag" när diarré/kräkning loggats (GLP-1)            |
-| `RingAction`        | `RingAction.tsx`        | Ring på Översikt som går att trycka på (bildtexten är knappen/länken)            |
-| `TodoCard`          | `TodoCard.tsx`          | Översikt: Att göra idag (tillskott, dos, pass, backup) eller "Allt klart"        |
-| `MilestoneCard`     | `MilestoneCard.tsx`     | Översikt: kontextkortet "Ny milstolpe" (senaste veckan, kan stängas)             |
-| `UpdateCard`        | `UpdateCard.tsx`        | Översikt: kontextkortet "Ny version finns" (toast på övriga sidor)               |
-| `CalorieDetails`    | `CalorieDetails.tsx`    | Kaloriringens panel: mål, takt, förbrukning, spärrar, "Så räknas målet ut"       |
-| `WeightDetails`     | `WeightDetails.tsx`     | Framsteg → Historik: förändring, kvar, BMI, när målet nås (viktkortet leder hit) |
+| Komponent           | Fil                     | Används till                                                                      |
+| ------------------- | ----------------------- | --------------------------------------------------------------------------------- |
+| `Page`              | `Page.tsx`              | Sidan: sticky rubrikrad som krymper vid scroll, fokus på rubriken vid sidbyte     |
+| `Card`              | `Card.tsx`              | Yta med rubrik (+ valfri åtgärd och `tone`). Nästlat kort → grupp utan ram        |
+| `ListRow`           | `ListRow.tsx`           | Rad: primär/sekundär text, högerställt värde, tryck, svep vänster/höger           |
+| `SectionAccordion`  | `SectionAccordion.tsx`  | Hopfällbar sektion med rubrik, metatext, värde och åtgärder (måltider)            |
+| `BottomSheet`       | `BottomSheet.tsx`       | Panel nerifrån (eller helskärm) som modal `<dialog>`                              |
+| `ActionSheet`       | `ActionSheet.tsx`       | Radmeny: liten panel med ett val per rad, destruktiva val i fel-färg              |
+| `DateBar`           | `DateBar.tsx`           | ‹ Idag › – datumrad med osynligt datumfält (Mat → Dag, formulär i paneler)        |
+| Inställningslista   | `Card` + `ListRow`      | Grupp av rader med status och › som var och en öppnar en panel                    |
+| `SegmentedControl`  | `SegmentedControl.tsx`  | Flikar/filter med `aria-pressed`; `size="small"` i sidhuvudet                     |
+| `ChoiceList`        | `ChoiceList.tsx`        | Valrader: ett val av flera (radioknappar) med förklaring och egen markering       |
+| `ChipGroup`         | `ChipGroup.tsx`         | Val som chips med fältetikett: biverkningar, veckodagar, injektionsställe         |
+| `StatBar`           | `StatBar.tsx`           | "827 / 1 680 kcal" + tunn stapel i datatypens färg + metarad                      |
+| `GoalRing` (Ring)   | `GoalRing.tsx`          | Ring mot dagsmål (dryck, kalorier, protein) med `tone`                            |
+| `ProgressBar`       | `ProgressBar.tsx`       | Stapel med `tone`, `thin`, `decorative`; `segments` = uppdelad stapel             |
+| `EmptyState`        | `EmptyState.tsx`        | Tomt läge: rubrik, förklaring och **en** knapp för nästa steg                     |
+| `Toast`             | `Toast.tsx`             | Kvittens ovanför navigeringen med valfri Ångra; försvinner efter 8 s              |
+| `useUndoToast`      | `lib/useUndoToast.ts`   | Tillstånd för en Toast med Ångra efter borttagning i en lista                     |
+| `Skeleton`          | `Skeleton.tsx`          | Platshållare medan IndexedDB läses (ingen layout som hoppar)                      |
+| `ShowMore`          | `ShowMore.tsx`          | "Visa fler" under en begränsad lista (med `useShowMore`)                          |
+| `RangeFilter`       | `RangeFilter.tsx`       | Tidsfilter 1 mån / 3 mån / Allt som chips                                         |
+| `DailyBarChart`     | `DailyBarChart.tsx`     | Stapelgraf, ett värde per dag i datatypens färg, valfri mållinje                  |
+| `PeriodBar`         | `PeriodBar.tsx`         | ‹ Månad/vecka › – som `DateBar` men med en rubrik i mitten (Kalender)             |
+| `Disclosure`        | `Disclosure.tsx`        | Hopfälld hjälptext bakom en liten dämpad textknapp (kalenderns förklaring)        |
+| `Parts`             | `Parts.tsx`             | "6 000 steg · 827 kcal" – delarna hålls ihop, texten bryts bara vid "·"           |
+| `BarcodeScanner`    | `BarcodeScanner.tsx`    | Kameravy för streckkoder (Mat, egna måltider, Tillskott) med reserver             |
+| `BarcodeNotFound`   | `BarcodeNotFound.tsx`   | "Hittade inte [EAN]": AI från etikett / manuellt + länk till Open Food Facts      |
+| `BarcodeElsewhere`  | `BarcodeElsewhere.tsx`  | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit        |
+| `AiJsonImport`      | `AiJsonImport.tsx`      | AI-flöden med JSON-svar: prompt (kopiera/dela) → klistra in → validering          |
+| `AiLabelImport`     | `AiLabelImport.tsx`     | `AiJsonImport` för etiketter (tillskott per dos, livsmedel per 100 g)             |
+| `RecipeImport`      | `RecipeImport.tsx`      | "Importera recept": länk/text → `AiJsonImport` → granskning (`…Review.tsx`)       |
+| `IngredientEditor`  | `IngredientEditor.tsx`  | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept         |
+| `WeekBudgetRow`     | `WeekBudgetRow.tsx`     | Veckoraden under kcal-ringen/-stapeln: en rad, kvar och ≈ per dag → panel         |
+| `WeekBudgetSheet`   | `WeekBudgetSheet.tsx`   | Veckopanelen: sju staplar mot dagsmålet, "ej loggad", kvar, per dag och saldo     |
+| `SvgChart`          | `SvgChart.tsx`          | Statisk graf som SVG (linje, punkter, staplar) – rapporten och utskrift           |
+| `PlateauCard`       | `PlateauCard.tsx`       | Översikt: platå, jämförelsetabell, 1–2 förklaringar, Fråga AI, Stäng              |
+| `ReportDocument`    | `ReportDocument.tsx`    | Rapporten till vården: sidhuvud + en `Card` per sektion, `theme-light`            |
+| `Macros`            | `Macros.tsx`            | "P 6 g · K 30 g · F 2 g · Fi 4 g" – fiber i fiberfärg, "–" saknas, "*" underkant  |
+| `FiberNote`         | `FiberNote.tsx`         | Rad under fiberringen/-stapeln: veckans fibermål under upptrappningen             |
+| `FiberMissingNote`  | `FiberMissingNote.tsx`  | Förklaringen bakom info-ikonen vid fibervärdet (poster utan fiberdata)            |
+| `InfoButton`        | `InfoButton.tsx`        | Liten info-ikon (16 px, 44 px tryckyta) som fäller ut en förklaring               |
+| `IconTipButton`     | `IconTipButton.tsx`     | Ikonknapp (48 px) med tooltip med namnet: långtryck och första gången             |
+| `MealSettings`      | `MealSettings.tsx`      | Inställningar → Måltider: lista med dra-handtag (`useDragReorder`), panel per rad |
+| `HydrationReminder` | `HydrationReminder.tsx` | Översikt: "Drick lite extra idag" när diarré/kräkning loggats (GLP-1)             |
+| `RingAction`        | `RingAction.tsx`        | Ring på Översikt som går att trycka på (bildtexten är knappen/länken)             |
+| `TodoCard`          | `TodoCard.tsx`          | Översikt: Att göra idag (tillskott, dos, pass, backup) eller "Allt klart"         |
+| `MilestoneCard`     | `MilestoneCard.tsx`     | Översikt: kontextkortet "Ny milstolpe" (senaste veckan, kan stängas)              |
+| `UpdateCard`        | `UpdateCard.tsx`        | Översikt: kontextkortet "Ny version finns" (toast på övriga sidor)                |
+| `CalorieDetails`    | `CalorieDetails.tsx`    | Kaloriringens panel: mål, takt, förbrukning, spärrar, "Så räknas målet ut"        |
+| `WeightDetails`     | `WeightDetails.tsx`     | Framsteg → Historik: förändring, kvar, BMI, när målet nås (viktkortet leder hit)  |
 
 ### Page (sidhuvud)
 
@@ -693,18 +695,34 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
 
 ### Gapraden och "Vad ska jag äta?" (Mat → Dag)
 
-- **Gapraden** (`gap-line`) ligger i summeringskortet direkt under staplarna, före makroraden: "41 g protein och 6 g fiber
+- **Gapraden** (`gap-line`) ligger i summeringskortet direkt under staplarna, före makroraden (ensam på raden): "41 g protein och 6 g fiber
   kvar" i `--text-sm`, fetstil, `tabular-nums`. Bara näringsämnen med mer än 10 % kvar av målet, störst andel först; är
   allt inom 10 % visas ingen rad. Bara för idag. Saklig ton – information, inte uppmaningar. Fiber räknas mot veckans
   fibermål, annars referensvärdet, och först när fiberdatan är läst.
-- **"Vad ska jag äta?"** är en sekundär liten knapp (`button button-secondary button-small`) högerställd på samma rad
-  (`gap-row`, radbryts på smala skärmar) – aldrig en primärknapp, sidan har ingen. Samma val överst i måltidens ⋯-meny
-  (`ListRow` med `chevron` och förklaring); idag visas ⋯ även på tomma måltider. Knappen gäller pågående måltid
-  (klockslaget), menyn den valda måltiden.
+- **"Vad ska jag äta?"** är en ikonknapp med gnistor (`IconTipButton` + `SparklesIcon`, `icon-button what-to-eat-button`
+  i `--accent`) i datumraden direkt till vänster om ⋯ – bara idag, aldrig en primärknapp. Tryckytan är 48 px och namnet
+  finns i `aria-label`. Långtryck (500 ms) visar namnet som en kort tooltip (`icon-tip`: `--text` på `--bg`, `--text-xs`,
+  `--shadow-md`, under knappen, högerställd, `pointer-events: none`) utan att öppna; samma tooltip visas automatiskt första
+  gången knappen syns (`preferences.whatToEatTipSeen`). Den försvinner efter 4 s eller vid nästa tryck/scroll. I
+  måltidssektionerna finns valet bara överst i ⋯-menyn (`ListRow` med `chevron` och förklaring); idag visas ⋯ även på tomma
+  måltider. Ikonen gäller pågående måltid (tiden närmast före klockslaget), menyn den valda måltiden.
 - **Panelen** (`BottomSheet` i helskärm, "Vad ska jag äta till lunch?") är `AskAi`: samma kryssrutor (innehållet heter
   "Kvar idag och vanliga livsmedel"), förhandsvisning, Dela, Kopiera och Öppna i ChatGPT/Claude. Appen skickar inget.
 - **Sök-sheeten**: när protein- eller fibergapet är stort står chipet Proteinrik/Fiberrik först i filterraden (störst gap
   först) – aldrig förvalt.
+
+### Ändra ordning (Inställningar → Måltider)
+
+- Listan är `list list-flush` med en `ListRow` per måltid: namn, "07:00 · Huvudmåltid" som `secondary` och ett
+  **dra-handtag** (sex prickar, `drag-handle`, 56 × 44 px, `--muted`, `touch-action: none`) som `trailing` till höger.
+  Tryck på raden = panel med formuläret (Namn, Ungefärlig tid, Typ som `ChoiceList`, primärknappen "Spara måltid", "Ta bort
+  måltiden" som destruktiv textknapp). Svep vänster = ta bort.
+- Dra i handtaget (`useDragReorder`): raden följer fingret (`ListRow` `dragOffset`, `--shadow-md`, handtaget i `--accent`) och
+  byter plats med grannen vid halva radhöjden; ordningen sparas när den släpps. Piltangenterna på handtaget flyttar ett steg
+  och platsen läses upp (`role="status"`). Sekundärknappen "Lägg till måltid" står under listan.
+- Ta bort en måltid med poster: en panel frågar vart posterna ska flyttas (`ChoiceList`, förval närmaste i tid) med
+  `button-danger` "Ta bort och flytta posterna". En tom måltid tas bort direkt. Båda ger `Toast` med Ångra. Den sista
+  måltiden kan inte tas bort.
 
 ### Snabblogg, recept och veckoraden
 
