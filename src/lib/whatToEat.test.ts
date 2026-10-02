@@ -78,6 +78,20 @@ describe('gapraden', () => {
 });
 
 describe('typicalMealKcal', () => {
+  it('räknas per måltid ur inställningen (eget mellanmål räknas för sig)', () => {
+    const log = [
+      entry({ date: '2026-09-30', meal: 'kvall', grams: 200 }),
+      entry({ date: '2026-09-29', meal: 'kvall', grams: 250 }),
+      entry({ date: '2026-09-28', meal: 'kvall', grams: 300 }),
+      entry({ date: '2026-09-28', meal: 'eftermiddag', grams: 900 }),
+      entry({ date: '2026-09-27', meal: 'eftermiddag', grams: 900 }),
+    ];
+    expect(typicalMealKcal(log, 'kvall', TODAY)).toBe(250);
+    // Bara två dagar med Eftermiddagsmellanmål: för lite underlag.
+    expect(typicalMealKcal(log, 'eftermiddag', TODAY)).toBeNull();
+    expect(typicalMealKcal(log, 'lunch', TODAY)).toBeNull();
+  });
+
   it('medianen av måltidens summa per dag de senaste 28 dagarna', () => {
     const log = [
       entry({ date: '2026-09-30', grams: 400 }),
@@ -143,7 +157,7 @@ describe('whatToEatSubject → prompt', () => {
       entry({ date: '2026-09-28', meal: 'middag', grams: 600, name: 'Tofu', foodId: 'lv:6' }),
     ];
     const subject = whatToEatSubject({
-      meal: 'middag',
+      meal: { id: 'middag', name: 'Middag' },
       today: TODAY,
       log,
       eaten: { kcal: 1400, proteinG: 80, fiberG: 18 },
@@ -159,7 +173,7 @@ describe('whatToEatSubject → prompt', () => {
 
   it('fiber som inte är inläst utelämnas ur det som är kvar', () => {
     const subject = whatToEatSubject({
-      meal: 'frukost',
+      meal: { id: 'frukost', name: 'Frukost' },
       today: TODAY,
       log: [],
       eaten: { kcal: 0, proteinG: 0, fiberG: null },

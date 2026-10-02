@@ -2,7 +2,7 @@ import type { FoodLogEntry, SavedMeal } from '../db/db.ts';
 import { fiberSum, type FiberSource } from '../lib/fiber.ts';
 import { entryCountText, loggedMealIngredients, mealSections } from '../lib/foodDay.ts';
 import { formatKcal } from '../lib/format.ts';
-import type { MealSlot } from '../lib/nutrition.ts';
+import type { MealId, MealSlot } from '../lib/mealSlots.ts';
 import { FoodEntryRow } from './FoodEntryRow.tsx';
 import { Macros } from './Macros.tsx';
 import { SectionAccordion } from './SectionAccordion.tsx';
@@ -11,16 +11,18 @@ interface MealSectionsProps {
   entries: readonly FoodLogEntry[];
   /** Sparade måltider – för att visa ingredienserna i en loggad måltid. */
   meals: readonly SavedMeal[];
+  /** Dagens måltider (Inställningar → Måltider) – en sektion per måltid i deras ordning. */
+  mealSlots: readonly MealSlot[];
   /** Utfällda måltider (styrs av Mat → Dag). */
-  open: ReadonlySet<MealSlot>;
+  open: ReadonlySet<MealId>;
   /** Favoritmarkerade livsmedel (id). */
   favoriteIds: ReadonlySet<string>;
   /** Fiberdata för posterna, `null` medan den laddas (då visas ingen fiber). */
   fiberSource?: FiberSource | null;
-  onToggle: (slot: MealSlot) => void;
-  onAdd: (slot: MealSlot) => void;
+  onToggle: (slot: MealId) => void;
+  onAdd: (slot: MealId) => void;
   /** Menyn (⋯) för en måltid: Vad ska jag äta?, spara som egen måltid, analysera. */
-  onMenu: (slot: MealSlot) => void;
+  onMenu: (slot: MealId) => void;
   /** Visa ⋯ även för tomma måltider (idag: menyn har Vad ska jag äta?). */
   menuAlways?: boolean;
   onEdit: (entry: FoodLogEntry) => void;
@@ -36,6 +38,7 @@ interface MealSectionsProps {
 export function MealSections({
   entries,
   meals,
+  mealSlots,
   open,
   favoriteIds,
   fiberSource = null,
@@ -52,7 +55,7 @@ export function MealSections({
       <h2 className="visually-hidden" id="day-log-title">
         Dagens mat
       </h2>
-      {mealSections(entries).map((section) => {
+      {mealSections(entries, mealSlots).map((section) => {
         const name = section.label.toLowerCase();
         return (
           <SectionAccordion

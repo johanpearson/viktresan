@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listFavorites, listMeals, resetDbForTests, type FoodLogEntry } from '../db/db.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
+import { defaultMealSlots } from '../lib/mealSlots.ts';
 import { FoodDay } from './FoodDay.tsx';
 
 const per100 = { kcal: 100, proteinG: 10, carbsG: 10, fatG: 2 };
@@ -29,6 +30,7 @@ const foodData: FoodData = {
   foodUnits: [],
   recipes: [],
   overrides: [],
+  mealSlots: defaultMealSlots(),
 };
 
 function renderDay(foodLog: FoodLogEntry[]) {

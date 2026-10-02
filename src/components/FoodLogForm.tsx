@@ -7,12 +7,13 @@ import { hasNutritionStatus } from '../lib/foodNutrition.ts';
 import { SOURCE_LABELS, type FoodItem } from '../lib/foodSearch.ts';
 import { decimalInput, formatGrams, formatInt, formatKcal, parseDecimal } from '../lib/format.ts';
 import {
-  MEAL_SLOTS,
-  defaultMealSlot,
-  mealLabel,
-  scaleNutrients,
+  initialMealId,
+  mealName,
+  sortMealSlots,
+  type MealId,
   type MealSlot,
-} from '../lib/nutrition.ts';
+} from '../lib/mealSlots.ts';
+import { scaleNutrients } from '../lib/nutrition.ts';
 import {
   GRAM,
   MAX_GRAMS,
@@ -58,12 +59,14 @@ interface FoodLogFormProps {
   editing: FoodLogEntry | null;
   date: string;
   /** Förvald måltid för nya poster, annars efter klockslaget. */
-  defaultMeal?: MealSlot | null;
+  defaultMeal?: MealId | null;
+  /** Dagens måltider (Inställningar → Måltider). */
+  mealSlots: readonly MealSlot[];
   favorite: boolean;
   onToggleFavorite: () => void;
   /** Sparar livsmedlets egna enheter och laddar om. */
   onUnitsChange: (units: FoodUnit[]) => Promise<void>;
-  onSaved: (message: string, meal: MealSlot) => void;
+  onSaved: (message: string, meal: MealId) => void;
   /** `ingredient`: mängden och enheterna den räknades med. */
   onAdd?: (value: UnitAmount, units: FoodUnit[]) => void;
   /** Visar "Ta bort posten" längst ner (vid redigering). */
@@ -98,6 +101,7 @@ export function FoodLogForm({
   editing,
   date,
   defaultMeal = null,
+  mealSlots,
   favorite,
   onToggleFavorite,
   onUnitsChange,
@@ -120,8 +124,8 @@ export function FoodLogForm({
   );
   const [unit, setUnit] = useState(usage.unit);
   const [amount, setAmount] = useState(() => decimalInput(usage.amount));
-  const [meal, setMeal] = useState<MealSlot>(
-    () => editing?.meal ?? defaultMeal ?? defaultMealSlot(new Date().getHours()),
+  const [meal, setMeal] = useState<MealId>(() =>
+    initialMealId(mealSlots, editing ?? (defaultMeal ? { meal: defaultMeal } : null)),
   );
   const [adjusting, setAdjusting] = useState(false);
   const [adjustGrams, setAdjustGrams] = useState('');
@@ -199,7 +203,7 @@ export function FoodLogForm({
     if (food.recipe) entry.recipe = food.recipe;
     await putFoodLog(entry);
     onSaved(
-      `${editing ? 'Uppdaterade' : 'Loggade'} ${food.name} (${loggedAmountText(entry)}) till ${mealLabel(meal).toLowerCase()}.`,
+      `${editing ? 'Uppdaterade' : 'Loggade'} ${food.name} (${loggedAmountText(entry)}) till ${mealName(mealSlots, meal).toLowerCase()}.`,
       meal,
     );
   }
@@ -334,13 +338,13 @@ export function FoodLogForm({
                 className="input"
                 value={meal}
                 onChange={(e) => {
-                  const slot = MEAL_SLOTS.find((m) => m.id === e.target.value);
+                  const slot = mealSlots.find((m) => m.id === e.target.value);
                   if (slot) setMeal(slot.id);
                 }}
               >
-                {MEAL_SLOTS.map((m) => (
+                {sortMealSlots(mealSlots).map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.label}
+                    {m.name}
                   </option>
                 ))}
               </select>

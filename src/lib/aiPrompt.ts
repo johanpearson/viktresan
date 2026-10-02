@@ -21,14 +21,8 @@ import {
   AI_PROMPT_TEMPLATE,
   AI_WHAT_TO_EAT_TEMPLATE,
 } from './aiPromptTemplate.ts';
-import {
-  dailyIntake,
-  mealLabel,
-  scaleNutrients,
-  totalOf,
-  type MealSlot,
-  type Nutrients,
-} from './nutrition.ts';
+import { dailyIntake, scaleNutrients, totalOf, type Nutrients } from './nutrition.ts';
+import { mealName, sortMealSlots, type MealSlot } from './mealSlots.ts';
 import { buildPlan } from './plan.ts';
 import { proteinGoalFor } from './protein.ts';
 import { dailyWeights, emaTrend } from './stats.ts';
@@ -189,7 +183,8 @@ export interface PromptItem {
 }
 
 export type AiSubject =
-  | { kind: 'meal'; meal: MealSlot; date: string; items: PromptItem[]; totals: Nutrients }
+  /** `meal` = måltidens namn ("Lunch", "Kvällsmål"). */
+  | { kind: 'meal'; meal: string; date: string; items: PromptItem[]; totals: Nutrients }
   | { kind: 'day'; date: string; items: PromptItem[]; totals: Nutrients }
   | {
       kind: 'week';
@@ -203,7 +198,8 @@ export type AiSubject =
   /** "Vad ska jag äta?" (Mat): vad som är kvar idag, måltiden och det som brukar finnas hemma. */
   | {
       kind: 'eat';
-      meal: MealSlot;
+      /** Måltidens namn. */
+      meal: string;
       remaining: { kcal: number | null; proteinG: number | null; fiberG: number | null };
       /** Måltidens typiska kcal (portionen förslagen ska ligga nära), `null` utan historik. */
       typicalKcal: number | null;
@@ -211,7 +207,7 @@ export type AiSubject =
       homeFoods: string[];
     };
 
-function promptItem(entry: FoodLogEntry, withMeal: boolean): PromptItem {
+function promptItem(entry: FoodLogEntry, mealName: string | null): PromptItem {
   const n = scaleNutrients(entry.per100, entry.grams);
   const item: PromptItem = {
     name: entry.name,
@@ -219,26 +215,35 @@ function promptItem(entry: FoodLogEntry, withMeal: boolean): PromptItem {
     kcal: n.kcal,
     proteinG: n.proteinG,
   };
-  if (withMeal) item.meal = mealLabel(entry.meal);
+  if (mealName !== null) item.meal = mealName;
   return item;
 }
 
 export function mealSubject(
   entries: readonly FoodLogEntry[],
-  meal: MealSlot,
+  meal: string,
   date: string,
 ): AiSubject {
   const items = [...entries]
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map((e) => promptItem(e, false));
+    .map((e) => promptItem(e, null));
   return { kind: 'meal', meal, date, items, totals: totalOf(entries) };
 }
 
-export function daySubject(entries: readonly FoodLogEntry[], date: string): AiSubject {
-  const order: MealSlot[] = ['frukost', 'lunch', 'middag', 'mellanmal'];
+/** Dagens mat i måltidernas ordning (inställningen), med måltidens namn på varje rad. */
+export function daySubject(
+  entries: readonly FoodLogEntry[],
+  date: string,
+  slots: readonly MealSlot[],
+): AiSubject {
+  const order = sortMealSlots(slots).map((s) => s.id);
+  const rank = (e: FoodLogEntry) => {
+    const i = order.indexOf(e.meal);
+    return i === -1 ? order.length : i;
+  };
   const items = [...entries]
-    .sort((a, b) => order.indexOf(a.meal) - order.indexOf(b.meal) || a.createdAt - b.createdAt)
-    .map((e) => promptItem(e, true));
+    .sort((a, b) => rank(a) - rank(b) || a.createdAt - b.createdAt)
+    .map((e) => promptItem(e, mealName(slots, e.meal)));
   return { kind: 'day', date, items, totals: totalOf(entries) };
 }
 
@@ -270,7 +275,7 @@ export function weekSubject(
 function subjectText(subject: AiSubject): { long: string; short: string } {
   if (subject.kind === 'meal') {
     return {
-      long: `min ${mealLabel(subject.meal).toLowerCase()} ${formatDayMonth(subject.date)}`,
+      long: `min ${subject.meal.toLowerCase()} ${formatDayMonth(subject.date)}`,
       short: 'måltiden',
     };
   }
@@ -278,7 +283,7 @@ function subjectText(subject: AiSubject): { long: string; short: string } {
     return { long: `min mat ${formatDayMonth(subject.date)}`, short: 'dagen' };
   if (subject.kind === 'plateau') return { long: 'min viktplatå', short: 'platån' };
   if (subject.kind === 'eat') {
-    return { long: `${mealLabel(subject.meal).toLowerCase()} idag`, short: 'måltiden' };
+    return { long: `${subject.meal.toLowerCase()} idag`, short: 'måltiden' };
   }
   return {
     long: `min mat veckan ${formatDayMonth(subject.from)}–${formatDayMonth(subject.to)}`,
@@ -305,8 +310,8 @@ function contentLines(subject: AiSubject): string[] {
   if (subject.kind === 'eat') {
     const lines = [
       subject.typicalKcal === null
-        ? `Måltid: ${mealLabel(subject.meal)}.`
-        : `Måltid: ${mealLabel(subject.meal)}, min typiska portion är ca ${formatKcal(subject.typicalKcal)}.`,
+        ? `Måltid: ${subject.meal}.`
+        : `Måltid: ${subject.meal}, min typiska portion är ca ${formatKcal(subject.typicalKcal)}.`,
     ];
     const left = remainingText(subject.remaining);
     if (left !== '') lines.push(`Kvar av dagens mål: ${left}.`);
@@ -330,7 +335,7 @@ function contentLines(subject: AiSubject): string[] {
   }
   const heading =
     subject.kind === 'meal'
-      ? `${mealLabel(subject.meal)} (totalt ${kcalProtein(subject.totals)}):`
+      ? `${subject.meal} (totalt ${kcalProtein(subject.totals)}):`
       : `Dagens mat (totalt ${kcalProtein(subject.totals)}):`;
   if (subject.items.length === 0) return [heading, '- inget loggat'];
   return [

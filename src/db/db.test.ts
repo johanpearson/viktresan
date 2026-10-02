@@ -32,6 +32,10 @@ import {
   listFavorites,
   listCustomUnits,
   listFoodLog,
+  listMealSlots,
+  countFoodLogByMeal,
+  deleteMealSlot,
+  putMealSlots,
   listFoods,
   listMeals,
   listMilestones,
@@ -77,8 +81,10 @@ import {
   listRecipes,
   putRecipe,
   type Recipe,
+  type FoodLogEntry,
 } from './db.ts';
 import { waterGoal } from '../lib/water.ts';
+import { applyMealOrder, defaultMealSlots } from '../lib/mealSlots.ts';
 
 afterEach(async () => {
   await resetDbForTests();
@@ -235,6 +241,7 @@ describe('db', () => {
       'foodUnits',
       'foods',
       'injections',
+      'mealSlots',
       'meals',
       'medications',
       'milestones',
@@ -827,12 +834,132 @@ describe('db', () => {
     });
     const db = await getDb();
     expect(db.version).toBe(DB_VERSION);
-    expect(DB_VERSION).toBe(14);
+    expect(DB_VERSION).toBe(15);
     expect(await getSetting(SETTING_PREFERENCES)).toEqual({
       trendHero: false,
       claimsHidden: ['energisnal'],
     });
     expect(await getSetting(SETTING_LAST_EXPORT)).toBe(123);
+  });
+
+  describe('egna måltider (v15)', () => {
+    /** Lokal tid 2026-09-27 hh:mm som ms. */
+    const at = (h: number, m = 0) => new Date(2026, 8, 27, h, m).getTime();
+    const legacy = (id: string, meal: string, createdAt: number) => ({
+      id,
+      date: '2026-09-27',
+      meal,
+      foodId: 'lv:1',
+      name: 'Havregryn',
+      grams: 60,
+      per100: { kcal: 370, proteinG: 13, carbsG: 59, fatG: 7 },
+      createdAt,
+    });
+
+    it('migrerar v14 → v15: standardmåltider, Mellanmål fördelas efter loggtid', async () => {
+      await createV6Database({
+        foods: [],
+        meals: [],
+        foodLog: [
+          legacy('f', 'frukost', at(7, 5)),
+          legacy('l', 'lunch', at(12)),
+          legacy('d', 'middag', at(18, 30)),
+          legacy('fm', 'mellanmal', at(9, 40)),
+          legacy('em', 'mellanmal', at(15, 20)),
+          legacy('sen', 'mellanmal', at(13, 40)),
+          legacy('kv', 'mellanmal', at(22, 10)),
+          // Mitt i natten: närmast Kvällsmål (21:00) räknat runt dygnet.
+          legacy('natt', 'mellanmal', at(3)),
+        ],
+      });
+      expect((await listMealSlots()).map((m) => `${m.name} ${m.time} ${m.kind}`)).toEqual([
+        'Frukost 07:00 huvudmal',
+        'Förmiddagsmellanmål 10:00 mellanmal',
+        'Lunch 12:00 huvudmal',
+        'Eftermiddagsmellanmål 15:00 mellanmal',
+        'Middag 18:00 huvudmal',
+        'Kvällsmål 21:00 mellanmal',
+      ]);
+      const log = await listFoodLog();
+      expect(Object.fromEntries(log.map((e) => [e.id, e.meal]))).toEqual({
+        f: 'frukost',
+        l: 'lunch',
+        d: 'middag',
+        fm: 'formiddag',
+        em: 'eftermiddag',
+        sen: 'eftermiddag',
+        kv: 'kvall',
+        natt: 'kvall',
+      });
+      // v7-migreringen (gram → mängd och enhet) har inte skrivits över.
+      expect(log.find((e) => e.id === 'em')).toMatchObject({ amount: 60, unit: 'g', grams: 60 });
+    });
+
+    it('en ny databas får standardmåltiderna', async () => {
+      expect((await listMealSlots()).map((m) => m.id)).toEqual([
+        'frukost',
+        'formiddag',
+        'lunch',
+        'eftermiddag',
+        'middag',
+        'kvall',
+      ]);
+    });
+
+    it('borttagen måltid: posterna flyttas till vald måltid och Ångra lägger tillbaka dem', async () => {
+      const entry = (id: string, meal: string): FoodLogEntry => ({
+        ...legacy(id, meal, at(21)),
+        amount: 60,
+        unit: 'g',
+      });
+      await putFoodLog(entry('a', 'kvall'));
+      await putFoodLog(entry('b', 'kvall'));
+      await putFoodLog(entry('c', 'middag'));
+      expect((await countFoodLogByMeal()).get('kvall')).toBe(2);
+
+      const originals = await deleteMealSlot('kvall', 'eftermiddag', 99);
+      expect(originals.map((e) => e.id).sort()).toEqual(['a', 'b']);
+      expect((await listMealSlots()).map((m) => m.id)).not.toContain('kvall');
+      const after = await listFoodLog();
+      expect(
+        after
+          .filter((e) => e.meal === 'eftermiddag')
+          .map((e) => e.id)
+          .sort(),
+      ).toEqual(['a', 'b']);
+      expect(after.find((e) => e.id === 'a')?.updatedAt).toBe(99);
+      expect(after.find((e) => e.id === 'c')?.meal).toBe('middag');
+
+      // Ångra.
+      const slot = defaultMealSlots().find((m) => m.id === 'kvall');
+      if (slot) await putMealSlots([slot]);
+      await putFoodLogEntries(originals);
+      expect((await listFoodLog()).filter((e) => e.meal === 'kvall')).toHaveLength(2);
+    });
+
+    it('kan inte flytta till en måltid som inte finns', async () => {
+      await expect(deleteMealSlot('kvall', 'saknas')).rejects.toThrow();
+      expect((await listMealSlots()).map((m) => m.id)).toContain('kvall');
+    });
+
+    it('ny ordning och nya namn sparas', async () => {
+      const ids = ['lunch', 'frukost', 'formiddag', 'eftermiddag', 'middag', 'kvall'];
+      const reordered = applyMealOrder(await listMealSlots(), ids, 5).map((m) =>
+        m.id === 'kvall' ? { ...m, name: 'Nattmacka', updatedAt: 5 } : m,
+      );
+      // Bara de som ändrats sparas.
+      const changed = reordered.filter((m) => m.updatedAt === 5);
+      expect(changed.map((m) => m.id)).toEqual(['lunch', 'frukost', 'formiddag', 'kvall']);
+      await putMealSlots(changed);
+      expect((await listMealSlots()).map((m) => m.name)).toEqual([
+        'Lunch',
+        'Frukost',
+        'Förmiddagsmellanmål',
+        'Eftermiddagsmellanmål',
+        'Middag',
+        'Nattmacka',
+      ]);
+    });
   });
 
   it('migrerar v13 → v14 utan sparade inställningar', async () => {

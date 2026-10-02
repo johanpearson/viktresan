@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FoodLogEntry, Medication, Profile } from '../db/db.ts';
 import { formatDayMonth } from './format.ts';
+import { defaultMealSlots } from './mealSlots.ts';
 import {
   AI_OPTIONS,
   DEFAULT_AI_OPTIONS,
@@ -83,7 +84,7 @@ function context(): AiContext {
 
 const breakfast = mealSubject(
   log.filter((e) => e.meal === 'frukost'),
-  'frukost',
+  'Frukost',
   TODAY,
 );
 
@@ -162,7 +163,11 @@ describe('buildAiPrompt', () => {
   });
 
   it('hela dagen listar maten per måltid och tar inte med "hittills"', () => {
-    const prompt = buildAiPrompt(daySubject(log, TODAY), context(), DEFAULT_AI_OPTIONS);
+    const prompt = buildAiPrompt(
+      daySubject(log, TODAY, defaultMealSlots()),
+      context(),
+      DEFAULT_AI_OPTIONS,
+    );
     expect(prompt).toContain('förbättra min mat 26 sep');
     expect(prompt).toContain('Dagens mat (totalt 660 kcal, 66 g protein):');
     expect(prompt).toContain('- Lunch: Kycklinggryta, 400 g');
@@ -216,7 +221,7 @@ describe('buildAiPrompt – platå', () => {
 describe('buildAiPrompt – Vad ska jag äta?', () => {
   const eat = {
     kind: 'eat' as const,
-    meal: 'mellanmal' as const,
+    meal: 'Kvällsmål',
     remaining: { kcal: 640.4, proteinG: 45.2, fiberG: -2 },
     typicalKcal: 250,
     homeFoods: ['Kvarg naturell', 'Banan', 'Knäckebröd'],
@@ -224,8 +229,8 @@ describe('buildAiPrompt – Vad ska jag äta?', () => {
 
   it('tar med måltid, kvarvarande värden, typisk portion, det som brukar finnas hemma och matpreferenser', () => {
     const prompt = buildAiPrompt(eat, context(), DEFAULT_AI_OPTIONS);
-    expect(prompt).toContain('vad jag ska äta till mellanmål idag');
-    expect(prompt).toContain('Måltid: Mellanmål, min typiska portion är ca 250 kcal.');
+    expect(prompt).toContain('vad jag ska äta till kvällsmål idag');
+    expect(prompt).toContain('Måltid: Kvällsmål, min typiska portion är ca 250 kcal.');
     expect(prompt).toContain('Kvar av dagens mål: 640 kcal, 45 g protein, 0 g fiber.');
     expect(prompt).toContain('Det här brukar finnas hemma: Kvarg naturell, Banan, Knäckebröd.');
     expect(prompt).toContain('Mina matpreferenser: Gillar fisk');
@@ -237,7 +242,7 @@ describe('buildAiPrompt – Vad ska jag äta?', () => {
 
   it('utan historik för måltiden nämns ingen typisk portion', () => {
     const prompt = buildAiPrompt({ ...eat, typicalKcal: null }, context(), DEFAULT_AI_OPTIONS);
-    expect(prompt).toContain('Måltid: Mellanmål.');
+    expect(prompt).toContain('Måltid: Kvällsmål.');
     expect(prompt).not.toContain('typiska portion är');
   });
 

@@ -37,6 +37,8 @@ interface ListRowProps {
   children?: ReactNode;
   /** Destruktivt val i en meny (t.ex. "Ta bort"): texten i fel-färg. */
   danger?: boolean;
+  /** Förskjutning i y-led (px) medan raden dras i ett dra-handtag, `undefined` = dras inte. */
+  dragOffset?: number | undefined;
   className?: string;
   testId?: string;
 }
@@ -60,6 +62,7 @@ export function ListRow({
   swipeRight,
   children,
   danger = false,
+  dragOffset,
   className,
   testId,
 }: ListRowProps) {
@@ -116,6 +119,8 @@ export function ListRow({
         .join(' ')}
       data-testid={testId}
       data-swiping={offset < 0 ? 'left' : offset > 0 ? 'right' : undefined}
+      data-reordering={dragOffset !== undefined ? 'true' : undefined}
+      style={dragOffset ? { transform: `translateY(${String(dragOffset)}px)` } : undefined}
     >
       {swipeLeft && (
         <span className="list-row-action list-row-action-left" aria-hidden="true">

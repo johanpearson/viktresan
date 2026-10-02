@@ -12,27 +12,6 @@ export interface Nutrients {
   fatG: number;
 }
 
-export type MealSlot = 'frukost' | 'lunch' | 'middag' | 'mellanmal';
-
-export const MEAL_SLOTS: readonly { id: MealSlot; label: string }[] = [
-  { id: 'frukost', label: 'Frukost' },
-  { id: 'lunch', label: 'Lunch' },
-  { id: 'middag', label: 'Middag' },
-  { id: 'mellanmal', label: 'Mellanmål' },
-];
-
-export function mealLabel(slot: MealSlot): string {
-  return MEAL_SLOTS.find((m) => m.id === slot)?.label ?? slot;
-}
-
-/** Förvald måltid efter klockslag. */
-export function defaultMealSlot(hour: number): MealSlot {
-  if (hour >= 4 && hour < 10) return 'frukost';
-  if (hour >= 11 && hour < 14) return 'lunch';
-  if (hour >= 17 && hour < 21) return 'middag';
-  return 'mellanmal';
-}
-
 export const ZERO: Nutrients = { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 };
 
 /** Näringsvärden för `grams` gram av ett livsmedel med värden per 100 g. */

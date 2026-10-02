@@ -2,7 +2,8 @@
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
  * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
  * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort, rapportens val och vad Översikt
- * döljer (ringar och kort), senast stängda milstolpekortet och dolda näringsetiketter. Lagras i `settings`
+ * döljer (ringar och kort), senast stängda milstolpekortet, dolda näringsetiketter och om namnet på
+ * "Vad ska jag äta?"-ikonen visats. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
@@ -39,6 +40,8 @@ export interface Preferences {
   milestoneCardDismissed: string | null;
   /** Näringsetiketter som inte visas (Inställningar → Visning). Alla visas som standard. */
   claimsHidden: readonly ClaimId[];
+  /** Namnet på "Vad ska jag äta?"-ikonen (Mat → Dag) har visats första gången. */
+  whatToEatTipSeen: boolean;
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -58,6 +61,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   overviewHidden: [],
   milestoneCardDismissed: null,
   claimsHidden: [],
+  whatToEatTipSeen: false,
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -94,6 +98,7 @@ export function parsePreferences(raw: unknown): Preferences {
     claimsHidden: Array.isArray(stored.claimsHidden)
       ? [...new Set(stored.claimsHidden.filter(isClaimId))]
       : [],
+    whatToEatTipSeen: stored.whatToEatTipSeen === true,
   };
 }
 
