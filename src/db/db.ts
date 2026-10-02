@@ -8,7 +8,15 @@ import {
 import type { NutrientKey } from '../data/nutrients.ts';
 import type { ActivityLevel, Sex } from '../lib/energy.ts';
 import type { DoseFrequency, InjectionSite } from '../lib/glp1.ts';
-import type { MealSlot, Nutrients } from '../lib/nutrition.ts';
+import {
+  defaultMealSlots,
+  moveEntries,
+  resolveEntryMeals,
+  sortMealSlots,
+  type MealId,
+  type MealSlot,
+} from '../lib/mealSlots.ts';
+import type { Nutrients } from '../lib/nutrition.ts';
 import {
   ensureSessions,
   isPhotoAngle,
@@ -21,7 +29,7 @@ import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 14;
+export const DB_VERSION = 15;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -237,7 +245,11 @@ export interface LoggedRecipe {
 export interface FoodLogEntry extends LoggedAmount {
   id: string;
   date: string;
-  meal: MealSlot;
+  /**
+   * Måltidens id i `mealSlots` (sedan v15; tidigare en fast måltid: frukost, lunch, middag,
+   * mellanmal – migreringen fördelar Mellanmål på mellanmålen efter loggtid).
+   */
+  meal: MealId;
   foodId: string;
   name: string;
   per100: Nutrients;
@@ -592,6 +604,11 @@ export interface ViktresanDB extends DBSchema {
     key: string;
     value: FoodOverride;
   };
+  /** Sedan v15. Dagens måltider (Inställningar → Måltider), nyckel = id. */
+  mealSlots: {
+    key: string;
+    value: MealSlot;
+  };
 }
 
 export type Database = IDBPDatabase<ViktresanDB>;
@@ -858,6 +875,23 @@ async function migrateToV14(tx: UpgradeTransaction): Promise<void> {
   await store.put(next, SETTING_PREFERENCES);
 }
 
+/**
+ * v14 → v15: egna måltider. Standardmåltiderna läggs in; Frukost, Lunch och Middag behåller
+ * sina id:n och Mellanmål-poster flyttas till mellanmålet vars tid ligger närmast loggtiden.
+ */
+async function migrateToV15(tx: UpgradeTransaction, migrateLog: boolean): Promise<void> {
+  const slots = defaultMealSlots(Date.now());
+  const store = tx.objectStore('mealSlots');
+  // Matloggen läses först när måltiderna är skrivna, dvs. efter v7-migreringens skrivningar
+  // (förfrågningarna i transaktionen körs i ordning) när en gammal databas uppgraderas i ett steg.
+  await Promise.all(slots.map((m) => store.put(m)));
+  if (!migrateLog) return;
+  const foodLog = tx.objectStore('foodLog');
+  const entries = await foodLog.getAll();
+  const moved = resolveEntryMeals(entries, slots).filter((e, i) => e !== entries[i]);
+  await Promise.all(moved.map((e) => foodLog.put(e)));
+}
+
 let dbPromise: Promise<Database> | null = null;
 
 /**
@@ -953,6 +987,12 @@ export function getDb(): Promise<Database> {
       if (oldVersion < 14) {
         // v14: Föreslå är borttagen – sparade "Inte intresserad"-förslag rensas ur inställningarna.
         if (oldVersion >= 1) void migrateToV14(transaction);
+      }
+      if (oldVersion < 15) {
+        // v15: egna måltider per dag. Ny store med standardmåltiderna; matloggens Mellanmål
+        // fördelas på mellanmålen efter loggtid (Frukost, Lunch och Middag har samma id).
+        db.createObjectStore('mealSlots', { keyPath: 'id' });
+        void migrateToV15(transaction, oldVersion >= 4);
       }
     },
     blocking() {
@@ -1178,6 +1218,53 @@ export async function listFoodLog(): Promise<FoodLogEntry[]> {
   const db = await getDb();
   const all = await db.getAllFromIndex('foodLog', 'by-date');
   return all.sort(byDateThenCreated);
+}
+
+/** Dagens måltider i listans ordning (standardmåltiderna om storen är tom). */
+export async function listMealSlots(): Promise<MealSlot[]> {
+  const db = await getDb();
+  const all = await db.getAll('mealSlots');
+  return all.length === 0 ? defaultMealSlots() : sortMealSlots(all);
+}
+
+/** Sparar måltider (ny, nytt namn/tid/typ eller ny ordning). */
+export async function putMealSlots(slots: readonly MealSlot[]): Promise<void> {
+  if (slots.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('mealSlots', 'readwrite');
+  await Promise.all(slots.map((m) => tx.store.put(m)));
+  await tx.done;
+}
+
+/**
+ * Tar bort en måltid och flyttar dess poster i matloggen till `targetId` – i en transaktion.
+ * Returnerar posterna som de var före flytten (för Ångra: `putMealSlots` + `putFoodLogEntries`).
+ */
+export async function deleteMealSlot(
+  id: MealId,
+  targetId: MealId,
+  now = Date.now(),
+): Promise<FoodLogEntry[]> {
+  if (id === targetId) throw new Error('Måltiden kan inte flyttas till sig själv.');
+  const db = await getDb();
+  const tx = db.transaction(['mealSlots', 'foodLog'], 'readwrite');
+  const slots = tx.objectStore('mealSlots');
+  const foodLog = tx.objectStore('foodLog');
+  if (!(await slots.get(targetId))) throw new Error('Måltiden att flytta till finns inte.');
+  const all = await foodLog.getAll();
+  const moved = moveEntries(all, id, targetId, now);
+  await Promise.all([slots.delete(id), ...moved.map((e) => foodLog.put(e))]);
+  await tx.done;
+  if (moved.length > 0) notifyChange();
+  return all.filter((e) => e.meal === id);
+}
+
+/** Antal poster i matloggen per måltid. */
+export async function countFoodLogByMeal(): Promise<Map<MealId, number>> {
+  const db = await getDb();
+  const counts = new Map<MealId, number>();
+  for (const e of await db.getAll('foodLog')) counts.set(e.meal, (counts.get(e.meal) ?? 0) + 1);
+  return counts;
 }
 
 export async function listFavorites(): Promise<Favorite[]> {
@@ -1601,6 +1688,8 @@ export interface Snapshot {
   supplementLog: SupplementIntake[];
   recipes: Recipe[];
   foodOverrides: FoodOverride[];
+  /** Dagens måltider. Tom = saknas i filen (säkerhetskopior före version 12): befintliga behålls. */
+  mealSlots: MealSlot[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -1627,6 +1716,7 @@ export function emptySnapshot(): Snapshot {
     supplementLog: [],
     recipes: [],
     foodOverrides: [],
+    mealSlots: [],
   };
 }
 
@@ -1654,6 +1744,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     supplementLog,
     recipes,
     foodOverrides,
+    mealSlots,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -1677,6 +1768,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listSupplementLog(),
     listRecipes(),
     listFoodOverrides(),
+    listMealSlots(),
   ]);
   return {
     profile,
@@ -1702,6 +1794,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     supplementLog,
     recipes,
     foodOverrides,
+    mealSlots,
   };
 }
 
@@ -1738,10 +1831,36 @@ const DATA_STORES = [
   'foodOverrides',
 ] as const;
 
+/**
+ * Måltiderna efter importen: filens (ersätt) eller filens ovanpå befintliga (slå ihop, senast
+ * ändrad vinner); saknas de i filen behålls befintliga. Aldrig tomt.
+ */
+function importedMealSlots(
+  existing: readonly MealSlot[],
+  incoming: readonly MealSlot[],
+  mode: ImportMode,
+): MealSlot[] {
+  if (incoming.length === 0) return existing.length > 0 ? [...existing] : defaultMealSlots();
+  if (mode === 'replace') return [...incoming];
+  const byId = new Map(existing.map((m) => [m.id, m]));
+  for (const m of incoming) {
+    const current = byId.get(m.id);
+    if (!current || changedAt(m) > changedAt(current)) byId.set(m.id, m);
+  }
+  return [...byId.values()];
+}
+
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
 export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction([...DATA_STORES], 'readwrite');
+  const tx = db.transaction([...DATA_STORES, 'mealSlots'], 'readwrite');
+  // Måltiderna först: importerade poster vars måltid saknas (gamla Mellanmål, borttagen måltid)
+  // flyttas till en befintlig måltid efter loggtid.
+  const mealSlots = tx.objectStore('mealSlots');
+  const slots = importedMealSlots(await mealSlots.getAll(), snapshot.mealSlots, mode);
+  if (mode === 'replace') await mealSlots.clear();
+  await Promise.all(slots.map((m) => mealSlots.put(m)));
+  const importedLog = resolveEntryMeals(snapshot.foodLog, slots);
   const weights = tx.objectStore('weights');
   const waist = tx.objectStore('waist');
   const steps = tx.objectStore('steps');
@@ -1775,7 +1894,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.photos.map((p) => photos.put(p)),
       ...snapshot.foods.map((f) => foods.put(f)),
       ...snapshot.meals.map((m) => meals.put(m)),
-      ...snapshot.foodLog.map((e) => foodLog.put(e)),
+      ...importedLog.map((e) => foodLog.put(e)),
       ...snapshot.favorites.map((f) => favorites.put(f)),
       ...snapshot.water.map((w) => water.put(w)),
       ...snapshot.workouts.map((w) => workouts.put(w)),
@@ -1820,7 +1939,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       const existing = await meals.get(m.id);
       if (!existing || changedAt(m) > changedAt(existing)) await meals.put(m);
     }
-    for (const e of snapshot.foodLog) {
+    for (const e of importedLog) {
       const existing = await foodLog.get(e.id);
       if (!existing || changedAt(e) > changedAt(existing)) await foodLog.put(e);
     }

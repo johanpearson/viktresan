@@ -7,18 +7,11 @@ import { addDays, toDayNumber } from './dates.ts';
 import { mealFoodId } from './foodCatalog.ts';
 import { recipeParts } from './recipes.ts';
 import { formatDayMonth } from './format.ts';
-import {
-  MEAL_SLOTS,
-  defaultMealSlot,
-  mealLabel,
-  scaleNutrients,
-  totalOf,
-  type MealSlot,
-  type Nutrients,
-} from './nutrition.ts';
+import { resolveMealId, sortMealSlots, type MealId, type MealSlot } from './mealSlots.ts';
+import { scaleNutrients, totalOf, type Nutrients } from './nutrition.ts';
 
 export interface MealSection {
-  slot: MealSlot;
+  slot: MealId;
   label: string;
   /** Postarna i den ordning de loggades. */
   entries: FoodLogEntry[];
@@ -26,17 +19,26 @@ export interface MealSection {
   count: number;
 }
 
-/** En sektion per måltid (alltid alla fyra, i dygnsordning), även tomma. */
-export function mealSections(entries: readonly FoodLogEntry[]): MealSection[] {
-  return MEAL_SLOTS.map(({ id, label }) => {
-    const inSlot = entries.filter((e) => e.meal === id).sort((a, b) => a.createdAt - b.createdAt);
-    return { slot: id, label, entries: inSlot, totals: totalOf(inSlot), count: inSlot.length };
+/**
+ * En sektion per måltid i inställningens ordning, även tomma. En post vars måltid saknas
+ * (t.ex. efter en import) visas i måltiden närmast dess loggtid i stället för att försvinna.
+ */
+export function mealSections(
+  entries: readonly FoodLogEntry[],
+  slots: readonly MealSlot[],
+): MealSection[] {
+  return sortMealSlots(slots).map(({ id, name }) => {
+    const inSlot = entries
+      .filter((e) => resolveMealId(slots, e.meal, e.createdAt) === id)
+      .sort((a, b) => a.createdAt - b.createdAt);
+    return {
+      slot: id,
+      label: name,
+      entries: inSlot,
+      totals: totalOf(inSlot),
+      count: inSlot.length,
+    };
   });
-}
-
-/** Måltiden som pågår vid klockslaget – den är utfälld som standard. */
-export function currentMealSlot(now: Date = new Date()): MealSlot {
-  return defaultMealSlot(now.getHours());
 }
 
 export function entryCountText(count: number): string {
@@ -106,8 +108,8 @@ export function dayLabel(date: string, today: string): string {
 }
 
 /** Förifyllt namn när en måltid sparas som egen måltid: "Frukost 26 sep". */
-export function savedMealName(slot: MealSlot, date: string): string {
-  return `${mealLabel(slot)} ${formatDayMonth(date)}`;
+export function savedMealName(mealName: string, date: string): string {
+  return `${mealName} ${formatDayMonth(date)}`;
 }
 
 /**

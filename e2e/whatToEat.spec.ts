@@ -175,7 +175,9 @@ test('gapraden döljs när allt är inom 10 % av målet och för andra dagar än
   // Vänta tills fiberdatan är läst (dagens fiber i makroraden) innan gapraden bedöms.
   await expect(summary.getByTestId('macros')).toContainText('24 g');
   await expect(summary.getByTestId('gap-line')).toHaveCount(0);
-  await expect(summary.getByRole('button', { name: 'Vad ska jag äta?' })).toBeVisible();
+  // Ikonknappen i datumraden, ingen knapp i summeringen.
+  await expect(page.getByTestId('what-to-eat')).toBeVisible();
+  await expect(summary.getByRole('button', { name: 'Vad ska jag äta?' })).toHaveCount(0);
 
   // Utan stora gap: chipsen i vanlig ordning.
   await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
@@ -190,7 +192,49 @@ test('gapraden döljs när allt är inom 10 % av målet och för andra dagar än
   await page.getByRole('button', { name: 'Föregående dag' }).tap();
   await expect(summary.getByTestId('intake')).toContainText('662');
   await expect(summary.getByTestId('gap-line')).toHaveCount(0);
-  await expect(summary.getByRole('button', { name: 'Vad ska jag äta?' })).toHaveCount(0);
+  await expect(page.getByTestId('what-to-eat')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('ikonknappen "Vad ska jag äta?": i datumraden bredvid ⋯, namnet första gången och vid långtryck', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await open(page, [...HISTORY, ...TODAYS_GAPS]);
+  const button = page.getByRole('button', { name: 'Vad ska jag äta?', exact: true });
+  const tip = page.getByTestId('what-to-eat-tip');
+
+  // I datumraden, bredvid ⋯, minst 44 px tryckyta.
+  const head = page.locator('.food-day-head');
+  await expect(head.getByTestId('what-to-eat')).toBeVisible();
+  const box = await button.boundingBox();
+  const menu = await head.getByRole('button', { name: 'Fler val för dagen' }).boundingBox();
+  if (!box || !menu) throw new Error('Knapparna saknas');
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  expect(Math.abs(box.y + box.height / 2 - (menu.y + menu.height / 2))).toBeLessThan(2);
+  expect(box.x + box.width).toBeLessThanOrEqual(menu.x + 0.5);
+
+  // Första gången: en kort tooltip med namnet, som försvinner av sig själv.
+  await expect(tip).toHaveText('Vad ska jag äta?');
+  await expect(tip).toHaveCount(0, { timeout: 6000 });
+  // Visas bara en gång.
+  await page.reload();
+  await expect(button).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(tip).toHaveCount(0);
+
+  // Långtryck visar namnet utan att öppna AI-flödet.
+  await button.dispatchEvent('pointerdown', { pointerId: 1, isPrimary: true, button: 0 });
+  await page.waitForTimeout(700);
+  await button.dispatchEvent('pointerup', { pointerId: 1, isPrimary: true, button: 0 });
+  await button.dispatchEvent('click');
+  await expect(tip).toHaveText('Vad ska jag äta?');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Ett vanligt tryck öppnar AI-flödet för pågående måltid.
+  await button.tap();
+  await expect(page.getByRole('dialog', { name: 'Vad ska jag äta till lunch?' })).toBeVisible();
   expect(errors).toEqual([]);
 });
 

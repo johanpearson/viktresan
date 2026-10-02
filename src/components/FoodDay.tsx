@@ -13,11 +13,13 @@ import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { weekBudget } from '../lib/weekBudget.ts';
 import { catalogFiberSource, fiberOfEntries, type FiberGoal } from '../lib/fiber.ts';
-import { currentMealSlot, savedMealName } from '../lib/foodDay.ts';
+import { savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import { formatDate, formatDayMonth } from '../lib/format.ts';
 import { haptic } from '../lib/haptics.ts';
-import { dailyIntake, mealLabel, totalOf, type MealSlot } from '../lib/nutrition.ts';
+import { currentMealId, mealName, resolveMealId, type MealId } from '../lib/mealSlots.ts';
+import { dailyIntake, totalOf } from '../lib/nutrition.ts';
+import { setPreference, usePreferences } from '../lib/preferences.ts';
 import type { FoodUnit } from '../lib/units.ts';
 import { gapClaims, gapText, largeGaps, whatToEatSubject } from '../lib/whatToEat.ts';
 import { AskAi } from './AskAi.tsx';
@@ -26,12 +28,14 @@ import { DateBar } from './DateBar.tsx';
 import { DaySummary } from './DaySummary.tsx';
 import { FoodLogForm } from './FoodLogForm.tsx';
 import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
+import { IconTipButton } from './IconTipButton.tsx';
 import { ListRow } from './ListRow.tsx';
 import { MealAnalysisView } from './MealAnalysisView.tsx';
 import { MealSections } from './MealSections.tsx';
 import { QuickLogForm } from './QuickLogForm.tsx';
 import { SaveMealForm } from './SaveMealForm.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
+import { SparklesIcon } from './SparklesIcon.tsx';
 import { Toast } from './Toast.tsx';
 
 interface FoodDayProps {
@@ -55,7 +59,7 @@ interface FoodDayProps {
 }
 
 /** Vad menyn, analysen och "Fråga AI" gäller: en måltid eller hela dagen. */
-type Target = { kind: 'meal'; slot: MealSlot } | { kind: 'day' };
+type Target = { kind: 'meal'; slot: MealId } | { kind: 'day' };
 
 interface AnalysisState {
   target: Target;
@@ -63,7 +67,7 @@ interface AnalysisState {
 }
 
 interface Picker {
-  meal: MealSlot | null;
+  meal: MealId | null;
   scan: boolean;
   focus: boolean;
   /** Streckkod att slå upp direkt (länk från Tillskott). */
@@ -120,12 +124,19 @@ export function FoodDay({
   const [editing, setEditing] = useState<FoodLogEntry | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [menu, setMenu] = useState<Target | null>(null);
-  const [saving, setSaving] = useState<MealSlot | null>(null);
+  const [saving, setSaving] = useState<MealId | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null);
   // "Vad ska jag äta?": måltiden prompten byggs för.
-  const [eat, setEat] = useState<MealSlot | null>(null);
+  const [eat, setEat] = useState<MealId | null>(null);
+  const { mealSlots } = foodData;
   // Pågående måltid (efter klockslaget) är utfälld från start, övriga ihopfällda.
-  const [open, setOpen] = useState<ReadonlySet<MealSlot>>(() => new Set([currentMealSlot()]));
+  const [open, setOpen] = useState<ReadonlySet<MealId>>(
+    () => new Set([currentMealId(mealSlots)].filter((id) => id !== null)),
+  );
+  const { loaded: prefsLoaded, prefs } = usePreferences();
+  const markTipSeen = useCallback(() => {
+    void setPreference('whatToEatTipSeen', true);
+  }, []);
   const [compact, setCompact] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
@@ -205,7 +216,7 @@ export function FoodDay({
     setToast(null);
   }, []);
 
-  function expand(slot: MealSlot) {
+  function expand(slot: MealId) {
     setOpen((prev) => new Set(prev).add(slot));
   }
 
@@ -218,7 +229,7 @@ export function FoodDay({
   async function undo(entry: FoodLogEntry) {
     await putFoodLog(entry);
     await reloadLog();
-    expand(entry.meal);
+    expand(resolveMealId(mealSlots, entry.meal, entry.createdAt));
     setToast({ message: `Ångrade – ${entry.name} är tillbaka.` });
   }
 
@@ -238,13 +249,17 @@ export function FoodDay({
   }
 
   function entriesFor(target: Target): FoodLogEntry[] {
-    return target.kind === 'day' ? entries : entries.filter((e) => e.meal === target.slot);
+    return target.kind === 'day' ? entries : entriesIn(target.slot);
+  }
+
+  function entriesIn(slot: MealId): FoodLogEntry[] {
+    return entries.filter((e) => resolveMealId(mealSlots, e.meal, e.createdAt) === slot);
   }
 
   function targetTitle(target: Target): string {
     return target.kind === 'day'
       ? `dagen ${formatDayMonth(date)}`
-      : `${mealLabel(target.slot).toLowerCase()} ${formatDayMonth(date)}`;
+      : `${mealName(mealSlots, target.slot).toLowerCase()} ${formatDayMonth(date)}`;
   }
 
   const analysisEntries = analysis ? entriesFor(analysis.target) : [];
@@ -253,6 +268,19 @@ export function FoodDay({
       <div className="food-top" ref={summaryRef}>
         <div className="food-day-head">
           <DateBar date={date} today={today} onChange={setDate} />
+          {isToday && (
+            <IconTipButton
+              label="Vad ska jag äta?"
+              icon={<SparklesIcon />}
+              className="what-to-eat-button"
+              testId="what-to-eat"
+              showTip={prefsLoaded && !prefs.whatToEatTipSeen}
+              onTipShown={markTipSeen}
+              onClick={() => {
+                setEat(currentMealId(mealSlots));
+              }}
+            />
+          )}
           {entries.length > 0 && (
             <button
               type="button"
@@ -276,13 +304,6 @@ export function FoodDay({
           when={when}
           week={week}
           gapText={gapText(gaps)}
-          onWhatToEat={
-            isToday
-              ? () => {
-                  setEat(currentMealSlot());
-                }
-              : undefined
-          }
         />
       </div>
       <div className="food-sticky" data-compact={compact ? 'true' : 'false'}>
@@ -321,6 +342,7 @@ export function FoodDay({
       <MealSections
         entries={entries}
         meals={foodData.meals}
+        mealSlots={mealSlots}
         open={open}
         favoriteIds={favoriteIds}
         fiberSource={fiberSource}
@@ -376,6 +398,7 @@ export function FoodDay({
               key={editing.id}
               initial={quickValuesOf({ ...editing, id: editing.foodId })}
               editing={editing}
+              mealSlots={mealSlots}
               date={date}
               favoriteIds={favoriteIds}
               onToggleFavorite={(foodId) => void toggleFavorite(foodId)}
@@ -403,6 +426,7 @@ export function FoodDay({
               customUnits={customUnits.get(editing.foodId) ?? NO_UNITS}
               last={null}
               editing={editing}
+              mealSlots={mealSlots}
               date={date}
               favorite={favoriteIds.has(editing.foodId)}
               onToggleFavorite={() => void toggleFavorite(editing.foodId)}
@@ -433,7 +457,7 @@ export function FoodDay({
       )}
       {menu && (
         <BottomSheet
-          title={menu.kind === 'day' ? 'Dagen' : mealLabel(menu.slot)}
+          title={menu.kind === 'day' ? 'Dagen' : mealName(mealSlots, menu.slot)}
           onClose={() => {
             setMenu(null);
           }}
@@ -483,8 +507,8 @@ export function FoodDay({
           }}
         >
           <SaveMealForm
-            defaultName={savedMealName(saving, date)}
-            entries={entries.filter((e) => e.meal === saving)}
+            defaultName={savedMealName(mealName(mealSlots, saving), date)}
+            entries={entriesIn(saving)}
             meals={foodData.meals}
             onSaved={(meal) => {
               setSaving(null);
@@ -542,8 +566,12 @@ export function FoodDay({
                 <AskAi
                   subject={
                     analysis.target.kind === 'day'
-                      ? daySubject(analysisEntries, date)
-                      : mealSubject(analysisEntries, analysis.target.slot, date)
+                      ? daySubject(analysisEntries, date, mealSlots)
+                      : mealSubject(
+                          analysisEntries,
+                          mealName(mealSlots, analysis.target.slot),
+                          date,
+                        )
                   }
                   context={{ ...aiContext, dayIntake: totals }}
                 />
@@ -557,14 +585,20 @@ export function FoodDay({
       {eat && (
         <BottomSheet
           full
-          title={`Vad ska jag äta till ${mealLabel(eat).toLowerCase()}?`}
+          title={`Vad ska jag äta till ${mealName(mealSlots, eat).toLowerCase()}?`}
           onClose={() => {
             setEat(null);
           }}
         >
           {aiContext ? (
             <AskAi
-              subject={whatToEatSubject({ meal: eat, today, log: foodLog, eaten, goals })}
+              subject={whatToEatSubject({
+                meal: { id: eat, name: mealName(mealSlots, eat) },
+                today,
+                log: foodLog,
+                eaten,
+                goals,
+              })}
               context={aiContext}
             />
           ) : (

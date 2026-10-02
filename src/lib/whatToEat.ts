@@ -8,7 +8,8 @@ import type { FoodLogEntry } from '../db/db.ts';
 import type { AiSubject } from './aiPrompt.ts';
 import { addDays } from './dates.ts';
 import { formatInt } from './format.ts';
-import { scaleNutrients, type MealSlot } from './nutrition.ts';
+import type { MealId, MealSlot } from './mealSlots.ts';
+import { scaleNutrients } from './nutrition.ts';
 
 /** Ett gap visas när mer än så här stor andel av målet återstår. */
 export const GAP_SHARE = 0.1;
@@ -93,7 +94,7 @@ function median(values: readonly number[]): number {
  */
 export function typicalMealKcal(
   log: readonly FoodLogEntry[],
-  slot: MealSlot,
+  slot: MealId,
   today: string,
 ): number | null {
   const byDate = new Map<string, number>();
@@ -131,7 +132,8 @@ export function commonFoods(
 
 /** Underlaget till "Vad ska jag äta?": måltiden, det som är kvar idag, typisk portion och vanliga livsmedel. */
 export function whatToEatSubject(input: {
-  meal: MealSlot;
+  /** Måltiden ur inställningen – namnet i prompten, id:t för typisk kcal. */
+  meal: Pick<MealSlot, 'id' | 'name'>;
   today: string;
   log: readonly FoodLogEntry[];
   eaten: Eaten;
@@ -140,14 +142,14 @@ export function whatToEatSubject(input: {
   const { meal, today, log, eaten, goals } = input;
   return {
     kind: 'eat',
-    meal,
+    meal: meal.name,
     remaining: {
       kcal: goals.targetKcal === null ? null : goals.targetKcal - eaten.kcal,
       proteinG: goals.proteinGoalG === null ? null : goals.proteinGoalG - eaten.proteinG,
       fiberG:
         goals.fiberGoalG === null || eaten.fiberG === null ? null : goals.fiberGoalG - eaten.fiberG,
     },
-    typicalKcal: typicalMealKcal(log, meal, today),
+    typicalKcal: typicalMealKcal(log, meal.id, today),
     homeFoods: commonFoods(log, today),
   };
 }

@@ -188,9 +188,9 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   await expect(star).toHaveAttribute('aria-pressed', 'true');
   // En banan ≈ 120 g.
   await expect(page.getByLabel('Mängd (st)')).toHaveValue('1');
-  await logAmount(page, '1', 'Mellanmål');
-  await expect(page.getByTestId('meal-mellanmal')).toContainText('1 st (120 g)');
-  await expect(page.getByTestId('meal-mellanmal')).toContainText('Banan');
+  await logAmount(page, '1', 'Eftermiddagsmellanmål');
+  await expect(page.getByTestId('meal-eftermiddag')).toContainText('1 st (120 g)');
+  await expect(page.getByTestId('meal-eftermiddag')).toContainText('Banan');
   await expect(intake).toContainText('294');
 
   // Snabbval i sök-sheeten: senaste (nyast först) och favoriter.
@@ -348,10 +348,10 @@ test('skapa eget livsmedel och måltid och logga dem', async ({ page }) => {
   await chooseUnit(page, 'g');
   await expect(page.getByLabel('Mängd (g)')).toHaveValue('120');
   await chooseUnit(page, 'bulle');
-  await logAmount(page, '1,5', 'Mellanmål');
+  await logAmount(page, '1,5', 'Eftermiddagsmellanmål');
   // 346 + 90 g × 3,8 = 346 + 342.
   await expect(page.getByTestId('intake')).toContainText('688');
-  await expect(page.getByTestId('meal-mellanmal')).toContainText('1,5 bulle (90 g)');
+  await expect(page.getByTestId('meal-eftermiddag')).toContainText('1,5 bulle (90 g)');
 
   const stored = await dump(page);
   expect(stored.meals).toEqual([
@@ -842,7 +842,7 @@ test('måltider: logga i två, fäll ihop och ut, redigera i sheet, svep bort oc
   const intake = page.getByTestId('intake');
 
   // Tomma måltider är smala rader med bara +.
-  for (const slot of ['frukost', 'lunch', 'middag', 'mellanmal']) {
+  for (const slot of ['frukost', 'formiddag', 'lunch', 'eftermiddag', 'middag', 'kvall']) {
     await expect(page.getByTestId(`meal-${slot}`).getByRole('heading')).not.toContainText('kcal');
   }
 
@@ -992,7 +992,7 @@ test('dagsvyn med 15 poster ryms inom en skärmhöjds scroll när måltiderna ä
 }) => {
   const errors = collectErrors(page);
   await page.clock.setFixedTime(todayAt(15));
-  const meals = ['frukost', 'lunch', 'middag', 'mellanmal'];
+  const meals = ['frukost', 'lunch', 'middag', 'eftermiddag'];
   const foodLog = Array.from({ length: 15 }, (_, i) => ({
     id: `f${String(i)}`,
     date: isoDaysFromToday(0),
@@ -1015,8 +1015,8 @@ test('dagsvyn med 15 poster ryms inom en skärmhöjds scroll när måltiderna ä
   await page.goto('./#/mat');
   await expect(page.getByTestId('intake')).toContainText('2 250');
 
-  // Kl. 15 pågår mellanmålet: utfällt, med sina tre poster.
-  await expect(mealToggle(page, 'mellanmal')).toHaveAttribute('aria-expanded', 'true');
+  // Kl. 15 pågår eftermiddagsmellanmålet: utfällt, med sina tre poster.
+  await expect(mealToggle(page, 'eftermiddag')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('food-entry')).toHaveCount(3);
   await expect(mealToggle(page, 'frukost')).toHaveText(/4 poster\s*600 kcal/);
 

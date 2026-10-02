@@ -56,7 +56,7 @@ const DATA = {
     {
       id: 'f1',
       date: isoDaysFromToday(-1),
-      meal: 'mellanmal',
+      meal: 'eftermiddag',
       foodId: 'maltid:meal1',
       name: 'Fika',
       amount: 1,

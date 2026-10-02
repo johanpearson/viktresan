@@ -11,7 +11,8 @@
 import type { FoodLogEntry } from '../db/db.ts';
 import { normalize, type FoodItem } from './foodSearch.ts';
 import { formatGrams, formatKcal, parseDecimal } from './format.ts';
-import type { MealSlot, Nutrients } from './nutrition.ts';
+import type { MealId } from './mealSlots.ts';
+import type { Nutrients } from './nutrition.ts';
 import { PORTION_UNIT } from './recipes.ts';
 import type { Parsed } from './validation.ts';
 
@@ -74,7 +75,7 @@ export function quickEntry(
   options: {
     id: string;
     date: string;
-    meal: MealSlot;
+    meal: MealId;
     now: number;
     editing?: FoodLogEntry | null;
   },

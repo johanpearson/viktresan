@@ -509,9 +509,10 @@ for (const theme of ['light', 'dark'] as const) {
     test('paneler: Inställningar', async ({ page }) => {
       await open(page, '#/installningar');
       const sheet = page.getByRole('dialog');
-      for (const id of ['profil', 'funktioner', 'sakerhetskopia'] as const) {
+      for (const id of ['profil', 'maltider', 'funktioner', 'sakerhetskopia'] as const) {
         await page.getByTestId(`settings-${id}`).getByRole('button').tap();
         await expect(sheet).toBeVisible();
+        if (id === 'maltider') await expect(sheet.getByTestId('meal-slots')).toBeVisible();
         await shot(page, `${theme}-sheet-installningar-${id}`, false);
         await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
         await expect(sheet).toBeHidden();
@@ -583,7 +584,7 @@ for (const theme of ['light', 'dark'] as const) {
     test('måltidsrubriker: långa och korta namn och kcal på Pixel 7 och 360 px', async ({
       page,
     }) => {
-      // Mellanmål 12 poster 1 234 kcal, Lunch 85 kcal, tom Middag; egen databas (inte VISUAL_DATA).
+      // Eftermiddagsmellanmål 12 poster 1 234 kcal, Lunch 85 kcal, tom Middag; egen databas (inte VISUAL_DATA).
       await page.clock.setFixedTime(new Date(FROZEN_NOW));
       await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
       // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.
@@ -595,10 +596,10 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto('./#/mat');
       await page.reload();
       const sections = page.locator('.meal-sections');
-      await expect(page.getByTestId('meal-mellanmal').getByTestId('meal-kcal')).toHaveText(
+      await expect(page.getByTestId('meal-eftermiddag').getByTestId('meal-kcal')).toHaveText(
         '1 234 kcal',
       );
-      await expect(page.getByTestId('meal-mellanmal').getByTestId('fiber')).toBeVisible();
+      await expect(page.getByTestId('meal-eftermiddag').getByTestId('fiber')).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       await shot(page, `${theme}-mat-maltider-pixel7`);
       await page.setViewportSize({ width: 360, height: 800 });

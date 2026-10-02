@@ -26,7 +26,7 @@ import {
 import { applyOverride, overrideMap } from '../lib/foodNutrition.ts';
 import { buildIndex, searchIndex, type FoodItem } from '../lib/foodSearch.ts';
 import type { Livsmedel } from '../lib/livsmedel.ts';
-import { mealLabel, type MealSlot } from '../lib/nutrition.ts';
+import { mealName, type MealId } from '../lib/mealSlots.ts';
 import { usePreferences } from '../lib/preferences.ts';
 import { quickValuesOf, type QuickValues } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
@@ -59,8 +59,8 @@ export type PickerMode =
       kind: 'log';
       date: string;
       /** Förvald måltid (tryck på + i en måltid), annars efter klockslaget. */
-      meal: MealSlot | null;
-      onLogged: (message: string, meal: MealSlot) => void;
+      meal: MealId | null;
+      onLogged: (message: string, meal: MealId) => void;
     }
   | {
       kind: 'ingredient';
@@ -319,7 +319,7 @@ export function FoodPicker({
     (mode.kind === 'ingredient'
       ? 'Lägg till ingrediens'
       : mode.meal
-        ? `Lägg till i ${mealLabel(mode.meal).toLowerCase()}`
+        ? `Lägg till i ${mealName(foodData.mealSlots, mode.meal).toLowerCase()}`
         : 'Logga mat');
 
   let body;
@@ -330,6 +330,7 @@ export function FoodPicker({
         editing={null}
         date={mode.date}
         defaultMeal={mode.meal}
+        mealSlots={foodData.mealSlots}
         favoriteIds={favoriteIds}
         onToggleFavorite={(foodId) => void toggleFavorite(foodId)}
         onSaved={(message, meal) => {
@@ -385,6 +386,7 @@ export function FoodPicker({
         editing={null}
         date={mode.kind === 'log' ? mode.date : ''}
         defaultMeal={mode.kind === 'log' ? mode.meal : null}
+        mealSlots={foodData.mealSlots}
         favorite={favoriteIds.has(selected.id)}
         onToggleFavorite={() => void toggleFavorite(selected.id)}
         onUnitsChange={async (units) => {

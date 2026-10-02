@@ -3,9 +3,7 @@ import {
   averageKcal,
   combineIngredients,
   dailyIntake,
-  defaultMealSlot,
   macroShares,
-  mealLabel,
   rollingAverageKcal,
   scaleNutrients,
   totalOf,
@@ -123,19 +121,5 @@ describe('averageKcal', () => {
 
   it('null utan data i fönstret', () => {
     expect(averageKcal([day('2025-12-01', 2000)], '2026-01-08')).toBeNull();
-  });
-});
-
-describe('måltider', () => {
-  it('väljer måltid efter klockslag', () => {
-    expect(defaultMealSlot(7)).toBe('frukost');
-    expect(defaultMealSlot(12)).toBe('lunch');
-    expect(defaultMealSlot(15)).toBe('mellanmal');
-    expect(defaultMealSlot(18)).toBe('middag');
-    expect(defaultMealSlot(23)).toBe('mellanmal');
-  });
-
-  it('har svenska etiketter', () => {
-    expect(mealLabel('mellanmal')).toBe('Mellanmål');
   });
 });

@@ -4,6 +4,7 @@ import {
   listFavorites,
   listFoodOverrides,
   listFoods,
+  listMealSlots,
   listMeals,
   listRecipes,
   type CustomUnits,
@@ -14,6 +15,7 @@ import {
   type StoredFood,
 } from '../db/db.ts';
 import { applyOverrides, overrideMap } from './foodNutrition.ts';
+import { defaultMealSlots, type MealSlot } from './mealSlots.ts';
 import { loadLivsmedel, type Livsmedel } from './livsmedel.ts';
 
 export interface FoodData {
@@ -28,6 +30,8 @@ export interface FoodData {
    * `livsmedel` från hooken; för `foods` används `storedItems` (foodCatalog.ts).
    */
   overrides: FoodOverride[];
+  /** Dagens måltider (Inställningar → Måltider) i listans ordning. */
+  mealSlots: MealSlot[];
 }
 
 const EMPTY: FoodData = {
@@ -37,6 +41,7 @@ const EMPTY: FoodData = {
   foodUnits: [],
   recipes: [],
   overrides: [],
+  mealSlots: defaultMealSlots(),
 };
 
 /**
@@ -54,15 +59,18 @@ export function useFoodData(): {
 
   const load = useCallback(async (): Promise<FoodData> => {
     try {
-      const [foods, meals, favorites, foodUnits, recipes, overrides] = await Promise.all([
-        listFoods(),
-        listMeals(),
-        listFavorites(),
-        listCustomUnits(),
-        listRecipes(),
-        listFoodOverrides(),
-      ]);
-      return { foods, meals, favorites, foodUnits, recipes, overrides };
+      const [foods, meals, favorites, foodUnits, recipes, overrides, mealSlots] = await Promise.all(
+        [
+          listFoods(),
+          listMeals(),
+          listFavorites(),
+          listCustomUnits(),
+          listRecipes(),
+          listFoodOverrides(),
+          listMealSlots(),
+        ],
+      );
+      return { foods, meals, favorites, foodUnits, recipes, overrides, mealSlots };
     } catch {
       return EMPTY;
     }

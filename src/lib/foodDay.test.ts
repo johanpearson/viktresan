@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FoodLogEntry, SavedMeal } from '../db/db.ts';
+import { defaultMealSlots } from './mealSlots.ts';
 import {
-  currentMealSlot,
   dayLabel,
   entriesToMealItems,
   entryCountText,
@@ -12,6 +12,7 @@ import {
 
 const oats = { kcal: 370, proteinG: 13, carbsG: 59, fatG: 7 };
 const milk = { kcal: 60, proteinG: 3.5, carbsG: 4.8, fatG: 3 };
+const SLOTS = defaultMealSlots();
 
 function entry(over: Partial<FoodLogEntry> & Pick<FoodLogEntry, 'id' | 'meal'>): FoodLogEntry {
   return {
@@ -29,13 +30,30 @@ function entry(over: Partial<FoodLogEntry> & Pick<FoodLogEntry, 'id' | 'meal'>):
 
 describe('mealSections', () => {
   it('summerar kcal, makron och antal poster per måltid', () => {
-    const sections = mealSections([
-      entry({ id: 'a', meal: 'frukost', grams: 60 }),
-      entry({ id: 'b', meal: 'frukost', foodId: 'lv:2', name: 'Mjölk', per100: milk, grams: 200 }),
-      entry({ id: 'c', meal: 'middag', grams: 100 }),
+    const sections = mealSections(
+      [
+        entry({ id: 'a', meal: 'frukost', grams: 60 }),
+        entry({
+          id: 'b',
+          meal: 'frukost',
+          foodId: 'lv:2',
+          name: 'Mjölk',
+          per100: milk,
+          grams: 200,
+        }),
+        entry({ id: 'c', meal: 'middag', grams: 100 }),
+      ],
+      SLOTS,
+    );
+    expect(sections.map((s) => s.slot)).toEqual([
+      'frukost',
+      'formiddag',
+      'lunch',
+      'eftermiddag',
+      'middag',
+      'kvall',
     ]);
-    expect(sections.map((s) => s.slot)).toEqual(['frukost', 'lunch', 'middag', 'mellanmal']);
-    const [frukost, lunch, middag] = sections;
+    const [frukost, , lunch, , middag] = sections;
     // 60 g × 3,7 + 200 g × 0,6 = 222 + 120.
     expect(frukost?.totals.kcal).toBeCloseTo(342);
     expect(frukost?.totals.proteinG).toBeCloseTo(7.8 + 7);
@@ -45,22 +63,44 @@ describe('mealSections', () => {
   });
 
   it('listar posterna i den ordning de loggades', () => {
-    const [frukost] = mealSections([
-      entry({ id: 'sen', meal: 'frukost', createdAt: 30 }),
-      entry({ id: 'tidig', meal: 'frukost', createdAt: 10 }),
-    ]);
+    const [frukost] = mealSections(
+      [
+        entry({ id: 'sen', meal: 'frukost', createdAt: 30 }),
+        entry({ id: 'tidig', meal: 'frukost', createdAt: 10 }),
+      ],
+      SLOTS,
+    );
     expect(frukost?.entries.map((e) => e.id)).toEqual(['tidig', 'sen']);
   });
-});
 
-describe('currentMealSlot', () => {
-  it('ger måltiden som pågår vid klockslaget', () => {
-    const at = (h: number, m = 0) => new Date(2026, 8, 27, h, m);
-    expect(currentMealSlot(at(7, 30))).toBe('frukost');
-    expect(currentMealSlot(at(12, 15))).toBe('lunch');
-    expect(currentMealSlot(at(18))).toBe('middag');
-    expect(currentMealSlot(at(15))).toBe('mellanmal');
-    expect(currentMealSlot(at(22))).toBe('mellanmal');
+  it('följer inställningens ordning och namn', () => {
+    const slots = [
+      {
+        id: 'b',
+        name: 'Sen lunch',
+        time: '14:00',
+        kind: 'huvudmal' as const,
+        order: 1,
+        createdAt: 0,
+      },
+      {
+        id: 'a',
+        name: 'Tidig frukost',
+        time: '05:30',
+        kind: 'huvudmal' as const,
+        order: 0,
+        createdAt: 0,
+      },
+    ];
+    expect(mealSections([], slots).map((s) => s.label)).toEqual(['Tidig frukost', 'Sen lunch']);
+  });
+
+  it('visar en post med en borttagen måltid i måltiden närmast loggtiden', () => {
+    const sections = mealSections(
+      [entry({ id: 'x', meal: 'borttagen', createdAt: new Date(2026, 8, 27, 20, 45).getTime() })],
+      SLOTS,
+    );
+    expect(sections.find((s) => s.count === 1)?.slot).toBe('kvall');
   });
 });
 
@@ -103,8 +143,8 @@ describe('texter', () => {
 
 describe('spara som egen måltid', () => {
   it('förifyller namnet med måltid och datum', () => {
-    expect(savedMealName('frukost', '2026-09-26')).toBe('Frukost 26 sep');
-    expect(savedMealName('mellanmal', '2026-01-03')).toBe('Mellanmål 3 jan');
+    expect(savedMealName('Frukost', '2026-09-26')).toBe('Frukost 26 sep');
+    expect(savedMealName('Kvällsmål', '2026-01-03')).toBe('Kvällsmål 3 jan');
   });
 
   it('kopierar posterna med mängd och enhet i loggordning', () => {

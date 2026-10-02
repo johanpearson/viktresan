@@ -1,7 +1,13 @@
 import { useState, type SyntheticEvent } from 'react';
 import { newId, putFoodLog, type FoodLogEntry } from '../db/db.ts';
 import { decimalInput, formatKcal } from '../lib/format.ts';
-import { MEAL_SLOTS, defaultMealSlot, mealLabel, type MealSlot } from '../lib/nutrition.ts';
+import {
+  initialMealId,
+  mealName,
+  sortMealSlots,
+  type MealId,
+  type MealSlot,
+} from '../lib/mealSlots.ts';
 import { parseQuick, quickEntry, quickFoodId, type QuickValues } from '../lib/quickLog.ts';
 
 interface QuickLogFormProps {
@@ -11,11 +17,13 @@ interface QuickLogFormProps {
   editing: FoodLogEntry | null;
   date: string;
   /** Förvald måltid för nya poster, annars efter klockslaget. */
-  defaultMeal?: MealSlot | null;
+  defaultMeal?: MealId | null;
+  /** Dagens måltider (Inställningar → Måltider). */
+  mealSlots: readonly MealSlot[];
   favoriteIds: ReadonlySet<string>;
   /** Växlar favorit för snabbloggen med de ifyllda värdena. */
   onToggleFavorite: (foodId: string) => void;
-  onSaved: (message: string, meal: MealSlot) => void;
+  onSaved: (message: string, meal: MealId) => void;
   /** Visar "Ta bort posten" längst ner (vid redigering). */
   onDelete?: () => void;
   onCancel: () => void;
@@ -30,6 +38,7 @@ export function QuickLogForm({
   editing,
   date,
   defaultMeal = null,
+  mealSlots,
   favoriteIds,
   onToggleFavorite,
   onSaved,
@@ -41,8 +50,8 @@ export function QuickLogForm({
   const [protein, setProtein] = useState(
     initial?.proteinG != null ? decimalInput(initial.proteinG) : '',
   );
-  const [meal, setMeal] = useState<MealSlot>(
-    () => editing?.meal ?? defaultMeal ?? defaultMealSlot(new Date().getHours()),
+  const [meal, setMeal] = useState<MealId>(() =>
+    initialMealId(mealSlots, editing ?? (defaultMeal ? { meal: defaultMeal } : null)),
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +75,7 @@ export function QuickLogForm({
     });
     await putFoodLog(entry);
     onSaved(
-      `${editing ? 'Uppdaterade' : 'Loggade'} ${entry.name} (≈ ${formatKcal(result.value.kcal)}) till ${mealLabel(meal).toLowerCase()}.`,
+      `${editing ? 'Uppdaterade' : 'Loggade'} ${entry.name} (≈ ${formatKcal(result.value.kcal)}) till ${mealName(mealSlots, meal).toLowerCase()}.`,
       meal,
     );
   }
@@ -148,13 +157,13 @@ export function QuickLogForm({
           className="input"
           value={meal}
           onChange={(e) => {
-            const slot = MEAL_SLOTS.find((m) => m.id === e.target.value);
+            const slot = mealSlots.find((m) => m.id === e.target.value);
             if (slot) setMeal(slot.id);
           }}
         >
-          {MEAL_SLOTS.map((m) => (
+          {sortMealSlots(mealSlots).map((m) => (
             <option key={m.id} value={m.id}>
-              {m.label}
+              {m.name}
             </option>
           ))}
         </select>

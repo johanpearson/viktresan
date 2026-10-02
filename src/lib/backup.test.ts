@@ -31,6 +31,7 @@ import {
   type Workout,
   type WorkoutPlan,
 } from '../db/db.ts';
+import { defaultMealSlots, type MealSlot } from './mealSlots.ts';
 import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
@@ -460,6 +461,14 @@ const photos: PhotoEntry[] = [
   },
 ];
 
+/** Standardmåltiderna med Kvällsmål omdöpt och en egen måltid. */
+const seedMealSlots: MealSlot[] = [
+  ...defaultMealSlots(1).map((m) =>
+    m.id === 'kvall' ? { ...m, name: 'Nattmacka', time: '22:30', updatedAt: 4 } : m,
+  ),
+  { id: 'brunch', name: 'Brunch', time: '10:30', kind: 'huvudmal', order: 6, createdAt: 3 },
+];
+
 async function seed(): Promise<void> {
   await applySnapshot(
     {
@@ -475,6 +484,7 @@ async function seed(): Promise<void> {
       ...glp1Data,
       ...milestoneData,
       ...supplementData,
+      mealSlots: seedMealSlots,
     },
     'replace',
   );
@@ -496,7 +506,11 @@ async function comparable(snapshot: Snapshot) {
 
 async function wipe(): Promise<void> {
   await applySnapshot(emptySnapshot(), 'replace');
-  expect(await readSnapshot()).toEqual(emptySnapshot());
+  // Måltiderna finns kvar (en fil utan måltider behåller enhetens).
+  expect(await readSnapshot()).toEqual({
+    ...emptySnapshot(),
+    mealSlots: expect.any(Array) as MealSlot[],
+  });
 }
 
 async function errorOf(promise: Promise<unknown>): Promise<BackupError> {
@@ -569,9 +583,10 @@ describe('backup round-trip', () => {
   });
 
   it('tom databas går också att exportera och importera', async () => {
-    const file = await createBackup(await readSnapshot(), { now: NOW });
+    const empty = await readSnapshot();
+    const file = await createBackup(empty, { now: NOW });
     const contents = await readBackup(file);
-    expect(contents.snapshot).toEqual(emptySnapshot());
+    expect(contents.snapshot).toEqual({ ...emptySnapshot(), mealSlots: empty.mealSlots });
   });
 });
 
@@ -624,6 +639,7 @@ describe('backup validering', () => {
     supplementLog: [],
     recipes: [],
     foodOverrides: [],
+    mealSlots: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -717,7 +733,22 @@ describe('backup validering', () => {
       { ...valid, exportedAt: 'igår' },
       // Version 3 kräver matdata.
       { ...valid, foods: undefined },
-      { ...valid, foodLog: [{ ...foodLog[0], meal: 'brunch' }] },
+      { ...valid, foodLog: [{ ...foodLog[0], meal: '' }] },
+      // Före version 12 bara de fasta måltiderna.
+      { ...valid, version: 11, foodLog: [{ ...foodLog[0], meal: 'brunch' }] },
+      { ...valid, mealSlots: undefined },
+      {
+        ...valid,
+        mealSlots: [{ id: 'x', name: '', time: '07:00', kind: 'huvudmal', order: 0, createdAt: 1 }],
+      },
+      {
+        ...valid,
+        mealSlots: [{ id: 'x', name: 'X', time: '7', kind: 'huvudmal', order: 0, createdAt: 1 }],
+      },
+      {
+        ...valid,
+        mealSlots: [{ id: 'x', name: 'X', time: '07:00', kind: 'fika', order: 0, createdAt: 1 }],
+      },
       { ...valid, foodLog: [{ ...foodLog[0], grams: 0 }] },
       { ...valid, foodLog: [{ ...foodLog[0], per100: { kcal: 10 } }] },
       { ...valid, foodLog: [foodLog[0], foodLog[0]] },
@@ -837,6 +868,34 @@ describe('backup validering', () => {
     expect((await errorOf(readBackup(bad))).code).toBe('invalid-data');
   });
 
+  it('version 11: Mellanmål fördelas på mellanmålen efter loggtid, övriga måltider behålls', async () => {
+    const at = (h: number) => new Date(2026, 0, 1, h).getTime();
+    const file = zipOf({
+      'backup.json': JSON.stringify({
+        ...valid,
+        version: 11,
+        mealSlots: undefined,
+        foodLog: [
+          { ...foodLog[0], id: 'f1', meal: 'frukost', createdAt: at(7) },
+          { ...foodLog[0], id: 'm1', meal: 'mellanmal', createdAt: at(10) },
+          { ...foodLog[0], id: 'm2', meal: 'mellanmal', createdAt: at(16) },
+          { ...foodLog[0], id: 'm3', meal: 'mellanmal', createdAt: at(21) },
+        ],
+      }),
+    });
+    const contents = await readBackup(file);
+    expect(contents.snapshot.mealSlots).toEqual([]);
+    await applySnapshot(contents.snapshot, 'replace');
+    const after = await readSnapshot();
+    expect(after.mealSlots).toHaveLength(6);
+    expect(Object.fromEntries(after.foodLog.map((e) => [e.id, e.meal]))).toEqual({
+      f1: 'frukost',
+      m1: 'formiddag',
+      m2: 'eftermiddag',
+      m3: 'kvall',
+    });
+  });
+
   it('tar bort okända fält', async () => {
     const file = zipOf({
       'backup.json': JSON.stringify({
@@ -921,6 +980,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   };
 
   const expected: Omit<Snapshot, 'photos'> = {
+    mealSlots: [],
     photoSessions: [{ id: 'migrerad:2026-01-01', date: '2026-01-01', createdAt: 10 }],
     milestones: [],
     supplements: [],
@@ -972,7 +1032,11 @@ describe('import av version 1 (kombinerade mätningar)', () => {
     expect(summarizeBackup(contents)).toMatchObject({ weights: 3, waist: 1, steps: 1, photos: 1 });
 
     await applySnapshot(contents.snapshot, 'replace');
-    expect({ ...(await readSnapshot()), photos: [] }).toEqual({ ...expected, photos: [] });
+    expect({ ...(await readSnapshot()), photos: [] }).toEqual({
+      ...expected,
+      photos: [],
+      mealSlots: expect.any(Array) as MealSlot[],
+    });
   });
 
   it('krypterad: dekrypteras med version 1 som AAD', async () => {
@@ -1496,10 +1560,23 @@ describe('import slå ihop', () => {
         },
         { foodId: 'fi:11', name: 'Rågbröd', values: { fiberG: 8 }, createdAt: 91 },
       ],
+      // Nyare namn på Nattmacka vinner; Brunch (bara lokalt) behålls.
+      mealSlots: defaultMealSlots(1)
+        .filter((m) => m.id === 'kvall')
+        .map((m) => ({ ...m, name: 'Kvällsfika', updatedAt: 9 })),
     };
     await applySnapshot(imported, 'merge');
 
     const after = await readSnapshot();
+    expect(after.mealSlots.map((m) => m.name)).toEqual([
+      'Frukost',
+      'Förmiddagsmellanmål',
+      'Lunch',
+      'Eftermiddagsmellanmål',
+      'Middag',
+      'Kvällsfika',
+      'Brunch',
+    ]);
     expect(after.profile).toEqual(local);
     expect(after.weights.map((m) => [m.id, m.weightKg])).toEqual([
       ['m1', 92.5],
@@ -1606,6 +1683,7 @@ describe('summarizeBackup', () => {
           ...glp1Data,
           ...milestoneData,
           ...supplementData,
+          mealSlots: seedMealSlots,
         },
         { now: NOW },
       ),

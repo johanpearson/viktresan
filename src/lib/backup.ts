@@ -21,7 +21,10 @@
  *                      fibermål och GLP-1-dryckestillägg, `fiberG` på livsmedel – äldre
  *                      versioner av appen släpper dem vid import),
  *                      foodOverrides – egna näringsvärden per livsmedel (sedan version 11;
- *                      äldre filer ger en tom lista), `sugarG`/`missing` på livsmedel
+ *                      äldre filer ger en tom lista), `sugarG`/`missing` på livsmedel,
+ *                      mealSlots – dagens måltider; matloggens `meal` är en måltids id
+ *                      (sedan version 12; äldre filer har frukost/lunch/middag/mellanmal och
+ *                      behåller enhetens måltider – Mellanmål fördelas efter loggtid vid importen)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -80,7 +83,14 @@ import { SUPPLEMENT_FORMS, SUPPLEMENT_SCHEDULES, DOSES_PER_DAY_MAX } from './sup
 import { isPhotoAngle, isProfileSide } from './photoSessions.ts';
 import { ACTIVITY_LEVELS, RATE_OPTIONS } from './energy.ts';
 import { APPETITE_MAX, APPETITE_MIN, DOSE_FREQUENCIES, isInjectionSite } from './glp1.ts';
-import { MEAL_SLOTS, type Nutrients } from './nutrition.ts';
+import type { Nutrients } from './nutrition.ts';
+import {
+  LEGACY_MEAL_IDS,
+  MEAL_NAME_MAX,
+  isMealTime,
+  type MealKind,
+  type MealSlot,
+} from './mealSlots.ts';
 import type { FoodUnit, UnitSource } from './units.ts';
 import { isValidProteinFactor } from './protein.ts';
 import { isHttpUrl } from './recipeImport.ts';
@@ -94,9 +104,9 @@ import {
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 11;
+export const BACKUP_VERSION = 12;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -203,6 +213,7 @@ interface PlainManifest {
   supplementLog: SupplementIntake[];
   recipes: Recipe[];
   foodOverrides: FoodOverride[];
+  mealSlots: MealSlot[];
 }
 
 interface EncryptedManifest {
@@ -266,6 +277,7 @@ export async function createBackup(
     supplementLog: snapshot.supplementLog,
     recipes: snapshot.recipes,
     foodOverrides: snapshot.foodOverrides,
+    mealSlots: snapshot.mealSlots,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -493,6 +505,8 @@ function parsePlain(
       recipes: version >= 10 ? parseRecipes(manifest) : [],
       // Version 1–10 saknar egna näringsvärden.
       foodOverrides: version >= 11 ? parseFoodOverrides(manifest) : [],
+      // Version 1–11 saknar egna måltider: enhetens måltider behålls vid importen.
+      mealSlots: version >= 12 ? parseMealSlots(manifest) : [],
     },
   };
 }
@@ -581,7 +595,7 @@ function parseFoodData(manifest: Record<string, unknown>, version: number): Food
   const upgraded = upgradeFoodData({
     foods: foods.map((f, i) => parseFoodRecord(f, i)),
     meals: meals.map((m, i) => parseMealRecord(m, i)),
-    foodLog: foodLog.map((e, i) => parseFoodLogRecord(e, i)),
+    foodLog: foodLog.map((e, i) => parseFoodLogRecord(e, i, version)),
   });
   const custom = Array.isArray(foodUnits)
     ? foodUnits.map((u, i) => parseCustomUnitsRecord(u, i))
@@ -677,6 +691,41 @@ function parseRecipes(manifest: Record<string, unknown>): Recipe[] {
   const result = recipes.map((r, i) => parseRecipeRecord(r, i));
   assertUniqueKeys(result, (r) => r.id, 'recept');
   return result;
+}
+
+function parseMealSlots(manifest: Record<string, unknown>): MealSlot[] {
+  const { mealSlots } = manifest;
+  if (!Array.isArray(mealSlots)) throw invalid('Måltider saknas.');
+  const result = mealSlots.map((m, i) => parseMealSlotRecord(m, i));
+  assertUniqueKeys(result, (m) => m.id, 'måltid under dagen');
+  return result;
+}
+
+const MEAL_KINDS: readonly MealKind[] = ['huvudmal', 'mellanmal'];
+
+function parseMealSlotRecord(value: unknown, index: number): MealSlot {
+  const bad = () => invalid(`Måltid nr ${index + 1} i säkerhetskopian är ogiltig.`);
+  if (
+    !isRecord(value) ||
+    !isId(value.id) ||
+    typeof value.name !== 'string' ||
+    value.name.trim() === '' ||
+    value.name.length > MEAL_NAME_MAX ||
+    !isMealTime(value.time) ||
+    !MEAL_KINDS.includes(value.kind as MealKind) ||
+    !isInt(value.order) ||
+    value.order < 0
+  ) {
+    throw bad();
+  }
+  return {
+    id: value.id,
+    name: value.name,
+    time: value.time,
+    kind: value.kind as MealKind,
+    order: value.order,
+    ...parseTimes(value, bad),
+  };
 }
 
 function parseFoodOverrides(manifest: Record<string, unknown>): FoodOverride[] {
@@ -1174,14 +1223,20 @@ function parseSupplementIntakeRecord(value: unknown, index: number): SupplementI
   };
 }
 
-function parseFoodLogRecord(value: unknown, index: number): LegacyFoodLogEntry {
+/**
+ * Version 1–11: måltiden är en av de fasta (frukost, lunch, middag, mellanmal); sedan version 12
+ * en måltids id. En måltid som saknas bland måltiderna flyttas vid importen (`applySnapshot`).
+ */
+function parseFoodLogRecord(value: unknown, index: number, version: number): LegacyFoodLogEntry {
   const bad = () => invalid(`Matloggpost nr ${index + 1} i säkerhetskopian är ogiltig.`);
-  const slot = isRecord(value) ? MEAL_SLOTS.find((m) => m.id === value.meal) : undefined;
+  const meal = isRecord(value) ? value.meal : undefined;
+  const validMeal = version >= 12 ? isId(meal) : LEGACY_MEAL_IDS.includes(meal as string);
   if (
     !isRecord(value) ||
     !isId(value.id) ||
     !isDate(value.date) ||
-    !slot ||
+    !validMeal ||
+    typeof meal !== 'string' ||
     !isId(value.foodId) ||
     !isName(value.name)
   ) {
@@ -1190,7 +1245,7 @@ function parseFoodLogRecord(value: unknown, index: number): LegacyFoodLogEntry {
   const entry: LegacyFoodLogEntry = {
     id: value.id,
     date: value.date,
-    meal: slot.id,
+    meal,
     foodId: value.foodId,
     name: value.name,
     ...parseAmount(value, bad),

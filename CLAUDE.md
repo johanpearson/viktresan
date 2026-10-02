@@ -82,7 +82,10 @@ src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
 src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
 src/lib/planText.ts     Sakliga förklaringar (spärrar, måldatum, TDEE-källa)
 src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-dagarssnitt, måltider
-src/lib/foodDay.ts      Mat → Dag: sektioner per måltid (summa, antal), pågående måltid, ingredienser i loggad måltid, datumetikett,
+src/lib/mealSlots.ts    Dagens måltider (Inställningar → Måltider): standardmåltider, pågående måltid (`currentMeal`: tid närmast före
+                        klockslaget), Mellanmål → mellanmål efter loggtid (`snackFor`/`resolveMealId`), ordning (`applyMealOrder`), validering
+src/lib/useDragReorder.ts  Ändra ordning med dra-handtag (pekarhändelser) eller piltangenter (Inställningar → Måltider)
+src/lib/foodDay.ts      Mat → Dag: sektioner per måltid ur inställningen (summa, antal), ingredienser i loggad måltid, datumetikett,
                         spara som egen måltid (savedMealName, entriesToMealItems)
 src/lib/mealAnalysis.ts Lokal analys: summor (makron, fiber, socker, salt, vitaminer, mineraler) i % av dagsmål/RI, nyckeltal
 src/lib/quickLog.ts     Snabblogg: kcal (+ protein) som matloggpost med `estimated`, id `snabb:<namn>:<kcal>:<protein>`
@@ -133,7 +136,7 @@ src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
 src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
-src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 14)
+src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 15)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, TodoCard, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
@@ -144,7 +147,8 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         RangeFilter (tidsfilter som chips), DailyBarChart (staplar per dag: steg, dryck),
                         PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·"),
                         ChoiceList (valrader i stället för radioknappar), ChipGroup (val som chips),
-                        Macros ("P 6 g · K 30 g · F 2 g · Fi 4 g" i matloggningen), DiscardPrompt ("Kasta ändringar?")
+                        Macros ("P 6 g · K 30 g · F 2 g · Fi 4 g" i matloggningen), DiscardPrompt ("Kasta ändringar?"),
+                        IconTipButton (ikonknapp med tooltip: långtryck/första gången), MealSettings (Inställningar → Måltider)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
@@ -158,8 +162,10 @@ src/pages/              En komponent per sektion: Översikt, Logga (rutnät → 
 e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrikernas rutnät (pil, namn, kcal i samma kolumn i alla
                         sektioner på 412 och 360 px, ingen radbrytning, tryckyta) med MEAL_HEADERS. overview.spec.ts = Översikt med fast data (höjd ≤ 1,5 skärmar, varje ring/kort navigerar rätt,
                         Att göra idag → "Allt klart", en enda prognostext). navigation.spec.ts = bakåtknappen med page.goBack() (standalone via matchMedia,
-                        flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). whatToEat.spec.ts = gapraden
-                        (visas/döljs, inte andra dagar), chipsens ordning i sök-sheeten och "Vad ska jag äta?" (12:30 = lunch, page.clock; toppen och ⋯ på
+                        flikar, paneler, undervy, skanner + kameraspår, genväg, "Kasta ändringar?", omladdning). mealSettings.spec.ts = Inställningar → Måltider
+                        (lägg till, byt namn, dra/piltangent, logga i Kvällsmål kl. 21:30, ta bort med flytt av posterna och Ångra). whatToEat.spec.ts = gapraden
+                        (visas/döljs, inte andra dagar), chipsens ordning i sök-sheeten och "Vad ska jag äta?" (12:30 = lunch, page.clock; ikonknappen i
+                        datumraden – plats, 44 px, tooltip första gången och vid långtryck – och ⋯ på
                         tom måltid, promptens värden, Dela/Kopiera mockade, kryssrutor, axe). recipeImport.spec.ts = receptimporten (delning via
                         `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). fineli.spec.ts = sökträff från den bundlade
@@ -187,7 +193,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
   filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
-  (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `funktioner`, `visning`, `oversikt`, `bilder`, `las`, `sakerhetskopia`,
+  (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `maltider`, `funktioner`, `visning`, `oversikt`, `bilder`, `las`, `sakerhetskopia`,
   `lagring`, `om`) öppnar panelen direkt.
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
@@ -211,7 +217,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`); Tillskott också (`availableSince: 4`, `FLAGS_VERSION = 4`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 14`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 15`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
@@ -232,7 +238,13 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   index `by-date`), `recipes` (v11, recept: ingredienser som måltider, `servings` och/eller `cookedWeightG`; livsmedels-id
   `recept:<id>`; valfri `sourceUrl` från receptimporten utan schemaändring), `foodOverrides` (v13, egna näringsvärden per
   livsmedel från OFF/Livsmedelsverket/Fineli, nyckel = `foodId`, valfri `ean`, `values` = kcal/proteinG/carbsG/fatG/fiberG/sugarG
-  per 100 g/ml; `putFoodOverride` utan värden tar bort posten). `StoredFood` har utan schemaändring valfria `sugarG` och
+  per 100 g/ml; `putFoodOverride` utan värden tar bort posten), `mealSlots` (v15, dagens måltider `{ id, name, time "HH:MM",
+kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddagsmellanmål 10, Lunch 12, Eftermiddagsmellanmål 15,
+  Middag 18, Kvällsmål 21 med id:n `frukost`, `formiddag`, `lunch`, `eftermiddag`, `middag`, `kvall`; `listMealSlots` ger standard om
+  storen är tom; `deleteMealSlot(id, mål)` tar bort och flyttar matloggens poster i en transaktion och returnerar dem för Ångra).
+  Matloggpostens `meal` är en måltids id (stabilt vid namnbyte). Migreringen v14 → v15 (`migrateToV15`) lägger in
+  standardmåltiderna; Frukost/Lunch/Middag behåller id:t och Mellanmål (`mellanmal`) flyttas till mellanmålet vars tid ligger
+  närmast postens `createdAt` (lokal tid, runt dygnet), annars Eftermiddagsmellanmål. `StoredFood` har utan schemaändring valfria `sugarG` och
   `missing` (makron som saknades i OFF och sparades som 0). Matloggposter har sedan v11 (utan datamigrering) valfria `estimated: true` (snabblogg: 1 portion = 100 "g",
   `per100` = hela värdet, ingår inte i vitaminer/mineraler – `DayNutrition.estimatedEntries`) och `recipe` (`{ yieldG, items }`,
   receptet som det såg ut vid loggningen – `partsOf`/ingredienser läser kopian, så en receptändring bara påverkar nya loggar).
@@ -263,7 +275,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -486,9 +498,10 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   `FoodPicker` – helskärms-sheet med sök, flikarna Senaste/Favoriter/Måltider, streckkod (Open Food Facts, cache,
   "Skapa eget livsmedel") och sedan `FoodLogForm`. Samma `FoodPicker` (`mode.kind = 'ingredient'`, utan måltidsval
   och utan måltider i listorna) lägger till ingredienser i `MealBuilder`. Dagens mat (`MealSections`): ett
-  hopfällbart kort per måltid (rutnät: pil, namn + antal poster (kortas med …), kcal i fast kolumn, ⋯, + som öppnar
+  hopfällbart kort per måltid ur Inställningar → Måltider, i deras ordning (rutnät: pil, namn + antal poster (kortas med …), kcal i fast kolumn, ⋯, + som öppnar
   sheeten förvald till måltiden; makroraden under, indragen i linje med namnet); pågående
-  måltid (`currentMealSlot`, samma klockslag som `defaultMealSlot`) är utfälld vid start, en måltid man loggar i
+  måltid (`currentMealId`: tiden närmast före klockslaget, före dagens första måltid den första; samma förval i logg-sheeten,
+  snabbloggen och "Vad ska jag äta?") är utfälld vid start, en måltid man loggar i
   fälls ut; tomma måltider är en smal rad med bara +. Rader (`FoodEntryRow`): tryck = redigera i bottom sheet
   (mängd, enhet, måltid, Ta bort), svep vänster (pekarhändelser, `touch-action: pan-y`) = ta bort; båda ger
   `FoodToast` med Ångra (lägger tillbaka posten oförändrad). En loggad sparad måltid kan fällas ut till
@@ -498,11 +511,21 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   datumraden för hela dagen) öppnar en meny: "Spara som egen måltid" (`SaveMealForm`, namn "Frukost 26 sep", posterna
   med mängd och enhet – loggade måltider delas upp i ingredienser i gram; syns direkt under Måltider i sök-sheeten) och
   "Analysera" (`MealAnalysisView`).
+- **Måltider** (`mealSlots.ts`, `MealSettings`, `MealSlotForm`, `MealSlotRemove`, Inställningar → Måltider, bakom `mat`): lista
+  med namn, ungefärlig tid och typ (Huvudmåltid/Mellanmål). Tryck = redigera (namn unikt, tid "HH:MM"), "Lägg till måltid",
+  dra-handtaget till höger (`useDragReorder`: pekarhändelser, piltangenter, uppläst plats) ändrar ordningen, svep vänster eller
+  "Ta bort måltiden" tar bort (inte den sista). En måltid med poster frågar vart de ska flyttas (förval: närmaste i tid, samma
+  typ först); en tom tas bort direkt. Båda med Ångra (`putMealSlots` + `putFoodLogEntries`). Allt som visar måltider läser
+  inställningen (`FoodData.mealSlots`): sektionerna i Mat → Dag, måltidsvalet i `FoodLogForm`/`QuickLogForm` (även när egna
+  måltider och recept loggas), sök-sheetens rubrik, "Spara som egen måltid", analysen, "Fråga AI" (`mealSubject`/`daySubject`
+  med namnen, dagen i måltidernas ordning) och "Vad ska jag äta?" (namn + typisk kcal per måltids-id). Mat → Historik och
+  rapporten visar inga måltider. En post vars måltid saknas visas i måltiden närmast loggtiden (`resolveMealId`).
 - **Gapraden och "Vad ska jag äta?"** (`whatToEat.ts`, `DaySummary`, bara idag): under staplarna i Mat → Dag står de
   näringsämnen som har mer än 10 % kvar av målet (`GAP_SHARE`), störst andel först: "41 g protein och 6 g fiber kvar"
   (`gap-line`); inom 10 % = ingen rad. Proteinmålet, fiber mot veckans fibermål (annars referensvärdet, `fiberReferenceG`) och
-  först när fiberdatan är läst. Knappen "Vad ska jag äta?" (sekundär, på gapraden; pågående måltid efter klockslaget) och samma
-  val överst i måltidens ⋯-meny (vald måltid; ⋯ visas idag även för tomma måltider) öppnar `AskAi` med ämnet `eat`
+  först när fiberdatan är läst. Ikonknappen "Vad ska jag äta?" (gnistor, `IconTipButton` + `SparklesIcon`, i datumraden bredvid ⋯,
+  bara idag; pågående måltid efter klockslaget; namnet som tooltip vid långtryck och första gången – `preferences.whatToEatTipSeen`)
+  och samma val överst i måltidens ⋯-meny (vald måltid; ⋯ visas idag även för tomma måltider) öppnar `AskAi` med ämnet `eat`
   (`AI_WHAT_TO_EAT_TEMPLATE`, samma kryssrutor): måltid, kvar av dagens kcal/protein/fiber, måltidens typiska kcal (median per dag
   de senaste 28 dagarna, minst 3 dagar, annars utelämnad – `typicalMealKcal`), de 20 vanligaste livsmedlen de senaste 28 dagarna
   som "brukar finnas hemma" (`commonFoods`, inte måltider/recept/snabbloggar) och matpreferenser; prompten ber om 3 realistiska
@@ -573,16 +596,18 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 11`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 12`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`, `foodOverrides`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`, `foodOverrides`, `mealSlots`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
     har portioner i stället för enheter och uppgraderas med `upgradeFoodData`; version 1–6 saknar milstolpar
     (tom lista – efter importen markeras passerade milstolpar utan firande); version 1–7 saknar fototillfällen och
-    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor); version 1–9 saknar recept (tom lista); version 1–10 saknar egna näringsvärden (tom lista). En bild vars `sessionId` saknas bland tillfällena avvisas.
+    grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor); version 1–9 saknar recept (tom lista); version 1–10 saknar egna näringsvärden (tom lista); version 1–11 saknar måltider (`mealSlots` tom = enhetens måltider
+    behålls) och har de fasta måltiderna – `applySnapshot` flyttar poster vars måltid saknas (gamla Mellanmål efter loggtid, annars
+    närmaste måltid; `resolveEntryMeals`). Måltiderna slås ihop per id (senast ändrad vinner). En bild vars `sessionId` saknas bland tillfällena avvisas.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.
