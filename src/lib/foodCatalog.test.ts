@@ -10,6 +10,7 @@ import {
   historyCatalog,
   historyMeals,
   removedIds,
+  isMissingOwn,
   sourceOf,
   storedToItem,
 } from './foodCatalog.ts';
@@ -127,6 +128,18 @@ describe('foodCatalog', () => {
     const log = [entry('a', 'lv:1', 3), entry('b', 'egen:x', 2), entry('c', 'lv:3', 1)];
     const recent = recentFoods(log, new Map(), 2, (f) => f.id !== 'lv:1');
     expect(recent.map((r) => r.id)).toEqual(['egen:x', 'lv:3']);
+  });
+
+  it('en egen post som saknas i katalogen räknas som borttagen (raderat recept, äldre borttagning)', () => {
+    const catalog = buildCatalog([{ id: 'egen:a', name: 'Kvar', source: 'egen', per100 }]);
+    const log = [
+      entry('a', 'recept:r', 3),
+      entry('b', 'egen:gammal', 2),
+      entry('c', 'egen:a', 1),
+      entry('d', 'lv:1', 1),
+    ];
+    const recent = recentFoods(log, catalog, 8, (f) => !isMissingOwn(f, catalog));
+    expect(recent.map((r) => r.id)).toEqual(['egen:a', 'lv:1']);
   });
 
   it('borttagna egna livsmedel och måltider: id:n, historikens katalog och måltider', () => {

@@ -25,6 +25,7 @@ import {
   fiberSourceFor,
   favoriteFoods,
   mealToItem,
+  isMissingOwn,
   recentFoods,
   removedIds,
   storedItems,
@@ -274,8 +275,11 @@ export function FoodPicker({
   const removed = useMemo(() => removedIds(foodData), [foodData]);
   const quickPick = useMemo(
     () => (f: FoodItem) =>
-      !removed.has(f.id) && isVisible(f, hidden) && (forLog || isIngredient(f)),
-    [removed, hidden, forLog],
+      !removed.has(f.id) &&
+      !isMissingOwn(f, catalog) &&
+      isVisible(f, hidden) &&
+      (forLog || isIngredient(f)),
+    [removed, catalog, hidden, forLog],
   );
   const recent = useMemo(
     () => recentFoods(foodLog, catalog, 8, quickPick),

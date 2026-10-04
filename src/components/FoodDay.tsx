@@ -14,6 +14,7 @@ import {
   fiberSourceFor,
   historyCatalog,
   historyMeals,
+  isMissingOwn,
   mealToItem,
   removedIds,
   storedItems,
@@ -178,7 +179,9 @@ export function FoodDay({
     for (const e of foodLog) {
       if (excluded.has(e.foodId)) continue;
       const item = catalog.get(e.foodId) ?? entryToItem(e);
-      if (removed.has(e.foodId) || !isVisible(item, hiddenFilters)) excluded.add(e.foodId);
+      if (removed.has(e.foodId) || isMissingOwn(item, catalog) || !isVisible(item, hiddenFilters)) {
+        excluded.add(e.foodId);
+      }
     }
     return excluded;
   }, [foodData, foodLog, catalog, hiddenFilters]);

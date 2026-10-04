@@ -247,6 +247,46 @@ test('ta bort en egen vara – tidigare loggar finns kvar', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test('ett borttaget recept försvinner ur Senaste men loggen finns kvar', async ({ page }) => {
+  await start(page, {
+    recipes: [
+      {
+        id: 'gryta',
+        name: 'Linsgryta',
+        items: [{ foodId: 'lv:9', name: 'Gurka', amount: 400, unit: 'g', grams: 400, per100 }],
+        servings: 4,
+        createdAt: 1,
+      },
+    ],
+    foodLog: [
+      {
+        id: 'r1',
+        date: isoDaysFromToday(0),
+        meal: 'frukost',
+        foodId: 'recept:gryta',
+        name: 'Linsgryta',
+        amount: 1,
+        unit: 'portion',
+        grams: 100,
+        per100,
+        createdAt: Date.now() - 60_000,
+      },
+    ],
+  });
+  const picker = await openPicker(page);
+  const recent = picker.getByTestId('quick-pick').filter({ hasText: 'Linsgryta' });
+  await expect(recent).toHaveCount(1);
+  await swipeLeft(picker.getByTestId('quick-pick-row').filter({ hasText: 'Linsgryta' }));
+  await page
+    .getByRole('dialog', { name: 'Ta bort Linsgryta?' })
+    .getByRole('button', { name: 'Ta bort' })
+    .tap();
+  await expect(picker.getByTestId('picker-toast')).toContainText('Tog bort Linsgryta.');
+  await expect(recent).toHaveCount(0);
+  await picker.getByRole('button', { name: 'Stäng' }).first().tap();
+  await expect(page.getByRole('button', { name: /^Frukost 1 post/ })).toContainText('380 kcal');
+});
+
 test('avbruten borttagning lägger tillbaka raden', async ({ page }) => {
   await start(page, {
     foods: [{ id: 'egen:k', name: 'Knäckebröd hemma', source: 'egen', per100, createdAt: 1 }],

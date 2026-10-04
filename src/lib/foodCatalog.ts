@@ -161,6 +161,16 @@ export function historyMeals(data: HistoryData): readonly SavedMeal[] {
   return data.removed.meals.length === 0 ? data.meals : [...data.meals, ...data.removed.meals];
 }
 
+/**
+ * Ett eget livsmedel, en måltid eller ett recept som inte längre finns i katalogen: borttaget
+ * (recept raderas, och egna livsmedel raderades före `deletedAt`) men återskapat ur en loggpost.
+ * Visas aldrig i snabbval eller AI-underlag.
+ */
+export function isMissingOwn(item: FoodItem, catalog: ReadonlyMap<string, FoodItem>): boolean {
+  const own = item.source === 'egen' || item.source === 'maltid' || item.source === 'recept';
+  return own && !catalog.has(item.id);
+}
+
 /** Id:n för borttagna egna livsmedel och måltider (visas aldrig i snabbval). */
 export function removedIds(data: Pick<HistoryData, 'removed'>): ReadonlySet<string> {
   return new Set([
