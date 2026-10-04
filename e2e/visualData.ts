@@ -28,7 +28,7 @@ export const LIVSMEDEL = {
 };
 
 /** Dagar före TODAY som ISO-datum (ren UTC-aritmetik, samma som appens addDays). */
-function daysAgo(days: number): string {
+export function daysAgo(days: number): string {
   const d = new Date(`${TODAY}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);

@@ -2770,6 +2770,12 @@ a.button {
   color: var(--accent);
 }
 
+.hero-summary .info-button {
+  margin-block: -14px;
+  margin-inline: -10px -14px;
+  vertical-align: middle;
+}
+
 .hero-info {
   margin: 4px 0 var(--space-2);
   padding: var(--space-2) var(--space-3);

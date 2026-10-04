@@ -76,7 +76,8 @@ src/lib/overview.ts     Översikts nyckeltal på en gemensam viktkälla (trend e
                         måldatumsuppgift (trendprognos, annars "enligt plan" med vald takt)
 src/lib/overviewItems.ts  Ringar och kort som kan döljas på Översikt (OVERVIEW_ITEMS, preferences.overviewHidden)
 src/lib/todo.ts         Översikt → Att göra idag: buildTodo (tillskott, dos, pass, obesvarade, backup) + raden Nästa dos
-src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos
+src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos (forecastGoal: spärrar, tak,
+                        intervall – se Trendvikt)
 src/lib/energy.ts       BMR (Mifflin-St Jeor), TDEE, kalorimål, spärrar, måldatumskontroll
 src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
 src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
@@ -293,7 +294,7 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
-  en linjär anpassning över de senaste 28 dagarna.
+  en linjär regression på trendvikten över de senaste 28 dagarna (utan de första 14 efter start).
   Schemaändring = höj `DB_VERSION` och lägg till ett nytt `if (oldVersion < N)`-block.
   Ändra aldrig befintliga migreringsblock – användarens data finns bara på enheten.
 - **Kalorimål** (`energy.ts`, `adaptiveTdee.ts`, `plan.ts`): mål = TDEE − takt × 7 700 / 7.
@@ -407,7 +408,14 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
 - **Trendvikt**: `preferences.trendHero` (på som standard, Inställningar → Visning) visar trendvikten som
   huvudsiffra och dagsvikt + datum som en liten rad (`current-weight`); förklaringen bakom en info-knapp (`trend-info`,
   "Vad är trendvikt?"). Under stapeln en rad "−X kg · Y kg kvar · mål ca [månad år]" (`goalEta`: trendens prognos, annars
-  datumet enligt vald takt märkt "enligt plan"). BMI och prognosens detaljer finns i Framsteg → Historik
+  datumet enligt vald takt märkt "enligt plan") med en info-ikon (`eta-info`, `ForecastExplanation`; i Framsteg →
+  Historik "Hur räknas prognosen?"). Prognosen (`forecastGoal`) är robust mot den snabba starten: trendprognos först
+  ≥ 21 dagar efter `profile.startDate` och med ≥ 12 vägningsdagar (annars `insufficient-data` med `reason` → "enligt
+  plan"); takten = linjär regression på EMA-trendvikten de senaste 28 dagarna utan de första 14 dagarna efter start
+  (vätskefasen); tak = max(vald takt, 1 % av trendvikten per vecka) – vid tak `capped` och raden `goal-eta-capped`
+  ("Takten är just nu snabbare än planerat …", `CAPPED_NOTE`); intervall (`range`, "ca mars–maj 2027",
+  `formatMonthRange`) när lutningen ± 2 standardfel skiljer ≥ 15 % och ger olika månader; når den långsamma änden inte
+  målet = `reason: 'uncertain'` → plan. BMI och prognosens detaljer finns i Framsteg → Historik
   (`WeightDetails`). Alla härledda värden (förändring mot startvikten, kvar till mål, %, BMI, prognosens
   utgångsvikt) räknas på samma vikt som huvudsiffran – trendvikten när inställningen är på, annars dagsvikten
   (`overviewStats` i `src/lib/overview.ts`; `forecastGoal({ fromKg })` tar takten från linjen). Viktgrafen: trendlinjen

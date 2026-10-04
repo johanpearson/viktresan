@@ -205,14 +205,90 @@ export function linearTrend(
   return { slopeKgPerDay: slope, fittedKg: yMean + slope * (lastX - xMean), lastDate: last.date };
 }
 
+/** Trendprognos först när det gått så här många dagar sedan start … */
+export const FORECAST_MIN_DAYS = 21;
+
+/** … och det finns så här många vägningar (dagar med minst en vägning). */
+export const FORECAST_MIN_WEIGH_INS = 12;
+
+/** De första dagarna efter start (mest vätska och glykogen) räknas inte in i takten. */
+export const FORECAST_EXCLUDED_DAYS = 14;
+
+/** Hållbar takt per vecka som andel av trendvikten (prognosens tak, tillsammans med vald takt). */
+export const SUSTAINABLE_SHARE_PER_WEEK = 0.01;
+
+/** Intervallets bredd i standardfel för lutningen (≈ 95 %). */
+export const FORECAST_SPREAD_SE = 2;
+
+/** Intervall visas när takten är osäker med minst så här stor andel (±). */
+export const FORECAST_RANGE_MIN_SHARE = 0.15;
+
+export interface TrendSlope {
+  /** Lutning i kg per dag. */
+  slopeKgPerDay: number;
+  /** Lutningens standardfel (kg per dag) ur residualernas spridning. */
+  slopeSeKgPerDay: number;
+  /** Den anpassade linjens värde på senaste punkten. */
+  fittedKg: number;
+  /** Senaste punkten. */
+  lastDate: string;
+}
+
+/** Minsta kvadrat-anpassning med lutningens standardfel. Kräver minst tre punkter. */
+function regression(points: readonly { date: string; kg: number }[]): TrendSlope | null {
+  const last = points[points.length - 1];
+  const first = points[0];
+  if (!first || !last || points.length < 3) return null;
+  const origin = toDayNumber(first.date);
+  const xs = points.map((p) => toDayNumber(p.date) - origin);
+  const ys = points.map((p) => p.kg);
+  const xMean = mean(xs);
+  const yMean = mean(ys);
+  let sxy = 0;
+  let sxx = 0;
+  xs.forEach((x, i) => {
+    sxy += (x - xMean) * ((ys[i] ?? yMean) - yMean);
+    sxx += (x - xMean) ** 2;
+  });
+  if (sxx === 0) return null;
+  const slope = sxy / sxx;
+  let ssr = 0;
+  xs.forEach((x, i) => {
+    ssr += ((ys[i] ?? yMean) - (yMean + slope * (x - xMean))) ** 2;
+  });
+  const lastX = toDayNumber(last.date) - origin;
+  return {
+    slopeKgPerDay: slope,
+    slopeSeKgPerDay: Math.sqrt(ssr / (points.length - 2) / sxx),
+    fittedKg: yMean + slope * (lastX - xMean),
+    lastDate: last.date,
+  };
+}
+
+/** Varför det inte finns någon trendprognos. */
+export type InsufficientReason =
+  /** Färre än `FORECAST_MIN_DAYS` dagar sedan start. */
+  | 'early'
+  /** Färre än `FORECAST_MIN_WEIGH_INS` vägningar, eller för få efter vätskefasen. */
+  | 'few-weigh-ins'
+  /** Spridningen är så stor att den långsamma änden inte leder till målet. */
+  | 'uncertain';
+
 export type GoalForecast =
   | { kind: 'reached' }
-  | { kind: 'insufficient-data' }
+  | { kind: 'insufficient-data'; reason: InsufficientReason }
   | { kind: 'not-progressing'; weeklyChangeKg: number }
   | {
       kind: 'forecast';
       date: string;
+      /** Intervallet (tidigast–senast) när osäkerheten är stor, annars `null`. */
+      range: { from: string; to: string } | null;
+      /** Takten prognosen räknar med (kg/vecka, med tecken) – efter taket. */
       weeklyChangeKg: number;
+      /** Den uppmätta takten (kg/vecka, med tecken) ur regressionen. */
+      measuredWeeklyChangeKg: number;
+      /** Den uppmätta takten var snabbare än taket – prognosen utgår från en hållbar takt. */
+      capped: boolean;
       /** Dagar efter måldatum (negativt = före). `null` om inget måldatum finns. */
       daysVsGoalDate: number | null;
     };
@@ -222,6 +298,10 @@ export interface ForecastInput {
   goalKg: number;
   today: string;
   goalDate?: string | undefined;
+  /** Startdatum (profilen); saknas det räknas från första vägningen. */
+  startDate?: string | undefined;
+  /** Vald takt i kg/vecka (positiv = mot målet); en del av prognosens tak. */
+  rateKg?: number | undefined;
   windowDays?: number;
   /**
    * Vikten prognosen utgår från (t.ex. trendvikten eller senaste dagsvikten). Saknas den används
@@ -230,30 +310,84 @@ export interface ForecastInput {
   fromKg?: number | undefined;
 }
 
-/** Datum då målvikten nås om den nuvarande trenden (linjär, senaste 4 veckorna) håller i sig. */
+/** Dagar till `remainingKg` med `kgPerWeek`, eller `null` om det inte går inom rimlig tid. */
+function daysAt(remainingKg: number, kgPerWeek: number): number | null {
+  if (kgPerWeek <= 0) return null;
+  const days = (remainingKg / kgPerWeek) * 7;
+  return Number.isFinite(days) && days <= MAX_FORECAST_DAYS ? Math.ceil(days) : null;
+}
+
+/**
+ * Datum då målvikten nås, robust mot den snabba starten:
+ * - först när det gått `FORECAST_MIN_DAYS` dagar sedan start och finns `FORECAST_MIN_WEIGH_INS`
+ *   vägningar (annars `insufficient-data` → datum enligt vald takt),
+ * - takten = linjär regression på trendvikten (EMA) de senaste `windowDays` dagarna, utan de
+ *   första `FORECAST_EXCLUDED_DAYS` dagarna efter start (vätskefasen),
+ * - aldrig snabbare än det högsta av vald takt och 1 % av trendvikten per vecka (`capped`),
+ * - intervall (`range`) när lutningens spridning är stor.
+ */
 export function forecastGoal({
   daily,
   goalKg,
   today,
   goalDate,
+  startDate,
+  rateKg,
   windowDays = TREND_WINDOW_DAYS,
   fromKg,
 }: ForecastInput): GoalForecast {
-  const trend = linearTrend(daily, today, windowDays);
-  if (!trend) return { kind: 'insufficient-data' };
-
-  const weeklyChangeKg = trend.slopeKgPerDay * 7;
-  const remaining = goalKg - (fromKg ?? trend.fittedKg);
-  if (roundKg(remaining) === 0) return { kind: 'reached' };
-  const days = remaining / trend.slopeKgPerDay;
-  if (!Number.isFinite(days) || days <= 0 || days > MAX_FORECAST_DAYS) {
-    return { kind: 'not-progressing', weeklyChangeKg };
+  const weighIns = daily.filter((d) => d.date <= today);
+  const first = weighIns[0];
+  const start = startDate ?? first?.date ?? today;
+  if (daysBetween(start, today) < FORECAST_MIN_DAYS) {
+    return { kind: 'insufficient-data', reason: 'early' };
   }
-  const date = addDays(trend.lastDate, Math.ceil(days));
+  if (!first || weighIns.length < FORECAST_MIN_WEIGH_INS) {
+    return { kind: 'insufficient-data', reason: 'few-weigh-ins' };
+  }
+
+  const trend = emaTrend(weighIns);
+  const windowStart = addDays(today, -(windowDays - 1));
+  const afterWaterPhase = addDays(start, FORECAST_EXCLUDED_DAYS);
+  const from = windowStart > afterWaterPhase ? windowStart : afterWaterPhase;
+  const points = trend.filter((t) => t.date >= from).map((t) => ({ date: t.date, kg: t.trendKg }));
+  const firstPoint = points[0];
+  const fit = regression(points);
+  if (!fit || !firstPoint || daysBetween(firstPoint.date, fit.lastDate) < MIN_TREND_SPAN_DAYS) {
+    return { kind: 'insufficient-data', reason: 'few-weigh-ins' };
+  }
+
+  const measuredWeeklyChangeKg = fit.slopeKgPerDay * 7;
+  const remaining = goalKg - (fromKg ?? fit.fittedKg);
+  if (roundKg(remaining) === 0) return { kind: 'reached' };
+  const direction = Math.sign(remaining);
+  const distance = Math.abs(remaining);
+  // Takt mot målet (kg/vecka, positiv = rätt håll).
+  const towardKg = measuredWeeklyChangeKg * direction;
+  const days = daysAt(distance, towardKg);
+  if (days == null) return { kind: 'not-progressing', weeklyChangeKg: measuredWeeklyChangeKg };
+
+  const capKg = Math.max(rateKg ?? 0, SUSTAINABLE_SHARE_PER_WEEK * (fromKg ?? fit.fittedKg));
+  const capped = towardKg > capKg;
+  const usedKg = Math.min(towardKg, capKg);
+  const date = addDays(fit.lastDate, daysAt(distance, usedKg) ?? days);
+
+  const spreadKg = FORECAST_SPREAD_SE * fit.slopeSeKgPerDay * 7;
+  const slowDays = daysAt(distance, Math.min(towardKg - spreadKg, capKg));
+  if (slowDays == null) return { kind: 'insufficient-data', reason: 'uncertain' };
+  const fastDays = daysAt(distance, Math.min(towardKg + spreadKg, capKg)) ?? slowDays;
+  const range = { from: addDays(fit.lastDate, fastDays), to: addDays(fit.lastDate, slowDays) };
+  const wide =
+    spreadKg / towardKg >= FORECAST_RANGE_MIN_SHARE &&
+    range.from.slice(0, 7) !== range.to.slice(0, 7);
+
   return {
     kind: 'forecast',
     date,
-    weeklyChangeKg,
+    range: wide ? range : null,
+    weeklyChangeKg: usedKg * direction,
+    measuredWeeklyChangeKg,
+    capped,
     daysVsGoalDate: goalDate ? daysBetween(goalDate, date) : null,
   };
 }
