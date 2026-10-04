@@ -648,8 +648,14 @@ for (const theme of ['light', 'dark'] as const) {
     test('paneler: Översikt och Framsteg', async ({ page }) => {
       await open(page, '');
       const sheet = page.getByRole('dialog');
-      // Tryck på passet i Att göra idag: radmenyn, sedan Klar.
-      await page.getByTestId('todo-workout').getByRole('button').tap();
+      // Tryck på passet i Att göra idag: radmenyn, sedan Klar. Sidan bakom scrollas först till
+      // ett fast läge (rubriken fastnad) så att bakgrunden inte beror på när scrollen hann klart.
+      const todo = page.getByTestId('todo-workout');
+      await todo.evaluate((el) => {
+        el.scrollIntoView({ block: 'center' });
+      });
+      await expect(page.locator('.page-header')).toHaveAttribute('data-stuck', 'true');
+      await todo.getByRole('button').tap();
       await expect(sheet).toBeVisible();
       await shot(page, `${theme}-sheet-pass-meny`, false);
       await sheet.getByRole('button', { name: 'Klar' }).tap();
@@ -688,6 +694,18 @@ for (const theme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Veckor', exact: true }).tap();
       await page.getByTestId('week').first().getByRole('button').tap();
       await expect(sheet).toBeVisible();
+      // Sidan bakom ska stå överst (rubriken inte fastnad). Webbläsarens scrollåterställning efter
+      // föregående panels history.go(-1) kan komma sent, så vänta tills scrollen står still överst.
+      await expect(async () => {
+        await page.evaluate(() => {
+          window.scrollTo(0, 0);
+        });
+        await page.waitForTimeout(300);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+        await expect(page.locator('.page-header')).toHaveAttribute('data-stuck', 'false', {
+          timeout: 300,
+        });
+      }).toPass();
       await shot(page, `${theme}-sheet-framsteg-vecka`, false);
     });
   });
