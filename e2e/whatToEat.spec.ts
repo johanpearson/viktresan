@@ -238,6 +238,20 @@ test('ikonknappen "Vad ska jag äta?": i datumraden bredvid ⋯, namnet första 
   expect(errors).toEqual([]);
 });
 
+test('"brukar finnas hemma" tar inte med det som är dolt i matsökningen', async ({ page }) => {
+  await open(page, [...HISTORY, ...TODAYS_GAPS]);
+  // Kategorin Gryn (Havregryn) dold i Inställningar → Matsökning.
+  await seed(page, {
+    hiddenFoods: [{ key: 'kategori:gryn', kind: 'kategori', value: 'gryn', createdAt: 1 }],
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Vad ska jag äta?' }).tap();
+  const prompt = page
+    .getByRole('dialog', { name: 'Vad ska jag äta till lunch?' })
+    .getByTestId('ai-prompt');
+  await expect(prompt).toHaveValue(/Det här brukar finnas hemma: Kycklingfilé\./);
+});
+
 test('"Vad ska jag äta?" bygger prompten för pågående måltid och måltiden i ⋯-menyn', async ({
   page,
 }) => {

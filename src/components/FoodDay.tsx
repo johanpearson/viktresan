@@ -15,12 +15,13 @@ import {
   historyCatalog,
   historyMeals,
   mealToItem,
+  removedIds,
   storedItems,
 } from '../lib/foodCatalog.ts';
 import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { weekBudget } from '../lib/weekBudget.ts';
-import { filtersFrom, visibleFoods } from '../lib/foodFilters.ts';
+import { filtersFrom, isVisible, visibleFoods } from '../lib/foodFilters.ts';
 import { fiberOfEntries, type FiberGoal } from '../lib/fiber.ts';
 import { savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
@@ -170,6 +171,17 @@ export function FoodDay({
   const pastCatalog = useMemo(() => historyCatalog(catalog, foodData), [catalog, foodData]);
   // Dolt i matsökningen nämns inte i "Vad ska jag äta?" och föreslås inte som byte.
   const hiddenFilters = useMemo(() => filtersFrom(foodData.hidden), [foodData.hidden]);
+  // "Brukar finnas hemma": inget som är dolt (livsmedel, kategori, källa) eller borttaget.
+  const notAtHome = useMemo(() => {
+    const removed = removedIds(foodData);
+    const excluded = new Set<string>();
+    for (const e of foodLog) {
+      if (excluded.has(e.foodId)) continue;
+      const item = catalog.get(e.foodId) ?? entryToItem(e);
+      if (removed.has(e.foodId) || !isVisible(item, hiddenFilters)) excluded.add(e.foodId);
+    }
+    return excluded;
+  }, [foodData, foodLog, catalog, hiddenFilters]);
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
     [foodData.foodUnits],
@@ -612,7 +624,7 @@ export function FoodDay({
                 log: foodLog,
                 eaten,
                 goals,
-                hidden: hiddenFilters.ids,
+                hidden: notAtHome,
               })}
               context={aiContext}
             />

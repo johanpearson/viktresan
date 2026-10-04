@@ -3,8 +3,8 @@ import {
   deleteFood,
   deleteMeal,
   deleteRecipe,
-  putFood,
-  putMeal,
+  restoreFood,
+  restoreMeal,
   putRecipe,
   saveCustomUnits,
   setFavorite,
@@ -132,8 +132,8 @@ export function OwnFoods({
     setEditing(null);
     await onChange();
     toast.show(`Tog bort ${name}.`, async () => {
-      if (target.kind === 'food') await putFood(target.food);
-      else if (target.kind === 'meal') await putMeal(target.meal);
+      if (target.kind === 'food') await restoreFood(target.food);
+      else if (target.kind === 'meal') await restoreMeal(target.meal);
       else await putRecipe(target.recipe);
       if (wasFavorite) await setFavorite(favoriteId, true, wasFavorite.createdAt);
       if (units.length > 0) await saveCustomUnits(favoriteId, units);

@@ -26,6 +26,9 @@ import {
   listAllFoods,
   listAllMeals,
   readSnapshot,
+  applySnapshot,
+  restoreFood,
+  restoreMeal,
   listHiddenFoods,
   putHiddenFoods,
   findSupplementByEan,
@@ -307,10 +310,17 @@ describe('db', () => {
     expect(await listFavorites()).toEqual([]);
     expect(await listAllFoods()).toEqual([{ ...food, deletedAt: 50, updatedAt: 50 }]);
     expect((await listAllMeals()).map((m) => m.deletedAt)).toEqual([51]);
-    // Säkerhetskopian tar med dem; Ångra (put av originalet) visar dem igen.
-    expect((await readSnapshot()).foods.map((f) => f.id)).toEqual(['egen:k']);
-    await putFood(food);
+    // Säkerhetskopian tar med dem; Ångra visar dem igen.
+    const backup = await readSnapshot();
+    expect(backup.foods.map((f) => f.id)).toEqual(['egen:k']);
+    await restoreFood({ ...food, deletedAt: 50 }, 60);
+    await restoreMeal({ id: 'm', name: 'Frukost', items: [], createdAt: 1 }, 61);
+    expect(await listFoods()).toEqual([{ ...food, updatedAt: 60 }]);
+    expect((await listMeals()).map((m) => m.updatedAt)).toEqual([61]);
+    // Ångra är nyare än borttagningen: en säkerhetskopia med borttagningen tar inte bort dem igen.
+    await applySnapshot(backup, 'merge');
     expect((await listFoods()).map((f) => f.id)).toEqual(['egen:k']);
+    expect((await listMeals()).map((m) => m.id)).toEqual(['m']);
   });
 
   it('egna näringsvärden: sparas per livsmedel, tomma värden tar bort posten', async () => {

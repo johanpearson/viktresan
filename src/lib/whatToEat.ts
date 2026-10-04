@@ -140,7 +140,7 @@ export function whatToEatSubject(input: {
   log: readonly FoodLogEntry[];
   eaten: Eaten;
   goals: Goals;
-  /** Dolda livsmedel (matsökningen) – nämns aldrig som "brukar finnas hemma". */
+  /** Livsmedel som är dolda i matsökningen eller borttagna – nämns aldrig som "brukar finnas hemma". */
   hidden?: ReadonlySet<string>;
 }): AiSubject {
   const { meal, today, log, eaten, goals, hidden } = input;

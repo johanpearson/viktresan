@@ -1167,7 +1167,7 @@ export async function putFood(food: StoredFood): Promise<void> {
 /**
  * Tar bort ett eget livsmedel: det markeras som borttaget (`deletedAt`) och syns inte längre i
  * listor, sökning eller skanning, men finns kvar så att tidigare loggars fiber är oförändrad.
- * Favoritmarkeringen och de egna enheterna tas bort. `putFood` med originalet ångrar.
+ * Favoritmarkeringen och de egna enheterna tas bort. `restoreFood` med originalet ångrar.
  */
 export async function deleteFood(id: string, now = Date.now()): Promise<void> {
   const db = await getDb();
@@ -1210,6 +1210,16 @@ export async function listCustomUnits(): Promise<CustomUnits[]> {
   return db.getAll('foodUnits');
 }
 
+/**
+ * Ångrar en borttagning: livsmedlet sparas utan `deletedAt` och med ny `updatedAt`, så att
+ * återställningen är den senaste ändringen även vid sammanslagning med en säkerhetskopia.
+ */
+export async function restoreFood(food: StoredFood, now = Date.now()): Promise<void> {
+  const restored: StoredFood = { ...food, updatedAt: now };
+  delete restored.deletedAt;
+  await putFood(restored);
+}
+
 /** Egna livsmedel och cachade produkter, även borttagna (fiberuppslag, säkerhetskopia), på namn. */
 export async function listAllFoods(): Promise<StoredFood[]> {
   const db = await getDb();
@@ -1238,7 +1248,7 @@ export async function putMeal(meal: SavedMeal): Promise<void> {
 
 /**
  * Tar bort en sparad måltid: den markeras som borttagen (`deletedAt`) och syns inte längre, men
- * ingredienserna finns kvar för tidigare loggar. `putMeal` med originalet ångrar.
+ * ingredienserna finns kvar för tidigare loggar. `restoreMeal` med originalet ångrar.
  */
 export async function deleteMeal(id: string, now = Date.now()): Promise<void> {
   const db = await getDb();
@@ -1251,6 +1261,13 @@ export async function deleteMeal(id: string, now = Date.now()): Promise<void> {
     tx.objectStore('foodUnits').delete(`maltid:${id}`),
   ]);
   await tx.done;
+}
+
+/** Ångrar en borttagning av en måltid (som `restoreFood`: ny `updatedAt`, ingen `deletedAt`). */
+export async function restoreMeal(meal: SavedMeal, now = Date.now()): Promise<void> {
+  const restored: SavedMeal = { ...meal, updatedAt: now };
+  delete restored.deletedAt;
+  await putMeal(restored);
 }
 
 /** Sparade måltider, även borttagna (tidigare loggars ingredienser, säkerhetskopia), på namn. */
