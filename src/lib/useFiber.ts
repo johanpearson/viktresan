@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ExtraNutrients } from '../data/nutrients.ts';
 import {
   getProfile,
-  listFoods,
+  listAllFoods,
   listFoodOverrides,
-  listMeals,
+  listAllMeals,
   saveProfile,
   type FoodLogEntry,
   type Profile,
@@ -48,7 +48,7 @@ export function useFiberSource(enabled: boolean, version?: unknown): FiberSource
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    Promise.all([loadLivsmedel(), listMeals(), listFoods(), listFoodOverrides()])
+    Promise.all([loadLivsmedel(), listAllMeals(), listAllFoods(), listFoodOverrides()])
       .then(([livsmedel, meals, foods, overrides]) => {
         const extras = livsmedelExtras(livsmedel);
         const own = new Map<string, ExtraNutrients | null | undefined>();

@@ -5,7 +5,7 @@ import { ReportDocument, type ReportPhoto } from '../components/ReportDocument.t
 import { ReportSettingsForm } from '../components/ReportSettingsForm.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import type { ExtraNutrients } from '../data/nutrients.ts';
-import { listFoodOverrides, listFoods, listMeals } from '../db/db.ts';
+import { listAllFoods, listAllMeals, listFoodOverrides } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
 import type { FiberGoal } from '../lib/fiber.ts';
@@ -64,7 +64,7 @@ function useFiberSource(enabled: boolean): FiberSource | null | 'loading' {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    Promise.all([loadLivsmedel(), listMeals(), listFoods(), listFoodOverrides()])
+    Promise.all([loadLivsmedel(), listAllMeals(), listAllFoods(), listFoodOverrides()])
       .then(([livsmedel, meals, foods, overrides]) => {
         const extra = new Map<string, ExtraNutrients | null>(
           livsmedel.foods.map((f) => [f.id, f.extra ?? null]),

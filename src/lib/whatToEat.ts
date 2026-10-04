@@ -107,16 +107,18 @@ export function typicalMealKcal(
 
 /**
  * De vanligaste livsmedlen de senaste 28 dagarna ("brukar finnas hemma"): livsmedel (inte
- * måltider, recept eller snabbloggar), flest loggar först, sedan senast loggat.
+ * måltider, recept eller snabbloggar, inte dolda i matsökningen), flest loggar först, sedan
+ * senast loggat.
  */
 export function commonFoods(
   log: readonly FoodLogEntry[],
   today: string,
   limit = HOME_FOODS,
+  hidden: ReadonlySet<string> = new Set(),
 ): string[] {
   const counts = new Map<string, { name: string; n: number; last: number }>();
   for (const e of recentEntries(log, today)) {
-    if (/^(maltid|recept):/.test(e.foodId)) continue;
+    if (/^(maltid|recept):/.test(e.foodId) || hidden.has(e.foodId)) continue;
     const prev = counts.get(e.foodId);
     counts.set(e.foodId, {
       name: e.name,
@@ -138,8 +140,10 @@ export function whatToEatSubject(input: {
   log: readonly FoodLogEntry[];
   eaten: Eaten;
   goals: Goals;
+  /** Dolda livsmedel (matsökningen) – nämns aldrig som "brukar finnas hemma". */
+  hidden?: ReadonlySet<string>;
 }): AiSubject {
-  const { meal, today, log, eaten, goals } = input;
+  const { meal, today, log, eaten, goals, hidden } = input;
   return {
     kind: 'eat',
     meal: meal.name,
@@ -150,6 +154,6 @@ export function whatToEatSubject(input: {
         goals.fiberGoalG === null || eaten.fiberG === null ? null : goals.fiberGoalG - eaten.fiberG,
     },
     typicalKcal: typicalMealKcal(log, meal.id, today),
-    homeFoods: commonFoods(log, today),
+    homeFoods: commonFoods(log, today, HOME_FOODS, hidden),
   };
 }

@@ -132,6 +132,25 @@ describe('commonFoods', () => {
     expect(foods).not.toContain('Min frukost');
     expect(foods).not.toContain('Mat 0');
   });
+
+  it('dolda livsmedel (matsökningen) nämns aldrig som "brukar finnas hemma"', () => {
+    const log = [
+      entry({ date: '2026-09-20', foodId: 'lv:1', name: 'Kycklingfilé' }),
+      entry({ date: '2026-09-21', foodId: 'lv:2', name: 'Chips' }),
+      entry({ date: '2026-09-22', foodId: 'lv:2', name: 'Chips' }),
+    ];
+    expect(commonFoods(log, TODAY)).toEqual(['Chips', 'Kycklingfilé']);
+    expect(commonFoods(log, TODAY, HOME_FOODS, new Set(['lv:2']))).toEqual(['Kycklingfilé']);
+    const subject = whatToEatSubject({
+      meal: { id: 'lunch', name: 'Lunch' },
+      today: TODAY,
+      log,
+      eaten: { kcal: 0, proteinG: 0, fiberG: 0 },
+      goals: GOALS,
+      hidden: new Set(['lv:2']),
+    });
+    expect(subject.kind === 'eat' && subject.homeFoods).toEqual(['Kycklingfilé']);
+  });
 });
 
 describe('whatToEatSubject → prompt', () => {

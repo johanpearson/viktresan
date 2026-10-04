@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  listAllFoods,
+  listAllMeals,
   listCustomUnits,
   listFavorites,
   listFoodOverrides,
-  listFoods,
+  listHiddenFoods,
   listMealSlots,
-  listMeals,
   listRecipes,
   type CustomUnits,
+  type HiddenFood,
   type FoodOverride,
   type Recipe,
   type Favorite,
@@ -32,6 +34,13 @@ export interface FoodData {
   overrides: FoodOverride[];
   /** Dagens måltider (Inställningar → Måltider) i listans ordning. */
   mealSlots: MealSlot[];
+  /** Dolt i matsökningen (livsmedel, kategorier, källor) – `filtersFrom` (foodFilters.ts). */
+  hidden: HiddenFood[];
+  /**
+   * Borttagna egna livsmedel och måltider: syns inte, men tidigare loggars fiber och
+   * ingredienser slås upp i dem (`fiberSourceFor`).
+   */
+  removed: { foods: StoredFood[]; meals: SavedMeal[] };
 }
 
 const EMPTY: FoodData = {
@@ -42,10 +51,13 @@ const EMPTY: FoodData = {
   recipes: [],
   overrides: [],
   mealSlots: defaultMealSlots(),
+  hidden: [],
+  removed: { foods: [], meals: [] },
 };
 
 /**
- * Egna livsmedel, cachade produkter, måltider, recept, favoriter och egna enheter från IndexedDB,
+ * Egna livsmedel, cachade produkter, måltider, recept, favoriter, egna enheter och dolt i
+ * matsökningen från IndexedDB,
  * samt Livsmedelsverkets och Finelis databaser (laddas separat – `null` tills de är klara) med
  * användarens egna näringsvärden inlagda.
  */
@@ -59,18 +71,31 @@ export function useFoodData(): {
 
   const load = useCallback(async (): Promise<FoodData> => {
     try {
-      const [foods, meals, favorites, foodUnits, recipes, overrides, mealSlots] = await Promise.all(
-        [
-          listFoods(),
-          listMeals(),
+      const [allFoods, allMeals, favorites, foodUnits, recipes, overrides, mealSlots, hidden] =
+        await Promise.all([
+          listAllFoods(),
+          listAllMeals(),
           listFavorites(),
           listCustomUnits(),
           listRecipes(),
           listFoodOverrides(),
           listMealSlots(),
-        ],
-      );
-      return { foods, meals, favorites, foodUnits, recipes, overrides, mealSlots };
+          listHiddenFoods(),
+        ]);
+      return {
+        foods: allFoods.filter((f) => f.deletedAt === undefined),
+        meals: allMeals.filter((m) => m.deletedAt === undefined),
+        favorites,
+        foodUnits,
+        recipes,
+        overrides,
+        mealSlots,
+        hidden,
+        removed: {
+          foods: allFoods.filter((f) => f.deletedAt !== undefined),
+          meals: allMeals.filter((m) => m.deletedAt !== undefined),
+        },
+      };
     } catch {
       return EMPTY;
     }

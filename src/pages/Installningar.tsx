@@ -7,6 +7,7 @@ import { ExportBackup } from '../components/ExportBackup.tsx';
 import { FeatureSettings } from '../components/FeatureSettings.tsx';
 import { FiberGoalSettings } from '../components/FiberGoalSettings.tsx';
 import { FoodPreferencesSettings } from '../components/FoodPreferencesSettings.tsx';
+import { FoodSearchSettings } from '../components/FoodSearchSettings.tsx';
 import { MealSettings } from '../components/MealSettings.tsx';
 import { ImportBackup } from '../components/ImportBackup.tsx';
 import { ListRow } from '../components/ListRow.tsx';
@@ -42,6 +43,7 @@ type PanelId =
   | 'dryck'
   | 'matpreferenser'
   | 'maltider'
+  | 'matsokning'
   | 'funktioner'
   | 'visning'
   | 'oversikt'
@@ -167,6 +169,12 @@ const GROUPS: readonly Group[] = [
         title: 'Måltider',
         feature: 'mat',
         secondary: () => 'Namn, tid och ordning',
+      },
+      {
+        id: 'matsokning',
+        title: 'Matsökning',
+        feature: 'mat',
+        secondary: () => 'Källor, kategorier och dolda livsmedel',
       },
     ],
   },
@@ -318,6 +326,8 @@ export function Installningar() {
         return data && <FoodPreferencesSettings key={imports} data={data} onChange={reload} />;
       case 'maltider':
         return <MealSettings key={imports} />;
+      case 'matsokning':
+        return <FoodSearchSettings key={imports} />;
       case 'funktioner':
         return <FeatureSettings />;
       case 'visning':

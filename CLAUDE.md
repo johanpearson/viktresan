@@ -112,7 +112,12 @@ src/data/foodCategories.ts  Kategorier: densitet, relevanta enheter, gissade sty
 src/data/fineliCategories.ts  Finelis användningsklasser (FUCLASS) → kategorier (FINELI_CLASSES)
 src/lib/foodSearch.ts   FoodItem + fuzzy-sökning (å/ä/ö-vikning, Damerau-Levenshtein) i alla källor: källordning (SOURCE_RANK),
                         deduplicering (dedupeKey/isDuplicate), korta källetiketter (SOURCE_TAGS: LV, Fineli, OFF, Egen)
-src/lib/foodCatalog.ts  Lagrat → FoodItem, snabbval (senaste, favoriter)
+src/lib/foodCatalog.ts  Lagrat → FoodItem, snabbval (senaste, favoriter), fiberSourceFor (fiber även ur borttagna egna)
+src/lib/foodFilters.ts  Matsökningens brus: dolda livsmedel/kategorier/avstängda källor (filtersFrom, isVisible, visibleFoods),
+                        kategorin per livsmedel (categoryOf, cachad), antal per kategori och förslag (aldrig loggade)
+src/lib/foodRanking.ts  Sökrankning: användningspoäng (usageScores, halveras var 30:e dag), searchPriority (egna + loggade först),
+                        varianter (variantKey, collapseVariants: högst 3 per variant + "Visa fler varianter")
+src/lib/useLongPress.ts Långtryck (500 ms) + contextmenu → meny (sökträffarna i FoodList)
 src/lib/livsmedel.ts    Laddar/tolkar public/livsmedel.json och public/fineli.json (format i livsmedelFormat.ts) och slår ihop dem
                         (mergeDatabases; `databases` = källorna för Om appen)
 src/lib/livsmedelImport.ts  Ren omvandling av Livsmedelsverkets API-svar (används av skriptet); toCompactFile/serializeCompactFile delas
@@ -136,7 +141,7 @@ src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
 src/lib/share.ts        Web Share API med nedladdning som reserv
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
-src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 15)
+src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 16)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
                         ImportBackup, TodoCard, LockGate, LockSettings …). Designsystemet (docs/DESIGN.md):
                         Page (sticky rubrik som krymper), Card, ListRow, SectionAccordion, BottomSheet,
@@ -148,7 +153,8 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         PeriodBar (‹ månad/vecka ›), Disclosure (hopfälld hjälptext), Parts (bryts bara vid "·"),
                         ChoiceList (valrader i stället för radioknappar), ChipGroup (val som chips),
                         Macros ("P 6 g · K 30 g · F 2 g · Fi 4 g" i matloggningen), DiscardPrompt ("Kasta ändringar?"),
-                        IconTipButton (ikonknapp med tooltip: långtryck/första gången), MealSettings (Inställningar → Måltider)
+                        IconTipButton (ikonknapp med tooltip: långtryck/första gången), MealSettings (Inställningar → Måltider),
+                        FoodSearchSettings (Inställningar → Matsökning: källor, kategorier, dolda livsmedel)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
@@ -166,7 +172,9 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         (lägg till, byt namn, dra/piltangent, logga i Kvällsmål kl. 21:30, ta bort med flytt av posterna och Ångra). whatToEat.spec.ts = gapraden
                         (visas/döljs, inte andra dagar), chipsens ordning i sök-sheeten och "Vad ska jag äta?" (12:30 = lunch, page.clock; ikonknappen i
                         datumraden – plats, 44 px, tooltip första gången och vid långtryck – och ⋯ på
-                        tom måltid, promptens värden, Dela/Kopiera mockade, kryssrutor, axe). recipeImport.spec.ts = receptimporten (delning via
+                        tom måltid, promptens värden, Dela/Kopiera mockade, kryssrutor, axe). foodSearchNoise.spec.ts = dölj med svep/långtryck + Ångra, dold kategori och avstängd källa
+                        i sökningen, Återställ i Inställningar → Matsökning, ta bort egen vara (bekräftelse, loggen och fibern kvar),
+                        rankning och "Visa fler varianter" (mockad livsmedel.json). recipeImport.spec.ts = receptimporten (delning via
                         `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). fineli.spec.ts = sökträff från den bundlade
                         Fineli-filen (etikett, loggning), källan i Om appen och deduplicering med mockade filer; specar som mockar
@@ -193,7 +201,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
   filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
-  (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `maltider`, `funktioner`, `visning`, `oversikt`, `bilder`, `las`, `sakerhetskopia`,
+  (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `maltider`, `matsokning`, `funktioner`, `visning`, `oversikt`, `bilder`, `las`, `sakerhetskopia`,
   `lagring`, `om`) öppnar panelen direkt.
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
@@ -217,7 +225,7 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   ett `feature`-fält och filtreras med `useFeatures().filter(...)`; enstaka delar lindas i
   `<Feature id="…">`. GLP-1 är av som standard (`availableSince: 3`); Tillskott också (`availableSince: 4`, `FLAGS_VERSION = 4`). En ny
   kommande funktion får `available: false` tills den byggs – sätt då `availableSince` och höj `FLAGS_VERSION`.
-- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 15`). Object stores:
+- **Data**: `src/db/db.ts` är enda stället som pratar med IndexedDB (`DB_VERSION = 16`). Object stores:
   `weights` (vikt + valfri anteckning, flera per dag, index `by-date`),
   `waist` (v3, midjemått, nyckel = `date`, ett per dag), `steps` (v3, steg, nyckel = `date`, ett per dag),
   `photos` (komprimerad Blob, `sessionId`, `angle` `fram`/`profil`/`okand`, `side` för profil, mått; index `by-date`,
@@ -241,7 +249,13 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   per 100 g/ml; `putFoodOverride` utan värden tar bort posten), `mealSlots` (v15, dagens måltider `{ id, name, time "HH:MM",
 kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddagsmellanmål 10, Lunch 12, Eftermiddagsmellanmål 15,
   Middag 18, Kvällsmål 21 med id:n `frukost`, `formiddag`, `lunch`, `eftermiddag`, `middag`, `kvall`; `listMealSlots` ger standard om
-  storen är tom; `deleteMealSlot(id, mål)` tar bort och flyttar matloggens poster i en transaktion och returnerar dem för Ångra).
+  storen är tom; `deleteMealSlot(id, mål)` tar bort och flyttar matloggens poster i en transaktion och returnerar dem för Ångra),
+  `hiddenFoods` (v16, dolt i matsökningen `{ key, kind: livsmedel|kategori|kalla, value, name?, createdAt }`, nyckel =
+  `<kind>:<value>`; `putHiddenFoods`/`deleteHiddenFoods`/`listHiddenFoods`). Borttagna egna livsmedel och sparade måltider
+  (`deleteFood`/`deleteMeal`) markeras med `deletedAt` (utan schemaändring) i stället för att raderas: `listFoods`/`listMeals`/
+  `findFoodByEan`/`findMealByEan` hoppar över dem, `listAllFoods`/`listAllMeals` (fiber, vitaminer, rapport, säkerhetskopia)
+  tar med dem – så att tidigare loggars fiber aldrig ändras. Ångra = `putFood`/`putMeal` med originalet. Recept raderas
+  (loggade recept har en egen kopia).
   Matloggpostens `meal` är en måltids id (stabilt vid namnbyte). Migreringen v14 → v15 (`migrateToV15`) lägger in
   standardmåltiderna; Frukost/Lunch/Middag behåller id:t och Mellanmål (`mellanmal`) flyttas till mellanmålet vars tid ligger
   närmast postens `createdAt` (lokal tid, runt dygnet), annars Eftermiddagsmellanmål. `StoredFood` har utan schemaändring valfria `sugarG` och
@@ -559,6 +573,18 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   utan småord i bokstavsordning; samma nyckel, eller ett tecken fel i en nyckel ≥ 8 tecken med energi inom 15 %/10 kcal)
   visas en gång, från källan som rankas först. Egna livsmedel döljs aldrig. Träffarna har en liten källetikett
   (`tag tag-source`: LV, Fineli, OFF, Egen; skärmläsare "Källa: …") före energin.
+- **Mindre brus i matsökningen** (`foodFilters.ts`, `foodRanking.ts`, `FoodSearchSettings`, docs/DESIGN.md): i sök-sheeten
+  (sökträffar, Senaste, Favoriter) ger svep vänster "Dölj" direkt med Ångra-toast (`picker-toast`) och långtryck en
+  `ActionSheet` med Dölj; för egna livsmedel, måltider och recept i stället "Ta bort" med bekräftelse (`ActionSheet`,
+  permanent i UI:t – se `deletedAt` ovan). Dolda livsmedel visas aldrig i sökningen, Senaste/Favoriter, receptimportens
+  matchning, bytesförslagen eller "brukar finnas hemma" i "Vad ska jag äta?" (`commonFoods(…, hidden)`). Inställningar →
+  Matsökning (bakom `mat`): källor (LV, Fineli, OFF; egna alltid på), kategorier ur databaserna mappade med `foodProfile`
+  (switch = visas, gäller bara databaskällorna; förslag = aldrig loggade, flest livsmedel först, högst 5, inte Övrigt) och
+  dolda livsmedel med sök och Återställ. Sökindexet byggs av `visibleFoods(…)`; katalogen för fiber/analys är orörd, så
+  dolt/borttaget påverkar aldrig historik, rapporter eller summeringar. Rankning: `searchIndex(…, priority)` – egna och
+  loggade först efter användningspoäng (varje post 1, halveras var 30:e dag; egna aldrig loggade 0), sedan exakt
+  namnträff, poäng, första ordet, källa, längd. Sökningen tar 60 träffar, `collapseVariants` visar högst 3 per variant
+  (två första betydelsebärande orden, utan tal/småord) och raden "Visa fler varianter av … (N)" (`more-variants`), högst 20.
 - **Livsmedel**: `livsmedel.json` har valfri sjunde kolumn (grupp, `""` = ingen) och åttonde (övriga näringsämnen i
   ordningen i filens `extra`, `null` = saknas; `pickExtraNutrients` matchar EuroFIR-kod eller namn och räknar om enheten).
   Livsmedelsverkets databas (CC BY 4.0 – källan visas, liksom Finelis, i Inställningar → Om appen, `LivsmedelSource`) hämtas med
@@ -596,10 +622,10 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
 - **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
   Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
   `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 12`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 13`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`, `foodOverrides`, `mealSlots`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`, `foodOverrides`, `mealSlots`, `hiddenFoods`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
@@ -607,7 +633,8 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
     (tom lista – efter importen markeras passerade milstolpar utan firande); version 1–7 saknar fototillfällen och
     grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor); version 1–9 saknar recept (tom lista); version 1–10 saknar egna näringsvärden (tom lista); version 1–11 saknar måltider (`mealSlots` tom = enhetens måltider
     behålls) och har de fasta måltiderna – `applySnapshot` flyttar poster vars måltid saknas (gamla Mellanmål efter loggtid, annars
-    närmaste måltid; `resolveEntryMeals`). Måltiderna slås ihop per id (senast ändrad vinner). En bild vars `sessionId` saknas bland tillfällena avvisas.
+    närmaste måltid; `resolveEntryMeals`). Måltiderna slås ihop per id (senast ändrad vinner). Version 1–12 saknar dolt i
+    matsökningen (tom lista); vid sammanslagning förblir dolt dolt (befintlig post behålls), `deletedAt` följer med. En bild vars `sessionId` saknas bland tillfällena avvisas.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.

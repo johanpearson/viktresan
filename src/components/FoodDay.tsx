@@ -8,11 +8,18 @@ import {
 } from '../db/db.ts';
 import { daySubject, mealSubject, type AiContext } from '../lib/aiPrompt.ts';
 import { todayIso } from '../lib/dates.ts';
-import { buildCatalog, entryToItem, mealToItem, storedItems } from '../lib/foodCatalog.ts';
+import {
+  buildCatalog,
+  entryToItem,
+  fiberSourceFor,
+  mealToItem,
+  storedItems,
+} from '../lib/foodCatalog.ts';
 import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { weekBudget } from '../lib/weekBudget.ts';
-import { catalogFiberSource, fiberOfEntries, type FiberGoal } from '../lib/fiber.ts';
+import { filtersFrom, visibleFoods } from '../lib/foodFilters.ts';
+import { fiberOfEntries, type FiberGoal } from '../lib/fiber.ts';
 import { savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
 import { formatDate, formatDayMonth } from '../lib/format.ts';
@@ -153,9 +160,11 @@ export function FoodDay({
   );
   // Fiber per post ur katalogen – först när Livsmedelsverkets data finns (annars utelämnas fibern).
   const fiberSource = useMemo(
-    () => (livsmedel ? catalogFiberSource(catalog, foodData.meals) : null),
-    [livsmedel, catalog, foodData.meals],
+    () => (livsmedel ? fiberSourceFor(catalog, foodData) : null),
+    [livsmedel, catalog, foodData],
   );
+  // Dolt i matsökningen nämns inte i "Vad ska jag äta?" och föreslås inte som byte.
+  const hiddenFilters = useMemo(() => filtersFrom(foodData.hidden), [foodData.hidden]);
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
     [foodData.foodUnits],
@@ -539,7 +548,7 @@ export function FoodDay({
               entries={analysisEntries}
               meals={foodData.meals}
               catalog={catalog}
-              foods={livsmedel?.foods ?? NO_FOODS}
+              foods={visibleFoods(livsmedel?.foods ?? NO_FOODS, hiddenFilters)}
               goals={{
                 targetKcal,
                 proteinGoalG,
@@ -598,6 +607,7 @@ export function FoodDay({
                 log: foodLog,
                 eaten,
                 goals,
+                hidden: hiddenFilters.ids,
               })}
               context={aiContext}
             />

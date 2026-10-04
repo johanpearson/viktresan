@@ -29,7 +29,7 @@ import { GRAM, type FoodUnit } from '../lib/units.ts';
 import type { Intensity, WorkoutStatus } from '../lib/workouts.ts';
 
 export const DB_NAME = 'viktresan';
-export const DB_VERSION = 15;
+export const DB_VERSION = 16;
 
 /**
  * En viktmätning. Datum lagras som ISO-sträng (YYYY-MM-DD) i lokal tid.
@@ -137,6 +137,11 @@ export interface StoredFood {
    * äldre cachade produkter saknar fältet (makrona räknas då som kända).
    */
   missing?: MacroField[];
+  /**
+   * Borttaget eget livsmedel (Ta bort, utan schemaändring): syns inte längre någonstans, men
+   * finns kvar så att tidigare loggars fiber inte ändras (`listAllFoods`).
+   */
+  deletedAt?: number;
   createdAt: number;
   updatedAt?: number;
 }
@@ -207,6 +212,11 @@ export interface SavedMeal {
   items: MealIngredient[];
   /** Valfri streckkod (t.ex. en färdig matlåda) – skanning hittar måltiden lokalt. */
   ean?: string;
+  /**
+   * Borttagen måltid (Ta bort, utan schemaändring): syns inte längre, men ingredienserna finns
+   * kvar för tidigare loggars fiber, vitaminer och mineraler (`listAllMeals`).
+   */
+  deletedAt?: number;
   createdAt: number;
   updatedAt?: number;
 }
@@ -479,6 +489,23 @@ export interface SupplementIntake {
   updatedAt?: number;
 }
 
+/** Vad som döljs i matsökningen: ett livsmedel, en kategori eller en hel källa. */
+export type HiddenKind = 'livsmedel' | 'kategori' | 'kalla';
+
+/**
+ * Något som döljs i matsökningen (sedan v16), nyckel = `<kind>:<value>`. `value` är livsmedlets
+ * id, kategorin (`FoodCategory`) eller källan (`livsmedelsverket`, `fineli`, `openfoodfacts`).
+ * Påverkar bara sökning och snabbval – aldrig loggen, historiken eller summeringar.
+ */
+export interface HiddenFood {
+  key: string;
+  kind: HiddenKind;
+  value: string;
+  /** Livsmedlets namn när det doldes (listan i Inställningar → Matsökning). */
+  name?: string;
+  createdAt: number;
+}
+
 export interface ViktresanDB extends DBSchema {
   /** Viktmätningar. I v1–v2 innehöll storen även midja och steg (`LegacyMeasurement`). */
   weights: {
@@ -608,6 +635,11 @@ export interface ViktresanDB extends DBSchema {
   mealSlots: {
     key: string;
     value: MealSlot;
+  };
+  /** Sedan v16. Dolda livsmedel, kategorier och källor i matsökningen, nyckel = `key`. */
+  hiddenFoods: {
+    key: string;
+    value: HiddenFood;
   };
 }
 
@@ -994,6 +1026,11 @@ export function getDb(): Promise<Database> {
         db.createObjectStore('mealSlots', { keyPath: 'id' });
         void migrateToV15(transaction, oldVersion >= 4);
       }
+      if (oldVersion < 16) {
+        // v16: dolda livsmedel, kategorier och källor i matsökningen. Ny store – befintlig data
+        // berörs inte (borttagna egna livsmedel/måltider markeras med `deletedAt`, ingen migrering).
+        db.createObjectStore('hiddenFoods', { keyPath: 'key' });
+      }
     },
     blocking() {
       // En nyare version av appen (annan flik) vill uppgradera: släpp anslutningen.
@@ -1127,11 +1164,18 @@ export async function putFood(food: StoredFood): Promise<void> {
   await db.put('foods', food);
 }
 
-export async function deleteFood(id: string): Promise<void> {
+/**
+ * Tar bort ett eget livsmedel: det markeras som borttaget (`deletedAt`) och syns inte längre i
+ * listor, sökning eller skanning, men finns kvar så att tidigare loggars fiber är oförändrad.
+ * Favoritmarkeringen och de egna enheterna tas bort. `putFood` med originalet ångrar.
+ */
+export async function deleteFood(id: string, now = Date.now()): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(['foods', 'favorites', 'foodUnits'], 'readwrite');
+  const foods = tx.objectStore('foods');
+  const food = await foods.get(id);
   await Promise.all([
-    tx.objectStore('foods').delete(id),
+    ...(food ? [foods.put({ ...food, deletedAt: now, updatedAt: now })] : []),
     tx.objectStore('favorites').delete(id),
     tx.objectStore('foodUnits').delete(id),
   ]);
@@ -1166,17 +1210,24 @@ export async function listCustomUnits(): Promise<CustomUnits[]> {
   return db.getAll('foodUnits');
 }
 
-/** Egna livsmedel och cachade produkter, sorterade på namn. */
-export async function listFoods(): Promise<StoredFood[]> {
+/** Egna livsmedel och cachade produkter, även borttagna (fiberuppslag, säkerhetskopia), på namn. */
+export async function listAllFoods(): Promise<StoredFood[]> {
   const db = await getDb();
   const all = await db.getAll('foods');
   return all.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
 }
 
-/** Ett eget livsmedel eller en cachad produkt med streckkoden (egna går före). */
+/** Egna livsmedel och cachade produkter (inte borttagna), sorterade på namn. */
+export async function listFoods(): Promise<StoredFood[]> {
+  return (await listAllFoods()).filter((f) => f.deletedAt === undefined);
+}
+
+/** Ett eget livsmedel eller en cachad produkt med streckkoden (egna går före, inte borttagna). */
 export async function findFoodByEan(ean: string): Promise<StoredFood | null> {
   const db = await getDb();
-  const hits = await db.getAllFromIndex('foods', 'by-ean', ean);
+  const hits = (await db.getAllFromIndex('foods', 'by-ean', ean)).filter(
+    (f) => f.deletedAt === undefined,
+  );
   return hits.find((f) => f.source === 'egen') ?? hits[0] ?? null;
 }
 
@@ -1185,21 +1236,33 @@ export async function putMeal(meal: SavedMeal): Promise<void> {
   await db.put('meals', meal);
 }
 
-export async function deleteMeal(id: string): Promise<void> {
+/**
+ * Tar bort en sparad måltid: den markeras som borttagen (`deletedAt`) och syns inte längre, men
+ * ingredienserna finns kvar för tidigare loggar. `putMeal` med originalet ångrar.
+ */
+export async function deleteMeal(id: string, now = Date.now()): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(['meals', 'favorites', 'foodUnits'], 'readwrite');
+  const meals = tx.objectStore('meals');
+  const meal = await meals.get(id);
   await Promise.all([
-    tx.objectStore('meals').delete(id),
+    ...(meal ? [meals.put({ ...meal, deletedAt: now, updatedAt: now })] : []),
     tx.objectStore('favorites').delete(`maltid:${id}`),
     tx.objectStore('foodUnits').delete(`maltid:${id}`),
   ]);
   await tx.done;
 }
 
-export async function listMeals(): Promise<SavedMeal[]> {
+/** Sparade måltider, även borttagna (tidigare loggars ingredienser, säkerhetskopia), på namn. */
+export async function listAllMeals(): Promise<SavedMeal[]> {
   const db = await getDb();
   const all = await db.getAll('meals');
   return all.sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+}
+
+/** Sparade måltider (inte borttagna), sorterade på namn. */
+export async function listMeals(): Promise<SavedMeal[]> {
+  return (await listAllMeals()).filter((m) => m.deletedAt === undefined);
 }
 
 export async function putFoodLog(entry: FoodLogEntry): Promise<void> {
@@ -1596,6 +1659,36 @@ export async function deleteRecipe(id: string): Promise<void> {
   await tx.done;
 }
 
+/** Nyckeln för något dolt i matsökningen. */
+export function hiddenKey(kind: HiddenKind, value: string): string {
+  return `${kind}:${value}`;
+}
+
+/** Allt som är dolt i matsökningen, äldst först. */
+export async function listHiddenFoods(): Promise<HiddenFood[]> {
+  const db = await getDb();
+  const all = await db.getAll('hiddenFoods');
+  return all.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Döljer ett livsmedel, en kategori eller en källa i matsökningen (samma nyckel skrivs över). */
+export async function putHiddenFoods(entries: readonly HiddenFood[]): Promise<void> {
+  if (entries.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('hiddenFoods', 'readwrite');
+  await Promise.all(entries.map((e) => tx.store.put(e)));
+  await tx.done;
+}
+
+/** Visar igen (Återställ, Ångra, brytare på). */
+export async function deleteHiddenFoods(keys: readonly string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const db = await getDb();
+  const tx = db.transaction('hiddenFoods', 'readwrite');
+  await Promise.all(keys.map((k) => tx.store.delete(k)));
+  await tx.done;
+}
+
 /** Kosttillskott i namnordning. */
 export async function listSupplements(): Promise<Supplement[]> {
   const db = await getDb();
@@ -1622,7 +1715,7 @@ export async function findSupplementByEan(ean: string): Promise<Supplement | nul
 /** Sparad måltid med streckkoden, eller null. Måltider har inget index – de är få. */
 export async function findMealByEan(ean: string): Promise<SavedMeal | null> {
   const db = await getDb();
-  return (await db.getAll('meals')).find((m) => m.ean === ean) ?? null;
+  return (await db.getAll('meals')).find((m) => m.ean === ean && m.deletedAt === undefined) ?? null;
 }
 
 export async function listSupplementLog(): Promise<SupplementIntake[]> {
@@ -1690,6 +1783,8 @@ export interface Snapshot {
   foodOverrides: FoodOverride[];
   /** Dagens måltider. Tom = saknas i filen (säkerhetskopior före version 12): befintliga behålls. */
   mealSlots: MealSlot[];
+  /** Dolt i matsökningen (sedan version 13). */
+  hiddenFoods: HiddenFood[];
 }
 
 export function emptySnapshot(): Snapshot {
@@ -1717,6 +1812,7 @@ export function emptySnapshot(): Snapshot {
     recipes: [],
     foodOverrides: [],
     mealSlots: [],
+    hiddenFoods: [],
   };
 }
 
@@ -1745,6 +1841,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     recipes,
     foodOverrides,
     mealSlots,
+    hiddenFoods,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -1752,8 +1849,9 @@ export async function readSnapshot(): Promise<Snapshot> {
     listSteps(),
     listPhotoSessions(),
     listPhotos(),
-    listFoods(),
-    listMeals(),
+    // Borttagna egna livsmedel och måltider följer med: tidigare loggar behöver dem.
+    listAllFoods(),
+    listAllMeals(),
     listFoodLog(),
     listFavorites(),
     listWater(),
@@ -1769,6 +1867,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listRecipes(),
     listFoodOverrides(),
     listMealSlots(),
+    listHiddenFoods(),
   ]);
   return {
     profile,
@@ -1795,6 +1894,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     recipes,
     foodOverrides,
     mealSlots,
+    hiddenFoods,
   };
 }
 
@@ -1829,6 +1929,7 @@ const DATA_STORES = [
   'supplementLog',
   'recipes',
   'foodOverrides',
+  'hiddenFoods',
 ] as const;
 
 /**
@@ -1883,6 +1984,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
   const supplementLog = tx.objectStore('supplementLog');
   const recipes = tx.objectStore('recipes');
   const foodOverrides = tx.objectStore('foodOverrides');
+  const hiddenFoods = tx.objectStore('hiddenFoods');
 
   if (mode === 'replace') {
     await Promise.all(DATA_STORES.map((name) => tx.objectStore(name).clear()));
@@ -1908,6 +2010,7 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
       ...snapshot.supplementLog.map((i) => supplementLog.put(i)),
       ...snapshot.recipes.map((r) => recipes.put(r)),
       ...snapshot.foodOverrides.map((o) => foodOverrides.put(o)),
+      ...snapshot.hiddenFoods.map((h) => hiddenFoods.put(h)),
       ...(snapshot.profile ? [profile.put(snapshot.profile, PROFILE_KEY)] : []),
     ]);
   } else {
@@ -1992,6 +2095,10 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     for (const o of snapshot.foodOverrides) {
       const existing = await foodOverrides.get(o.foodId);
       if (!existing || changedAt(o) > changedAt(existing)) await foodOverrides.put(o);
+    }
+    // Dolt i någon av dem förblir dolt (en befintlig post behålls).
+    for (const h of snapshot.hiddenFoods) {
+      if (!(await hiddenFoods.get(h.key))) await hiddenFoods.put(h);
     }
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);

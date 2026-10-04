@@ -25,6 +25,9 @@
  *                      mealSlots – dagens måltider; matloggens `meal` är en måltids id
  *                      (sedan version 12; äldre filer har frukost/lunch/middag/mellanmal och
  *                      behåller enhetens måltider – Mellanmål fördelas efter loggtid vid importen)
+ *                      hiddenFoods – dolda livsmedel, kategorier och källor i matsökningen och
+ *                      `deletedAt` på borttagna egna livsmedel/måltider (sedan version 13; äldre
+ *                      filer ger en tom lista)
  *                      (version 1: `measurements` med vikt, midja och steg i samma post)
  *   photos/<id>.<ext>  bilderna som de lagras i IndexedDB
  *
@@ -45,6 +48,8 @@ import {
   type LegacyStoredFood,
   type Favorite,
   type FoodLogEntry,
+  type HiddenFood,
+  type HiddenKind,
   type FoodOverride,
   type MacroField,
   type NutritionField,
@@ -104,9 +109,9 @@ import {
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 12;
+export const BACKUP_VERSION = 13;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -214,6 +219,7 @@ interface PlainManifest {
   recipes: Recipe[];
   foodOverrides: FoodOverride[];
   mealSlots: MealSlot[];
+  hiddenFoods: HiddenFood[];
 }
 
 interface EncryptedManifest {
@@ -278,6 +284,7 @@ export async function createBackup(
     recipes: snapshot.recipes,
     foodOverrides: snapshot.foodOverrides,
     mealSlots: snapshot.mealSlots,
+    hiddenFoods: snapshot.hiddenFoods,
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -507,6 +514,8 @@ function parsePlain(
       foodOverrides: version >= 11 ? parseFoodOverrides(manifest) : [],
       // Version 1–11 saknar egna måltider: enhetens måltider behålls vid importen.
       mealSlots: version >= 12 ? parseMealSlots(manifest) : [],
+      // Version 1–12 saknar dolt i matsökningen.
+      hiddenFoods: version >= 13 ? parseHiddenFoods(manifest) : [],
     },
   };
 }
@@ -726,6 +735,40 @@ function parseMealSlotRecord(value: unknown, index: number): MealSlot {
     order: value.order,
     ...parseTimes(value, bad),
   };
+}
+
+function parseHiddenFoods(manifest: Record<string, unknown>): HiddenFood[] {
+  const { hiddenFoods } = manifest;
+  if (!Array.isArray(hiddenFoods)) throw invalid('Dolt i matsökningen saknas.');
+  const result = hiddenFoods.map((h, i) => parseHiddenFoodRecord(h, i));
+  assertUniqueKeys(result, (h) => h.key, 'dold post i matsökningen');
+  return result;
+}
+
+const HIDDEN_KINDS: readonly HiddenKind[] = ['livsmedel', 'kategori', 'kalla'];
+
+function parseHiddenFoodRecord(value: unknown, index: number): HiddenFood {
+  const bad = () => invalid(`Dold post nr ${index + 1} i matsökningen är ogiltig.`);
+  if (
+    !isRecord(value) ||
+    !HIDDEN_KINDS.includes(value.kind as HiddenKind) ||
+    !isId(value.value) ||
+    value.key !== `${String(value.kind)}:${value.value}` ||
+    !isTimestamp(value.createdAt)
+  ) {
+    throw bad();
+  }
+  const entry: HiddenFood = {
+    key: value.key,
+    kind: value.kind as HiddenKind,
+    value: value.value,
+    createdAt: value.createdAt,
+  };
+  if (value.name !== undefined) {
+    if (!isName(value.name)) throw bad();
+    entry.name = value.name;
+  }
+  return entry;
 }
 
 function parseFoodOverrides(manifest: Record<string, unknown>): FoodOverride[] {
@@ -1026,6 +1069,10 @@ function parseFoodRecord(value: unknown, index: number): LegacyStoredFood {
     if (!Array.isArray(value.missing) || !value.missing.every(isMacroField)) throw bad();
     food.missing = [...new Set(value.missing)];
   }
+  if (value.deletedAt !== undefined) {
+    if (!isTimestamp(value.deletedAt)) throw bad();
+    food.deletedAt = value.deletedAt;
+  }
   return food;
 }
 
@@ -1084,6 +1131,10 @@ function parseMealRecord(value: unknown, index: number): LegacySavedMeal {
     ...parseTimes(value, bad),
   };
   if (value.ean !== undefined) meal.ean = parseEan(value.ean, bad);
+  if (value.deletedAt !== undefined) {
+    if (!isTimestamp(value.deletedAt)) throw bad();
+    meal.deletedAt = value.deletedAt;
+  }
   return meal;
 }
 

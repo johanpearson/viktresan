@@ -3,6 +3,7 @@
  * fram snabbval (senaste, favoriter). Rena funktioner.
  */
 import type { Favorite, FoodLogEntry, FoodOverride, SavedMeal, StoredFood } from '../db/db.ts';
+import { catalogFiberSource, type FiberSource } from './fiber.ts';
 import { applyOverride, overrideMap } from './foodNutrition.ts';
 import type { FoodItem, FoodSource } from './foodSearch.ts';
 import { combineIngredients } from './nutrition.ts';
@@ -129,4 +130,26 @@ export function buildCatalog(...lists: readonly (readonly FoodItem[])[]): Map<st
   const map = new Map<string, FoodItem>();
   for (const list of lists) for (const item of list) map.set(item.id, item);
   return map;
+}
+
+/**
+ * Fiberkällan för matloggen ur katalogen, med borttagna egna livsmedel och måltider – så att
+ * en borttagning aldrig ändrar tidigare loggars fiber.
+ */
+export function fiberSourceFor(
+  catalog: ReadonlyMap<string, FoodItem>,
+  data: {
+    meals: readonly SavedMeal[];
+    overrides: readonly FoodOverride[];
+    removed: { foods: readonly StoredFood[]; meals: readonly SavedMeal[] };
+  },
+): FiberSource {
+  const { removed } = data;
+  const full =
+    removed.foods.length === 0
+      ? catalog
+      : buildCatalog(storedItems({ foods: removed.foods, overrides: data.overrides }), [
+          ...catalog.values(),
+        ]);
+  return catalogFiberSource(full, [...data.meals, ...removed.meals]);
 }

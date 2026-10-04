@@ -509,10 +509,19 @@ for (const theme of ['light', 'dark'] as const) {
     test('paneler: Inställningar', async ({ page }) => {
       await open(page, '#/installningar');
       const sheet = page.getByRole('dialog');
-      for (const id of ['profil', 'maltider', 'funktioner', 'sakerhetskopia'] as const) {
+      for (const id of [
+        'profil',
+        'maltider',
+        'matsokning',
+        'funktioner',
+        'sakerhetskopia',
+      ] as const) {
         await page.getByTestId(`settings-${id}`).getByRole('button').tap();
         await expect(sheet).toBeVisible();
         if (id === 'maltider') await expect(sheet.getByTestId('meal-slots')).toBeVisible();
+        if (id === 'matsokning') {
+          await expect(sheet.getByTestId('search-category-agg')).toBeVisible();
+        }
         await shot(page, `${theme}-sheet-installningar-${id}`, false);
         await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
         await expect(sheet).toBeHidden();
