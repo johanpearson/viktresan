@@ -80,9 +80,9 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
     'aria-valuenow',
     '33',
   );
-  // −1 kg/vecka från trendvikten: prognosen bygger på trenden (inte "enligt plan").
-  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'trend');
-  await expect(page.getByTestId('goal-eta')).toHaveText(/^mål ca /);
+  // Tre vägningar räcker inte för en trendprognos (kräver 21 dagar och 12 vägningar): enligt plan.
+  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'plan');
+  await expect(page.getByTestId('goal-eta')).toHaveText(/^mål ca .+ enligt plan$/);
 
   await expect(page.getByTestId('today-card')).toBeVisible();
 
@@ -98,7 +98,9 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await expect(details.getByTestId('remaining')).toHaveText('6,7 kg');
   await expect(details.getByTestId('bmi')).toHaveText('26,8');
   await expect(details).toContainText('Övervikt');
-  await expect(details).toContainText(/Med nuvarande trend \([−-]1,0 kg\/vecka\)/);
+  await expect(details).toContainText(
+    'Enligt plan (0,5 kg/vecka) – trendprognos efter 21 dagar och 12 vägningar',
+  );
   const chart = page.getByRole('img', { name: /Viktgraf/ });
   await expect(chart.locator('canvas')).toBeVisible();
   await expect(chart).toHaveAttribute('data-points', '3');

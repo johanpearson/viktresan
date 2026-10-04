@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { collectErrors, seed, type SeedData } from './helpers.ts';
-import { FROZEN_NOW, LIVSMEDEL, TODAY, VISUAL_DATA } from './visualData.ts';
+import { FROZEN_NOW, LIVSMEDEL, TODAY, VISUAL_DATA, daysAgo } from './visualData.ts';
 
 /**
  * Översikt: slimmad vy med fast testdata (visualData.ts, torsdag 24 sep 2026 12:30). Höjden för
@@ -89,12 +89,22 @@ test('viktkortet: trendvikt, en rad under stapeln och tryck → Framsteg → His
   await hero.getByTestId('trend-info').tap();
   await expect(hero.getByTestId('trend-info-text')).toHaveCount(0);
 
+  // Prognosens förklaring bakom info-ikonen vid måldatumet.
+  await expect(hero).not.toContainText('glykogen');
+  await hero.getByTestId('eta-info').tap();
+  await expect(hero.getByTestId('eta-info-text')).toContainText('glykogen');
+  await expect(hero.getByTestId('eta-info-text')).toContainText('1 % av vikten per vecka');
+  await hero.getByTestId('eta-info').tap();
+  await expect(hero.getByTestId('eta-info-text')).toHaveCount(0);
+
   // Hela kortet är tryckytan.
   await hero.tap();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Framsteg');
   const details = page.getByTestId('weight-details');
   await expect(details.getByTestId('bmi')).toHaveText(/^\d+,\d$/);
   await expect(details.getByTestId('forecast')).toHaveText(/^ca /);
+  await details.getByText('Hur räknas prognosen?').tap();
+  await expect(details.getByTestId('forecast-explanation')).toContainText('vätska och glykogen');
 });
 
 test('ingen motsägande prognostext: enligt plan tills trenden räcker', async ({ page }) => {
@@ -115,6 +125,31 @@ test('ingen motsägande prognostext: enligt plan tills trenden räcker', async (
   await expect(page.getByTestId('goal-eta')).not.toContainText('enligt plan');
   await expect(page.getByText(/mål ca/)).toHaveCount(1);
   await expect(page.locator('body')).not.toContainText('Logga några mätningar');
+});
+
+test('snabbare takt än taket: prognosen utgår från en hållbar takt', async ({ page }) => {
+  // −0,3 kg/dag (−2,1 kg/vecka) i 40 dagar; taket = max(0,5; 1 % av trendvikten) ≈ 0,9 kg/vecka.
+  const weights = Array.from({ length: 41 }, (_, k) => ({
+    id: `w${String(k)}`,
+    date: daysAgo(40 - k),
+    weightKg: Math.round((100 - k * 0.3) * 10) / 10,
+    createdAt: Date.parse(FROZEN_NOW) - (40 - k) * 864e5,
+  }));
+  await open(page, {
+    profile: {
+      ...VISUAL_DATA.profile,
+      startDate: daysAgo(40),
+      startWeightKg: 100,
+      goalWeightKg: 70,
+    },
+    weights,
+  });
+  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'trend');
+  await expect(page.getByTestId('goal-eta-capped')).toHaveText(
+    'Takten är just nu snabbare än planerat, prognosen utgår från en hållbar takt.',
+  );
+  await page.getByTestId('hero').tap();
+  await expect(page.getByTestId('weight-details')).toContainText('Med hållbar takt');
 });
 
 test('varje ring och kort navigerar rätt', async ({ page }) => {

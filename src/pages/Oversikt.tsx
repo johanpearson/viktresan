@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { Feature } from '../components/Feature.tsx';
+import { ForecastExplanation } from '../components/ForecastExplanation.tsx';
 import { HydrationReminder } from '../components/HydrationReminder.tsx';
 import { InfoButton } from '../components/InfoButton.tsx';
 import { MilestoneCard } from '../components/MilestoneCard.tsx';
@@ -16,8 +17,8 @@ import { UpdateCard } from '../components/UpdateCard.tsx';
 import { WeekSummaryCard } from '../components/WeekSummaryCard.tsx';
 import type { FoodLogEntry, Profile, WeightEntry } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
-import { formatKg, formatMonthYear, formatShortDate } from '../lib/format.ts';
-import { goalEta, overviewStats, type GoalEta } from '../lib/overview.ts';
+import { formatKg, formatMonthRange, formatMonthYear, formatShortDate } from '../lib/format.ts';
+import { CAPPED_NOTE, goalEta, overviewStats, type GoalEta } from '../lib/overview.ts';
 import { useOverviewItems } from '../lib/overviewItems.ts';
 import { buildPlan } from '../lib/plan.ts';
 import { usePreferences } from '../lib/preferences.ts';
@@ -88,13 +89,13 @@ interface WeightCardProps {
   today: string;
 }
 
-/** "mål ca feb. 2027" eller "mål ca feb. 2027 enligt plan". */
+/** "mål ca feb. 2027", "mål ca mars–maj 2027" (osäker trend) eller "mål ca feb. 2027 enligt plan". */
 function etaText(eta: GoalEta): string {
   switch (eta.kind) {
     case 'reached':
       return 'Målet nått!';
     case 'trend':
-      return `mål ca ${formatMonthYear(eta.date)}`;
+      return `mål ca ${eta.range ? formatMonthRange(eta.range.from, eta.range.to) : formatMonthYear(eta.date)}`;
     case 'plan':
       return `mål ca ${formatMonthYear(eta.date)} enligt plan`;
   }
@@ -119,6 +120,8 @@ function WeightCard({ profile, weights, foodLog, today }: WeightCardProps) {
     planDate: plan.kind === 'plan' ? plan.plan.forecastDate : null,
   });
   const trendHero = stats.source === 'trend' && trendKg != null && latestDate != null;
+  const [etaInfoOpen, setEtaInfoOpen] = useState(false);
+  const etaInfoId = useId();
 
   return (
     <section className="card hero hero-card" data-testid="hero" aria-label="Vikt och mål">
@@ -178,9 +181,30 @@ function WeightCard({ profile, weights, foodLog, today }: WeightCardProps) {
               <span className="nowrap" data-testid="goal-eta" data-kind={eta.kind}>
                 {etaText(eta)}
               </span>
+              {eta.kind !== 'reached' && (
+                <InfoButton
+                  label="Hur räknas prognosen?"
+                  expanded={etaInfoOpen}
+                  controls={etaInfoId}
+                  testId="eta-info"
+                  onToggle={() => {
+                    setEtaInfoOpen((o) => !o);
+                  }}
+                />
+              )}
             </>
           )}
         </p>
+        {eta?.kind === 'trend' && eta.capped && (
+          <p className="hero-sub" data-testid="goal-eta-capped">
+            {CAPPED_NOTE}
+          </p>
+        )}
+        {etaInfoOpen && (
+          <p className="hero-info" id={etaInfoId} data-testid="eta-info-text">
+            <ForecastExplanation />
+          </p>
+        )}
       </div>
       {/* Hela kortet är tryckytan (länkens ::after); info-knappen ligger ovanpå. */}
       <a className="hero-link" href="#/framsteg" data-testid="hero-link">

@@ -25,6 +25,8 @@ const monthYearFormat = new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'UTC',
 });
 
+const monthFormat = new Intl.DateTimeFormat('sv-SE', { month: 'short', timeZone: 'UTC' });
+
 /** sv-SE använder hårda mellanslag som tusentalsavgränsare; gör dem till vanliga. */
 function normalizeSpaces(text: string): string {
   return text.replace(/[\u00a0\u202f]/g, ' ');
@@ -65,6 +67,19 @@ export function formatShortDate(iso: string): string {
 /** "2027-02-12" → "feb. 2027" – för ungefärliga datum (prognosen). */
 export function formatMonthYear(iso: string): string {
   return normalizeSpaces(monthYearFormat.format(new Date(toDayNumber(iso) * 86_400_000)));
+}
+
+/**
+ * Ungefärligt intervall: "mars–maj 2027" inom samma år, annars "dec. 2026–feb. 2027"; samma
+ * månad ger bara "mars 2027".
+ */
+export function formatMonthRange(from: string, to: string): string {
+  if (from.slice(0, 7) === to.slice(0, 7)) return formatMonthYear(from);
+  const start =
+    from.slice(0, 4) === to.slice(0, 4)
+      ? normalizeSpaces(monthFormat.format(new Date(toDayNumber(from) * 86_400_000)))
+      : formatMonthYear(from);
+  return `${start}–${formatMonthYear(to)}`;
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];

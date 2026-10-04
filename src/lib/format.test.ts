@@ -6,6 +6,7 @@ import {
   formatKcal,
   formatRate,
   formatDate,
+  formatMonthRange,
   formatMonthYear,
   formatPhotoLabel,
   formatInt,
@@ -40,6 +41,10 @@ describe('format', () => {
   it('formaterar datum på svenska', () => {
     expect(formatDate('2026-09-25')).toMatch(/25 sep.* 2026/);
     expect(formatMonthYear('2027-02-12')).toBe('feb. 2027');
+    // Intervall: samma år = året en gång, olika år = båda, samma månad = en månad.
+    expect(formatMonthRange('2027-03-05', '2027-05-20')).toBe('mars–maj 2027');
+    expect(formatMonthRange('2026-12-05', '2027-02-20')).toBe('dec. 2026–feb. 2027');
+    expect(formatMonthRange('2027-03-05', '2027-03-20')).toBe('mars 2027');
     expect(formatShortDate('2026-09-25')).toMatch(/^25 sep\.?$/);
   });
 
