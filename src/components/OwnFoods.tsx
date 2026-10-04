@@ -3,8 +3,8 @@ import {
   deleteFood,
   deleteMeal,
   deleteRecipe,
-  putFood,
-  putMeal,
+  restoreFood,
+  restoreMeal,
   putRecipe,
   saveCustomUnits,
   setFavorite,
@@ -13,8 +13,13 @@ import {
   type StoredFood,
 } from '../db/db.ts';
 import { claimsFor } from '../lib/claims.ts';
-import { catalogFiberSource } from '../lib/fiber.ts';
-import { buildCatalog, mealToItem, storedItems, storedToItem } from '../lib/foodCatalog.ts';
+import {
+  buildCatalog,
+  fiberSourceFor,
+  mealToItem,
+  storedItems,
+  storedToItem,
+} from '../lib/foodCatalog.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
 import { recipeFoodId, recipeToItem, recipeYield, yieldText } from '../lib/recipes.ts';
@@ -104,9 +109,12 @@ export function OwnFoods({
   const fiberSource = useMemo(
     () =>
       livsmedel
-        ? catalogFiberSource(buildCatalog(livsmedel.foods, storedItems(source.foodData)), meals)
+        ? fiberSourceFor(
+            buildCatalog(livsmedel.foods, storedItems(source.foodData)),
+            source.foodData,
+          )
         : null,
-    [livsmedel, source.foodData, meals],
+    [livsmedel, source.foodData],
   );
 
   /**
@@ -124,8 +132,8 @@ export function OwnFoods({
     setEditing(null);
     await onChange();
     toast.show(`Tog bort ${name}.`, async () => {
-      if (target.kind === 'food') await putFood(target.food);
-      else if (target.kind === 'meal') await putMeal(target.meal);
+      if (target.kind === 'food') await restoreFood(target.food);
+      else if (target.kind === 'meal') await restoreMeal(target.meal);
       else await putRecipe(target.recipe);
       if (wasFavorite) await setFavorite(favoriteId, true, wasFavorite.createdAt);
       if (units.length > 0) await saveCustomUnits(favoriteId, units);

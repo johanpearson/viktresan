@@ -3,6 +3,7 @@
  * fram snabbval (senaste, favoriter). Rena funktioner.
  */
 import type { Favorite, FoodLogEntry, FoodOverride, SavedMeal, StoredFood } from '../db/db.ts';
+import { catalogFiberSource, type FiberSource } from './fiber.ts';
 import { applyOverride, overrideMap } from './foodNutrition.ts';
 import type { FoodItem, FoodSource } from './foodSearch.ts';
 import { combineIngredients } from './nutrition.ts';
@@ -92,6 +93,8 @@ export function recentFoods(
   log: readonly FoodLogEntry[],
   catalog: ReadonlyMap<string, FoodItem>,
   limit = 8,
+  /** Bara livsmedel som ska visas räknas mot `limit` (dolda, borttagna). */
+  include: (item: FoodItem) => boolean = () => true,
 ): FoodItem[] {
   const sorted = [...log].sort((a, b) => changedAt(b) - changedAt(a));
   const seen = new Set<string>();
@@ -99,7 +102,9 @@ export function recentFoods(
   for (const entry of sorted) {
     if (seen.has(entry.foodId)) continue;
     seen.add(entry.foodId);
-    result.push(catalog.get(entry.foodId) ?? entryToItem(entry));
+    const item = catalog.get(entry.foodId) ?? entryToItem(entry);
+    if (!include(item)) continue;
+    result.push(item);
     if (result.length >= limit) break;
   }
   return result;
@@ -129,4 +134,58 @@ export function buildCatalog(...lists: readonly (readonly FoodItem[])[]): Map<st
   const map = new Map<string, FoodItem>();
   for (const list of lists) for (const item of list) map.set(item.id, item);
   return map;
+}
+
+/** Det som behövs för att slå upp tidigare loggar: aktiva och borttagna egna livsmedel och måltider. */
+interface HistoryData {
+  meals: readonly SavedMeal[];
+  overrides: readonly FoodOverride[];
+  removed: { foods: readonly StoredFood[]; meals: readonly SavedMeal[] };
+}
+
+/**
+ * Katalogen för tidigare loggar (analys, fiber): den synliga katalogen plus borttagna egna
+ * livsmedel. Bara för uppslag – aldrig för sökning eller snabbval.
+ */
+export function historyCatalog(
+  catalog: ReadonlyMap<string, FoodItem>,
+  data: HistoryData,
+): ReadonlyMap<string, FoodItem> {
+  const { foods } = data.removed;
+  if (foods.length === 0) return catalog;
+  return buildCatalog(storedItems({ foods, overrides: data.overrides }), [...catalog.values()]);
+}
+
+/** Sparade måltider för tidigare loggars ingredienser: aktiva och borttagna. */
+export function historyMeals(data: HistoryData): readonly SavedMeal[] {
+  return data.removed.meals.length === 0 ? data.meals : [...data.meals, ...data.removed.meals];
+}
+
+/**
+ * Ett eget livsmedel, en måltid eller ett recept som inte längre finns i katalogen: borttaget
+ * (recept raderas, och egna livsmedel raderades före `deletedAt`) men återskapat ur en loggpost.
+ * Visas aldrig i snabbval eller AI-underlag.
+ */
+export function isMissingOwn(item: FoodItem, catalog: ReadonlyMap<string, FoodItem>): boolean {
+  const own = item.source === 'egen' || item.source === 'maltid' || item.source === 'recept';
+  return own && !catalog.has(item.id);
+}
+
+/** Id:n för borttagna egna livsmedel och måltider (visas aldrig i snabbval). */
+export function removedIds(data: Pick<HistoryData, 'removed'>): ReadonlySet<string> {
+  return new Set([
+    ...data.removed.foods.map((f) => f.id),
+    ...data.removed.meals.map((m) => mealFoodId(m.id)),
+  ]);
+}
+
+/**
+ * Fiberkällan för matloggen ur katalogen, med borttagna egna livsmedel och måltider – så att
+ * en borttagning aldrig ändrar tidigare loggars fiber.
+ */
+export function fiberSourceFor(
+  catalog: ReadonlyMap<string, FoodItem>,
+  data: HistoryData,
+): FiberSource {
+  return catalogFiberSource(historyCatalog(catalog, data), historyMeals(data));
 }

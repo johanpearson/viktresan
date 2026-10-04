@@ -21,6 +21,16 @@ import {
   putFoodLogEntries,
   putFoodOverride,
   findMealByEan,
+  deleteHiddenFoods,
+  hiddenKey,
+  listAllFoods,
+  listAllMeals,
+  readSnapshot,
+  applySnapshot,
+  restoreFood,
+  restoreMeal,
+  listHiddenFoods,
+  putHiddenFoods,
   findSupplementByEan,
   listSupplementLog,
   listSupplements,
@@ -240,6 +250,7 @@ describe('db', () => {
       'foodOverrides',
       'foodUnits',
       'foods',
+      'hiddenFoods',
       'injections',
       'mealSlots',
       'meals',
@@ -260,6 +271,56 @@ describe('db', () => {
       'workoutPlans',
       'workouts',
     ]);
+  });
+
+  it('dolt i matsökningen: sparas per nyckel och visas igen när posten tas bort', async () => {
+    expect(hiddenKey('livsmedel', 'lv:1')).toBe('livsmedel:lv:1');
+    await putHiddenFoods([
+      { key: 'kategori:godis', kind: 'kategori', value: 'godis', createdAt: 2 },
+      { key: 'livsmedel:lv:1', kind: 'livsmedel', value: 'lv:1', name: 'Bröd', createdAt: 1 },
+    ]);
+    expect((await listHiddenFoods()).map((h) => h.key)).toEqual([
+      'livsmedel:lv:1',
+      'kategori:godis',
+    ]);
+    await deleteHiddenFoods(['livsmedel:lv:1']);
+    expect((await listHiddenFoods()).map((h) => h.key)).toEqual(['kategori:godis']);
+  });
+
+  it('borttaget eget livsmedel och måltid finns kvar för loggarna men syns inte', async () => {
+    const per100 = { kcal: 100, proteinG: 1, carbsG: 2, fatG: 3 };
+    const food = {
+      id: 'egen:k',
+      name: 'Knäcke',
+      source: 'egen' as const,
+      per100,
+      ean: '73100005',
+      fiberG: 15,
+      createdAt: 1,
+    };
+    await putFood(food);
+    await putMeal({ id: 'm', name: 'Frukost', items: [], ean: '73100006', createdAt: 1 });
+    await setFavorite('egen:k', true, 2);
+    await deleteFood('egen:k', 50);
+    await deleteMeal('m', 51);
+    expect(await listFoods()).toEqual([]);
+    expect(await listMeals()).toEqual([]);
+    expect(await findFoodByEan('73100005')).toBeNull();
+    expect(await findMealByEan('73100006')).toBeNull();
+    expect(await listFavorites()).toEqual([]);
+    expect(await listAllFoods()).toEqual([{ ...food, deletedAt: 50, updatedAt: 50 }]);
+    expect((await listAllMeals()).map((m) => m.deletedAt)).toEqual([51]);
+    // Säkerhetskopian tar med dem; Ångra visar dem igen.
+    const backup = await readSnapshot();
+    expect(backup.foods.map((f) => f.id)).toEqual(['egen:k']);
+    await restoreFood({ ...food, deletedAt: 50 }, 60);
+    await restoreMeal({ id: 'm', name: 'Frukost', items: [], createdAt: 1 }, 61);
+    expect(await listFoods()).toEqual([{ ...food, updatedAt: 60 }]);
+    expect((await listMeals()).map((m) => m.updatedAt)).toEqual([61]);
+    // Ångra är nyare än borttagningen: en säkerhetskopia med borttagningen tar inte bort dem igen.
+    await applySnapshot(backup, 'merge');
+    expect((await listFoods()).map((f) => f.id)).toEqual(['egen:k']);
+    expect((await listMeals()).map((m) => m.id)).toEqual(['m']);
   });
 
   it('egna näringsvärden: sparas per livsmedel, tomma värden tar bort posten', async () => {
@@ -834,7 +895,7 @@ describe('db', () => {
     });
     const db = await getDb();
     expect(db.version).toBe(DB_VERSION);
-    expect(DB_VERSION).toBe(15);
+    expect(DB_VERSION).toBe(16);
     expect(await getSetting(SETTING_PREFERENCES)).toEqual({
       trendHero: false,
       claimsHidden: ['energisnal'],

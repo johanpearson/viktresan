@@ -161,7 +161,16 @@ const DEDUPE_SOURCES: ReadonlySet<FoodSource> = new Set([
 ]);
 
 /** Småord som inte skiljer två livsmedel åt ("Mjölk, 3 % fett" = "Mjölk fett 3 %"). */
-const FILLER_WORDS = new Set(['och', 'm', 'med', 'i', 'pa', 'av', 'typ', 'ca']);
+export const FILLER_WORDS: ReadonlySet<string> = new Set([
+  'och',
+  'm',
+  'med',
+  'i',
+  'pa',
+  'av',
+  'typ',
+  'ca',
+]);
 
 /**
  * Nyckel för att känna igen samma livsmedel i olika källor: normaliserade ord
@@ -231,20 +240,29 @@ export function buildIndex<T extends Searchable>(items: readonly T[]): SearchInd
 
 /**
  * Söker bland livsmedel från alla källor. Alla sökord måste träffa något ord i
- * namnet. Sortering: poäng, sedan hela namnet exakt, sedan träff på namnets
- * första ord, sedan källa (`SOURCE_RANK` – Livsmedelsverket före Fineli vid
- * likvärdig träff), sedan kortare namn. Samma livsmedel från flera databaser (`isDuplicate`) visas en
- * gång – från den källa som kommer först i `SOURCE_RANK`, på den bästa träffens plats.
+ * namnet. Sortering: först prioriterade träffar (`priority` ger ett tal – egna och nyligen
+ * loggade, högst först), sedan hela namnet exakt, poäng, träff på namnets första ord, källa
+ * (`SOURCE_RANK` – Livsmedelsverket före Fineli vid likvärdig träff) och kortare namn. Samma
+ * livsmedel från flera databaser (`isDuplicate`) visas en gång – från den källa som kommer först
+ * i `SOURCE_RANK`, på den bästa träffens plats.
  */
 export function searchIndex<T>(
   index: readonly SearchIndexEntry<T>[],
   query: string,
   limit = 30,
+  /** Prioritet (högre först) för träffar som ska stå överst, `null` = ingen. */
+  priority?: (item: T) => number | null,
 ): T[] {
   const tokens = normalize(query).split(' ').filter(Boolean);
   if (tokens.length === 0) return [];
   const whole = tokens.join(' ');
-  const hits: { entry: SearchIndexEntry<T>; score: number; exact: boolean; first: boolean }[] = [];
+  const hits: {
+    entry: SearchIndexEntry<T>;
+    score: number;
+    exact: boolean;
+    first: boolean;
+    priority: number | null;
+  }[] = [];
   for (const entry of index) {
     let total = 0;
     let first = false;
@@ -265,26 +283,43 @@ export function searchIndex<T>(
       }
       total += best;
     }
-    if (ok) hits.push({ entry, score: total, exact: entry.words.join(' ') === whole, first });
+    if (ok) {
+      hits.push({
+        entry,
+        score: total,
+        exact: entry.words.join(' ') === whole,
+        first,
+        priority: priority ? priority(entry.item) : null,
+      });
+    }
   }
   hits.sort(
     (a, b) =>
-      b.score - a.score ||
+      Number(b.priority !== null) - Number(a.priority !== null) ||
+      (b.priority ?? 0) - (a.priority ?? 0) ||
       Number(b.exact) - Number(a.exact) ||
+      b.score - a.score ||
       Number(b.first) - Number(a.first) ||
       a.entry.rank - b.entry.rank ||
       a.entry.length - b.entry.length,
   );
+  // En prioriterad träff (t.ex. loggad från Fineli) byts aldrig mot en dubblett från en annan källa.
+  const pinned = new Set(hits.filter((h) => h.priority !== null).map((h) => h.entry));
   return dedupe(
     hits.map((h) => h.entry),
     limit,
+    (e) => pinned.has(e),
   ).map((e) => e.item);
 }
 
-/** Tar bort dubbletter (se `searchIndex`) tills `limit` träffar finns. */
+/**
+ * Tar bort dubbletter (se `searchIndex`) tills `limit` träffar finns. En behållen träff som är
+ * `pinned` ersätts aldrig av en dubblett från en källa som rankas högre.
+ */
 export function dedupe<T>(
   sorted: readonly SearchIndexEntry<T>[],
   limit: number,
+  pinned: (entry: SearchIndexEntry<T>) => boolean = () => false,
 ): SearchIndexEntry<T>[] {
   const kept: SearchIndexEntry<T>[] = [];
   for (const entry of sorted) {
@@ -297,8 +332,9 @@ export function dedupe<T>(
     const at = kept.findIndex(
       (k) => k.key !== null && isDuplicate({ key: k.key, kcal: k.kcal }, { key, kcal: entry.kcal }),
     );
-    if (at === -1) kept.push(entry);
-    else if (entry.rank < (kept[at]?.rank ?? 0)) kept[at] = entry;
+    const current = kept[at];
+    if (current === undefined) kept.push(entry);
+    else if (entry.rank < current.rank && !pinned(current)) kept[at] = entry;
   }
   return kept;
 }

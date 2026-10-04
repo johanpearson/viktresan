@@ -254,7 +254,9 @@ test('Egna: svep tar bort med Ångra, tryck redigerar och kan ta bort', async ({
   await page.getByRole('button', { name: 'Ta bort livsmedlet' }).tap();
   await expect(row).toHaveCount(0);
   await expect(toast).toContainText('Tog bort Mormors bulle.');
-  expect((await dump(page)).foods).toEqual([]);
+  // Borttaget = markerat och dolt överallt; finns kvar för tidigare loggars fiber.
+  const foods = (await dump(page)).foods as { name: string; deletedAt?: number }[];
+  expect(foods.map((f) => [f.name, typeof f.deletedAt])).toEqual([['Mormors bulle', 'number']]);
   expect(errors).toEqual([]);
 });
 

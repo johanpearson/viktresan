@@ -31,6 +31,8 @@ const foodData: FoodData = {
   recipes: [],
   overrides: [],
   mealSlots: defaultMealSlots(),
+  hidden: [],
+  removed: { foods: [], meals: [] },
 };
 
 function renderDay(foodLog: FoodLogEntry[]) {

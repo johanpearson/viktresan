@@ -10,6 +10,7 @@ import {
   resetDbForTests,
   saveProfile,
   type Favorite,
+  type HiddenFood,
   type FoodLogEntry,
   type Injection,
   type Medication,
@@ -469,6 +470,13 @@ const seedMealSlots: MealSlot[] = [
   { id: 'brunch', name: 'Brunch', time: '10:30', kind: 'huvudmal', order: 6, createdAt: 3 },
 ];
 
+/** Dolt i matsökningen: ett livsmedel, en kategori och en källa. */
+const seedHidden: HiddenFood[] = [
+  { key: 'livsmedel:lv:1', kind: 'livsmedel', value: 'lv:1', name: 'Bröd fullkorn', createdAt: 5 },
+  { key: 'kategori:godis', kind: 'kategori', value: 'godis', createdAt: 6 },
+  { key: 'kalla:fineli', kind: 'kalla', value: 'fineli', createdAt: 7 },
+];
+
 async function seed(): Promise<void> {
   await applySnapshot(
     {
@@ -485,6 +493,7 @@ async function seed(): Promise<void> {
       ...milestoneData,
       ...supplementData,
       mealSlots: seedMealSlots,
+      hiddenFoods: seedHidden,
     },
     'replace',
   );
@@ -640,6 +649,7 @@ describe('backup validering', () => {
     recipes: [],
     foodOverrides: [],
     mealSlots: [],
+    hiddenFoods: [],
   };
 
   it('avvisar filer som inte är zip', async () => {
@@ -757,6 +767,11 @@ describe('backup validering', () => {
       { ...valid, meals: [{ ...meals[0], items: [{ foodId: 'x', name: 'x', grams: -1 }] }] },
       { ...valid, favorites: [{ foodId: 'x' }] },
       { ...valid, foods: [{ ...foods[0], missing: ['fiberG'] }] },
+      // Version 13: dolt i matsökningen.
+      { ...valid, hiddenFoods: undefined },
+      { ...valid, hiddenFoods: [{ key: 'kalla:x', kind: 'kalla', value: 'y', createdAt: 1 }] },
+      { ...valid, hiddenFoods: [{ key: 'gruppen:x', kind: 'gruppen', value: 'x', createdAt: 1 }] },
+      { ...valid, foods: [{ ...foods[0], deletedAt: -1 }] },
       // Version 11: egna näringsvärden.
       { ...valid, foodOverrides: undefined },
       { ...valid, foodOverrides: [{ foodId: 'lv:1', name: 'X', values: {}, createdAt: 1 }] },
@@ -981,6 +996,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
 
   const expected: Omit<Snapshot, 'photos'> = {
     mealSlots: [],
+    hiddenFoods: [],
     photoSessions: [{ id: 'migrerad:2026-01-01', date: '2026-01-01', createdAt: 10 }],
     milestones: [],
     supplements: [],
@@ -1564,10 +1580,27 @@ describe('import slå ihop', () => {
       mealSlots: defaultMealSlots(1)
         .filter((m) => m.id === 'kvall')
         .map((m) => ({ ...m, name: 'Kvällsfika', updatedAt: 9 })),
+      // Dolt på någon av enheterna förblir dolt; befintlig post behålls.
+      hiddenFoods: [
+        { key: 'kategori:godis', kind: 'kategori', value: 'godis', createdAt: 60 },
+        {
+          key: 'livsmedel:off:123',
+          kind: 'livsmedel',
+          value: 'off:123',
+          name: 'Chips',
+          createdAt: 61,
+        },
+      ],
     };
     await applySnapshot(imported, 'merge');
 
     const after = await readSnapshot();
+    expect(after.hiddenFoods.map((h) => [h.key, h.createdAt])).toEqual([
+      ['livsmedel:lv:1', 5],
+      ['kategori:godis', 6],
+      ['kalla:fineli', 7],
+      ['livsmedel:off:123', 61],
+    ]);
     expect(after.mealSlots.map((m) => m.name)).toEqual([
       'Frukost',
       'Förmiddagsmellanmål',
@@ -1660,6 +1693,47 @@ describe('import slå ihop', () => {
     expect(after.foodLog.find((e) => e.id === 'f1')?.grams).toBe(260);
   });
 
+  it('ett borttaget livsmedel eller en borttagen måltid får inte tillbaka favorit och enheter', async () => {
+    const food: StoredFood = {
+      id: 'egen:k',
+      name: 'Knäcke',
+      source: 'egen',
+      per100: { kcal: 380, proteinG: 10, carbsG: 60, fatG: 8 },
+      createdAt: 1,
+    };
+    const meal: SavedMeal = { id: 'm', name: 'Frukost', items: [], createdAt: 1 };
+    // Lokalt borttagna (nyare än den andra enhetens kopia, som fortfarande har favoriterna).
+    await applySnapshot(
+      {
+        ...emptySnapshot(),
+        foods: [{ ...food, deletedAt: 50, updatedAt: 50 }],
+        meals: [{ ...meal, deletedAt: 50, updatedAt: 50 }],
+      },
+      'replace',
+    );
+    await applySnapshot(
+      {
+        ...emptySnapshot(),
+        foods: [food],
+        meals: [meal],
+        favorites: [
+          { foodId: 'egen:k', createdAt: 2 },
+          { foodId: 'maltid:m', createdAt: 2 },
+          { foodId: 'lv:1', createdAt: 2 },
+        ],
+        foodUnits: [
+          { foodId: 'egen:k', units: [{ name: 'st', grams: 10, source: 'egen' }], createdAt: 2 },
+        ],
+      },
+      'merge',
+    );
+    const after = await readSnapshot();
+    expect(after.foods.map((f) => f.deletedAt)).toEqual([50]);
+    expect(after.meals.map((m) => m.deletedAt)).toEqual([50]);
+    expect(after.favorites.map((f) => f.foodId)).toEqual(['lv:1']);
+    expect(after.foodUnits).toEqual([]);
+  });
+
   it('tar profilen från säkerhetskopian om det inte finns någon', async () => {
     await applySnapshot({ ...emptySnapshot(), profile }, 'merge');
     expect((await readSnapshot()).profile).toEqual(profile);
@@ -1684,6 +1758,7 @@ describe('summarizeBackup', () => {
           ...milestoneData,
           ...supplementData,
           mealSlots: seedMealSlots,
+          hiddenFoods: seedHidden,
         },
         { now: NOW },
       ),

@@ -121,7 +121,7 @@ export function Mat() {
       {source && data && tab === 'naring' && (
         <NutritionView
           foodLog={data.foodLog}
-          meals={source.foodData.meals}
+          meals={[...source.foodData.meals, ...source.foodData.removed.meals]}
           livsmedel={food.livsmedel?.foods ?? null}
           supplementLog={data.supplementLog}
           supplements={features.isEnabled('tillskott')}

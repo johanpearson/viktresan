@@ -56,6 +56,8 @@ export interface SeedData {
   foodOverrides?: Record<string, unknown>[];
   /** Dagens måltider (sedan v15); ersätter standardmåltiderna helt. */
   mealSlots?: Record<string, unknown>[];
+  /** Dolt i matsökningen (sedan v16); nyckel = `key` (`livsmedel:<id>`, `kategori:<…>`, `kalla:<…>`). */
+  hiddenFoods?: Record<string, unknown>[];
 }
 
 /**
@@ -99,6 +101,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
         'recipes',
         'foodOverrides',
         'mealSlots',
+        'hiddenFoods',
       ],
       'readwrite',
     );
@@ -127,6 +130,7 @@ export async function seed(page: Page, data: SeedData): Promise<void> {
     for (const x of data.supplementLog ?? []) tx.objectStore('supplementLog').put(x);
     for (const x of data.recipes ?? []) tx.objectStore('recipes').put(x);
     for (const x of data.foodOverrides ?? []) tx.objectStore('foodOverrides').put(x);
+    for (const x of data.hiddenFoods ?? []) tx.objectStore('hiddenFoods').put(x);
     if (data.mealSlots) {
       const store = tx.objectStore('mealSlots');
       store.clear();
@@ -375,7 +379,8 @@ export async function openLog(page: Page, type: LogType): Promise<void> {
 
 /** Sveper en ListRow åt vänster (ta bort) med pekarhändelser, som ett finger. */
 export async function swipeLeft(row: Locator): Promise<void> {
-  const content = row.locator('.list-row-content');
+  // ListRow, eller en sökträff i sök-sheeten (`pick-content`).
+  const content = row.locator('.list-row-content, .pick-content').first();
   const box = await content.boundingBox();
   if (!box) throw new Error('Raden syns inte');
   const y = box.y + box.height / 2;

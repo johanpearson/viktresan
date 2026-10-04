@@ -62,8 +62,13 @@ function nav(page: Page) {
 async function setFeature(page: Page, name: RegExp, on: boolean) {
   await page.goto('./#/installningar/funktioner');
   const toggle = page.getByRole('switch', { name });
+  const features = async () => JSON.stringify((await dump(page)).settings.features ?? null);
+  const before = await features();
+  const wasOn = await toggle.isChecked();
   await toggle.setChecked(on);
   await expect(toggle).toBeChecked({ checked: on });
+  // Brytaren ändras direkt i gränssnittet – vänta tills den är sparad innan sidan lämnas.
+  if (wasOn !== on) await expect.poll(features).not.toBe(before);
 }
 
 /** Vad som syns i varje vy som berörs av brytarna. */

@@ -1,6 +1,7 @@
 import { useMemo, useState, type SyntheticEvent } from 'react';
 import { newId, putRecipe, type MealIngredient, type Recipe } from '../db/db.ts';
 import { buildCatalog, storedItems } from '../lib/foodCatalog.ts';
+import { filtersFrom, visibleFoods } from '../lib/foodFilters.ts';
 import { buildIndex, type FoodItem } from '../lib/foodSearch.ts';
 import { decimalInput, formatGrams, formatKcal, parseDecimal } from '../lib/format.ts';
 import { saveMatches, type MatchMemory } from '../lib/matchMemory.ts';
@@ -94,8 +95,15 @@ export function RecipeImportReview({
   // Kandidater: egna livsmedel (även cachade Open Food Facts-träffar) och Livsmedelsverkets.
   const custom = useMemo(() => storedItems(foodData), [foodData]);
   const lvFoods = livsmedel?.foods ?? NO_FOODS;
-  const catalog = useMemo(() => buildCatalog(lvFoods, custom), [lvFoods, custom]);
-  const index = useMemo(() => buildIndex([...custom, ...lvFoods]), [custom, lvFoods]);
+  // Dolt i matsökningen (livsmedel, kategorier, källor) föreslås inte som matchning – varken
+  // ur sökningen eller ur matchningsminnet (katalogen och indexet har samma kandidater).
+  const hidden = useMemo(() => filtersFrom(foodData.hidden), [foodData.hidden]);
+  const candidates = useMemo(
+    () => visibleFoods([...custom, ...lvFoods], hidden),
+    [custom, lvFoods, hidden],
+  );
+  const catalog = useMemo(() => buildCatalog(candidates), [candidates]);
+  const index = useMemo(() => buildIndex(candidates), [candidates]);
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
     [foodData.foodUnits],
