@@ -315,6 +315,18 @@ describe('forecastGoal', () => {
     expect(calm).toMatchObject({ kind: 'forecast', range: null });
   });
 
+  it('gamla vägningar: datumet räknas från idag och hamnar aldrig bakåt i tiden', () => {
+    // 31 dagliga vägningar som slutade för 20 dagar sedan; nära målet.
+    const daily = weighIns(31);
+    const today = addDays(start, 50);
+    const f = forecastGoal({ daily, goalKg: 92.6, today, startDate: start, rateKg: 0.5 });
+    expect(f.kind).toBe('forecast');
+    if (f.kind === 'forecast') {
+      expect(f.date > today).toBe(true);
+      expect(f.range == null || f.range.from > today).toBe(true);
+    }
+  });
+
   it('jämför med måldatum', () => {
     const daily = weighIns(31);
     const today = addDays(start, 30);

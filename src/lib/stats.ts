@@ -370,13 +370,14 @@ export function forecastGoal({
   const capKg = Math.max(rateKg ?? 0, SUSTAINABLE_SHARE_PER_WEEK * (fromKg ?? fit.fittedKg));
   const capped = towardKg > capKg;
   const usedKg = Math.min(towardKg, capKg);
-  const date = addDays(fit.lastDate, daysAt(distance, usedKg) ?? days);
+  // Räknas från idag: med gamla vägningar (kvar i fönstret) hamnar datumet aldrig bakåt i tiden.
+  const date = addDays(today, daysAt(distance, usedKg) ?? days);
 
   const spreadKg = FORECAST_SPREAD_SE * fit.slopeSeKgPerDay * 7;
   const slowDays = daysAt(distance, Math.min(towardKg - spreadKg, capKg));
   if (slowDays == null) return { kind: 'insufficient-data', reason: 'uncertain' };
   const fastDays = daysAt(distance, Math.min(towardKg + spreadKg, capKg)) ?? slowDays;
-  const range = { from: addDays(fit.lastDate, fastDays), to: addDays(fit.lastDate, slowDays) };
+  const range = { from: addDays(today, fastDays), to: addDays(today, slowDays) };
   const wide =
     spreadKg / towardKg >= FORECAST_RANGE_MIN_SHARE &&
     range.from.slice(0, 7) !== range.to.slice(0, 7);
