@@ -1693,6 +1693,47 @@ describe('import slå ihop', () => {
     expect(after.foodLog.find((e) => e.id === 'f1')?.grams).toBe(260);
   });
 
+  it('ett borttaget livsmedel eller en borttagen måltid får inte tillbaka favorit och enheter', async () => {
+    const food: StoredFood = {
+      id: 'egen:k',
+      name: 'Knäcke',
+      source: 'egen',
+      per100: { kcal: 380, proteinG: 10, carbsG: 60, fatG: 8 },
+      createdAt: 1,
+    };
+    const meal: SavedMeal = { id: 'm', name: 'Frukost', items: [], createdAt: 1 };
+    // Lokalt borttagna (nyare än den andra enhetens kopia, som fortfarande har favoriterna).
+    await applySnapshot(
+      {
+        ...emptySnapshot(),
+        foods: [{ ...food, deletedAt: 50, updatedAt: 50 }],
+        meals: [{ ...meal, deletedAt: 50, updatedAt: 50 }],
+      },
+      'replace',
+    );
+    await applySnapshot(
+      {
+        ...emptySnapshot(),
+        foods: [food],
+        meals: [meal],
+        favorites: [
+          { foodId: 'egen:k', createdAt: 2 },
+          { foodId: 'maltid:m', createdAt: 2 },
+          { foodId: 'lv:1', createdAt: 2 },
+        ],
+        foodUnits: [
+          { foodId: 'egen:k', units: [{ name: 'st', grams: 10, source: 'egen' }], createdAt: 2 },
+        ],
+      },
+      'merge',
+    );
+    const after = await readSnapshot();
+    expect(after.foods.map((f) => f.deletedAt)).toEqual([50]);
+    expect(after.meals.map((m) => m.deletedAt)).toEqual([50]);
+    expect(after.favorites.map((f) => f.foodId)).toEqual(['lv:1']);
+    expect(after.foodUnits).toEqual([]);
+  });
+
   it('tar profilen från säkerhetskopian om det inte finns någon', async () => {
     await applySnapshot({ ...emptySnapshot(), profile }, 'merge');
     expect((await readSnapshot()).profile).toEqual(profile);

@@ -26,10 +26,11 @@ import {
   favoriteFoods,
   mealToItem,
   recentFoods,
+  removedIds,
   storedItems,
   storedToItem,
 } from '../lib/foodCatalog.ts';
-import { filtersFrom, hiddenFoodEntry, visibleFoods } from '../lib/foodFilters.ts';
+import { filtersFrom, hiddenFoodEntry, isVisible, visibleFoods } from '../lib/foodFilters.ts';
 import { applyOverride, overrideMap } from '../lib/foodNutrition.ts';
 import { collapseVariants, isOwn, searchPriority, usageScores } from '../lib/foodRanking.ts';
 import { buildIndex, searchIndex, type FoodItem } from '../lib/foodSearch.ts';
@@ -268,19 +269,21 @@ export function FoodPicker({
       </li>,
     );
   }
+  // Snabbval: inte dolt (livsmedel, kategori, källa) och aldrig borttagna egna (som annars
+  // återskapas ur loggposten).
+  const removed = useMemo(() => removedIds(foodData), [foodData]);
+  const quickPick = useMemo(
+    () => (f: FoodItem) =>
+      !removed.has(f.id) && isVisible(f, hidden) && (forLog || isIngredient(f)),
+    [removed, hidden, forLog],
+  );
   const recent = useMemo(
-    () =>
-      recentFoods(foodLog, catalog, 8 + hidden.ids.size).filter(
-        (f) => !hidden.ids.has(f.id) && (forLog || isIngredient(f)),
-      ),
-    [foodLog, catalog, forLog, hidden],
+    () => recentFoods(foodLog, catalog, 8, quickPick),
+    [foodLog, catalog, quickPick],
   );
   const favorites = useMemo(
-    () =>
-      favoriteFoods(foodData.favorites, catalog, foodLog).filter(
-        (f) => !hidden.ids.has(f.id) && (forLog || isIngredient(f)),
-      ),
-    [foodData.favorites, catalog, foodLog, forLog, hidden],
+    () => favoriteFoods(foodData.favorites, catalog, foodLog).filter(quickPick),
+    [foodData.favorites, catalog, foodLog, quickPick],
   );
   const ownDishes = useMemo(() => [...mealItems, ...recipeItems], [mealItems, recipeItems]);
   const favoriteIds = new Set(foodData.favorites.map((f) => f.foodId));

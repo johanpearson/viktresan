@@ -95,13 +95,15 @@ export function RecipeImportReview({
   // Kandidater: egna livsmedel (även cachade Open Food Facts-träffar) och Livsmedelsverkets.
   const custom = useMemo(() => storedItems(foodData), [foodData]);
   const lvFoods = livsmedel?.foods ?? NO_FOODS;
-  const catalog = useMemo(() => buildCatalog(lvFoods, custom), [lvFoods, custom]);
-  // Dolt i matsökningen (livsmedel, kategorier, källor) föreslås inte som matchning.
+  // Dolt i matsökningen (livsmedel, kategorier, källor) föreslås inte som matchning – varken
+  // ur sökningen eller ur matchningsminnet (katalogen och indexet har samma kandidater).
   const hidden = useMemo(() => filtersFrom(foodData.hidden), [foodData.hidden]);
-  const index = useMemo(
-    () => buildIndex(visibleFoods([...custom, ...lvFoods], hidden)),
+  const candidates = useMemo(
+    () => visibleFoods([...custom, ...lvFoods], hidden),
     [custom, lvFoods, hidden],
   );
+  const catalog = useMemo(() => buildCatalog(candidates), [candidates]);
+  const index = useMemo(() => buildIndex(candidates), [candidates]);
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
     [foodData.foodUnits],

@@ -12,6 +12,8 @@ import {
   buildCatalog,
   entryToItem,
   fiberSourceFor,
+  historyCatalog,
+  historyMeals,
   mealToItem,
   storedItems,
 } from '../lib/foodCatalog.ts';
@@ -163,6 +165,9 @@ export function FoodDay({
     () => (livsmedel ? fiberSourceFor(catalog, foodData) : null),
     [livsmedel, catalog, foodData],
   );
+  // Tidigare loggar slås upp även i borttagna egna livsmedel och måltider (ingredienser, analys).
+  const pastMeals = useMemo(() => historyMeals(foodData), [foodData]);
+  const pastCatalog = useMemo(() => historyCatalog(catalog, foodData), [catalog, foodData]);
   // Dolt i matsökningen nämns inte i "Vad ska jag äta?" och föreslås inte som byte.
   const hiddenFilters = useMemo(() => filtersFrom(foodData.hidden), [foodData.hidden]);
   const customUnits = useMemo(
@@ -350,7 +355,7 @@ export function FoodDay({
       </div>
       <MealSections
         entries={entries}
-        meals={foodData.meals}
+        meals={pastMeals}
         mealSlots={mealSlots}
         open={open}
         favoriteIds={favoriteIds}
@@ -518,7 +523,7 @@ export function FoodDay({
           <SaveMealForm
             defaultName={savedMealName(mealName(mealSlots, saving), date)}
             entries={entriesIn(saving)}
-            meals={foodData.meals}
+            meals={pastMeals}
             onSaved={(meal) => {
               setSaving(null);
               void reloadFood().then(() => {
@@ -546,8 +551,8 @@ export function FoodDay({
           {analysis.view === 'analysis' ? (
             <MealAnalysisView
               entries={analysisEntries}
-              meals={foodData.meals}
-              catalog={catalog}
+              meals={pastMeals}
+              catalog={pastCatalog}
               foods={visibleFoods(livsmedel?.foods ?? NO_FOODS, hiddenFilters)}
               goals={{
                 targetKcal,

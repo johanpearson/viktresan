@@ -7,6 +7,9 @@ import {
   favoriteFoods,
   mealToItem,
   recentFoods,
+  historyCatalog,
+  historyMeals,
+  removedIds,
   sourceOf,
   storedToItem,
 } from './foodCatalog.ts';
@@ -118,6 +121,41 @@ describe('foodCatalog', () => {
     );
     expect(recent.map((r) => r.name)).toEqual(['Namn lv:3', 'Namn lv:1', 'Nytt namn']);
     expect(recentFoods([entry('a', 'lv:1', 1), entry('b', 'lv:2', 2)], catalog, 1)).toHaveLength(1);
+  });
+
+  it('senaste: det som inte ska visas räknas inte mot gränsen', () => {
+    const log = [entry('a', 'lv:1', 3), entry('b', 'egen:x', 2), entry('c', 'lv:3', 1)];
+    const recent = recentFoods(log, new Map(), 2, (f) => f.id !== 'lv:1');
+    expect(recent.map((r) => r.id)).toEqual(['egen:x', 'lv:3']);
+  });
+
+  it('borttagna egna livsmedel och måltider: id:n, historikens katalog och måltider', () => {
+    const data = {
+      meals: [{ id: 'm1', name: 'Aktiv', items: [], createdAt: 1 }],
+      overrides: [],
+      removed: {
+        foods: [
+          {
+            id: 'egen:k',
+            name: 'Knäcke',
+            source: 'egen' as const,
+            per100,
+            deletedAt: 5,
+            createdAt: 1,
+          },
+        ],
+        meals: [{ id: 'm2', name: 'Borta', items: [], deletedAt: 5, createdAt: 1 }],
+      },
+    };
+    expect([...removedIds(data)]).toEqual(['egen:k', 'maltid:m2']);
+    const visible = buildCatalog([
+      { id: 'lv:1', name: 'Bröd', source: 'livsmedelsverket', per100 },
+    ]);
+    expect([...historyCatalog(visible, data).keys()].sort()).toEqual(['egen:k', 'lv:1']);
+    expect(historyMeals(data).map((m) => m.id)).toEqual(['m1', 'm2']);
+    const empty = { ...data, removed: { foods: [], meals: [] } };
+    expect(historyCatalog(visible, empty)).toBe(visible);
+    expect(historyMeals(empty)).toBe(data.meals);
   });
 
   it('favoriter: från katalogen, annars senaste loggposten, annars utelämnas', () => {

@@ -2103,6 +2103,15 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     if (snapshot.profile && !(await profile.get(PROFILE_KEY))) {
       await profile.put(snapshot.profile, PROFILE_KEY);
     }
+    // Ett borttaget livsmedel eller en borttagen måltid (som vann) behåller varken favorit eller
+    // egna enheter, även om en annan enhets kopia hade dem.
+    const removed = [
+      ...(await foods.getAll()).filter((f) => f.deletedAt !== undefined).map((f) => f.id),
+      ...(await meals.getAll())
+        .filter((m) => m.deletedAt !== undefined)
+        .map((m) => `maltid:${m.id}`),
+    ];
+    await Promise.all(removed.flatMap((id) => [favorites.delete(id), foodUnits.delete(id)]));
   }
   await tx.done;
 }

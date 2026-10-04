@@ -223,6 +223,11 @@ test('ta bort en egen vara – tidigare loggar finns kvar', async ({ page }) => 
   await confirm.getByRole('button', { name: 'Ta bort' }).tap();
   await expect(picker.getByTestId('picker-toast')).toContainText('Tog bort Knäckebröd hemma.');
   await expect(hit(picker, 'Knäckebröd hemma')).toHaveCount(0);
+  // Inte heller i Senaste, trots att den loggats idag.
+  await search(picker, '');
+  await expect(
+    picker.getByTestId('quick-pick').filter({ hasText: 'Knäckebröd hemma' }),
+  ).toHaveCount(0);
   await picker.getByRole('button', { name: 'Stäng' }).first().tap();
   await expect(picker).toBeHidden();
 
