@@ -1,6 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { DAY_MS, collectErrors, dump, isoDaysFromToday, seed, wipe } from './helpers.ts';
+import {
+  DAY_MS,
+  collectErrors,
+  dump,
+  isoDaysFromToday,
+  seed,
+  forceDownloadBackup,
+  wipe,
+} from './helpers.ts';
 
 const DATA = {
   profile: {
@@ -152,6 +160,13 @@ const DATA = {
   ],
 };
 
+// Nedladdningsläget som standard. Testerna för "Skriv över fil" mockar showSaveFilePicker i stället
+// och får inte även borttagningen – ordningen mellan flera init-skript är inte definierad.
+const FILE_MODE = 'skriv över fil:';
+test.beforeEach(async ({ page }, testInfo) => {
+  if (!testInfo.title.startsWith(FILE_MODE)) await forceDownloadBackup(page);
+});
+
 async function openSettings(page: Page) {
   await page.goto('./#/installningar/sakerhetskopia');
   await expect(page.getByRole('dialog', { name: 'Säkerhetskopia' })).toBeVisible();
@@ -166,7 +181,7 @@ async function exportBackup(page: Page, password?: string): Promise<Buffer> {
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Exportera säkerhetskopia' }).tap();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/^viktresan-backup-\d{4}-\d{2}-\d{2}\.zip$/);
+  expect(download.suggestedFilename()).toBe('viktresan-backup.zip');
   await expect(
     page.getByRole('status').filter({ hasText: 'Säkerhetskopian är nedladdad' }),
   ).toBeVisible();
@@ -209,10 +224,12 @@ test('export → import ger identisk data', async ({ page }) => {
   expect(before.workoutPlans).toHaveLength(1);
 
   await openSettings(page);
-  await expect(page.getByTestId('last-export')).toHaveText('Ingen export gjord ännu.');
+  await expect(page.getByTestId('backup-mode')).toHaveText('Nedladdning');
+  await expect(page.getByTestId('last-export')).toHaveText('Ingen ännu');
   const zip = await exportBackup(page);
   expect(zip.subarray(0, 2).toString()).toBe('PK');
-  await expect(page.getByTestId('last-export')).toContainText('(i dag)');
+  await expect(page.getByTestId('last-export')).not.toHaveText('Ingen ännu');
+  await expect(page.getByText('I dag', { exact: true })).toBeVisible();
 
   // Ny "enhet": töm datan och återställ.
   await wipe(page);
@@ -319,31 +336,206 @@ test('ogiltig fil ger tydligt fel', async ({ page }) => {
   await expect(page.getByRole('alert')).toHaveText('Filen är ingen giltig zip-fil.');
 });
 
-test('delar via Web Share API när det finns', async ({ page }) => {
+interface MockFileState {
+  picker: number;
+  writes: number;
+  requests: number;
+  suggestedName: string;
+  /** Svar på queryPermission (som efter en omstart av webbläsaren: 'prompt'). */
+  permission: 'granted' | 'prompt';
+  /** Nästa skrivning misslyckas som när filen flyttats eller tagits bort. */
+  broken: boolean;
+  /** Filens innehåll efter senaste skrivningen. */
+  bytes: number[];
+}
+
+/**
+ * Mockad "Spara som" med ett låtsat filhandtag. Riktiga handtag (OPFS) i IndexedDB kraschar
+ * Chromium i Playwrights kontexter, så handtaget sparas som en markör och blir ett handtag igen
+ * när appen läser det (`IDBRequest.result`) – appens egen lagringskod körs oförändrad.
+ * Filens innehåll och räknarna ligger i sessionStorage så att de överlever omladdning.
+ */
+async function mockSaveFilePicker(page: Page) {
   await page.addInitScript(() => {
-    const shared: { name: string; size: number; type: string }[] = [];
-    Object.assign(window, { __shared: shared });
-    Object.defineProperty(navigator, 'canShare', {
-      value: (data: ShareData) => Array.isArray(data.files) && data.files.length > 0,
+    const KEY = '__mockBackupFile';
+    const MARK = '__mockFileHandle';
+    const initial: MockFileState = {
+      picker: 0,
+      writes: 0,
+      requests: 0,
+      suggestedName: '',
+      permission: 'granted',
+      broken: false,
+      bytes: [],
+    };
+    const read = (): MockFileState => {
+      const raw = sessionStorage.getItem(KEY);
+      return raw ? (JSON.parse(raw) as MockFileState) : { ...initial };
+    };
+    const update = (change: (state: MockFileState) => void) => {
+      const state = read();
+      change(state);
+      sessionStorage.setItem(KEY, JSON.stringify(state));
+    };
+
+    const makeHandle = () => ({
+      [MARK]: true,
+      kind: 'file',
+      name: 'vald-backup.zip',
+      queryPermission: () => Promise.resolve(read().permission),
+      requestPermission: () => {
+        update((s) => {
+          s.requests += 1;
+          s.permission = 'granted';
+        });
+        return Promise.resolve('granted');
+      },
+      createWritable: () => {
+        const failed = read().broken;
+        update((s) => {
+          s.writes += 1;
+          s.broken = false;
+        });
+        if (failed) return Promise.reject(new DOMException('Filen finns inte', 'NotFoundError'));
+        const chunks: Blob[] = [];
+        return Promise.resolve({
+          write: (data: Blob) => {
+            chunks.push(data);
+            return Promise.resolve();
+          },
+          close: async () => {
+            const bytes = Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()));
+            update((s) => {
+              s.bytes = bytes;
+            });
+          },
+        });
+      },
     });
-    Object.defineProperty(navigator, 'share', {
-      value: (data: ShareData) => {
-        for (const f of data.files ?? []) shared.push({ name: f.name, size: f.size, type: f.type });
-        return Promise.resolve();
+
+    Object.assign(window, {
+      showSaveFilePicker: (options: { suggestedName: string }) => {
+        update((s) => {
+          s.picker += 1;
+          s.suggestedName = options.suggestedName;
+        });
+        return Promise.resolve(makeHandle());
+      },
+    });
+
+    const isMarked = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null && MARK in value;
+    const store = IDBObjectStore.prototype;
+    const put = Object.getOwnPropertyDescriptor(store, 'put')?.value as IDBObjectStore['put'];
+    store.put = function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      return put.call(this, isMarked(value) ? { [MARK]: true } : value, key);
+    };
+    const result = Object.getOwnPropertyDescriptor(IDBRequest.prototype, 'result');
+    Object.defineProperty(IDBRequest.prototype, 'result', {
+      configurable: true,
+      get(this: IDBRequest) {
+        const value: unknown = result?.get?.call(this);
+        return isMarked(value) ? makeHandle() : value;
       },
     });
   });
+}
+
+function mockFile(page: Page): Promise<MockFileState> {
+  return page.evaluate(
+    () => JSON.parse(sessionStorage.getItem('__mockBackupFile') ?? 'null') as MockFileState,
+  );
+}
+
+async function setMockFile(page: Page, change: Partial<MockFileState>) {
+  await page.evaluate((c) => {
+    const state = JSON.parse(sessionStorage.getItem('__mockBackupFile') ?? '{}') as object;
+    sessionStorage.setItem('__mockBackupFile', JSON.stringify({ ...state, ...c }));
+  }, change);
+}
+
+test('skriv över fil: första backupen väljer fil, nästa skriver över samma fil', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await mockSaveFilePicker(page);
+  await openSettings(page);
+  await seed(page, { profile: DATA.profile, weights: DATA.weights });
+  await openSettings(page);
+  await expect(page.getByTestId('backup-mode')).toHaveText('Skriv över fil');
+  await expect(page.getByTestId('backup-mode-note')).toHaveText(
+    'Du väljer plats och filnamn första gången',
+  );
+
+  await page.getByRole('button', { name: 'Exportera säkerhetskopia' }).tap();
+  await expect(page.getByRole('status')).toContainText(
+    'Säkerhetskopian är sparad i vald-backup.zip',
+  );
+  const first = await mockFile(page);
+  expect(first).toMatchObject({ picker: 1, writes: 1, suggestedName: 'viktresan-backup.zip' });
+  expect(Buffer.from(first.bytes).subarray(0, 2).toString()).toBe('PK');
+  await expect(page.getByTestId('backup-mode-note')).toHaveText(
+    'Varje backup skriver över vald-backup.zip',
+  );
+  await expect(page.getByTestId('last-export')).not.toHaveText('Ingen ännu');
+
+  // Ny vägning och omladdning: handtaget läses från IndexedDB, ingen ny dialog. Behörigheten
+  // har gått ut (som efter en omstart) och begärs igen.
+  await seed(page, {
+    weights: [{ id: 'ny', date: isoDaysFromToday(0), weightKg: 86, createdAt: Date.now() }],
+  });
+  await setMockFile(page, { permission: 'prompt' });
+  await page.reload();
+  await expect(page.getByTestId('backup-mode-note')).toHaveText(
+    'Varje backup skriver över vald-backup.zip',
+  );
+  await page.getByRole('button', { name: 'Exportera säkerhetskopia' }).tap();
+  await expect(page.getByRole('status')).toContainText(
+    'Säkerhetskopian är sparad i vald-backup.zip',
+  );
+  const second = await mockFile(page);
+  expect(second).toMatchObject({ picker: 1, writes: 2, requests: 1 });
+
+  // Samma fil innehåller nu den nya vägningen.
+  await chooseBackup(page, Buffer.from(second.bytes));
+  await expect(page.getByTestId('import-preview').getByTestId('preview-weights')).toHaveText('3');
+  expect(errors).toEqual([]);
+});
+
+test('skriv över fil: en borttagen fil ger "Välj fil igen"', async ({ page }) => {
+  await mockSaveFilePicker(page);
   await openSettings(page);
   await page.getByRole('button', { name: 'Exportera säkerhetskopia' }).tap();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Säkerhetskopian är delad' }),
-  ).toBeVisible();
-  const shared = await page.evaluate(
-    () => (window as unknown as { __shared: { name: string; type: string }[] }).__shared,
+  await expect(page.getByRole('status')).toContainText('sparad i vald-backup.zip');
+
+  // Filen tas bort utanför appen – handtaget slutar fungera.
+  await setMockFile(page, { broken: true });
+  await page.getByRole('button', { name: 'Exportera säkerhetskopia' }).tap();
+  await expect(page.getByTestId('backup-file-problem')).toContainText('Välj fil igen');
+  await expect(page.getByTestId('backup-mode-note')).toHaveText(
+    'Du väljer plats och filnamn första gången',
   );
-  expect(shared).toEqual([
-    expect.objectContaining({ name: expect.stringMatching(/\.zip$/), type: 'application/zip' }),
-  ]);
+
+  await page.getByRole('button', { name: 'Välj fil igen' }).tap();
+  await expect(page.getByRole('status')).toContainText('sparad i vald-backup.zip');
+  await expect(page.getByTestId('backup-file-problem')).toBeHidden();
+  const state = await mockFile(page);
+  expect(state).toMatchObject({ picker: 2, writes: 3 });
+  expect(Buffer.from(state.bytes).subarray(0, 2).toString()).toBe('PK');
+});
+
+test('nedladdning: fast filnamn och en engångsnotis om äldre kopior', async ({ page }) => {
+  await openSettings(page);
+  await expect(page.getByTestId('backup-mode-note')).toHaveText(
+    'Laddas ner som viktresan-backup.zip',
+  );
+  await exportBackup(page);
+  await expect(page.getByTestId('download-hint')).toContainText('Filer-appen');
+
+  // Nästa gång (även efter omladdning) visas notisen inte.
+  await page.reload();
+  await exportBackup(page);
+  await expect(page.getByTestId('download-hint')).toBeHidden();
 });
 
 test('påminner om säkerhetskopia efter 7 dagar utan export', async ({ page }) => {

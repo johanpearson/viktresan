@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { collectErrors, seed } from './helpers.ts';
+import { collectErrors, seed, forceDownloadBackup } from './helpers.ts';
 import {
   FROZEN_NOW,
   LIVSMEDEL,
@@ -43,6 +43,8 @@ function masks(scope: Page | Locator): Locator[] {
 }
 
 async function open(page: Page, hash: string) {
+  // Säkerhetskopian som på en telefon (utan showSaveFilePicker).
+  await forceDownloadBackup(page);
   await page.clock.setFixedTime(new Date(FROZEN_NOW));
   await page.route('**/livsmedel.json', (route) => route.fulfill({ json: LIVSMEDEL }));
   // Tom Fineli-databas: testerna bygger på den mockade Livsmedelsverket-datan.

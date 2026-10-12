@@ -3,7 +3,7 @@
  * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
  * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort, rapportens val och vad Översikt
  * döljer (ringar och kort), senast stängda milstolpekortet, dolda näringsetiketter och om namnet på
- * "Vad ska jag äta?"-ikonen visats. Lagras i `settings`
+ * "Vad ska jag äta?"-ikonen och notisen om nedladdade säkerhetskopior visats. Lagras i `settings`
  * under `preferences`. Delas av alla komponenter via useSyncExternalStore.
  */
 import { useSyncExternalStore } from 'react';
@@ -42,6 +42,8 @@ export interface Preferences {
   claimsHidden: readonly ClaimId[];
   /** Namnet på "Vad ska jag äta?"-ikonen (Mat → Dag) har visats första gången. */
   whatToEatTipSeen: boolean;
+  /** Notisen om att äldre nedladdade säkerhetskopior kan tas bort i Filer-appen har visats. */
+  backupDownloadHintSeen: boolean;
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -62,6 +64,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   milestoneCardDismissed: null,
   claimsHidden: [],
   whatToEatTipSeen: false,
+  backupDownloadHintSeen: false,
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -99,6 +102,7 @@ export function parsePreferences(raw: unknown): Preferences {
       ? [...new Set(stored.claimsHidden.filter(isClaimId))]
       : [],
     whatToEatTipSeen: stored.whatToEatTipSeen === true,
+    backupDownloadHintSeen: stored.backupDownloadHintSeen === true,
   };
 }
 

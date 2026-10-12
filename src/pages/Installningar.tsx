@@ -4,6 +4,7 @@ import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Card } from '../components/Card.tsx';
 import { DisplaySettings } from '../components/DisplaySettings.tsx';
 import { ExportBackup } from '../components/ExportBackup.tsx';
+import { BACKUP_MODE_LABEL, backupMode } from '../lib/backupFile.ts';
 import { FeatureSettings } from '../components/FeatureSettings.tsx';
 import { FiberGoalSettings } from '../components/FiberGoalSettings.tsx';
 import { FoodPreferencesSettings } from '../components/FoodPreferencesSettings.tsx';
@@ -19,7 +20,6 @@ import { ProfileForm } from '../components/ProfileForm.tsx';
 import { ProteinGoalSettings } from '../components/ProteinGoalSettings.tsx';
 import { StorageSettings } from '../components/StorageSettings.tsx';
 import { WaterGoalSettings } from '../components/WaterGoalSettings.tsx';
-import { daysSince } from '../lib/backupReminder.ts';
 import { FEATURES, useFeatures, type FeatureGated } from '../lib/features.ts';
 import { decimalInput, formatInt, formatKg, formatMl } from '../lib/format.ts';
 import { useLockStatus } from '../lib/lock.ts';
@@ -82,15 +82,16 @@ interface Group {
 
 const NO_PROFILE = 'Fyll i profilen först';
 
+const shortDate = new Intl.DateTimeFormat('sv-SE', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
 function lastExportShort(status: BackupStatus | null): string {
   if (status == null) return '…';
-  if (status.lastExportAt == null) return 'Ingen export ännu';
-  const days = daysSince(status.lastExportAt, Date.now());
-  return days === 0
-    ? 'Senast i dag'
-    : days === 1
-      ? 'Senast i går'
-      : `Senast för ${String(days)} dagar sedan`;
+  if (status.lastExportAt == null) return 'Senaste backup: ingen ännu';
+  return `Senaste backup: ${shortDate.format(status.lastExportAt)}`;
 }
 
 /** Inställningarna som grupperade listor; varje rad öppnar en panel. Funktionsbrytarna styr raderna. */
@@ -221,7 +222,10 @@ const GROUPS: readonly Group[] = [
       {
         id: 'sakerhetskopia',
         title: 'Säkerhetskopia',
-        secondary: ({ backup }) => lastExportShort(backup),
+        secondary: ({ backup }) => (
+          <span data-testid="backup-summary">{lastExportShort(backup)}</span>
+        ),
+        value: () => BACKUP_MODE_LABEL[backupMode()],
       },
       {
         id: 'lagring',
@@ -342,9 +346,8 @@ export function Installningar() {
         return (
           <>
             <p className="form-note">
-              Allt – profil, mätningar, matlogg och bilder – sparas i en zip-fil som du kan dela
-              till t.ex. molnlagring eller e-post. Datan lämnar bara enheten när du själv väljer
-              det.
+              Allt – profil, mätningar, matlogg och bilder – sparas i en enda zip-fil. Datan lämnar
+              bara enheten när du själv väljer det.
             </p>
             <ExportBackup status={backup.status} onExported={backup.markExported} />
             <ImportBackup

@@ -1753,6 +1753,8 @@ export async function deleteSupplementIntake(id: string): Promise<void> {
 
 /** Nycklar i `settings`-storen. */
 export const SETTING_LAST_EXPORT = 'lastExportAt';
+/** Filhandtaget som säkerhetskopian skrivs över i (File System Access API). */
+export const SETTING_BACKUP_FILE = 'backupFile';
 export const SETTING_LOCK = 'lock';
 export const SETTING_FEATURES = 'features';
 export const SETTING_PREFERENCES = 'preferences';
