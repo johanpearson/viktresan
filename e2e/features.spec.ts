@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { collectErrors, dump, isoDaysFromToday, openCalendarLegend, seed } from './helpers.ts';
+import {
+  collectErrors,
+  dump,
+  isoDaysFromToday,
+  openCalendarLegend,
+  seed,
+  forceDownloadBackup,
+} from './helpers.ts';
 
 /** Lite av allt, idag, så att varje vy har något att visa. */
 const DATA = {
@@ -191,6 +198,7 @@ test('bilder av döljer fliken i Framsteg och i kalendern', async ({ page }) => 
 });
 
 test('avstängda funktioner: datan ligger kvar, exporteras och syns igen', async ({ page }) => {
+  await forceDownloadBackup(page);
   for (const name of [/^Steg/, /^Midjemått/, /^Mat/, /^Bilder/]) {
     await setFeature(page, name, false);
   }

@@ -399,3 +399,13 @@ export async function openCalendarLegend(page: Page): Promise<void> {
   await legend.locator('summary').tap();
   await expect(legend).toHaveAttribute('open', '');
 }
+
+/**
+ * Säkerhetskopian i nedladdningsläget: Playwrights Chromium har `showSaveFilePicker`, vilket annars
+ * ger läget "Skriv över fil" (som på datorn). Telefoner saknar den.
+ */
+export async function forceDownloadBackup(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    delete (window as { showSaveFilePicker?: unknown }).showSaveFilePicker;
+  });
+}

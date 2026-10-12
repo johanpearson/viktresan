@@ -332,6 +332,14 @@ radioknappar – se nedan. Samma switchar används för val i en panel, t.ex. "T
 med `legend` och en `switch-list`; en förklaring ("Inte ifyllt – …") är `switch-description` och kopplas med
 `aria-describedby`, så att switchens namn bara är rubriken.
 
+### Säkerhetskopia (Inställningar → Säkerhetskopia)
+
+Raden visar läget som värde ("Skriv över fil"/"Nedladdning") och "Senaste backup: 12 okt. 2026" som `secondary`. I panelen
+är läget och senaste backup två `ListRow`-värden (förklaringen som `secondary`), sedan krypteringsswitchen och **en**
+primärknapp, "Exportera säkerhetskopia". Slutar den sparade filen fungera visas felet ovanför knappen (`form-error`) och
+knappen blir "Välj fil igen" – ingen andra fylld knapp. "Välj en annan fil" är en liten textknapp (`button-ghost
+button-small`). Notisen om äldre nedladdade kopior (`form-note muted`) visas bara efter första nedladdningen.
+
 ### ChoiceList (valrader)
 
 ```tsx

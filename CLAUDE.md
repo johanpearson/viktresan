@@ -140,7 +140,8 @@ src/lib/validation.ts   Validering av profil- och mätningsformulär
 src/lib/backup.ts       Säkerhetskopia: zip (fflate), valfri kryptering, validering vid import
 src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
 src/lib/useBackupStatus.ts Hook: senaste export + om påminnelsen ska visas
-src/lib/share.ts        Web Share API med nedladdning som reserv
+src/lib/backupFile.ts   Var säkerhetskopian hamnar: läge (backupMode), skriv över vald fil (saveToBackupFile, filhandtag i settings),
+                        annars nedladdning (download)
 src/lib/lock.ts         Valfritt WebAuthn-lås: tillstånd (useSyncExternalStore), lås/lås upp
 src/db/db.ts            IndexedDB via idb: schema, migreringar, dataåtkomst, onDataChange (DB_VERSION 16)
 src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChart, ExportBackup,
@@ -290,7 +291,7 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats, `backupDownloadHintSeen` – notisen om äldre nedladdade kopior har visats), `backupFile` (filhandtaget som säkerhetskopian skrivs över i), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -627,9 +628,19 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
 
 ### Säkerhetskopiering och återställning
 
-- **Export** (Inställningar → Säkerhetskopia): `readSnapshot()` → `createBackup()` → `shareOrDownload()`.
-  Web Share API används om `navigator.canShare({ files })` är sant, annars laddas filen ner.
-  `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
+- **Export** (Inställningar → Säkerhetskopia, `ExportBackup`, `backupFile.ts`): en fil som skrivs över, ingen inloggning.
+  Läget (`backupMode`) visas i panelen och som värde på raden ("Skriv över fil"/"Nedladdning"), liksom "Senaste backup: [datum]".
+  - **Skriv över fil** när `showSaveFilePicker` finns: första backupen öppnar "Spara som" (förslag `viktresan-backup.zip`),
+    handtaget sparas i `settings` (`backupFile`) och nästa backup skriver över samma fil (`queryPermission`/`requestPermission`
+    vid behov). Filen väljs och behörigheten begärs innan kopian byggs (knapptrycket måste fortfarande gälla). Går handtaget
+    inte att använda (flyttad/borttagen fil) glöms det och primärknappen blir "Välj fil igen"; "Välj en annan fil" finns som
+    textknapp. Nekad behörighet behåller handtaget.
+  - **Nedladdning** annars (telefoner): `download()` med det fasta namnet `viktresan-backup.zip` och första gången en kort
+    notis (`preferences.backupDownloadHintSeen`) om att äldre kopior kan tas bort i Filer-appen.
+    `lastExportAt` sätts bara när filen sparats/laddats ner (inte vid avbruten "Spara som").
+    E2E: Playwrights Chromium har `showSaveFilePicker` – `forceDownloadBackup(page)` (helpers.ts) tar bort den för
+    nedladdningsläget; `backup.spec.ts` mockar den med ett OPFS-handtag.
+    `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
 - **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 13`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,

@@ -320,12 +320,8 @@ export async function createBackup(
   return new Blob([outer], { type: 'application/zip' });
 }
 
-export function backupFileName(now: Date = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `viktresan-backup-${y}-${m}-${d}.zip`;
-}
+/** Fast filnamn: varje backup skriver över samma fil (eller laddas ner med samma namn). */
+export const BACKUP_FILE_NAME = 'viktresan-backup.zip';
 
 // ---------------------------------------------------------------------------
 // Import

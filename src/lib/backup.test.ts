@@ -37,7 +37,7 @@ import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
   BackupError,
-  backupFileName,
+  BACKUP_FILE_NAME,
   createBackup,
   readBackup,
   summarizeBackup,
@@ -1792,7 +1792,7 @@ describe('summarizeBackup', () => {
     });
   });
 
-  it('filnamnet innehåller datumet', () => {
-    expect(backupFileName(new Date(2026, 8, 5))).toBe('viktresan-backup-2026-09-05.zip');
+  it('filnamnet är fast', () => {
+    expect(BACKUP_FILE_NAME).toBe('viktresan-backup.zip');
   });
 });

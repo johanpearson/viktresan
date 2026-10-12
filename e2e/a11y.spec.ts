@@ -1,6 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { isoDaysFromToday, openCalendarLegend, openLog, seed } from './helpers.ts';
+import {
+  isoDaysFromToday,
+  openCalendarLegend,
+  openLog,
+  seed,
+  forceDownloadBackup,
+} from './helpers.ts';
 
 const ROUTES = [
   ['Översikt', './'],
@@ -361,6 +367,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('import-förhandsvisning och krypteringsfält saknar tillgänglighetsfel', async ({
       page,
     }) => {
+      await forceDownloadBackup(page);
       await seedData(page);
       await page.goto('./#/installningar/sakerhetskopia');
       await page.getByLabel('Kryptera med lösenord').check();
