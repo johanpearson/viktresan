@@ -160,9 +160,11 @@ const DATA = {
   ],
 };
 
-// Nedladdningsläget som standard; testerna för "Skriv över fil" mockar showSaveFilePicker.
-test.beforeEach(async ({ page }) => {
-  await forceDownloadBackup(page);
+// Nedladdningsläget som standard. Testerna för "Skriv över fil" mockar showSaveFilePicker i stället
+// och får inte även borttagningen – ordningen mellan flera init-skript är inte definierad.
+const FILE_MODE = 'skriv över fil:';
+test.beforeEach(async ({ page }, testInfo) => {
+  if (!testInfo.title.startsWith(FILE_MODE)) await forceDownloadBackup(page);
 });
 
 async function openSettings(page: Page) {

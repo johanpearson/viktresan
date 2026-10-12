@@ -641,7 +641,6 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
     E2E: Playwrights Chromium har `showSaveFilePicker` – `forceDownloadBackup(page)` (helpers.ts) tar bort den för
     nedladdningsläget; `backup.spec.ts` mockar den med ett låtsat handtag (sparas som markör i IndexedDB – riktiga
     OPFS-handtag i IndexedDB kraschar Chromium i Playwrights kontexter).
-    `lastExportAt` sätts bara om filen faktiskt delades/laddades ner (inte vid avbruten delning).
 - **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 13`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
