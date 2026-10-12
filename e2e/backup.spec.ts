@@ -334,60 +334,122 @@ test('ogiltig fil ger tydligt fel', async ({ page }) => {
   await expect(page.getByRole('alert')).toHaveText('Filen är ingen giltig zip-fil.');
 });
 
+interface MockFileState {
+  picker: number;
+  writes: number;
+  requests: number;
+  suggestedName: string;
+  /** Svar på queryPermission (som efter en omstart av webbläsaren: 'prompt'). */
+  permission: 'granted' | 'prompt';
+  /** Nästa skrivning misslyckas som när filen flyttats eller tagits bort. */
+  broken: boolean;
+  /** Filens innehåll efter senaste skrivningen. */
+  bytes: number[];
+}
+
 /**
- * Mockad "Spara som": returnerar ett riktigt filhandtag i webbläsarens privata filsystem (OPFS),
- * så att det går att spara i IndexedDB och skriva till. Räknar dialoger och skrivningar.
+ * Mockad "Spara som" med ett låtsat filhandtag. Riktiga handtag (OPFS) i IndexedDB kraschar
+ * Chromium i Playwrights kontexter, så handtaget sparas som en markör och blir ett handtag igen
+ * när appen läser det (`IDBRequest.result`) – appens egen lagringskod körs oförändrad.
+ * Filens innehåll och räknarna ligger i sessionStorage så att de överlever omladdning.
  */
 async function mockSaveFilePicker(page: Page) {
   await page.addInitScript(() => {
-    const calls = { picker: 0, writes: 0, suggestedName: '', broken: false };
-    Object.assign(window, { __backupCalls: calls });
-    Object.assign(window, {
-      showSaveFilePicker: async (options: { suggestedName: string }) => {
-        calls.picker += 1;
-        calls.suggestedName = options.suggestedName;
-        const dir = await navigator.storage.getDirectory();
-        return dir.getFileHandle('vald-backup.zip', { create: true });
+    const KEY = '__mockBackupFile';
+    const MARK = '__mockFileHandle';
+    const initial: MockFileState = {
+      picker: 0,
+      writes: 0,
+      requests: 0,
+      suggestedName: '',
+      permission: 'granted',
+      broken: false,
+      bytes: [],
+    };
+    const read = (): MockFileState => {
+      const raw = sessionStorage.getItem(KEY);
+      return raw ? (JSON.parse(raw) as MockFileState) : { ...initial };
+    };
+    const update = (change: (state: MockFileState) => void) => {
+      const state = read();
+      change(state);
+      sessionStorage.setItem(KEY, JSON.stringify(state));
+    };
+
+    const makeHandle = () => ({
+      [MARK]: true,
+      kind: 'file',
+      name: 'vald-backup.zip',
+      queryPermission: () => Promise.resolve(read().permission),
+      requestPermission: () => {
+        update((s) => {
+          s.requests += 1;
+          s.permission = 'granted';
+        });
+        return Promise.resolve('granted');
+      },
+      createWritable: () => {
+        const failed = read().broken;
+        update((s) => {
+          s.writes += 1;
+          s.broken = false;
+        });
+        if (failed) return Promise.reject(new DOMException('Filen finns inte', 'NotFoundError'));
+        const chunks: Blob[] = [];
+        return Promise.resolve({
+          write: (data: Blob) => {
+            chunks.push(data);
+            return Promise.resolve();
+          },
+          close: async () => {
+            const bytes = Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()));
+            update((s) => {
+              s.bytes = bytes;
+            });
+          },
+        });
       },
     });
-    const proto = FileSystemFileHandle.prototype;
-    const createWritable = Object.getOwnPropertyDescriptor(proto, 'createWritable')
-      ?.value as typeof proto.createWritable;
-    proto.createWritable = function (this: FileSystemFileHandle, ...args) {
-      calls.writes += 1;
-      // Som när filen flyttats eller tagits bort i Filer: skrivningen misslyckas en gång.
-      if (calls.broken) {
-        calls.broken = false;
-        return Promise.reject(new DOMException('Filen finns inte', 'NotFoundError'));
-      }
-      return createWritable.apply(this, args);
+
+    Object.assign(window, {
+      showSaveFilePicker: (options: { suggestedName: string }) => {
+        update((s) => {
+          s.picker += 1;
+          s.suggestedName = options.suggestedName;
+        });
+        return Promise.resolve(makeHandle());
+      },
+    });
+
+    const isMarked = (value: unknown): value is Record<string, unknown> =>
+      typeof value === 'object' && value !== null && MARK in value;
+    const store = IDBObjectStore.prototype;
+    const put = Object.getOwnPropertyDescriptor(store, 'put')?.value as IDBObjectStore['put'];
+    store.put = function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      return put.call(this, isMarked(value) ? { [MARK]: true } : value, key);
     };
+    const result = Object.getOwnPropertyDescriptor(IDBRequest.prototype, 'result');
+    Object.defineProperty(IDBRequest.prototype, 'result', {
+      configurable: true,
+      get(this: IDBRequest) {
+        const value: unknown = result?.get?.call(this);
+        return isMarked(value) ? makeHandle() : value;
+      },
+    });
   });
 }
 
-function backupCalls(page: Page) {
+function mockFile(page: Page): Promise<MockFileState> {
   return page.evaluate(
-    () =>
-      (
-        window as unknown as {
-          __backupCalls: {
-            picker: number;
-            writes: number;
-            suggestedName: string;
-            broken: boolean;
-          };
-        }
-      ).__backupCalls,
+    () => JSON.parse(sessionStorage.getItem('__mockBackupFile') ?? 'null') as MockFileState,
   );
 }
 
-async function readChosenFile(page: Page): Promise<Buffer> {
-  const bytes = await page.evaluate(async () => {
-    const dir = await navigator.storage.getDirectory();
-    const file = await (await dir.getFileHandle('vald-backup.zip')).getFile();
-    return Array.from(new Uint8Array(await file.arrayBuffer()));
-  });
-  return Buffer.from(bytes);
+async function setMockFile(page: Page, change: Partial<MockFileState>) {
+  await page.evaluate((c) => {
+    const state = JSON.parse(sessionStorage.getItem('__mockBackupFile') ?? '{}') as object;
+    sessionStorage.setItem('__mockBackupFile', JSON.stringify({ ...state, ...c }));
+  }, change);
 }
 
 test('skriv över fil: första backupen väljer fil, nästa skriver över samma fil', async ({
@@ -407,23 +469,20 @@ test('skriv över fil: första backupen väljer fil, nästa skriver över samma 
   await expect(page.getByRole('status')).toContainText(
     'Säkerhetskopian är sparad i vald-backup.zip',
   );
-  expect(await backupCalls(page)).toEqual({
-    picker: 1,
-    writes: 1,
-    suggestedName: 'viktresan-backup.zip',
-    broken: false,
-  });
+  const first = await mockFile(page);
+  expect(first).toMatchObject({ picker: 1, writes: 1, suggestedName: 'viktresan-backup.zip' });
+  expect(Buffer.from(first.bytes).subarray(0, 2).toString()).toBe('PK');
   await expect(page.getByTestId('backup-mode-note')).toHaveText(
     'Varje backup skriver över vald-backup.zip',
   );
   await expect(page.getByTestId('last-export')).not.toHaveText('Ingen ännu');
-  const first = await readChosenFile(page);
-  expect(first.subarray(0, 2).toString()).toBe('PK');
 
-  // Ny vägning och omladdning: handtaget läses från IndexedDB, ingen ny dialog.
+  // Ny vägning och omladdning: handtaget läses från IndexedDB, ingen ny dialog. Behörigheten
+  // har gått ut (som efter en omstart) och begärs igen.
   await seed(page, {
     weights: [{ id: 'ny', date: isoDaysFromToday(0), weightKg: 86, createdAt: Date.now() }],
   });
+  await setMockFile(page, { permission: 'prompt' });
   await page.reload();
   await expect(page.getByTestId('backup-mode-note')).toHaveText(
     'Varje backup skriver över vald-backup.zip',
@@ -432,15 +491,11 @@ test('skriv över fil: första backupen väljer fil, nästa skriver över samma 
   await expect(page.getByRole('status')).toContainText(
     'Säkerhetskopian är sparad i vald-backup.zip',
   );
-  expect(await backupCalls(page)).toEqual({
-    picker: 0,
-    writes: 1,
-    suggestedName: '',
-    broken: false,
-  });
+  const second = await mockFile(page);
+  expect(second).toMatchObject({ picker: 1, writes: 2, requests: 1 });
 
-  // Filen innehåller nu den nya vägningen.
-  await chooseBackup(page, await readChosenFile(page));
+  // Samma fil innehåller nu den nya vägningen.
+  await chooseBackup(page, Buffer.from(second.bytes));
   await expect(page.getByTestId('import-preview').getByTestId('preview-weights')).toHaveText('3');
   expect(errors).toEqual([]);
 });
@@ -452,9 +507,7 @@ test('skriv över fil: en borttagen fil ger "Välj fil igen"', async ({ page }) 
   await expect(page.getByRole('status')).toContainText('sparad i vald-backup.zip');
 
   // Filen tas bort utanför appen – handtaget slutar fungera.
-  await page.evaluate(() => {
-    (window as unknown as { __backupCalls: { broken: boolean } }).__backupCalls.broken = true;
-  });
+  await setMockFile(page, { broken: true });
   await page.getByRole('button', { name: 'Exportera säkerhetskopia' }).tap();
   await expect(page.getByTestId('backup-file-problem')).toContainText('Välj fil igen');
   await expect(page.getByTestId('backup-mode-note')).toHaveText(
@@ -464,8 +517,9 @@ test('skriv över fil: en borttagen fil ger "Välj fil igen"', async ({ page }) 
   await page.getByRole('button', { name: 'Välj fil igen' }).tap();
   await expect(page.getByRole('status')).toContainText('sparad i vald-backup.zip');
   await expect(page.getByTestId('backup-file-problem')).toBeHidden();
-  expect((await backupCalls(page)).picker).toBe(2);
-  expect((await readChosenFile(page)).subarray(0, 2).toString()).toBe('PK');
+  const state = await mockFile(page);
+  expect(state).toMatchObject({ picker: 2, writes: 3 });
+  expect(Buffer.from(state.bytes).subarray(0, 2).toString()).toBe('PK');
 });
 
 test('nedladdning: fast filnamn och en engångsnotis om äldre kopior', async ({ page }) => {
