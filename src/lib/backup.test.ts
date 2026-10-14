@@ -6,12 +6,17 @@ import {
   DB_NAME,
   applySnapshot,
   emptySnapshot,
+  getDb,
   readSnapshot,
   resetDbForTests,
   saveProfile,
   type Favorite,
   type HiddenFood,
   type FoodLogEntry,
+  type FoodOverride,
+  type LoggedAmount,
+  type MealIngredient,
+  type Recipe,
   type Injection,
   type Medication,
   type MilestoneRecord,
@@ -1794,5 +1799,245 @@ describe('summarizeBackup', () => {
 
   it('filnamnet är fast', () => {
     expect(BACKUP_FILE_NAME).toBe('viktresan-backup.zip');
+  });
+});
+
+describe('backup fullständighet', () => {
+  // `Required<…>`: ett nytt fält i en posttyp får typkontrollen att fallera här tills det
+  // fylls i – och testet visar då om säkerhetskopian tar med det.
+  const amount: Required<LoggedAmount> = { amount: 2, unit: 'dl', grams: 200, per100Unit: 'ml' };
+  const item: Required<MealIngredient> = {
+    ...amount,
+    foodId: 'off:7310865004703',
+    name: 'Mellanmjölk',
+    per100: { kcal: 46, proteinG: 3.5, carbsG: 4.8, fatG: 1.5 },
+  };
+  const times = { createdAt: 1_700_000_000_000, updatedAt: 1_700_000_100_000 };
+  const full: Snapshot = {
+    profile: {
+      startDate: '2026-01-01',
+      startWeightKg: 92.5,
+      heightCm: 181,
+      goalWeightKg: 80,
+      goalDate: '2026-12-31',
+      sex: 'man',
+      birthYear: 1985,
+      activityLevel: 'stillasittande',
+      ratePerWeekKg: 0.75,
+      waterGoalMl: 2200,
+      waterTrainingBonus: true,
+      proteinFactor: 1.8,
+      foodPreferences: 'Gillar fisk',
+      showFiberGoal: true,
+      fiberRamp: false,
+      fiberRampStart: { date: '2026-02-01', startG: 18 },
+      waterGlp1BonusMl: 700,
+      waterGlp1OnOwnGoal: true,
+    } satisfies Required<Profile>,
+    weights: [
+      { id: 'w1', date: '2026-02-01', weightKg: 91, note: 'Morgon', ...times },
+    ] satisfies Required<WeightEntry>[],
+    waist: [{ date: '2026-02-01', waistCm: 98, ...times }] satisfies Required<WaistEntry>[],
+    steps: [{ date: '2026-02-01', steps: 9000, ...times }] satisfies Required<StepsEntry>[],
+    photoSessions: [
+      { id: 's1', date: '2026-02-01', weightKg: 91, note: 'Start', ...times },
+    ] satisfies Required<PhotoSession>[],
+    photos: [
+      {
+        id: 'p1',
+        sessionId: 's1',
+        date: '2026-02-01',
+        angle: 'profil',
+        side: 'vanster',
+        blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }),
+        mimeType: 'image/webp',
+        width: 1080,
+        height: 1440,
+        ...times,
+      },
+    ] satisfies Required<PhotoEntry>[],
+    foods: [
+      {
+        id: 'off:7310865004703',
+        name: 'Mellanmjölk',
+        source: 'openfoodfacts',
+        per100: item.per100,
+        per100Unit: 'ml',
+        units: [{ name: 'förpackning', grams: 1000, source: 'openfoodfacts' }],
+        ean: '7310865004703',
+        fiberG: 0,
+        sugarG: 4.8,
+        missing: ['fatG'],
+        deletedAt: 1_700_000_200_000,
+        ...times,
+      },
+    ] satisfies Required<StoredFood>[],
+    meals: [
+      {
+        id: 'm1',
+        name: 'Frukostlåda',
+        items: [item],
+        ean: '7310865004710',
+        deletedAt: 1_700_000_200_000,
+        ...times,
+      },
+    ] satisfies Required<SavedMeal>[],
+    foodLog: [
+      {
+        ...amount,
+        id: 'f1',
+        date: '2026-02-01',
+        meal: 'frukost',
+        foodId: 'recept:r1',
+        name: 'Gryta',
+        per100: item.per100,
+        estimated: true,
+        recipe: { yieldG: 800, items: [item] },
+        ...times,
+      },
+    ] satisfies Required<FoodLogEntry>[],
+    favorites: [{ foodId: 'lv:1', createdAt: 1 }] satisfies Required<Favorite>[],
+    water: [{ id: 'v1', date: '2026-02-01', ml: 250, ...times }] satisfies Required<WaterEntry>[],
+    workouts: [
+      {
+        id: 'plan1:2026-02-02',
+        date: '2026-02-02',
+        time: '07:00',
+        type: 'Löpning',
+        durationMin: 30,
+        intensity: 'hog',
+        note: 'Intervaller',
+        status: 'genomford',
+        planId: 'plan1',
+        ...times,
+      },
+    ] satisfies Required<Workout>[],
+    workoutPlans: [
+      {
+        id: 'plan1',
+        type: 'Löpning',
+        weekdays: [0, 2],
+        time: '07:00',
+        durationMin: 30,
+        intensity: 'medel',
+        note: 'Lugnt',
+        startDate: '2026-02-01',
+        endDate: '2026-06-01',
+        ...times,
+      },
+    ] satisfies Required<WorkoutPlan>[],
+    medications: [
+      {
+        id: 'med1',
+        name: 'Wegovy',
+        frequency: 'vecka',
+        weekday: 5,
+        time: '08:00',
+        steps: [{ date: '2026-02-01', doseMg: 0.25 }],
+        endDate: '2026-12-31',
+        ...times,
+      },
+    ] satisfies Required<Medication>[],
+    injections: [
+      {
+        id: 'i1',
+        date: '2026-02-07',
+        time: '08:15',
+        medicationId: 'med1',
+        medicationName: 'Wegovy',
+        doseMg: 0.25,
+        site: 'buk-vanster',
+        ...times,
+      },
+    ] satisfies Required<Injection>[],
+    symptoms: [
+      { date: '2026-02-08', appetite: 2, sideEffects: ['Illamående'], ...times },
+    ] satisfies Required<SymptomEntry>[],
+    foodUnits: [
+      { foodId: 'lv:1', units: [{ name: 'skiva', grams: 30, source: 'egen' }], ...times },
+    ] satisfies Required<CustomUnits>[],
+    milestones: [
+      { id: 'kg-1', date: '2026-02-10', createdAt: 1 },
+    ] satisfies Required<MilestoneRecord>[],
+    supplements: [
+      {
+        id: 'sup1',
+        name: 'D-vitamin',
+        form: 'tablett',
+        amountPerDose: 1,
+        nutrients: [{ key: 'vitaminD', amount: 400, unit: 'IE' }],
+        schedule: 'veckodagar',
+        weekdays: [0, 3],
+        dosesPerDay: 1,
+        ean: '7310865004727',
+        ...times,
+      },
+    ] satisfies Required<Supplement>[],
+    supplementLog: [
+      {
+        id: 'sup1:2026-02-02',
+        date: '2026-02-02',
+        supplementId: 'sup1',
+        name: 'D-vitamin',
+        doses: 1,
+        nutrients: [{ key: 'vitaminD', amount: 400, unit: 'IE' }],
+        ...times,
+      },
+    ] satisfies Required<SupplementIntake>[],
+    recipes: [
+      {
+        id: 'r1',
+        name: 'Gryta',
+        items: [item],
+        servings: 4,
+        cookedWeightG: 800,
+        sourceUrl: 'https://example.com/gryta',
+        ...times,
+      },
+    ] satisfies Required<Recipe>[],
+    foodOverrides: [
+      {
+        foodId: 'off:7310865004703',
+        ean: '7310865004703',
+        name: 'Mellanmjölk',
+        values: { kcal: 46, proteinG: 3.5, carbsG: 4.8, fatG: 1.5, fiberG: 0, sugarG: 4.8 },
+        ...times,
+      },
+    ] satisfies Required<FoodOverride>[],
+    mealSlots: [
+      { id: 'frukost', name: 'Frukost', time: '07:00', kind: 'huvudmal', order: 0, ...times },
+    ] satisfies Required<MealSlot>[],
+    hiddenFoods: [
+      { key: 'livsmedel:lv:2', kind: 'livsmedel', value: 'lv:2', name: 'Lever', createdAt: 1 },
+    ] satisfies Required<HiddenFood>[],
+  };
+
+  it('varje fält i varje posttyp följer med genom export och import', async () => {
+    for (const password of [undefined, 'korrekt häst batteri']) {
+      const file = await createBackup(full, {
+        now: NOW,
+        iterations: ITERATIONS,
+        ...(password ? { password } : {}),
+      });
+      const { snapshot } = await readBackup(file, password);
+      const bytes = await Promise.all(
+        snapshot.photos.map(async (p) => [
+          p.blob.type,
+          ...new Uint8Array(await p.blob.arrayBuffer()),
+        ]),
+      );
+      expect(bytes).toEqual([['image/webp', 1, 2, 3]]);
+      const withoutBlobs = (s: Snapshot) => ({
+        ...s,
+        photos: s.photos.map((p) => ({ ...p, blob: null })),
+      });
+      expect(withoutBlobs(snapshot)).toEqual(withoutBlobs(full));
+    }
+  });
+
+  it('varje datalager i databasen ingår i säkerhetskopian (utom enhetens inställningar)', async () => {
+    const db = await getDb();
+    const stores = [...db.objectStoreNames].filter((s) => s !== 'settings');
+    expect(stores.sort()).toEqual(Object.keys(emptySnapshot()).sort());
   });
 });
