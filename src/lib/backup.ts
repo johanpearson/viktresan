@@ -67,6 +67,7 @@ import {
   type StoredFood,
   type Profile,
   type Snapshot,
+  type SnapshotSettings,
   type StepsEntry,
   type Supplement,
   type SupplementForm,
@@ -107,11 +108,14 @@ import {
   WATER_GOAL_MIN_ML,
 } from './water.ts';
 import { INTENSITIES, WORKOUT_STATUSES, type Intensity } from './workouts.ts';
+import { FLAGS_VERSION, parseFlags } from './features.ts';
+import { parseMatchMemory } from './matchMemory.ts';
+import { parsePreferences } from './preferences.ts';
 
 export const BACKUP_FORMAT = 'viktresan-backup';
-export const BACKUP_VERSION = 13;
+export const BACKUP_VERSION = 14;
 /** Versioner som fortfarande går att importera. */
-const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+const READABLE_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 /** OWASP:s rekommendation (2023) för PBKDF2-HMAC-SHA256. */
 export const PBKDF2_ITERATIONS = 600_000;
 
@@ -174,6 +178,8 @@ export interface BackupSummary {
   recipes: number;
   /** Livsmedel med egna näringsvärden. */
   foodOverrides: number;
+  /** Appens inställningar (funktioner, visning, receptimportens minne) finns med (version 14+). */
+  hasSettings: boolean;
   /** Första och sista datum bland alla poster, eller null om inga finns. */
   firstDate: string | null;
   lastDate: string | null;
@@ -220,6 +226,7 @@ interface PlainManifest {
   foodOverrides: FoodOverride[];
   mealSlots: MealSlot[];
   hiddenFoods: HiddenFood[];
+  settings: SnapshotSettings;
 }
 
 interface EncryptedManifest {
@@ -285,6 +292,7 @@ export async function createBackup(
     foodOverrides: snapshot.foodOverrides,
     mealSlots: snapshot.mealSlots,
     hiddenFoods: snapshot.hiddenFoods,
+    settings: parseSettings(snapshot.settings),
   };
   files[MANIFEST] = [strToU8(JSON.stringify(manifest, null, 2)), { level: 6, mtime: now }];
   const plain = zipSync(files);
@@ -410,6 +418,7 @@ export function summarizeBackup(contents: BackupContents): BackupSummary {
     supplementLog: snapshot.supplementLog.length,
     recipes: snapshot.recipes.length,
     foodOverrides: snapshot.foodOverrides.length,
+    hasSettings: snapshot.settings !== null,
     firstDate: dates[0] ?? null,
     lastDate: dates[dates.length - 1] ?? null,
   };
@@ -512,6 +521,8 @@ function parsePlain(
       mealSlots: version >= 12 ? parseMealSlots(manifest) : [],
       // Version 1–12 saknar dolt i matsökningen.
       hiddenFoods: version >= 13 ? parseHiddenFoods(manifest) : [],
+      // Version 1–13 saknar inställningar: enhetens inställningar behålls vid importen.
+      settings: version >= 14 ? parseSettingsField(manifest) : null,
     },
   };
 }
@@ -765,6 +776,29 @@ function parseHiddenFoodRecord(value: unknown, index: number): HiddenFood {
     entry.name = value.name;
   }
   return entry;
+}
+
+function parseSettingsField(manifest: Record<string, unknown>): SnapshotSettings {
+  if (!isRecord(manifest.settings)) throw invalid('Inställningar saknas.');
+  return parseSettings(manifest.settings);
+}
+
+/**
+ * Inställningarna tolkas med appens egna tolkare, både vid export och import: okända och
+ * felaktiga fält släpps (standardvärdet gäller). Funktionsbrytarna sparas med `version` så att
+ * en funktion som tillkommer senare får sitt standardläge.
+ */
+function parseSettings(value: unknown): SnapshotSettings {
+  const settings = isRecord(value) ? value : {};
+  return {
+    features:
+      settings.features == null
+        ? null
+        : { ...parseFlags(settings.features), version: FLAGS_VERSION },
+    preferences: settings.preferences == null ? null : parsePreferences(settings.preferences),
+    ingredientMatches:
+      settings.ingredientMatches == null ? null : parseMatchMemory(settings.ingredientMatches),
+  };
 }
 
 function parseFoodOverrides(manifest: Record<string, unknown>): FoodOverride[] {

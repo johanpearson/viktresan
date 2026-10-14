@@ -182,6 +182,12 @@ export async function setFeature(id: FeatureId, on: boolean): Promise<void> {
   await setSetting(SETTING_FEATURES, { ...flags, version: FLAGS_VERSION });
 }
 
+/** Läser om inställningen (efter import av en säkerhetskopia). */
+export function reloadFeatures(): Promise<void> {
+  loading = null;
+  return initFeatures();
+}
+
 export function resetFeaturesForTests(): void {
   loading = null;
   state = { loaded: false, flags: DEFAULT_FLAGS };

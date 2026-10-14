@@ -1,8 +1,10 @@
 import { useState, type ChangeEvent, type SyntheticEvent } from 'react';
 import { applySnapshot, type ImportMode } from '../db/db.ts';
 import { BackupError, readBackup, summarizeBackup, type BackupContents } from '../lib/backup.ts';
+import { reloadFeatures } from '../lib/features.ts';
 import { formatDate } from '../lib/format.ts';
 import { syncMilestones } from '../lib/milestoneSync.ts';
+import { reloadPreferences } from '../lib/preferences.ts';
 import { formatBytes } from '../lib/storage.ts';
 import { ChoiceList, type ChoiceOption } from './ChoiceList.tsx';
 import { ListRow } from './ListRow.tsx';
@@ -77,6 +79,8 @@ export function ImportBackup({ onImported }: ImportBackupProps) {
     setError(null);
     try {
       await applySnapshot(state.contents.snapshot, mode);
+      // Funktioner och visning kan ha följt med i kopian.
+      await Promise.all([reloadFeatures(), reloadPreferences()]);
       // Historisk data: redan passerade milstolpar markeras som nådda utan att firas.
       await syncMilestones({ mode: 'silent' });
       const { weights, waist, steps, photos, foodLog } = state.contents.snapshot;
@@ -174,12 +178,13 @@ const IMPORT_MODES: readonly ChoiceOption<ImportMode>[] = [
     id: 'merge',
     label: 'Slå ihop med befintlig data',
     description:
-      'Nya poster läggs till. Finns samma post redan behålls den senast ändrade. Din nuvarande profil behålls.',
+      'Nya poster läggs till. Finns samma post redan behålls den senast ändrade. Din nuvarande profil och dina inställningar behålls.',
   },
   {
     id: 'replace',
     label: 'Ersätt all befintlig data',
-    description: 'Profil, mätningar, matlogg och bilder på den här enheten raderas och ersätts.',
+    description:
+      'Profil, inställningar, mätningar, matlogg och bilder på den här enheten raderas och ersätts.',
   },
 ];
 
@@ -197,6 +202,11 @@ function Preview({ contents, mode, busy, onMode, onImport, onCancel }: PreviewPr
         <ListRow primary="Exporterad" value={dateTime.format(new Date(summary.exportedAt))} />
         <ListRow primary="Krypterad" value={summary.encrypted ? 'Ja' : 'Nej'} />
         <ListRow primary="Profil" value={summary.hasProfile ? 'Ja' : 'Nej'} />
+        <ListRow
+          primary="Inställningar"
+          secondary="Funktioner, visning och receptimportens minne"
+          value={value(summary.hasSettings ? 'Ja' : 'Nej', 'preview-settings')}
+        />
         <ListRow primary="Vikt" value={value(summary.weights, 'preview-weights')} />
         <ListRow primary="Midjemått" value={value(summary.waist, 'preview-waist')} />
         <ListRow primary="Dagar med steg" value={value(summary.steps, 'preview-steps')} />

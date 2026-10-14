@@ -159,6 +159,12 @@ export async function setPreference<K extends keyof Preferences>(
   await setSetting(SETTING_PREFERENCES, prefs);
 }
 
+/** Läser om inställningen (efter import av en säkerhetskopia). */
+export function reloadPreferences(): Promise<void> {
+  loading = null;
+  return initPreferences();
+}
+
 export function resetPreferencesForTests(): void {
   loading = null;
   state = { loaded: false, prefs: DEFAULT_PREFERENCES };

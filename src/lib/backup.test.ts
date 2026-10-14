@@ -1,17 +1,29 @@
 // @vitest-environment node
 // Node-miljö: jsdoms Blob överlever inte structuredClone i fake-indexeddb, Nodes gör det.
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DB_NAME,
   applySnapshot,
   emptySnapshot,
+  getDb,
+  getSetting,
+  setSetting,
+  SETTING_FEATURES,
+  SETTING_INGREDIENT_MATCHES,
+  SETTING_LAST_EXPORT,
+  SETTING_LOCK,
+  SETTING_PREFERENCES,
   readSnapshot,
   resetDbForTests,
   saveProfile,
   type Favorite,
   type HiddenFood,
   type FoodLogEntry,
+  type FoodOverride,
+  type LoggedAmount,
+  type MealIngredient,
+  type Recipe,
   type Injection,
   type Medication,
   type MilestoneRecord,
@@ -23,6 +35,7 @@ import {
   type SavedMeal,
   type StoredFood,
   type Snapshot,
+  type SnapshotSettings,
   type StepsEntry,
   type SymptomEntry,
   type WaistEntry,
@@ -33,6 +46,8 @@ import {
   type WorkoutPlan,
 } from '../db/db.ts';
 import { defaultMealSlots, type MealSlot } from './mealSlots.ts';
+import { DEFAULT_FLAGS, FLAGS_VERSION } from './features.ts';
+import { DEFAULT_PREFERENCES, type Preferences } from './preferences.ts';
 import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
@@ -477,6 +492,19 @@ const seedHidden: HiddenFood[] = [
   { key: 'kalla:fineli', kind: 'kalla', value: 'fineli', createdAt: 7 },
 ];
 
+const seedSettings: SnapshotSettings = {
+  features: { ...DEFAULT_FLAGS, glp1: true, tillskott: true, version: FLAGS_VERSION },
+  preferences: { ...DEFAULT_PREFERENCES, trendHero: false, overviewHidden: ['steg'] },
+  ingredientMatches: { 'krossade tomater': 'lv:1' },
+};
+
+/** Inga sparade inställningar (standardvärdena gäller). */
+const NO_SETTINGS: SnapshotSettings = {
+  features: null,
+  preferences: null,
+  ingredientMatches: null,
+};
+
 async function seed(): Promise<void> {
   await applySnapshot(
     {
@@ -494,6 +522,7 @@ async function seed(): Promise<void> {
       ...supplementData,
       mealSlots: seedMealSlots,
       hiddenFoods: seedHidden,
+      settings: seedSettings,
     },
     'replace',
   );
@@ -514,11 +543,12 @@ async function comparable(snapshot: Snapshot) {
 }
 
 async function wipe(): Promise<void> {
-  await applySnapshot(emptySnapshot(), 'replace');
+  await applySnapshot({ ...emptySnapshot(), settings: NO_SETTINGS }, 'replace');
   // Måltiderna finns kvar (en fil utan måltider behåller enhetens).
   expect(await readSnapshot()).toEqual({
     ...emptySnapshot(),
     mealSlots: expect.any(Array) as MealSlot[],
+    settings: NO_SETTINGS,
   });
 }
 
@@ -595,7 +625,11 @@ describe('backup round-trip', () => {
     const empty = await readSnapshot();
     const file = await createBackup(empty, { now: NOW });
     const contents = await readBackup(file);
-    expect(contents.snapshot).toEqual({ ...emptySnapshot(), mealSlots: empty.mealSlots });
+    expect(contents.snapshot).toEqual({
+      ...emptySnapshot(),
+      mealSlots: empty.mealSlots,
+      settings: NO_SETTINGS,
+    });
   });
 });
 
@@ -627,6 +661,7 @@ describe('backup validering', () => {
     ...header,
     exportedAt: NOW.toISOString(),
     profile: null,
+    settings: NO_SETTINGS,
     weights: [{ id: 'a', date: '2026-01-01', weightKg: 80, createdAt: 1 }],
     waist: [{ date: '2026-01-01', waistCm: 90, createdAt: 1 }],
     steps: [{ date: '2026-01-01', steps: 8000, createdAt: 1 }],
@@ -995,6 +1030,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   };
 
   const expected: Omit<Snapshot, 'photos'> = {
+    settings: null,
     mealSlots: [],
     hiddenFoods: [],
     photoSessions: [{ id: 'migrerad:2026-01-01', date: '2026-01-01', createdAt: 10 }],
@@ -1052,6 +1088,8 @@ describe('import av version 1 (kombinerade mätningar)', () => {
       ...expected,
       photos: [],
       mealSlots: expect.any(Array) as MealSlot[],
+      // Version 1 saknar inställningar: enhetens (inga sparade) behålls.
+      settings: NO_SETTINGS,
     });
   });
 
@@ -1591,6 +1629,7 @@ describe('import slå ihop', () => {
           createdAt: 61,
         },
       ],
+      settings: null,
     };
     await applySnapshot(imported, 'merge');
 
@@ -1759,6 +1798,7 @@ describe('summarizeBackup', () => {
           ...supplementData,
           mealSlots: seedMealSlots,
           hiddenFoods: seedHidden,
+          settings: seedSettings,
         },
         { now: NOW },
       ),
@@ -1778,6 +1818,7 @@ describe('summarizeBackup', () => {
       supplementLog: 1,
       recipes: 1,
       foodOverrides: 2,
+      hasSettings: true,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,
@@ -1794,5 +1835,354 @@ describe('summarizeBackup', () => {
 
   it('filnamnet är fast', () => {
     expect(BACKUP_FILE_NAME).toBe('viktresan-backup.zip');
+  });
+});
+
+describe('backup fullständighet', () => {
+  // `Required<…>`: ett nytt fält i en posttyp får typkontrollen att fallera här tills det
+  // fylls i – och testet visar då om säkerhetskopian tar med det.
+  const amount: Required<LoggedAmount> = { amount: 2, unit: 'dl', grams: 200, per100Unit: 'ml' };
+  const item: Required<MealIngredient> = {
+    ...amount,
+    foodId: 'off:7310865004703',
+    name: 'Mellanmjölk',
+    per100: { kcal: 46, proteinG: 3.5, carbsG: 4.8, fatG: 1.5 },
+  };
+  const times = { createdAt: 1_700_000_000_000, updatedAt: 1_700_000_100_000 };
+  const full: Snapshot = {
+    profile: {
+      startDate: '2026-01-01',
+      startWeightKg: 92.5,
+      heightCm: 181,
+      goalWeightKg: 80,
+      goalDate: '2026-12-31',
+      sex: 'man',
+      birthYear: 1985,
+      activityLevel: 'stillasittande',
+      ratePerWeekKg: 0.75,
+      waterGoalMl: 2200,
+      waterTrainingBonus: true,
+      proteinFactor: 1.8,
+      foodPreferences: 'Gillar fisk',
+      showFiberGoal: true,
+      fiberRamp: false,
+      fiberRampStart: { date: '2026-02-01', startG: 18 },
+      waterGlp1BonusMl: 700,
+      waterGlp1OnOwnGoal: true,
+    } satisfies Required<Profile>,
+    weights: [
+      { id: 'w1', date: '2026-02-01', weightKg: 91, note: 'Morgon', ...times },
+    ] satisfies Required<WeightEntry>[],
+    waist: [{ date: '2026-02-01', waistCm: 98, ...times }] satisfies Required<WaistEntry>[],
+    steps: [{ date: '2026-02-01', steps: 9000, ...times }] satisfies Required<StepsEntry>[],
+    photoSessions: [
+      { id: 's1', date: '2026-02-01', weightKg: 91, note: 'Start', ...times },
+    ] satisfies Required<PhotoSession>[],
+    photos: [
+      {
+        id: 'p1',
+        sessionId: 's1',
+        date: '2026-02-01',
+        angle: 'profil',
+        side: 'vanster',
+        blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }),
+        mimeType: 'image/webp',
+        width: 1080,
+        height: 1440,
+        ...times,
+      },
+    ] satisfies Required<PhotoEntry>[],
+    foods: [
+      {
+        id: 'off:7310865004703',
+        name: 'Mellanmjölk',
+        source: 'openfoodfacts',
+        per100: item.per100,
+        per100Unit: 'ml',
+        units: [{ name: 'förpackning', grams: 1000, source: 'openfoodfacts' }],
+        ean: '7310865004703',
+        fiberG: 0,
+        sugarG: 4.8,
+        missing: ['fatG'],
+        deletedAt: 1_700_000_200_000,
+        ...times,
+      },
+    ] satisfies Required<StoredFood>[],
+    meals: [
+      {
+        id: 'm1',
+        name: 'Frukostlåda',
+        items: [item],
+        ean: '7310865004710',
+        deletedAt: 1_700_000_200_000,
+        ...times,
+      },
+    ] satisfies Required<SavedMeal>[],
+    foodLog: [
+      {
+        ...amount,
+        id: 'f1',
+        date: '2026-02-01',
+        meal: 'frukost',
+        foodId: 'recept:r1',
+        name: 'Gryta',
+        per100: item.per100,
+        estimated: true,
+        recipe: { yieldG: 800, items: [item] },
+        ...times,
+      },
+    ] satisfies Required<FoodLogEntry>[],
+    favorites: [{ foodId: 'lv:1', createdAt: 1 }] satisfies Required<Favorite>[],
+    water: [{ id: 'v1', date: '2026-02-01', ml: 250, ...times }] satisfies Required<WaterEntry>[],
+    workouts: [
+      {
+        id: 'plan1:2026-02-02',
+        date: '2026-02-02',
+        time: '07:00',
+        type: 'Löpning',
+        durationMin: 30,
+        intensity: 'hog',
+        note: 'Intervaller',
+        status: 'genomford',
+        planId: 'plan1',
+        ...times,
+      },
+    ] satisfies Required<Workout>[],
+    workoutPlans: [
+      {
+        id: 'plan1',
+        type: 'Löpning',
+        weekdays: [0, 2],
+        time: '07:00',
+        durationMin: 30,
+        intensity: 'medel',
+        note: 'Lugnt',
+        startDate: '2026-02-01',
+        endDate: '2026-06-01',
+        ...times,
+      },
+    ] satisfies Required<WorkoutPlan>[],
+    medications: [
+      {
+        id: 'med1',
+        name: 'Wegovy',
+        frequency: 'vecka',
+        weekday: 5,
+        time: '08:00',
+        steps: [{ date: '2026-02-01', doseMg: 0.25 }],
+        endDate: '2026-12-31',
+        ...times,
+      },
+    ] satisfies Required<Medication>[],
+    injections: [
+      {
+        id: 'i1',
+        date: '2026-02-07',
+        time: '08:15',
+        medicationId: 'med1',
+        medicationName: 'Wegovy',
+        doseMg: 0.25,
+        site: 'buk-vanster',
+        ...times,
+      },
+    ] satisfies Required<Injection>[],
+    symptoms: [
+      { date: '2026-02-08', appetite: 2, sideEffects: ['Illamående'], ...times },
+    ] satisfies Required<SymptomEntry>[],
+    foodUnits: [
+      { foodId: 'lv:1', units: [{ name: 'skiva', grams: 30, source: 'egen' }], ...times },
+    ] satisfies Required<CustomUnits>[],
+    milestones: [
+      { id: 'kg-1', date: '2026-02-10', createdAt: 1 },
+    ] satisfies Required<MilestoneRecord>[],
+    supplements: [
+      {
+        id: 'sup1',
+        name: 'D-vitamin',
+        form: 'tablett',
+        amountPerDose: 1,
+        nutrients: [{ key: 'vitaminD', amount: 400, unit: 'IE' }],
+        schedule: 'veckodagar',
+        weekdays: [0, 3],
+        dosesPerDay: 1,
+        ean: '7310865004727',
+        ...times,
+      },
+    ] satisfies Required<Supplement>[],
+    supplementLog: [
+      {
+        id: 'sup1:2026-02-02',
+        date: '2026-02-02',
+        supplementId: 'sup1',
+        name: 'D-vitamin',
+        doses: 1,
+        nutrients: [{ key: 'vitaminD', amount: 400, unit: 'IE' }],
+        ...times,
+      },
+    ] satisfies Required<SupplementIntake>[],
+    recipes: [
+      {
+        id: 'r1',
+        name: 'Gryta',
+        items: [item],
+        servings: 4,
+        cookedWeightG: 800,
+        sourceUrl: 'https://example.com/gryta',
+        ...times,
+      },
+    ] satisfies Required<Recipe>[],
+    foodOverrides: [
+      {
+        foodId: 'off:7310865004703',
+        ean: '7310865004703',
+        name: 'Mellanmjölk',
+        values: { kcal: 46, proteinG: 3.5, carbsG: 4.8, fatG: 1.5, fiberG: 0, sugarG: 4.8 },
+        ...times,
+      },
+    ] satisfies Required<FoodOverride>[],
+    mealSlots: [
+      { id: 'frukost', name: 'Frukost', time: '07:00', kind: 'huvudmal', order: 0, ...times },
+    ] satisfies Required<MealSlot>[],
+    hiddenFoods: [
+      { key: 'livsmedel:lv:2', kind: 'livsmedel', value: 'lv:2', name: 'Lever', createdAt: 1 },
+    ] satisfies Required<HiddenFood>[],
+    settings: {
+      features: {
+        ...DEFAULT_FLAGS,
+        glp1: true,
+        tillskott: true,
+        steg: false,
+        version: FLAGS_VERSION,
+      },
+      preferences: {
+        trendHero: false,
+        weekCardDismissed: '2026-02-02',
+        profileSide: 'hoger',
+        ghostEnabled: false,
+        ghostOpacity: 0.6,
+        aiOptions: { ...DEFAULT_PREFERENCES.aiOptions, glp1: true },
+        haptics: false,
+        plateauDismissed: '2026-03-01',
+        report: { ...DEFAULT_PREFERENCES.report, period: '4v' },
+        reportPrintHintSeen: true,
+        overviewHidden: ['steg'],
+        milestoneCardDismissed: 'kg-1',
+        claimsHidden: ['proteinrik'],
+        whatToEatTipSeen: true,
+        backupDownloadHintSeen: true,
+      } satisfies Required<Preferences>,
+      ingredientMatches: { 'krossade tomater': 'lv:1' },
+    },
+  };
+
+  it('varje fält i varje posttyp följer med genom export och import', async () => {
+    for (const password of [undefined, 'korrekt häst batteri']) {
+      const file = await createBackup(full, {
+        now: NOW,
+        iterations: ITERATIONS,
+        ...(password ? { password } : {}),
+      });
+      const { snapshot } = await readBackup(file, password);
+      const bytes = await Promise.all(
+        snapshot.photos.map(async (p) => [
+          p.blob.type,
+          ...new Uint8Array(await p.blob.arrayBuffer()),
+        ]),
+      );
+      expect(bytes).toEqual([['image/webp', 1, 2, 3]]);
+      const withoutBlobs = (s: Snapshot) => ({
+        ...s,
+        photos: s.photos.map((p) => ({ ...p, blob: null })),
+      });
+      expect(withoutBlobs(snapshot)).toEqual(withoutBlobs(full));
+    }
+  });
+
+  it('varje datalager i databasen ingår i säkerhetskopian', async () => {
+    const db = await getDb();
+    expect([...db.objectStoreNames].sort()).toEqual(Object.keys(emptySnapshot()).sort());
+  });
+});
+
+describe('backup inställningar', () => {
+  const deviceSettings = {
+    features: { ...DEFAULT_FLAGS, version: FLAGS_VERSION },
+    preferences: { ...DEFAULT_PREFERENCES, haptics: false },
+    ingredientMatches: { 'gul lök': 'lv:2', 'krossade tomater': 'lv:3' },
+  };
+
+  async function storeDeviceSettings() {
+    await setSetting(SETTING_FEATURES, deviceSettings.features);
+    await setSetting(SETTING_PREFERENCES, deviceSettings.preferences);
+    await setSetting(SETTING_INGREDIENT_MATCHES, deviceSettings.ingredientMatches);
+    await setSetting(SETTING_LOCK, { credentialId: 'abc', createdAt: 1 });
+    await setSetting(SETTING_LAST_EXPORT, 123);
+  }
+
+  async function roundTrip(settings: SnapshotSettings | null) {
+    const file = await createBackup({ ...emptySnapshot(), settings }, { now: NOW });
+    return (await readBackup(file)).snapshot;
+  }
+
+  it('ersätt: filens inställningar gäller, låset och senaste export behålls', async () => {
+    await storeDeviceSettings();
+    await applySnapshot(await roundTrip(seedSettings), 'replace');
+    expect((await readSnapshot()).settings).toEqual(seedSettings);
+    expect(await getSetting(SETTING_LOCK)).toEqual({ credentialId: 'abc', createdAt: 1 });
+    expect(await getSetting(SETTING_LAST_EXPORT)).toBe(123);
+  });
+
+  it('ersätt: inställningar som inte sparats i filen får standardvärdena', async () => {
+    await storeDeviceSettings();
+    await applySnapshot(await roundTrip(NO_SETTINGS), 'replace');
+    expect((await readSnapshot()).settings).toEqual(NO_SETTINGS);
+  });
+
+  it('slå ihop: enhetens inställningar behålls, saknade tas från filen och minnet slås ihop', async () => {
+    await setSetting(SETTING_PREFERENCES, deviceSettings.preferences);
+    await setSetting(SETTING_INGREDIENT_MATCHES, deviceSettings.ingredientMatches);
+    await applySnapshot(await roundTrip(seedSettings), 'merge');
+    expect((await readSnapshot()).settings).toEqual({
+      features: seedSettings.features,
+      preferences: deviceSettings.preferences,
+      ingredientMatches: { 'krossade tomater': 'lv:3', 'gul lök': 'lv:2' },
+    });
+  });
+
+  it('en kopia utan inställningar (före version 14) lämnar enhetens orörda', async () => {
+    await storeDeviceSettings();
+    for (const mode of ['replace', 'merge'] as const) {
+      await applySnapshot({ ...emptySnapshot(), settings: null }, mode);
+      expect((await readSnapshot()).settings).toEqual({
+        features: deviceSettings.features,
+        preferences: deviceSettings.preferences,
+        ingredientMatches: deviceSettings.ingredientMatches,
+      });
+    }
+  });
+
+  it('okända och felaktiga värden släpps vid importen', async () => {
+    const snapshot = await roundTrip({
+      features: { glp1: true, okand: true, steg: 'ja', version: FLAGS_VERSION },
+      preferences: { trendHero: false, ghostOpacity: 5, okand: 1 },
+      ingredientMatches: { tomat: 'lv:1', tom: 7 },
+    });
+    expect(snapshot.settings).toEqual({
+      features: { ...DEFAULT_FLAGS, glp1: true, version: FLAGS_VERSION },
+      preferences: { ...DEFAULT_PREFERENCES, trendHero: false },
+      ingredientMatches: { tomat: 'lv:1' },
+    });
+  });
+
+  it('en kopia av version 14 utan inställningar avvisas', async () => {
+    const file = await createBackup(emptySnapshot(), { now: NOW });
+    const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+    const manifest = JSON.parse(strFromU8(entries['backup.json'] ?? new Uint8Array())) as Record<
+      string,
+      unknown
+    >;
+    delete manifest.settings;
+    const broken = new Blob([zipSync({ 'backup.json': strToU8(JSON.stringify(manifest)) })]);
+    expect((await errorOf(readBackup(broken))).code).toBe('invalid-data');
   });
 });
