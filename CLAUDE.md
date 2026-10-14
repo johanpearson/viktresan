@@ -291,7 +291,8 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats, `backupDownloadHintSeen` – notisen om äldre nedladdade kopior har visats), `backupFile` (filhandtaget som säkerhetskopian skrivs över i), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). Inställningar ingår inte i säkerhetskopior – de är knutna till enheten.
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats, `backupDownloadHintSeen` – notisen om äldre nedladdade kopior har visats), `backupFile` (filhandtaget som säkerhetskopian skrivs över i), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). `features`, `preferences` och `ingredientMatches` ingår i säkerhetskopior (sedan version 14); `lock` (passkeyn
+  finns bara på enheten – en återställd nyckel på en annan enhet skulle låsa ute användaren), `backupFile` och `lastExportAt` ingår inte.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
   I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
@@ -641,10 +642,11 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
     E2E: Playwrights Chromium har `showSaveFilePicker` – `forceDownloadBackup(page)` (helpers.ts) tar bort den för
     nedladdningsläget; `backup.spec.ts` mockar den med ett låtsat handtag (sparas som markör i IndexedDB – riktiga
     OPFS-handtag i IndexedDB kraschar Chromium i Playwrights kontexter).
-- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 13`):
+- **Filformat** (`BACKUP_FORMAT = 'viktresan-backup'`, `BACKUP_VERSION = 14`):
   - Okrypterad zip: `backup.json` (format, version, exportedAt, profil, `weights`, `waist`, `steps`,
     `photoSessions`, bildmetadata med `file`, `sessionId`, `angle`, `foods`, `meals`, `foodLog`, `favorites`, `water`, `workouts`,
-    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`, `foodOverrides`, `mealSlots`, `hiddenFoods`) + `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
+    `workoutPlans`, `medications`, `injections`, `symptoms`, `foodUnits`, `milestones`, `supplements`, `supplementLog`, `recipes`, `foodOverrides`, `mealSlots`, `hiddenFoods`, `settings` = `{ features, preferences, ingredientMatches }`, `null` = inte sparad) +
+    `photos/<id>.<ext>` (bilderna oförändrade, okomprimerat i zip:en).
   - Version 1 (kombinerade `measurements`) kan fortfarande importeras; den delas upp med
     `splitLegacyMeasurements`. Version 1–2 saknar mat och ger tomma matlistor; version 1–3 saknar
     vatten och träning och ger tomma listor; version 1–4 saknar GLP-1 och ger tomma listor; version 3–5
@@ -653,7 +655,8 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
     grupperas med `groupLegacyPhotos` (vinkel "ej angiven"); version 1–8 saknar tillskott (tomma listor); version 1–9 saknar recept (tom lista); version 1–10 saknar egna näringsvärden (tom lista); version 1–11 saknar måltider (`mealSlots` tom = enhetens måltider
     behålls) och har de fasta måltiderna – `applySnapshot` flyttar poster vars måltid saknas (gamla Mellanmål efter loggtid, annars
     närmaste måltid; `resolveEntryMeals`). Måltiderna slås ihop per id (senast ändrad vinner). Version 1–12 saknar dolt i
-    matsökningen (tom lista); vid sammanslagning förblir dolt dolt (befintlig post behålls), `deletedAt` följer med. En bild vars `sessionId` saknas bland tillfällena avvisas.
+    matsökningen (tom lista); vid sammanslagning förblir dolt dolt (befintlig post behålls), `deletedAt` följer med. Version 1–13 saknar inställningar (`settings: null`):
+    enhetens behålls i båda lägena. Inställningarna tolkas med `parseFlags`/`parsePreferences`/`parseMatchMemory` (okänt släpps). En bild vars `sessionId` saknas bland tillfällena avvisas.
   - Krypterad zip: `backup.json` med bara format, version och parametrar (PBKDF2-SHA-256,
     600 000 iterationer, 16 byte salt; AES-256-GCM, 12 byte iv) + `backup.enc` = hela den
     okrypterade zip:en krypterad. AAD = `viktresan-backup:<version>`. Lösenord minst 8 tecken.
@@ -663,13 +666,16 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   `invalid-data`, `password-required`, `wrong-password`. UI:t visar förhandsvisning
   (`summarizeBackup`) och låter användaren välja läge. `applySnapshot()` skriver i **en**
   transaktion:
-  - `replace`: profil, mätningar och bilder töms och ersätts.
+  - `replace`: profil, mätningar och bilder töms och ersätts; filens inställningar gäller (`null` = standardvärdet).
   - `merge`: nya poster läggs till; samma nyckel (id, för midja/steg/mående datum, för egna enheter `foodId`) → senast ändrad (milstolpar: befintlig behålls) (`updatedAt ?? createdAt`) vinner,
-    lika → befintlig behålls. Befintlig profil behålls; saknas den tas den från filen.
+    lika → befintlig behålls. Befintlig profil behålls; saknas den tas den från filen. Samma för funktioner och visning;
+    receptimportens minne slås ihop (enhetens matchning vinner).
+  - Efteråt läser `ImportBackup` om brytarna och visningen (`reloadFeatures`/`reloadPreferences`), så de gäller utan omladdning.
 - **Påminnelse** (raden "Dags att säkerhetskopiera" i Översikt → Att göra idag): visas när det finns data och ingen export gjorts
   på 7 dagar. Utan tidigare export räknas från äldsta postens `createdAt`.
 - Tester: `src/lib/backup.test.ts` (round-trip okrypterat/krypterat, fel lösenord, validering,
-  merge; körs i `node`-miljö eftersom jsdoms Blob inte klarar structuredClone), `e2e/backup.spec.ts`.
+  merge, inställningar; "backup fullständighet" fyller i varje fält i varje posttyp med `Required<…>` – ett nytt fält
+  fäller typkontrollen tills testet visar att kopian tar med det – och jämför datalagren med `Snapshot`; körs i `node`-miljö eftersom jsdoms Blob inte klarar structuredClone), `e2e/backup.spec.ts`.
 
 ### Lås (valfritt, av som standard)
 

@@ -262,6 +262,67 @@ test('export → import ger identisk data', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('inställningarna följer med: funktioner och visning gäller direkt efter importen', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await openSettings(page);
+  await seed(page, {
+    ...DATA,
+    settings: {
+      features: { glp1: true, tillskott: true, steg: false, version: 4 },
+      preferences: { trendHero: false, haptics: false },
+      ingredientMatches: { 'krossade tomater': 'lv:1' },
+    },
+  });
+  await page.reload();
+  await openSettings(page);
+  const zip = await exportBackup(page);
+
+  // Ny enhet: all data och alla inställningar borta, appen startad på nytt.
+  await wipe(page);
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('viktresan');
+      req.onsuccess = () => {
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        reject(req.error ?? new Error('open failed'));
+      };
+    });
+    const tx = db.transaction('settings', 'readwrite');
+    tx.objectStore('settings').clear();
+    await new Promise<void>((resolve) => {
+      tx.oncomplete = () => {
+        resolve();
+      };
+    });
+    db.close();
+  });
+  await page.reload();
+  await openSettings(page);
+  await chooseBackup(page, zip);
+  const preview = page.getByTestId('import-preview');
+  await expect(preview.getByTestId('preview-settings')).toHaveText('Ja');
+  await preview.getByLabel(/Ersätt all befintlig data/).check();
+  await preview.getByRole('button', { name: 'Ersätt och importera' }).tap();
+  await expect(page.getByRole('status').filter({ hasText: 'Importen är klar' })).toBeVisible();
+
+  const { settings } = await dump(page);
+  expect(settings.features).toMatchObject({ glp1: true, tillskott: true, steg: false });
+  expect(settings.preferences).toMatchObject({ trendHero: false, haptics: false });
+  expect(settings.ingredientMatches).toEqual({ 'krossade tomater': 'lv:1' });
+
+  // Utan omladdning: brytarna visar de importerade lägena.
+  await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
+  await page.getByTestId('settings-funktioner').getByRole('button').tap();
+  await expect(page.getByRole('switch', { name: /GLP-1/ })).toBeChecked();
+  await expect(page.getByRole('switch', { name: /Tillskott/ })).toBeChecked();
+  await expect(page.getByRole('switch', { name: /Steg/ })).not.toBeChecked();
+  expect(errors).toEqual([]);
+});
+
 test('krypterad export: fel lösenord ger tydligt fel, rätt lösenord återställer', async ({
   page,
 }) => {

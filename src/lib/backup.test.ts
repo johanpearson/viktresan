@@ -1,12 +1,19 @@
 // @vitest-environment node
 // Node-miljö: jsdoms Blob överlever inte structuredClone i fake-indexeddb, Nodes gör det.
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DB_NAME,
   applySnapshot,
   emptySnapshot,
   getDb,
+  getSetting,
+  setSetting,
+  SETTING_FEATURES,
+  SETTING_INGREDIENT_MATCHES,
+  SETTING_LAST_EXPORT,
+  SETTING_LOCK,
+  SETTING_PREFERENCES,
   readSnapshot,
   resetDbForTests,
   saveProfile,
@@ -28,6 +35,7 @@ import {
   type SavedMeal,
   type StoredFood,
   type Snapshot,
+  type SnapshotSettings,
   type StepsEntry,
   type SymptomEntry,
   type WaistEntry,
@@ -38,6 +46,8 @@ import {
   type WorkoutPlan,
 } from '../db/db.ts';
 import { defaultMealSlots, type MealSlot } from './mealSlots.ts';
+import { DEFAULT_FLAGS, FLAGS_VERSION } from './features.ts';
+import { DEFAULT_PREFERENCES, type Preferences } from './preferences.ts';
 import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
@@ -482,6 +492,19 @@ const seedHidden: HiddenFood[] = [
   { key: 'kalla:fineli', kind: 'kalla', value: 'fineli', createdAt: 7 },
 ];
 
+const seedSettings: SnapshotSettings = {
+  features: { ...DEFAULT_FLAGS, glp1: true, tillskott: true, version: FLAGS_VERSION },
+  preferences: { ...DEFAULT_PREFERENCES, trendHero: false, overviewHidden: ['steg'] },
+  ingredientMatches: { 'krossade tomater': 'lv:1' },
+};
+
+/** Inga sparade inställningar (standardvärdena gäller). */
+const NO_SETTINGS: SnapshotSettings = {
+  features: null,
+  preferences: null,
+  ingredientMatches: null,
+};
+
 async function seed(): Promise<void> {
   await applySnapshot(
     {
@@ -499,6 +522,7 @@ async function seed(): Promise<void> {
       ...supplementData,
       mealSlots: seedMealSlots,
       hiddenFoods: seedHidden,
+      settings: seedSettings,
     },
     'replace',
   );
@@ -519,11 +543,12 @@ async function comparable(snapshot: Snapshot) {
 }
 
 async function wipe(): Promise<void> {
-  await applySnapshot(emptySnapshot(), 'replace');
+  await applySnapshot({ ...emptySnapshot(), settings: NO_SETTINGS }, 'replace');
   // Måltiderna finns kvar (en fil utan måltider behåller enhetens).
   expect(await readSnapshot()).toEqual({
     ...emptySnapshot(),
     mealSlots: expect.any(Array) as MealSlot[],
+    settings: NO_SETTINGS,
   });
 }
 
@@ -600,7 +625,11 @@ describe('backup round-trip', () => {
     const empty = await readSnapshot();
     const file = await createBackup(empty, { now: NOW });
     const contents = await readBackup(file);
-    expect(contents.snapshot).toEqual({ ...emptySnapshot(), mealSlots: empty.mealSlots });
+    expect(contents.snapshot).toEqual({
+      ...emptySnapshot(),
+      mealSlots: empty.mealSlots,
+      settings: NO_SETTINGS,
+    });
   });
 });
 
@@ -632,6 +661,7 @@ describe('backup validering', () => {
     ...header,
     exportedAt: NOW.toISOString(),
     profile: null,
+    settings: NO_SETTINGS,
     weights: [{ id: 'a', date: '2026-01-01', weightKg: 80, createdAt: 1 }],
     waist: [{ date: '2026-01-01', waistCm: 90, createdAt: 1 }],
     steps: [{ date: '2026-01-01', steps: 8000, createdAt: 1 }],
@@ -1000,6 +1030,7 @@ describe('import av version 1 (kombinerade mätningar)', () => {
   };
 
   const expected: Omit<Snapshot, 'photos'> = {
+    settings: null,
     mealSlots: [],
     hiddenFoods: [],
     photoSessions: [{ id: 'migrerad:2026-01-01', date: '2026-01-01', createdAt: 10 }],
@@ -1057,6 +1088,8 @@ describe('import av version 1 (kombinerade mätningar)', () => {
       ...expected,
       photos: [],
       mealSlots: expect.any(Array) as MealSlot[],
+      // Version 1 saknar inställningar: enhetens (inga sparade) behålls.
+      settings: NO_SETTINGS,
     });
   });
 
@@ -1596,6 +1629,7 @@ describe('import slå ihop', () => {
           createdAt: 61,
         },
       ],
+      settings: null,
     };
     await applySnapshot(imported, 'merge');
 
@@ -1764,6 +1798,7 @@ describe('summarizeBackup', () => {
           ...supplementData,
           mealSlots: seedMealSlots,
           hiddenFoods: seedHidden,
+          settings: seedSettings,
         },
         { now: NOW },
       ),
@@ -1783,6 +1818,7 @@ describe('summarizeBackup', () => {
       supplementLog: 1,
       recipes: 1,
       foodOverrides: 2,
+      hasSettings: true,
       exportedAt: NOW.toISOString(),
       encrypted: false,
       hasProfile: true,
@@ -2010,6 +2046,33 @@ describe('backup fullständighet', () => {
     hiddenFoods: [
       { key: 'livsmedel:lv:2', kind: 'livsmedel', value: 'lv:2', name: 'Lever', createdAt: 1 },
     ] satisfies Required<HiddenFood>[],
+    settings: {
+      features: {
+        ...DEFAULT_FLAGS,
+        glp1: true,
+        tillskott: true,
+        steg: false,
+        version: FLAGS_VERSION,
+      },
+      preferences: {
+        trendHero: false,
+        weekCardDismissed: '2026-02-02',
+        profileSide: 'hoger',
+        ghostEnabled: false,
+        ghostOpacity: 0.6,
+        aiOptions: { ...DEFAULT_PREFERENCES.aiOptions, glp1: true },
+        haptics: false,
+        plateauDismissed: '2026-03-01',
+        report: { ...DEFAULT_PREFERENCES.report, period: '4v' },
+        reportPrintHintSeen: true,
+        overviewHidden: ['steg'],
+        milestoneCardDismissed: 'kg-1',
+        claimsHidden: ['proteinrik'],
+        whatToEatTipSeen: true,
+        backupDownloadHintSeen: true,
+      } satisfies Required<Preferences>,
+      ingredientMatches: { 'krossade tomater': 'lv:1' },
+    },
   };
 
   it('varje fält i varje posttyp följer med genom export och import', async () => {
@@ -2035,9 +2098,91 @@ describe('backup fullständighet', () => {
     }
   });
 
-  it('varje datalager i databasen ingår i säkerhetskopian (utom enhetens inställningar)', async () => {
+  it('varje datalager i databasen ingår i säkerhetskopian', async () => {
     const db = await getDb();
-    const stores = [...db.objectStoreNames].filter((s) => s !== 'settings');
-    expect(stores.sort()).toEqual(Object.keys(emptySnapshot()).sort());
+    expect([...db.objectStoreNames].sort()).toEqual(Object.keys(emptySnapshot()).sort());
+  });
+});
+
+describe('backup inställningar', () => {
+  const deviceSettings = {
+    features: { ...DEFAULT_FLAGS, version: FLAGS_VERSION },
+    preferences: { ...DEFAULT_PREFERENCES, haptics: false },
+    ingredientMatches: { 'gul lök': 'lv:2', 'krossade tomater': 'lv:3' },
+  };
+
+  async function storeDeviceSettings() {
+    await setSetting(SETTING_FEATURES, deviceSettings.features);
+    await setSetting(SETTING_PREFERENCES, deviceSettings.preferences);
+    await setSetting(SETTING_INGREDIENT_MATCHES, deviceSettings.ingredientMatches);
+    await setSetting(SETTING_LOCK, { credentialId: 'abc', createdAt: 1 });
+    await setSetting(SETTING_LAST_EXPORT, 123);
+  }
+
+  async function roundTrip(settings: SnapshotSettings | null) {
+    const file = await createBackup({ ...emptySnapshot(), settings }, { now: NOW });
+    return (await readBackup(file)).snapshot;
+  }
+
+  it('ersätt: filens inställningar gäller, låset och senaste export behålls', async () => {
+    await storeDeviceSettings();
+    await applySnapshot(await roundTrip(seedSettings), 'replace');
+    expect((await readSnapshot()).settings).toEqual(seedSettings);
+    expect(await getSetting(SETTING_LOCK)).toEqual({ credentialId: 'abc', createdAt: 1 });
+    expect(await getSetting(SETTING_LAST_EXPORT)).toBe(123);
+  });
+
+  it('ersätt: inställningar som inte sparats i filen får standardvärdena', async () => {
+    await storeDeviceSettings();
+    await applySnapshot(await roundTrip(NO_SETTINGS), 'replace');
+    expect((await readSnapshot()).settings).toEqual(NO_SETTINGS);
+  });
+
+  it('slå ihop: enhetens inställningar behålls, saknade tas från filen och minnet slås ihop', async () => {
+    await setSetting(SETTING_PREFERENCES, deviceSettings.preferences);
+    await setSetting(SETTING_INGREDIENT_MATCHES, deviceSettings.ingredientMatches);
+    await applySnapshot(await roundTrip(seedSettings), 'merge');
+    expect((await readSnapshot()).settings).toEqual({
+      features: seedSettings.features,
+      preferences: deviceSettings.preferences,
+      ingredientMatches: { 'krossade tomater': 'lv:3', 'gul lök': 'lv:2' },
+    });
+  });
+
+  it('en kopia utan inställningar (före version 14) lämnar enhetens orörda', async () => {
+    await storeDeviceSettings();
+    for (const mode of ['replace', 'merge'] as const) {
+      await applySnapshot({ ...emptySnapshot(), settings: null }, mode);
+      expect((await readSnapshot()).settings).toEqual({
+        features: deviceSettings.features,
+        preferences: deviceSettings.preferences,
+        ingredientMatches: deviceSettings.ingredientMatches,
+      });
+    }
+  });
+
+  it('okända och felaktiga värden släpps vid importen', async () => {
+    const snapshot = await roundTrip({
+      features: { glp1: true, okand: true, steg: 'ja', version: FLAGS_VERSION },
+      preferences: { trendHero: false, ghostOpacity: 5, okand: 1 },
+      ingredientMatches: { tomat: 'lv:1', tom: 7 },
+    });
+    expect(snapshot.settings).toEqual({
+      features: { ...DEFAULT_FLAGS, glp1: true, version: FLAGS_VERSION },
+      preferences: { ...DEFAULT_PREFERENCES, trendHero: false },
+      ingredientMatches: { tomat: 'lv:1' },
+    });
+  });
+
+  it('en kopia av version 14 utan inställningar avvisas', async () => {
+    const file = await createBackup(emptySnapshot(), { now: NOW });
+    const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+    const manifest = JSON.parse(strFromU8(entries['backup.json'] ?? new Uint8Array())) as Record<
+      string,
+      unknown
+    >;
+    delete manifest.settings;
+    const broken = new Blob([zipSync({ 'backup.json': strToU8(JSON.stringify(manifest)) })]);
+    expect((await errorOf(readBackup(broken))).code).toBe('invalid-data');
   });
 });

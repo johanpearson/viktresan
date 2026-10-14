@@ -2,6 +2,7 @@ import {
   openDB,
   type DBSchema,
   type IDBPDatabase,
+  type IDBPObjectStore,
   type IDBPTransaction,
   type StoreNames,
 } from 'idb';
@@ -1776,7 +1777,25 @@ export async function deleteSetting(key: string): Promise<void> {
   await db.delete('settings', key);
 }
 
-/** All användardata – det som ingår i en säkerhetskopia. Inställningar ingår inte. */
+/**
+ * Appens inställningar i en säkerhetskopia (sedan version 14), som de lagras i `settings`.
+ * `null` = inte sparad (standardvärdena gäller). Låset (knutet till enhetens passkey),
+ * filhandtaget och senaste export ingår inte – de hör till enheten.
+ */
+export interface SnapshotSettings {
+  features: unknown;
+  preferences: unknown;
+  ingredientMatches: unknown;
+}
+
+/** Inställningsnycklarna som följer med i en säkerhetskopia. */
+const BACKED_UP_SETTINGS = {
+  features: SETTING_FEATURES,
+  preferences: SETTING_PREFERENCES,
+  ingredientMatches: SETTING_INGREDIENT_MATCHES,
+} as const satisfies Record<keyof SnapshotSettings, string>;
+
+/** All användardata – det som ingår i en säkerhetskopia. */
 export interface Snapshot {
   profile: Profile | null;
   weights: WeightEntry[];
@@ -1804,6 +1823,8 @@ export interface Snapshot {
   mealSlots: MealSlot[];
   /** Dolt i matsökningen (sedan version 13). */
   hiddenFoods: HiddenFood[];
+  /** Inställningarna. `null` = saknas i filen (säkerhetskopior före version 14): befintliga behålls. */
+  settings: SnapshotSettings | null;
 }
 
 export function emptySnapshot(): Snapshot {
@@ -1832,6 +1853,7 @@ export function emptySnapshot(): Snapshot {
     foodOverrides: [],
     mealSlots: [],
     hiddenFoods: [],
+    settings: null,
   };
 }
 
@@ -1861,6 +1883,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     foodOverrides,
     mealSlots,
     hiddenFoods,
+    settings,
   ] = await Promise.all([
     getProfile(),
     listWeights(),
@@ -1887,6 +1910,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     listFoodOverrides(),
     listMealSlots(),
     listHiddenFoods(),
+    readSettings(),
   ]);
   return {
     profile,
@@ -1914,6 +1938,19 @@ export async function readSnapshot(): Promise<Snapshot> {
     foodOverrides,
     mealSlots,
     hiddenFoods,
+    settings,
+  };
+}
+
+async function readSettings(): Promise<SnapshotSettings> {
+  const db = await getDb();
+  const [features, preferences, ingredientMatches] = await Promise.all(
+    Object.values(BACKED_UP_SETTINGS).map((key) => db.get('settings', key)),
+  );
+  return {
+    features: features ?? null,
+    preferences: preferences ?? null,
+    ingredientMatches: ingredientMatches ?? null,
   };
 }
 
@@ -1973,7 +2010,7 @@ function importedMealSlots(
 /** Skriver in en snapshot i en enda transaktion – antingen går allt igenom eller inget. */
 export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction([...DATA_STORES, 'mealSlots'], 'readwrite');
+  const tx = db.transaction([...DATA_STORES, 'mealSlots', 'settings'], 'readwrite');
   // Måltiderna först: importerade poster vars måltid saknas (gamla Mellanmål, borttagen måltid)
   // flyttas till en befintlig måltid efter loggtid.
   const mealSlots = tx.objectStore('mealSlots');
@@ -2132,7 +2169,42 @@ export async function applySnapshot(snapshot: Snapshot, mode: ImportMode): Promi
     ];
     await Promise.all(removed.flatMap((id) => [favorites.delete(id), foodUnits.delete(id)]));
   }
+  if (snapshot.settings) await importSettings(tx.objectStore('settings'), snapshot.settings, mode);
   await tx.done;
+}
+
+/**
+ * `replace`: filens inställningar gäller (saknade = standardvärdena). `merge`: enhetens egna
+ * inställningar behålls och filens används bara där enheten saknar dem; receptimportens minne
+ * slås ihop (enhetens matchning vinner).
+ */
+async function importSettings<Stores extends ArrayLike<StoreNames<ViktresanDB>>>(
+  store: IDBPObjectStore<ViktresanDB, Stores, 'settings', 'readwrite'>,
+  settings: SnapshotSettings,
+  mode: ImportMode,
+): Promise<void> {
+  for (const [field, key] of Object.entries(BACKED_UP_SETTINGS)) {
+    const incoming = settings[field as keyof SnapshotSettings];
+    const existing: unknown = await store.get(key);
+    if (mode === 'replace') {
+      if (incoming === null) await store.delete(key);
+      else await store.put(incoming, key);
+    } else if (incoming === null) {
+      // Inget att lägga till.
+    } else if (existing === undefined) {
+      await store.put(incoming, key);
+    } else if (
+      key === SETTING_INGREDIENT_MATCHES &&
+      isPlainObject(incoming) &&
+      isPlainObject(existing)
+    ) {
+      await store.put({ ...incoming, ...existing }, key);
+    }
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** När den äldsta posten (vikt, midja, steg, bild, matlogg, vatten, pass, GLP-1) skapades (ms), eller null. */
