@@ -167,7 +167,7 @@ export default defineConfig({
       },
       workbox: {
         // livsmedel.json = Livsmedelsverkets databas, fineli.json = Finelis (se scripts/fetch-*.ts).
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,json}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,json,woff2}'],
         navigateFallback: `${BASE}index.html`,
         cleanupOutdatedCaches: true,
         // Ta kontroll över sidan direkt vid första besöket, så att den fungerar

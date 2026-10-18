@@ -33,6 +33,7 @@ import { useAppData, type AppData } from '../lib/useAppData.ts';
 import { useBackupStatus, type BackupStatus } from '../lib/useBackupStatus.ts';
 import { consumeSubPath } from '../lib/navigation.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
+import { normalize } from '../lib/foodSearch.ts';
 import { versionLine } from '../lib/version.ts';
 import { waterGoal } from '../lib/water.ts';
 
@@ -71,6 +72,8 @@ interface Panel extends FeatureGated {
   id: PanelId;
   /** Radens och panelens rubrik. */
   title: string;
+  /** Fler ord som sökfältet hittar panelen på. */
+  keywords: string;
   secondary?: (s: Summary) => ReactNode;
   value?: (s: Summary) => ReactNode;
 }
@@ -101,6 +104,8 @@ const GROUPS: readonly Group[] = [
     panels: [
       {
         id: 'profil',
+        keywords:
+          'startvikt längd målvikt mål kön födelseår ålder aktivitetsnivå takt kalorimål startdatum',
         title: 'Profil',
         secondary: ({ data }) =>
           data?.profile
@@ -111,6 +116,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'protein',
+        keywords: 'protein faktor gram',
         title: 'Proteinmål',
         feature: 'mat',
         secondary: ({ data }) =>
@@ -124,6 +130,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'fiber',
+        keywords: 'fiber nnr upptrappning',
         title: 'Fibermål',
         feature: 'mat',
         secondary: ({ data, glp1 }) =>
@@ -143,6 +150,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'dryck',
+        keywords: 'vatten dryck vätska ml träning glp-1',
         title: 'Dryckesmål',
         feature: 'vatten',
         secondary: ({ data, glp1 }) =>
@@ -156,6 +164,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'matpreferenser',
+        keywords: 'allergi vegetarisk kost fråga ai',
         title: 'Matpreferenser',
         feature: 'mat',
         secondary: ({ data }) =>
@@ -167,12 +176,14 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'maltider',
+        keywords: 'frukost lunch middag mellanmål kvällsmål tider ordning',
         title: 'Måltider',
         feature: 'mat',
         secondary: () => 'Namn, tid och ordning',
       },
       {
         id: 'matsokning',
+        keywords: 'sök källor kategorier dolda livsmedel fineli livsmedelsverket open food facts',
         title: 'Matsökning',
         feature: 'mat',
         secondary: () => 'Källor, kategorier och dolda livsmedel',
@@ -184,6 +195,7 @@ const GROUPS: readonly Group[] = [
     panels: [
       {
         id: 'funktioner',
+        keywords: 'steg midja mat dryck träning glp-1 tillskott bilder stäng av slå på',
         title: 'Funktioner',
         secondary: () => 'Stäng av det du inte använder',
         value: ({ enabledFeatures }) =>
@@ -191,11 +203,13 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'visning',
+        keywords: 'trendvikt vibration näringsetiketter',
         title: 'Visning',
         secondary: () => 'Trendvikt och vibration',
       },
       {
         id: 'oversikt',
+        keywords: 'ringar kort dölj',
         title: 'Översikt',
         secondary: () => 'Ringar och kort',
         value: ({ overviewHidden }) =>
@@ -203,6 +217,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'bilder',
+        keywords: 'profilsida spökbild foto kamera',
         title: 'Bilder',
         feature: 'bilder',
         secondary: () => 'Profilbilder tas från',
@@ -210,6 +225,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'las',
+        keywords: 'lås passkey ansiktsigenkänning fingeravtryck',
         title: 'Lås',
         secondary: () => 'Fingeravtryck eller skärmlås',
         value: ({ locked }) => (locked ? 'På' : 'Av'),
@@ -221,6 +237,7 @@ const GROUPS: readonly Group[] = [
     panels: [
       {
         id: 'sakerhetskopia',
+        keywords: 'backup export import zip lösenord kryptering återställ',
         title: 'Säkerhetskopia',
         secondary: ({ backup }) => (
           <span data-testid="backup-summary">{lastExportShort(backup)}</span>
@@ -229,6 +246,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'lagring',
+        keywords: 'beständig lagring utrymme',
         title: 'Lagring',
         secondary: () => 'Allt sparas bara på den här enheten',
         value: ({ storage }) =>
@@ -240,6 +258,7 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'om',
+        keywords: 'version uppdatering källor licens',
         title: 'Om appen',
         secondary: () => 'Version, uppdateringar och källor',
       },
@@ -305,6 +324,32 @@ export function Installningar() {
     setOpenId(null);
   }
 
+  // Sökfältet: paneler där varje ord finns i rubriken, gruppen eller nyckelorden.
+  const [query, setQuery] = useState('');
+  const words = normalize(query).split(' ').filter(Boolean);
+  const matches = groups.flatMap((g) =>
+    g.panels.filter((p) => {
+      const text = normalize(`${p.title} ${g.title} ${p.keywords}`);
+      return words.every((w) => text.includes(w));
+    }),
+  );
+
+  function row(panel: Panel) {
+    return (
+      <ListRow
+        key={panel.id}
+        testId={`settings-${panel.id}`}
+        primary={panel.title}
+        secondary={panel.secondary?.(summary)}
+        value={panel.value?.(summary)}
+        chevron
+        onClick={() => {
+          setOpenId(panel.id);
+        }}
+      />
+    );
+  }
+
   function content(id: PanelId): ReactNode {
     switch (id) {
       case 'profil':
@@ -368,25 +413,39 @@ export function Installningar() {
 
   return (
     <Page title="Inställningar">
-      {groups.map((group) => (
-        <Card key={group.title} title={group.title}>
-          <ul className="list">
-            {group.panels.map((panel) => (
-              <ListRow
-                key={panel.id}
-                testId={`settings-${panel.id}`}
-                primary={panel.title}
-                secondary={panel.secondary?.(summary)}
-                value={panel.value?.(summary)}
-                chevron
-                onClick={() => {
-                  setOpenId(panel.id);
-                }}
-              />
-            ))}
-          </ul>
+      <label className="search-field settings-search">
+        <span className="visually-hidden">Sök i inställningar</span>
+        <span aria-hidden="true" className="search-icon" />
+        <input
+          className="input"
+          type="search"
+          placeholder="Sök i inställningar"
+          autoComplete="off"
+          enterKeyHint="search"
+          value={query}
+          data-testid="settings-search"
+          onChange={(e) => {
+            setQuery(e.target.value);
+          }}
+        />
+      </label>
+      {words.length > 0 ? (
+        <Card title="Sökträffar">
+          {matches.length > 0 ? (
+            <ul className="list">{matches.map(row)}</ul>
+          ) : (
+            <p className="muted" role="status">
+              Inga inställningar matchar ”{query.trim()}”.
+            </p>
+          )}
         </Card>
-      ))}
+      ) : (
+        groups.map((group) => (
+          <Card key={group.title} title={group.title}>
+            <ul className="list">{group.panels.map(row)}</ul>
+          </Card>
+        ))
+      )}
       <footer className="app-footer" data-testid="app-footer">
         {versionLine()}
       </footer>

@@ -100,6 +100,33 @@ export function parseDecimal(input: string): number | null {
   return Number(text);
 }
 
+const FRACTIONS: Readonly<Record<string, number>> = {
+  '½': 1 / 2,
+  '¼': 1 / 4,
+  '¾': 3 / 4,
+  '⅓': 1 / 3,
+  '⅔': 2 / 3,
+};
+
+/**
+ * Mängd som man skriver den i köket: "1,5", "1/2", "1 1/2", "½" eller "1½".
+ * `null` om texten inte är en sådan mängd.
+ */
+export function parseAmount(input: string): number | null {
+  const text = input.trim();
+  const decimal = parseDecimal(text);
+  if (decimal !== null) return decimal;
+  const m = /^(?:(\d+)\s+(\d+)\/(\d+)|(\d+)\/(\d+)|(\d+)?\s*([½¼¾⅓⅔]))$/.exec(text);
+  if (!m) return null;
+  const [, whole, num, den, num2, den2, lead, glyph] = m;
+  // Division med 0 ger Infinity, som underkänns nedan.
+  const value =
+    glyph !== undefined
+      ? Number(lead ?? 0) + (FRACTIONS[glyph] ?? 0)
+      : Number(whole ?? 0) + Number(num ?? num2) / Number(den ?? den2);
+  return Number.isFinite(value) ? value : null;
+}
+
 /** Ökar/minskar en vikt och avrundar till en decimal. */
 export function stepKg(value: number, delta: number): number {
   return Math.round((value + delta + Number.EPSILON) * 10) / 10;

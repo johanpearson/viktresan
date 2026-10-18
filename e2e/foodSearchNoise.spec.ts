@@ -234,7 +234,8 @@ test('ta bort en egen vara – tidigare loggar finns kvar', async ({ page }) => 
   // Loggen finns kvar med kcal och fiber (fibern slås upp på det borttagna livsmedlet).
   const frukost = page.getByRole('button', { name: /^Frukost 1 post/ });
   await expect(frukost).toContainText('Fi 4,5 g');
-  await frukost.tap();
+  // Pågående måltid (efter klockslaget) är redan utfälld.
+  if ((await frukost.getAttribute('aria-expanded')) === 'false') await frukost.tap();
   const entry = page.getByTestId('food-entry').filter({ hasText: 'Knäckebröd hemma' });
   await expect(entry).toHaveCount(1);
   await expect(entry).toContainText('114 kcal');

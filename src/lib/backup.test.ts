@@ -2028,6 +2028,8 @@ describe('backup fullständighet', () => {
         servings: 4,
         cookedWeightG: 800,
         sourceUrl: 'https://example.com/gryta',
+        oneOff: true,
+        batch: { startedAt: 1_700_000_200_000, portions: 4 },
         ...times,
       },
     ] satisfies Required<Recipe>[],

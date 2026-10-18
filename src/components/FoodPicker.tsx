@@ -9,9 +9,11 @@ import {
   findSupplementByEan,
   putFood,
   putHiddenFoods,
+  putRecipe,
   saveCustomUnits,
   setFavorite,
   type FoodLogEntry,
+  type Recipe,
   type StoredFood,
 } from '../db/db.ts';
 import { CLAIM_RULES, type ClaimId } from '../data/nutritionClaims.ts';
@@ -39,7 +41,20 @@ import type { Livsmedel } from '../lib/livsmedel.ts';
 import { mealName, type MealId } from '../lib/mealSlots.ts';
 import { usePreferences } from '../lib/preferences.ts';
 import { quickValuesOf, type QuickValues } from '../lib/quickLog.ts';
-import { recipeToItem } from '../lib/recipes.ts';
+import { formatKcal } from '../lib/format.ts';
+import {
+  PORTION_UNIT,
+  canStartBatch,
+  cookedAgoText,
+  isArchived,
+  leftovers,
+  portionsText,
+  recipeFoodId,
+  recipeToItem,
+  recipeYield,
+  withBatch,
+  withoutBatch,
+} from '../lib/recipes.ts';
 import { lastUsage, type FoodUnit, type Usage } from '../lib/units.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
@@ -54,6 +69,7 @@ import { FoodList } from './FoodList.tsx';
 import { FoodLogForm } from './FoodLogForm.tsx';
 import { ListRow } from './ListRow.tsx';
 import { QuickLogForm } from './QuickLogForm.tsx';
+import { RecipeBuilder } from './RecipeBuilder.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
 import { Toast } from './Toast.tsx';
 
@@ -167,6 +183,10 @@ export function FoodPicker({
   const [query, setQuery] = useState(initialQuery);
   const deferred = useDeferredValue(query);
   const [selected, setSelected] = useState<FoodItem | null>(null);
+  /** Förvald mängd för det valda (1 portion ur en matlåda eller en nylagad rätt). */
+  const [selectedUsage, setSelectedUsage] = useState<Usage | null>(null);
+  /** "Laga en rätt": receptformuläret för en engångsrätt. */
+  const [cooking, setCooking] = useState(false);
   const [scanning, setScanning] = useState(scan);
   const [lookup, setLookup] = useState<Lookup>({ kind: 'idle' });
   const [creating, setCreating] = useState<Creating | null>(null);
@@ -289,7 +309,35 @@ export function FoodPicker({
     () => favoriteFoods(foodData.favorites, catalog, foodLog).filter(quickPick),
     [foodData.favorites, catalog, foodLog, quickPick],
   );
-  const ownDishes = useMemo(() => [...mealItems, ...recipeItems], [mealItems, recipeItems]);
+  // Måltider-fliken: arkiverade recept (engångsrätter, oanvända) bara i sökningen.
+  const ownDishes = useMemo(
+    () => [
+      ...mealItems,
+      ...(forLog
+        ? foodData.recipes.filter((r) => !isArchived(r, foodLog)).map(recipeToItem)
+        : NO_FOODS),
+    ],
+    [mealItems, forLog, foodData.recipes, foodLog],
+  );
+  // Matlådor: lagade omgångar med portioner kvar (bara vid loggning).
+  const boxes = useMemo(
+    () => (forLog ? leftovers(foodData.recipes, foodLog) : []),
+    [forLog, foodData.recipes, foodLog],
+  );
+  const selectedRecipe =
+    selected?.source === 'recept'
+      ? foodData.recipes.find((r) => recipeFoodId(r.id) === selected.id)
+      : undefined;
+  const batchOffer =
+    forLog && selectedRecipe && canStartBatch(selectedRecipe, foodLog)
+      ? {
+          portions: selectedRecipe.servings ?? 0,
+          onStart: async (startedAt: number) => {
+            await putRecipe(withBatch(selectedRecipe, startedAt));
+            await reloadFood();
+          },
+        }
+      : undefined;
   const favoriteIds = new Set(foodData.favorites.map((f) => f.foodId));
   const customUnits = useMemo(
     () => new Map(foodData.foodUnits.map((u) => [u.foodId, u.units])),
@@ -304,7 +352,7 @@ export function FoodPicker({
     if (focusSearch && !scan && !initialEan) searchRef.current?.focus();
   }, [focusSearch, scan, initialEan]);
 
-  function pick(food: FoodItem) {
+  function pick(food: FoodItem, usage: Usage | null = null) {
     if (food.source === 'snabb') {
       // Ett snabbval (Senaste/Favoriter) öppnar snabbloggen förifylld.
       setQuick({ initial: quickValuesOf(food) });
@@ -313,6 +361,7 @@ export function FoodPicker({
       return;
     }
     setSelected(food);
+    setSelectedUsage(usage);
     setQuery('');
     setStatus(null);
     setScanning(false);
@@ -426,6 +475,16 @@ export function FoodPicker({
     else setMenu(food);
   }
 
+  /** "Slut": matlådorna försvinner ur listan (Ångra lägger tillbaka omgången). */
+  async function finishBatch(recipe: Recipe) {
+    await putRecipe(withoutBatch(recipe));
+    await reloadFood();
+    toast.show(`Matlådorna med ${recipe.name} är slut.`, async () => {
+      await putRecipe(recipe);
+      await reloadFood();
+    });
+  }
+
   async function toggleFavorite(foodId: string) {
     await setFavorite(foodId, !favoriteIds.has(foodId));
     await reloadFood();
@@ -440,7 +499,24 @@ export function FoodPicker({
         : 'Logga mat');
 
   let body;
-  if (quick !== null && mode.kind === 'log') {
+  if (cooking && mode.kind === 'log') {
+    body = (
+      <RecipeBuilder
+        recipe={null}
+        source={source}
+        cookOnce
+        onSaved={(saved) => {
+          setCooking(false);
+          void reloadFood().then(() => {
+            pick(recipeToItem(saved), { unit: PORTION_UNIT, amount: 1 });
+          });
+        }}
+        onCancel={() => {
+          setCooking(false);
+        }}
+      />
+    );
+  } else if (quick !== null && mode.kind === 'log') {
     body = (
       <QuickLogForm
         initial={quick.initial}
@@ -499,7 +575,7 @@ export function FoodPicker({
         food={selected}
         purpose={mode.kind}
         customUnits={customUnits.get(selected.id) ?? NO_UNITS}
-        last={initialUsage ?? lastUsage(foodLog, selected.id)}
+        last={selectedUsage ?? initialUsage ?? lastUsage(foodLog, selected.id)}
         editing={null}
         date={mode.kind === 'log' ? mode.date : ''}
         defaultMeal={mode.kind === 'log' ? mode.meal : null}
@@ -529,6 +605,7 @@ export function FoodPicker({
         onLogUpdated={() => {
           void reloadLog?.();
         }}
+        batchOffer={batchOffer}
       />
     );
   } else {
@@ -651,6 +728,38 @@ export function FoodPicker({
         ) : (
           lookup.kind === 'idle' && (
             <>
+              {boxes.length > 0 && (
+                <section className="leftovers" aria-labelledby="leftovers-title">
+                  <h3 className="subheading" id="leftovers-title">
+                    Matlådor
+                  </h3>
+                  <ul className="list list-flush">
+                    {boxes.map(({ recipe, left }) => {
+                      const perPortion = recipeYield(recipe).perPortion;
+                      return (
+                        <ListRow
+                          key={recipe.id}
+                          testId="leftover"
+                          primary={recipe.name}
+                          secondary={`${portionsText(left)} kvar · ${cookedAgoText(recipe.batch?.startedAt ?? 0)}`}
+                          value={
+                            perPortion && (
+                              <span className="kcal">{formatKcal(perPortion.kcal)}</span>
+                            )
+                          }
+                          onClick={() => {
+                            pick(recipeToItem(recipe), { unit: PORTION_UNIT, amount: 1 });
+                          }}
+                          swipeLeft={{
+                            label: 'Slut',
+                            onSwipe: () => void finishBatch(recipe),
+                          }}
+                        />
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
               {forLog && (
                 <ul className="list list-flush">
                   <ListRow
@@ -660,6 +769,16 @@ export function FoodPicker({
                     chevron
                     onClick={() => {
                       setQuick({ initial: null });
+                      setStatus(null);
+                    }}
+                  />
+                  <ListRow
+                    testId="cook-once-open"
+                    primary="Laga en rätt"
+                    secondary="Ingredienser och portioner – för något du lagar en gång"
+                    chevron
+                    onClick={() => {
+                      setCooking(true);
                       setStatus(null);
                     }}
                   />

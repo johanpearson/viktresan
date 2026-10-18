@@ -16,7 +16,7 @@ import {
 import { categoryFromFineliClass } from '../data/fineliCategories.ts';
 import { STANDARD_UNIT_RULES, type StandardUnitRule } from '../data/units.ts';
 import { normalize } from './foodSearch.ts';
-import { decimalInput, formatGrams, formatMl, parseDecimal } from './format.ts';
+import { decimalInput, formatGrams, formatMl, parseAmount, parseDecimal } from './format.ts';
 import type { Parsed } from './validation.ts';
 
 /**
@@ -306,6 +306,79 @@ export function gramsPerUnit(units: readonly FoodUnit[], unit: string): number |
   return units.find((u) => sameName(u.name, unit))?.grams ?? null;
 }
 
+/** Små volymmått (krm, tsk, msk): halva är minsta rimliga mängd. */
+const SPOON_ML = 15;
+
+/**
+ * En mängd avrundad till något man kan mäta upp i köket: gram hela (under 10 g en
+ * decimal), ml i steg om 5, styck och skedar i halvor, dl/l i tiondelar under 1 och
+ * halvor upp till 10, därefter hela.
+ */
+export function friendlyAmount(value: number, unit: string): number {
+  if (!(value > 0)) return 0;
+  if (isGram(unit)) return value >= 10 ? Math.round(value) : round1(value);
+  const ml = volumeMl(unit);
+  if (ml === 1) return Math.max(5, Math.round(value / 5) * 5);
+  const smallStep = ml !== null && ml > SPOON_ML ? 0.1 : 0.5;
+  const step = value >= 10 ? 1 : value >= 1 ? 0.5 : smallStep;
+  return round1(Math.max(step, Math.round(value / step) * step));
+}
+
+/** Mängden i en annan enhet för samma vikt, köksvänligt avrundad; `null` utan känd vikt. */
+export function convertAmount(
+  grams: number,
+  unit: string,
+  units: readonly FoodUnit[],
+): number | null {
+  const per = gramsPerUnit(units, unit);
+  return per === null || !(per > 0) ? null : friendlyAmount(grams / per, unit);
+}
+
+export interface Equivalent {
+  unit: string;
+  amount: number;
+  /** "1,5 dl", "135 g". */
+  label: string;
+}
+
+/** Fler skedar än så här visas inte som omräkning. */
+const MAX_SPOONS = 8;
+
+/** Högsta tillåtna avvikelse mellan avrundad och exakt mängd för att visas som likvärdig. */
+const EQUIVALENT_TOLERANCE = 0.15;
+
+/**
+ * Ungefär samma mängd i livsmedlets andra enheter ("≈ 1,5 dl · 8 msk · 52 g"): högst `max`
+ * enheter i livsmedlets ordning och sist gram. En enhet där den köksvänliga mängden
+ * skiljer mer än 15 % från den exakta (t.ex. 7 g som ägg) eller blir orimligt stor
+ * (fler än 8 skedar) hoppas över, liksom gissade enheter (vikten är inte bekräftad).
+ */
+export function equivalents(
+  grams: number,
+  current: string,
+  units: readonly FoodUnit[],
+  max = 2,
+): Equivalent[] {
+  if (!(grams > 0)) return [];
+  const result: Equivalent[] = [];
+  for (const u of units) {
+    if (result.length >= max) break;
+    if (sameName(u.name, current) || !(u.grams > 0) || isGuess(u)) continue;
+    const exact = grams / u.grams;
+    const amount = friendlyAmount(exact, u.name);
+    const ml = volumeMl(u.name);
+    // Ingen räknar upp 19 matskedar: skedar bara upp till 8 st.
+    const maxAmount = ml === null ? MAX_UNIT_AMOUNT : ml <= SPOON_ML ? MAX_SPOONS : MAX_GRAMS;
+    if (amount > maxAmount || Math.abs(amount - exact) / exact > EQUIVALENT_TOLERANCE) continue;
+    result.push({ unit: u.name, amount, label: amountLabel(amount, u.name) });
+  }
+  if (!isGram(current)) {
+    const amount = friendlyAmount(grams, GRAM);
+    result.push({ unit: GRAM, amount, label: amountLabel(amount, GRAM) });
+  }
+  return result;
+}
+
 /** "2 st" / "120 g". */
 export function amountLabel(amount: number, unit: string): string {
   return isGram(unit) ? formatGrams(amount) : `${decimalInput(amount)} ${unit}`;
@@ -371,7 +444,7 @@ export function parseUnitAmount(
 ): Parsed<{ amount: number; unit: string; grams: number }> {
   const per = gramsPerUnit(units, unit);
   if (per === null) return { ok: false, error: 'Välj en enhet.' };
-  const amount = parseDecimal(text);
+  const amount = parseAmount(text);
   if (isGram(unit)) {
     if (amount == null || amount <= 0 || amount > MAX_GRAMS) {
       return { ok: false, error: 'Ange mängd i gram (1–5 000).' };

@@ -330,7 +330,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
             ],
             servings: 6,
             cookedWeightG: 1500,
-            createdAt: 1,
+            // Nyligen skapat – ett recept som inte använts på 60 dagar ligger under Arkiv.
+            createdAt: Date.now(),
           },
         ],
       });

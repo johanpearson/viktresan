@@ -347,7 +347,27 @@ export const VISUAL_DATA: SeedData = {
       ],
       servings: 4,
       cookedWeightG: 1200,
+      // Lagad igår: fyra matlådor överst i sök-sheeten.
+      batch: { startedAt: at(1), portions: 4 },
       createdAt: at(10),
+    },
+    {
+      // Engångsrätt ("Laga en rätt"): under Arkiv i Mat → Egna.
+      id: 'pytt',
+      name: 'Pytt i panna',
+      items: [
+        {
+          foodId: 'lv:4',
+          name: 'Potatis kokt',
+          amount: 600,
+          unit: 'g',
+          grams: 600,
+          per100: POTATIS,
+        },
+      ],
+      servings: 2,
+      oneOff: true,
+      createdAt: at(3),
     },
   ],
   favorites: [{ foodId: 'lv:6', createdAt: at(20) }],

@@ -90,7 +90,9 @@ src/lib/foodDay.ts      Mat → Dag: sektioner per måltid ur inställningen (su
                         spara som egen måltid (savedMealName, entriesToMealItems)
 src/lib/mealAnalysis.ts Lokal analys: summor (makron, fiber, socker, salt, vitaminer, mineraler) i % av dagsmål/RI, nyckeltal
 src/lib/quickLog.ts     Snabblogg: kcal (+ protein) som matloggpost med `estimated`, id `snabb:<namn>:<kcal>:<protein>`
-src/lib/recipes.ts      Recept: utbyte (portioner/tillagad vikt), näring per portion och 100 g, kopia till loggen, duplicera
+src/lib/recipes.ts      Recept: utbyte (portioner/tillagad vikt), näring per portion och 100 g, kopia till loggen, duplicera,
+                        matlådor (leftovers/canStartBatch/withBatch, kvar räknas ur loggen), arkiv (isArchived: engångsrätt
+                        eller 60 dagar utan användning)
 src/lib/recipeImport.ts Receptimport: prompt (länk/text/bild), JSON-validering, ingredienstolkning ("1 burk … (400 g)"), mängd i gram
                         med enhetssystemet (resolveAmount), matchning (matchFood) och säkerhetsnivå (hög/osäker/ingen)
 src/lib/matchMemory.ts  Minnet av manuella matchningar i receptimporten (settings `ingredientMatches`: text → livsmedels-id)
@@ -107,7 +109,8 @@ src/lib/claims.ts       Etikettreglerna (isProteinRich/isFiberRich/isLowEnergy),
 src/lib/foodNutrition.ts  Näringsvärdenas status (kcal, P, K, F, fiber, socker; saknas/källa/eget), egna värden ovanpå källan
                         (applyOverride/withoutOverride, mergeOverride), uppdatering av tidigare loggposter (logEntriesToUpdate)
 src/data/nutrients.ts   Övriga näringsämnen: nyckel, enhet, RI (EU 1169/2011; fiber NNR), EuroFIR-kod/namn för importen
-src/lib/units.ts        Enheter: volym via densitet, kategori (foodProfile), relevanta enheter, gissningar, förval, OFF-portion/förpackning
+src/lib/units.ts        Enheter: volym via densitet, kategori (foodProfile), relevanta enheter, gissningar, förval, OFF-portion/förpackning,
+                        köksvänlig omräkning (friendlyAmount, convertAmount) och omräkningsraden (equivalents)
 src/data/units.ts       Kuraterad tabell per livsmedel (Livsmedelsverket): styckvikter, egen densitet/kategori (ungefärliga)
 src/data/foodCategories.ts  Kategorier: densitet, relevanta enheter, gissade styckvikter; namnmönster + Livsmedelsverkets grupper
 src/data/fineliCategories.ts  Finelis användningsklasser (FUCLASS) → kategorier (FINELI_CLASSES)
@@ -135,7 +138,8 @@ src/lib/nutrientUnits.ts  Enheter för vitaminer/mineraler: g/mg/µg och IE (D-v
 src/lib/micronutrients.ts  Näringssummering: mat + tillskott per ämne och dag, 7-dagarssnitt, UL-varningar med bidrag
 src/data/upperLimits.ts EFSA:s övre gränsvärden (UL) för vuxna med källa; `appliesTo` total eller bara tillskott
 src/lib/useFoodData.ts  Hook: egna livsmedel, måltider, favoriter + Livsmedelsverkets data
-src/lib/format.ts       Svensk formatering/tolkning av kg, heltal, datum
+src/lib/format.ts       Svensk formatering/tolkning av kg, heltal, datum; mängder med bråk (parseAmount: "1/2", "1 1/2", "½")
+src/lib/appBadge.ts     Siffran på appikonen (Badging API) = antal i Att göra idag (sätts av TodoCard)
 src/lib/validation.ts   Validering av profil- och mätningsformulär
 src/lib/backup.ts       Säkerhetskopia: zip (fflate), valfri kryptering, validering vid import
 src/lib/backupReminder.ts  Ren logik för påminnelsen (7 dagar utan export)
@@ -192,6 +196,8 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript); svep görs med
                         dispatchEvent('pointer…') (`swipeLeft` i helpers.ts) och pågående måltid styrs med page.clock.setFixedTime
+                        recipesAndUnits.spec.ts = enhetsbyte med omräkning och bråk, omräkningsraden, matlådor (logga, kvar, Slut
+                        + Ångra), "Laga en rätt" → Arkiv i Egna och sökningen i Inställningar.
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
 scripts/                Engångsskript (ikongenerering inkl. genvägsikoner shortcut-*.svg, fetch-livsmedel.ts, fetch-fineli.ts)
 public/livsmedel.json   Livsmedelsverkets data, kompakt (en rad per livsmedel), precachad
@@ -204,7 +210,8 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
   (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `maltider`, `matsokning`, `funktioner`, `visning`, `oversikt`, `bilder`, `las`, `sakerhetskopia`,
-  `lagring`, `om`) öppnar panelen direkt.
+  `lagring`, `om`) öppnar panelen direkt. Sökfältet överst (`settings-search`) filtrerar raderna på rubrik, grupp och
+  panelens `keywords` ("backup" → Säkerhetskopia).
   Flikar i Framsteg har egen delsökväg (`#/framsteg/bilder`). Gamla `#/historik`, `#/bilder`
   och `#/steg` skickas vidare (`MOVED`). En route för en avstängd funktion visar Översikt.
 - **Bakåtknappen** (`navigation.ts`, all historik går därigenom – inga egna `pushState`/`location.hash =`): historiken
@@ -246,7 +253,8 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
   `schedule` `dagligen`/`veckodagar` (+ `weekdays`)/`vid-behov`, `dosesPerDay`, valfri `ean`; index `by-ean`),
   `supplementLog` (v10, tagna doser, id = `<tillskott>:<datum>`, en per tillskott och dag, namn och ämnen kopieras in;
   index `by-date`), `recipes` (v11, recept: ingredienser som måltider, `servings` och/eller `cookedWeightG`; livsmedels-id
-  `recept:<id>`; valfri `sourceUrl` från receptimporten utan schemaändring), `foodOverrides` (v13, egna näringsvärden per
+  `recept:<id>`; valfri `sourceUrl` från receptimporten, `oneOff: true` (engångsrätt) och `batch` `{ startedAt, portions }`
+  (pågående matlådor) utan schemaändring), `foodOverrides` (v13, egna näringsvärden per
   livsmedel från OFF/Livsmedelsverket/Fineli, nyckel = `foodId`, valfri `ean`, `values` = kcal/proteinG/carbsG/fatG/fiberG/sugarG
   per 100 g/ml; `putFoodOverride` utan värden tar bort posten), `mealSlots` (v15, dagens måltider `{ id, name, time "HH:MM",
 kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddagsmellanmål 10, Lunch 12, Eftermiddagsmellanmål 15,
@@ -334,6 +342,16 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
 - **Snabblogg och recept**: sök-sheeten har raden "Snabblogg" (`QuickLogForm`); snabbval under Senaste/Favoriter
   ("≈ 700 kcal") öppnar den förifylld. Recept (Mat → Egna, `RecipeBuilder`) söks och listas under Måltider i sök-sheeten,
   loggas i portioner (½, 1, 1½, 2) eller gram och kan dupliceras.
+- **Matlådor** (`recipes.ts`, `FoodLogForm` `batchOffer`, `FoodPicker`): när ett recept med ≥ 2 portioner loggas och
+  ingen omgång pågår visas "Resten blir matlådor" (på som standard); då sparas `batch` `{ startedAt = postens createdAt,
+portions = servings }` på receptet. Kvar = portioner − poster av receptet loggade från `startedAt` (portion, annars
+  gram ÷ portionens vikt) – räknas alltid ur loggen, så ändrade/borttagna poster stämmer. Sök-sheeten visar "Matlådor"
+  överst (`leftover`, ≥ ½ portion kvar, högst 7 dagar, "3 portioner kvar · lagad igår"); tryck = loggformuläret med
+  1 portion, svep vänster = "Slut" (tar bort `batch`, Ångra).
+- **Laga en rätt och arkiv**: sök-sheetens rad "Laga en rätt" (`cook-once-open`) öppnar `RecipeBuilder` med `cookOnce`
+  ("Spara bland mina recept" av = `oneOff: true`) och sedan loggformuläret med 1 portion. Mat → Egna visar recept som
+  inte är arkiverade; engångsrätter och recept utan loggning/ändring på 60 dagar (`ARCHIVE_DAYS`) ligger hopfällda under
+  "Arkiv (N)" (`recipe-archive`). Arkiverade recept finns kvar i sökningen men inte under Måltider i sök-sheeten.
 - **Dryck** (i UI:t "Dryck"; internt heter det fortfarande `water`/`vatten` – store, funktion, route
   `#/logga/vatten`): mål = eget `waterGoalMl`, annars standardmål efter kön: 2 000 ml (man) / 1 600 ml
   (kvinna), 1 800 ml utan kön – dryckesdelen (~80 %) av EFSA:s totala vätskeintag. Ingen koppling till
@@ -511,7 +529,11 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   den som egen enhet (`confirmGuess`). "Lägg till egen enhet" finns i livsmedlets detaljer ("Enheter för …",
   Egna → livsmedlet). `volym`/`gissning` lagras aldrig. Förval: senast använda (`lastUsage`), annars första
   enheten med känd vikt (egen/OFF/standard), annars kategorins första, annars 100 g. Alla värden
-  (densitet, styckvikter) är ungefärliga. Vid redigering av en post gäller enhetens vikt när posten
+  (densitet, styckvikter) är ungefärliga. Byte av enhet räknar om mängden till samma vikt, köksvänligt avrundad
+  (`friendlyAmount`: gram hela, ml i steg om 5, styck/skedar i halvor, dl/l i tiondelar under 1); en ny egen enhet
+  börjar på 1. Under förhandsvisningen står omräkningsraden "≈ 1,5 dl · 8 msk · 52 g" (`unit-equivalents`, högst två
+  enheter + gram, inte om avrundningen avviker > 15 % eller blir fler än 8 skedar) – tryck byter enhet och mängd.
+  Mängden får skrivas som bråk ("1/2", "1 1/2", "½", `parseAmount`). Vid redigering av en post gäller enhetens vikt när posten
   loggades (`entryUnit`).
   Open Food Facts: värden per 100 ml (`nutrition_data_per` = 100ml, eller förpackning i ml) →
   `per100Unit: 'ml'` på livsmedel, loggpost och ingrediens; mängden räknas då direkt i ml (densitet 1).

@@ -236,7 +236,17 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `${theme}-sheet-mat-recept`, false);
       await close();
 
+      // Laga en rätt: receptformuläret för en engångsrätt.
+      await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
+      await sheet.getByTestId('cook-once-open').getByRole('button').tap();
+      await expect(sheet.getByTestId('recipe-form')).toBeVisible();
+      await shot(page, `${theme}-sheet-mat-laga`, false);
+      await close();
+
       await page.getByRole('button', { name: 'Egna', exact: true }).tap();
+      await page.getByTestId('recipe-archive').getByText('Arkiv (1)').tap();
+      await expect(page.getByTestId('recipe-archive').getByTestId('own-recipe')).toBeVisible();
+      await shot(page, `${theme}-mat-egna-arkiv`);
       await page.getByTestId('own-recipe').getByRole('button').first().tap();
       await expect(page.getByTestId('recipe-per-portion')).toBeVisible();
       await shot(page, `${theme}-mat-recept-formular`);
@@ -395,6 +405,9 @@ for (const theme of ['light', 'dark'] as const) {
       await sheet.getByTestId('quick-pick').filter({ hasText: 'Potatis kokt' }).tap();
       await expect(sheet.getByTestId('nutrition-status')).toBeVisible();
       await shot(page, `${theme}-sheet-mat-logga`, false);
+      // Mängd, enheter och omräkningsraden ("≈ 1,5 dl · 90 g").
+      await sheet.getByTestId('unit-equivalents').scrollIntoViewIfNeeded();
+      await shot(page, `${theme}-sheet-mat-logga-enheter`, false);
       await sheet.getByTestId('nutrition-complete').first().tap();
       await expect(sheet.getByTestId('nutrition-complete-form')).toBeVisible();
       await shot(page, `${theme}-sheet-mat-komplettera`, false);
@@ -528,6 +541,9 @@ for (const theme of ['light', 'dark'] as const) {
         await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
         await expect(sheet).toBeHidden();
       }
+      await page.getByTestId('settings-search').fill('backup');
+      await expect(page.getByTestId('settings-sakerhetskopia')).toBeVisible();
+      await shot(page, `${theme}-installningar-sok`);
     });
 
     test('paneler: Inställningar – val', async ({ page }) => {
@@ -652,6 +668,11 @@ for (const theme of ['light', 'dark'] as const) {
       const sheet = page.getByRole('dialog');
       // Tryck på passet i Att göra idag: radmenyn, sedan Klar. Sidan bakom scrollas först till
       // ett fast läge (rubriken fastnad) så att bakgrunden inte beror på när scrollen hann klart.
+      // Varningen för övre gränsvärden läser livsmedelsdatan och dyker upp ovanför – vänta in den.
+      await expect(page.getByText('Över övre gränsvärdet idag')).toBeVisible();
+      // Raderna ovanför passet (dos och tillskott) läses också in efter hand.
+      await expect(page.getByText('Dos idag: Wegovy 0,5 mg')).toBeVisible();
+      await expect(page.getByText('Magnesium + zink')).toBeVisible();
       const todo = page.getByTestId('todo-workout');
       await todo.evaluate((el) => {
         el.scrollIntoView({ block: 'center' });
