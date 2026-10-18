@@ -47,6 +47,33 @@ describe('buildPlan', () => {
     expect(result.plan.tdee).toBeCloseTo(result.adaptive.tdee);
   });
 
+  it('dagar med "Som vanligt" räknas inte i den adaptiva förbrukningen, inte ens med fler poster', () => {
+    const weights = [];
+    const real = [];
+    for (let i = 28; i >= 1; i--) {
+      const date = addDays(TODAY, -i);
+      weights.push({ date, weightKg: 90 - (28 - i) * 0.05 });
+      real.push({ date, grams: 100, per100: { kcal: 2200, proteinG: 0, carbsG: 0, fatG: 0 } });
+    }
+    // Igår: en uppskattad dag + ett mellanmål på 200 kcal i stället för den riktiga dagen.
+    const yesterday = addDays(TODAY, -1);
+    const withUsual = [
+      ...real.filter((e) => e.date !== yesterday),
+      {
+        date: yesterday,
+        grams: 100,
+        per100: { kcal: 2000, proteinG: 0, carbsG: 0, fatG: 0 },
+        usual: true as const,
+      },
+      { date: yesterday, grams: 100, per100: { kcal: 200, proteinG: 0, carbsG: 0, fatG: 0 } },
+    ];
+    const without = real.filter((e) => e.date !== yesterday);
+    const a = buildPlan(profile, weights, withUsual, TODAY);
+    const b = buildPlan(profile, weights, without, TODAY);
+    if (a.kind !== 'plan' || b.kind !== 'plan') throw new Error('väntade plan');
+    expect(a.adaptive).toEqual(b.adaptive);
+  });
+
   it('bortser från framtida mätningar', () => {
     const result = buildPlan(profile, [{ date: addDays(TODAY, 3), weightKg: 50 }], [], TODAY);
     expect(result.kind === 'plan' && result.trendKg).toBe(92);

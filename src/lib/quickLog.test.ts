@@ -76,6 +76,17 @@ describe('quickEntry', () => {
     );
     expect(edited).toMatchObject({ id: 'q1', date: DAY, createdAt: 5, updatedAt: 9 });
     expect(edited.meal).toBe('lunch');
+    expect(edited).not.toHaveProperty('usual');
+  });
+
+  it('en redigerad "Som vanligt"-post förblir märkt som vanligt', () => {
+    const original = { ...quick('Som vanligt', 400, 20), usual: true as const };
+    const edited = quickEntry(
+      { name: 'Som vanligt', kcal: 450, proteinG: 20 },
+      { id: 'nytt', date: DAY, meal: 'frukost', now: 9, editing: original },
+    );
+    expect(edited.usual).toBe(true);
+    expect(edited.estimated).toBe(true);
   });
 
   it('snabbval visas som "≈ 700 kcal" och fylls i formuläret', () => {

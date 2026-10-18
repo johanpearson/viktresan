@@ -95,6 +95,8 @@ export function quickEntry(
     createdAt: editing?.createdAt ?? options.now,
   };
   if (editing) entry.updatedAt = options.now;
+  // En redigerad "Som vanligt"-post är fortfarande en uppskattad dag.
+  if (editing?.usual) entry.usual = true;
   return entry;
 }
 

@@ -107,6 +107,16 @@ test('glömt logga: Hoppa över och Fyll i', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('ett ogiltigt datum i adressen ger dagens Mat utan sök-sheet', async ({ page }) => {
+  const errors = collectErrors(page);
+  await open(page);
+  await page.goto('./#/mat/logga/2026-02-30');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mat');
+  await expect(page.locator('.date-bar')).toContainText('Idag');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('plusknappen i mitten av navigeringen öppnar Logga, där Mat finns', async ({ page }) => {
   const errors = collectErrors(page);
   await open(page);

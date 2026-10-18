@@ -47,8 +47,11 @@ export function buildPlan(
       energy.heightCm,
       ageFromBirthYear(energy.birthYear, today),
     ) * activityFactor(energy.activityLevel);
-  // "Som vanligt"-dagar är gissningar: förbrukningen ska bara lära sig av riktiga loggar.
-  const intake = dailyIntake(foodLog.filter((e) => !e.usual));
+  // "Som vanligt"-dagar är gissningar: förbrukningen ska bara lära sig av riktiga loggar. Hela
+  // dagen tas bort – annars blev en uppskattad dag + ett tillagt mellanmål en loggad dag med för
+  // lite mat.
+  const usualDates = new Set(foodLog.filter((e) => e.usual).map((e) => e.date));
+  const intake = dailyIntake(foodLog.filter((e) => !usualDates.has(e.date)));
   const adaptive = adaptiveTdee({ daily, intake, today, formulaTdee });
   const plan = caloriePlan({
     profile: energy,
