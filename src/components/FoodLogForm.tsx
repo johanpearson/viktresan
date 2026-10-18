@@ -173,12 +173,15 @@ export function FoodLogForm({
 
   /**
    * Byter enhet och räknar om mängden till samma vikt, köksvänligt avrundad (150 g
-   * havregryn → 4,5 dl). Utan giltig mängd, eller med `amountOverride` (ny egen enhet,
-   * en tryckt omräkning), gäller det värdet i stället.
+   * havregryn → 4,5 dl). Utan giltig mängd eller till en gissad enhet börjar den på 1 (gram:
+   * 100); `amountOverride` (ny egen enhet, en tryckt omräkning) gäller före allt.
    */
   function changeUnit(next: string, amountOverride?: number) {
     if (next === unit && amountOverride === undefined) return;
-    const converted = parsed.ok ? convertAmount(parsed.value.grams, next, units) : null;
+    // En gissad vikt räknas inte om till – den ska bekräftas först, så 1 st är tydligast.
+    const target = units.find((u) => u.name === next);
+    const converted =
+      parsed.ok && !isGuess(target) ? convertAmount(parsed.value.grams, next, units) : null;
     const fallback = isGram(next) ? 100 : 1;
     setAmount(decimalInput(amountOverride ?? converted ?? fallback));
     setUnit(next);

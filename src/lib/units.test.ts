@@ -627,5 +627,9 @@ describe('omräkning mellan enheter', () => {
     // 7 g ≈ 0,12 ägg – "0,5 st" vore missvisande.
     expect(equivalents(7, 'g', eggs)).toEqual([]);
     expect(equivalents(120, 'g', eggs).map((e) => e.label)).toEqual(['2 st']);
+    // En gissad styckvikt är inte bekräftad och visas inte som omräkning.
+    expect(equivalents(60, 'g', [{ name: 'st', grams: 60, source: 'gissning' as const }])).toEqual(
+      [],
+    );
   });
 });

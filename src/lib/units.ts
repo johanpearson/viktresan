@@ -351,7 +351,7 @@ const EQUIVALENT_TOLERANCE = 0.15;
  * Ungefär samma mängd i livsmedlets andra enheter ("≈ 1,5 dl · 8 msk · 52 g"): högst `max`
  * enheter i livsmedlets ordning och sist gram. En enhet där den köksvänliga mängden
  * skiljer mer än 15 % från den exakta (t.ex. 7 g som ägg) eller blir orimligt stor
- * (fler än 8 skedar) hoppas över.
+ * (fler än 8 skedar) hoppas över, liksom gissade enheter (vikten är inte bekräftad).
  */
 export function equivalents(
   grams: number,
@@ -363,7 +363,7 @@ export function equivalents(
   const result: Equivalent[] = [];
   for (const u of units) {
     if (result.length >= max) break;
-    if (sameName(u.name, current) || !(u.grams > 0)) continue;
+    if (sameName(u.name, current) || !(u.grams > 0) || isGuess(u)) continue;
     const exact = grams / u.grams;
     const amount = friendlyAmount(exact, u.name);
     const ml = volumeMl(u.name);
