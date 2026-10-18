@@ -288,6 +288,12 @@ export interface FoodLogEntry extends LoggedAmount {
    * Räknas i alla summor men inte i vitaminer och mineraler.
    */
   estimated?: true;
+  /**
+   * "Som vanligt" för en dag utan matlogg (Översikt → Att göra idag): uppskattad ur de typiska
+   * måltiderna. Alltid tillsammans med `estimated`. Räknas inte i den adaptiva förbrukningen.
+   * Ingen schemaändring.
+   */
+  usual?: true;
   /** Loggat recept: receptet som det såg ut då (sedan v11). */
   recipe?: LoggedRecipe;
   createdAt: number;

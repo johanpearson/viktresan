@@ -1,6 +1,6 @@
 /**
  * Översikt → Att göra idag: det som väntar idag (tillskott att bocka av, dos på dosdagen,
- * planerade pass, obesvarade pass, påminnelsen om säkerhetskopia) och raden "Nästa dos" för
+ * planerade pass, obesvarade pass, dagar utan matlogg, påminnelsen om säkerhetskopia) och raden "Nästa dos" för
  * dagar som inte är dosdagar. Rena funktioner – komponenten `TodoCard` ritar dem.
  */
 import type {
@@ -28,6 +28,8 @@ export interface TodoInput {
   enabled: { tillskott: boolean; glp1: boolean; traning: boolean };
   /** Påminnelsen om säkerhetskopia ska visas. */
   backupDue: boolean;
+  /** Dagar utan matlogg att fråga om (`missedFoodDays`, redan begränsade), senast först. */
+  missedFood: readonly string[];
 }
 
 export interface NextDoseLine {
@@ -48,6 +50,8 @@ export interface Todo {
   workouts: WorkoutItem[];
   /** Planerade pass vars tid passerat: "Blev passet av?". */
   unanswered: WorkoutItem[];
+  /** Dagar utan matlogg: "Ingen mat loggad igår". */
+  missedFood: string[];
   backup: boolean;
   /** Nästa dos när idag inte är dosdag, annars `null`. */
   nextDose: NextDoseLine | null;
@@ -76,12 +80,14 @@ export function buildTodo(input: TodoInput, now: Date): Todo {
     workouts,
     unanswered,
     backup: input.backupDue,
+    missedFood: [...input.missedFood],
     nextDose: next && site ? { date: next.date, time: next.time, doseMg: next.doseMg, site } : null,
     empty:
       supplements.length === 0 &&
       doses.length === 0 &&
       workouts.length === 0 &&
       unanswered.length === 0 &&
+      input.missedFood.length === 0 &&
       !input.backupDue,
   };
 }

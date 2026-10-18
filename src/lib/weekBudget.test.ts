@@ -22,8 +22,9 @@ describe('weekBudget', () => {
     expect(w.shortfall).toBeNull();
   });
 
-  it('mitt i veckan: kvar och per dag resten av veckan (idag medräknad)', () => {
-    // Mån 2 500 + tis 2 700 = 5 200. Kvar 8 800 på 5 dagar (ons–sön) = 1 760.
+  it('mitt i veckan: kvar och per dag för dagarna efter idag', () => {
+    // Mån 2 500 + tis 2 700 = 5 200; idag räknas som dagsmålet 2 000 (600 hittills).
+    // 14 000 − 5 200 − 2 000 = 6 800 på 4 dagar (tor–sön) = 1 700.
     const intake = [
       { date: MON, kcal: 2500 },
       { date: TUE, kcal: 2700 },
@@ -31,7 +32,7 @@ describe('weekBudget', () => {
     ];
     const w = weekBudget({ ...base, intake, today: WED });
     expect(w.daysLeft).toBe(5);
-    expect(w.perDayKcal).toBe(1760);
+    expect(w.perDayKcal).toBe(1700);
     // Kvar för veckan räknar med det som ätits idag.
     expect(w.eatenKcal).toBe(5800);
     expect(w.remainingKcal).toBe(8200);
@@ -40,7 +41,7 @@ describe('weekBudget', () => {
     expect(w.shortfall).toBeNull();
   });
 
-  it('per dag står still under dagen (räknas på dagarna före idag)', () => {
+  it('per dag står still under dagen tills dagens intag passerar dagsmålet', () => {
     const before = weekBudget({ ...base, intake: [{ date: MON, kcal: 1500 }], today: WED });
     const after = weekBudget({
       ...base,
@@ -52,6 +53,32 @@ describe('weekBudget', () => {
     });
     expect(after.perDayKcal).toBe(before.perDayKcal);
     expect(after.balanceKcal).toBe(before.balanceKcal);
+    // 2 600 idag (600 över dagsmålet) → 600 mindre på de fyra dagarna efter idag.
+    const big = weekBudget({
+      ...base,
+      intake: [
+        { date: MON, kcal: 1500 },
+        { date: WED, kcal: 2600 },
+      ],
+      today: WED,
+    });
+    expect(big.perDayKcal).toBe((before.perDayKcal ?? 0) - 150);
+  });
+
+  it('veckans sista dag: bara det som är kvar, inget per dag', () => {
+    // Söndag: 10 059 före idag, 2 026 idag (skärmdumpen: "928 kcal kvar · ≈ 2 953/dag").
+    const w = weekBudget({
+      dailyTargetKcal: 1859,
+      floorKcal: 1500,
+      intake: [
+        { date: MON, kcal: 10_059 },
+        { date: SUN, kcal: 2026 },
+      ],
+      today: SUN,
+    });
+    expect(w.daysLeft).toBe(1);
+    expect(w.perDayKcal).toBeNull();
+    expect(weekRowShortText(w)).toBe('Vecka: 928 kcal kvar');
   });
 
   it('dagar utan matlogg räknas som 0 kcal men markeras som ej loggade', () => {
@@ -59,8 +86,8 @@ describe('weekBudget', () => {
     const w = weekBudget({ ...base, intake: [{ date: MON, kcal: 2000 }], today: WED });
     expect(w.unloggedDays).toBe(1);
     expect(w.eatenKcal).toBe(2000);
-    // Kvar 12 000 på 5 dagar = 2 400.
-    expect(w.perDayKcal).toBe(2400);
+    // 14 000 − 2 000 − 2 000 (idag) = 10 000 på 4 dagar = 2 500.
+    expect(w.perDayKcal).toBe(2500);
     // Saldo: 2 000 − 4 000 = −2 000.
     expect(w.balanceKcal).toBe(-2000);
     expect(w.days.map((d) => [d.kcal, d.status])).toEqual([
@@ -147,7 +174,7 @@ describe('weekBudget', () => {
         { date: SUN, kcal: 3000 },
       ];
       const w = weekBudget({ ...base, intake, today: SUN });
-      expect(w.perDayKcal).toBe(1500);
+      expect(w.perDayKcal).toBeNull();
       expect(w.shortfall).toEqual({
         exceeded: true,
         exceededKcal: 1000,
@@ -164,7 +191,15 @@ describe('weekBudget', () => {
       const w = weekBudget({ ...base, intake, today: SUN });
       expect(w.remainingKcal).toBe(0);
       expect(w.shortfall).toBeNull();
-      expect(w.perDayKcal).toBe(2000);
+      expect(w.perDayKcal).toBeNull();
+    });
+
+    it('per dag stannar på golvet när budgeten räcker med golvet idag', () => {
+      // 14 000 − 6 300 − 2 000 (idag) = 5 700 på 4 dagar = 1 425 < golvet. Äts golvet idag
+      // ryms veckan (6 300 + 5 × 1 500 = 13 800) – ingen spärr, bara golvet som förslag.
+      const w = weekBudget({ ...base, intake: [{ date: MON, kcal: 6300 }], today: WED });
+      expect(w.perDayKcal).toBe(1500);
+      expect(w.shortfall).toBeNull();
     });
   });
 });
@@ -177,7 +212,7 @@ describe('weekRowShortText', () => {
       { date: WED, kcal: 600 },
     ];
     const w = weekBudget({ ...base, intake, today: WED });
-    expect(weekRowShortText(w)).toBe('Vecka: 8 200 kcal kvar · ≈ 1 760/dag');
+    expect(weekRowShortText(w)).toBe('Vecka: 8 200 kcal kvar · ≈ 1 700/dag');
   });
 
   it('över budgeten och avslutad vecka', () => {

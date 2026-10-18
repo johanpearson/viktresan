@@ -122,7 +122,7 @@ async function seedToday() {
 describe('App', () => {
   it('visar navigering med fem sektioner, utan Inställningar', async () => {
     await renderAt('');
-    expect(navLabels()).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
+    expect(navLabels()).toEqual(['Översikt', 'Mat', 'Logga', 'Kalender', 'Framsteg']);
   });
 
   it('kugghjulet på Översikt leder till Inställningar', async () => {
@@ -241,11 +241,12 @@ describe('funktionsbrytare', () => {
 
   it('allt påslaget: alla vyer visar steg, midja, mat och bilder', async () => {
     const v = await observe([]);
-    expect(v.nav).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
+    expect(v.nav).toEqual(['Översikt', 'Mat', 'Logga', 'Kalender', 'Framsteg']);
     expect(v.today).toEqual(['Dryck', 'Kalorier', 'Protein', 'Steg', 'Träning']);
     expect(v.calorieCard).toBe(true);
     expect(v.rings).toBe(true);
     expect(v.tiles).toEqual([
+      'log-tile-mat',
       'log-tile-vikt',
       'log-tile-midja',
       'log-tile-steg',
@@ -263,6 +264,7 @@ describe('funktionsbrytare', () => {
   it('steg av: döljs i Logga, Översikt, Kalender och grafer', async () => {
     const v = await observe(['steg']);
     expect(v.tiles).toEqual([
+      'log-tile-mat',
       'log-tile-vikt',
       'log-tile-midja',
       'log-tile-vatten',
@@ -279,6 +281,7 @@ describe('funktionsbrytare', () => {
   it('midjemått av: döljs i Logga, Översikt, Kalender och historik', async () => {
     const v = await observe(['midja']);
     expect(v.tiles).toEqual([
+      'log-tile-mat',
       'log-tile-vikt',
       'log-tile-steg',
       'log-tile-vatten',
@@ -314,7 +317,7 @@ describe('funktionsbrytare', () => {
 
   it('vatten och träning av: döljs i Logga, Översikt, Kalender och historik', async () => {
     const v = await observe(['vatten', 'traning']);
-    expect(v.tiles).toEqual(['log-tile-vikt', 'log-tile-midja', 'log-tile-steg']);
+    expect(v.tiles).toEqual(['log-tile-mat', 'log-tile-vikt', 'log-tile-midja', 'log-tile-steg']);
     expect(v.today).toEqual(['Kalorier', 'Protein', 'Steg']);
     expect(v.rings).toBe(true);
     expect(screen.queryByTestId('water-ring')).not.toBeInTheDocument();

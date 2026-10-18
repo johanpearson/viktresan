@@ -24,11 +24,11 @@ describe('routeFromHash', () => {
     expect(hrefFor(framsteg, 'bilder')).toBe('#/framsteg/bilder');
   });
 
-  it('bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg; Mat hör till matfunktionen', () => {
+  it('bottennavigeringen: Översikt, Mat, Logga (plus i mitten), Kalender, Framsteg; Mat hör till matfunktionen', () => {
     expect(NAV_ROUTES.map((r) => r.label)).toEqual([
       'Översikt',
-      'Logga',
       'Mat',
+      'Logga',
       'Kalender',
       'Framsteg',
     ]);

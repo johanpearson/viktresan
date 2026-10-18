@@ -14,12 +14,14 @@ import { useFeatures } from '../lib/features.ts';
 import {
   formatCm,
   formatInt,
+  formatKcal,
   formatKg,
   formatMg,
   formatMl,
   formatShortDate,
 } from '../lib/format.ts';
 import { nextDose } from '../lib/glp1.ts';
+import { totalOf } from '../lib/nutrition.ts';
 import { useAppData, type AppData } from '../lib/useAppData.ts';
 import { consumeSubPath } from '../lib/navigation.ts';
 import { useHashRoute } from '../lib/useHashRoute.ts';
@@ -165,6 +167,30 @@ const LOG_TYPES: readonly LogType[] = [
   },
 ];
 
+/** Ikonen på en ruta (24×24, streck) i datatypens färg. */
+function TileIcon({ path }: { path: string }) {
+  return (
+    <svg
+      className="log-tile-icon"
+      viewBox="0 0 24 24"
+      width="28"
+      height="28"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={path} />
+    </svg>
+  );
+}
+
+/** Samma ikon som Mat i bottennavigeringen. */
+const FOOD_ICON = 'M6 3v7a2 2 0 0 0 4 0V3M8 3v18M17 21V3c-2 1-3 4-3 8h3';
+
 export function Logga() {
   const { data, reload } = useAppData();
   const features = useFeatures();
@@ -187,6 +213,20 @@ export function Logga() {
   return (
     <Page title="Logga">
       <ul className="log-grid" aria-label="Vad vill du logga?">
+        {features.isEnabled('mat') && (
+          <li>
+            {/* Mat har en egen sida: rutan öppnar sök-sheeten där (samma som genvägen "Logga mat"). */}
+            <a className="log-tile" href="#/mat/logga" data-testid="log-tile-mat" data-type="mat">
+              <TileIcon path={FOOD_ICON} />
+              <span className="log-tile-label">Mat</span>
+              {data && (
+                <span className="log-tile-summary">
+                  Idag {formatKcal(totalOf(data.foodLog.filter((e) => e.date === todayIso())).kcal)}
+                </span>
+              )}
+            </a>
+          </li>
+        )}
         {types.map((t) => (
           <li key={t.id}>
             <button
@@ -199,21 +239,7 @@ export function Logga() {
                 setOpenId(t.id);
               }}
             >
-              <svg
-                className="log-tile-icon"
-                viewBox="0 0 24 24"
-                width="28"
-                height="28"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path d={t.icon} />
-              </svg>
+              <TileIcon path={t.icon} />
               <span className="log-tile-label">{t.label}</span>
               {data && (
                 <span className="log-tile-summary">

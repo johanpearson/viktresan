@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { collectErrors, seed, forceDownloadBackup } from './helpers.ts';
+import { collectErrors, seed, forceDownloadBackup, type SeedData } from './helpers.ts';
 import {
   FROZEN_NOW,
   LIVSMEDEL,
@@ -8,6 +8,7 @@ import {
   VISUAL_DATA,
   WEEKLY_EXTRA,
   WORST_CASE_RINGS,
+  daysAgo,
 } from './visualData.ts';
 
 /**
@@ -42,7 +43,7 @@ function masks(scope: Page | Locator): Locator[] {
   ];
 }
 
-async function open(page: Page, hash: string) {
+async function open(page: Page, hash: string, data: SeedData = VISUAL_DATA) {
   // Säkerhetskopian som på en telefon (utan showSaveFilePicker).
   await forceDownloadBackup(page);
   await page.clock.setFixedTime(new Date(FROZEN_NOW));
@@ -52,7 +53,7 @@ async function open(page: Page, hash: string) {
     route.fulfill({ json: { format: 'viktresan-livsmedel', foods: [] } }),
   );
   await page.goto('./');
-  await seed(page, VISUAL_DATA);
+  await seed(page, data);
   // Läs om så att funktionsbrytare och inställningar läses från den seedade datan.
   await page.goto(`./${hash}`);
   await page.reload();
@@ -661,6 +662,23 @@ for (const theme of ['light', 'dark'] as const) {
         await sheet.getByRole('button', { name: 'Stäng', exact: true }).tap();
         await expect(sheet).toBeHidden();
       }
+    });
+
+    test('glömt logga: raden i Att göra idag och radmenyn', async ({ page }) => {
+      // Samma data utan gårdagens matlogg.
+      const yesterday = daysAgo(1);
+      await open(page, '', {
+        ...VISUAL_DATA,
+        foodLog: (VISUAL_DATA.foodLog ?? []).filter((e) => e.date !== yesterday),
+      });
+      const todo = page.getByTestId('todo-card');
+      await expect(todo.getByTestId('todo-missed')).toHaveText(/Ingen mat loggad igår/);
+      await expect(todo).toHaveScreenshot(`${theme}-todo-glomt-logga.png`, {
+        maxDiffPixelRatio: 0.002,
+      });
+      await todo.getByTestId('todo-missed').getByRole('button').tap();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await shot(page, `${theme}-sheet-glomt-logga`, false);
     });
 
     test('paneler: Översikt och Framsteg', async ({ page }) => {

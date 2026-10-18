@@ -89,20 +89,36 @@ function median(values: readonly number[]): number {
 }
 
 /**
- * Måltidens typiska kcal: medianen av måltidens summa per dag de senaste 28 dagarna (dagar med
- * något loggat i måltiden). `null` med färre än 3 sådana dagar.
+ * Måltidens typiska kcal och protein: medianen av måltidens summa per dag de senaste 28 dagarna
+ * (dagar med något loggat i måltiden, utan snabbloggar). `null` med färre än 3 sådana dagar.
  */
+export function typicalMeal(
+  log: readonly FoodLogEntry[],
+  slot: MealId,
+  today: string,
+): { kcal: number; proteinG: number } | null {
+  const byDate = new Map<string, { kcal: number; proteinG: number }>();
+  for (const e of recentEntries(log, today)) {
+    if (e.meal !== slot) continue;
+    const n = scaleNutrients(e.per100, e.grams);
+    const prev = byDate.get(e.date) ?? { kcal: 0, proteinG: 0 };
+    byDate.set(e.date, { kcal: prev.kcal + n.kcal, proteinG: prev.proteinG + n.proteinG });
+  }
+  if (byDate.size < MIN_TYPICAL_DAYS) return null;
+  const days = [...byDate.values()];
+  return {
+    kcal: Math.round(median(days.map((d) => d.kcal))),
+    proteinG: Math.round(median(days.map((d) => d.proteinG))),
+  };
+}
+
+/** Måltidens typiska kcal (`typicalMeal`), `null` med färre än 3 dagar. */
 export function typicalMealKcal(
   log: readonly FoodLogEntry[],
   slot: MealId,
   today: string,
 ): number | null {
-  const byDate = new Map<string, number>();
-  for (const e of recentEntries(log, today)) {
-    if (e.meal !== slot) continue;
-    byDate.set(e.date, (byDate.get(e.date) ?? 0) + scaleNutrients(e.per100, e.grams).kcal);
-  }
-  return byDate.size >= MIN_TYPICAL_DAYS ? Math.round(median([...byDate.values()])) : null;
+  return typicalMeal(log, slot, today)?.kcal ?? null;
 }
 
 /**

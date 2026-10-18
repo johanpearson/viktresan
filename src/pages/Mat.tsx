@@ -7,7 +7,7 @@ import { Page } from '../components/Page.tsx';
 import { SegmentedControl } from '../components/SegmentedControl.tsx';
 import { Skeleton } from '../components/Skeleton.tsx';
 import { aiContextFrom } from '../lib/aiPrompt.ts';
-import { todayIso } from '../lib/dates.ts';
+import { isIsoDate, todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
 import { fiberReferenceG } from '../lib/fiber.ts';
 import { buildPlan } from '../lib/plan.ts';
@@ -34,7 +34,8 @@ export function Mat() {
   const { data, reload } = useAppData();
   const food = useFoodData();
   const features = useFeatures();
-  // "#/mat/logga" (genvägen "Logga mat") öppnar sök-sheeten direkt, "#/mat/ean/<kod>" slår
+  // "#/mat/logga" (genvägen "Logga mat") öppnar sök-sheeten direkt ("#/mat/logga/<datum>" för en
+  // tidigare dag – "Fyll i" för en dag utan matlogg i Att göra idag), "#/mat/ean/<kod>" slår
   // upp en streckkod (från Tillskott), "#/mat/naring" öppnar Näring och "#/mat/importera"
   // (delningsmenyn) öppnar Egna → Importera recept med den delade länken eller texten.
   const { sub } = useHashRoute();
@@ -44,7 +45,11 @@ export function Mat() {
   const [tab, setTab] = useState<Tab>(() =>
     sub === 'naring' ? 'naring' : initialImport !== null ? 'egna' : 'dag',
   );
-  const [initialPicker] = useState(() => sub === 'logga');
+  const [initialDate] = useState(() => {
+    const date = /^logga\/(\d{4}-\d{2}-\d{2})$/.exec(sub)?.[1];
+    return date !== undefined && isIsoDate(date) && date <= todayIso() ? date : undefined;
+  });
+  const [initialPicker] = useState(() => sub === 'logga' || initialDate !== undefined);
   const [initialEan] = useState(() => /^ean\/(\d{8,14})$/.exec(sub)?.[1]);
   // Delsökvägen öppnar en panel: sidans post blir "#/mat", panelens post behåller den.
   const [opensPanel] = useState(
@@ -93,6 +98,7 @@ export function Mat() {
           proteinGoalG={proteinGoalG}
           fiberGoalOn={fiber.goalOn}
           initialPicker={initialPicker}
+          initialDate={initialDate}
           initialEan={initialEan}
           reloadLog={reload}
           aiContext={aiContextFrom(data, todayIso())}

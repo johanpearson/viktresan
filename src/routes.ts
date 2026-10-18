@@ -18,8 +18,9 @@ export interface Route extends FeatureGated {
 /** Ordningen här styr ordningen i navigeringen. */
 export const ROUTES: readonly Route[] = [
   { id: 'oversikt', path: '/', label: 'Översikt', inNav: true },
-  { id: 'logga', path: '/logga', label: 'Logga', inNav: true },
   { id: 'mat', path: '/mat', label: 'Mat', inNav: true, feature: 'mat' },
+  // Mitt i bottennavigeringen som plusknappen: allt loggas därifrån med ett tryck.
+  { id: 'logga', path: '/logga', label: 'Logga', inNav: true },
   { id: 'kalender', path: '/kalender', label: 'Kalender', inNav: true },
   {
     id: 'framsteg',

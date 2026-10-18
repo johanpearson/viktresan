@@ -1348,6 +1348,10 @@ function parseFoodLogRecord(value: unknown, index: number, version: number): Leg
     if (value.estimated !== true) throw bad();
     entry.estimated = true;
   }
+  if (value.usual !== undefined) {
+    if (value.usual !== true) throw bad();
+    entry.usual = true;
+  }
   if (value.recipe !== undefined) entry.recipe = parseLoggedRecipe(value.recipe, bad);
   return entry;
 }

@@ -69,7 +69,8 @@ Kort har en mjuk skugga (`--shadow-card`) och en nästan osynlig ram (`--card-bo
 bakgrund – inget kort-i-kort (kort i en panel har varken ram eller skugga). Sticky rader får en 1 px linje när
 de "fastnat". Knappar och segment är "piller" (`--radius-full`). Översikts viktkort har en svag ton av
 accentfärgen (`--accent-soft`). Bottennavigeringen är solid (innehållet syns aldrig igenom) och den aktiva fliken har
-ikonen i en tonad pill (`--accent-soft`).
+ikonen i en tonad pill (`--accent-soft`). Logga står i mitten som plusknappen: ikonen i en fylld pill i accentfärgen
+(`nav-link-add`), alltid, så att den syns som sidans "lägg till".
 
 Rörelse: knappar trycks ner till 98 % (av med `prefers-reduced-motion`). Ingen animation vid sidbyte –
 innehållet ska ligga still när det mäts och scrollas till direkt efter laddning.
