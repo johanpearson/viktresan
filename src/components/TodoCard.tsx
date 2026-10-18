@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   deleteSupplementIntake,
   putSupplementIntake,
   putWorkout,
   type Supplement,
 } from '../db/db.ts';
+import { setAppBadge } from '../lib/appBadge.ts';
 import { BACKUP_REMINDER_DAYS } from '../lib/backupReminder.ts';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
@@ -61,6 +62,17 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
     },
     now,
   );
+  const count =
+    todo.supplements.length +
+    todo.doses.length +
+    todo.workouts.length +
+    todo.unanswered.length +
+    (todo.backup ? 1 : 0);
+
+  // Siffran på appikonen följer listan.
+  useEffect(() => {
+    setAppBadge(count);
+  }, [count]);
 
   async function take(supplements: readonly Supplement[]) {
     toast.close();
@@ -147,13 +159,6 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
   }
 
   const unanswered = allUnanswered ? todo.unanswered : todo.unanswered.slice(0, UNANSWERED_VISIBLE);
-  const count =
-    todo.supplements.length +
-    todo.doses.length +
-    todo.workouts.length +
-    todo.unanswered.length +
-    (todo.backup ? 1 : 0);
-
   return (
     <Card
       title={

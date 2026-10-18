@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   decimalInput,
+  parseAmount,
   formatCm,
   formatGrams,
   formatKcal,
@@ -97,5 +98,25 @@ describe('mat', () => {
     expect(formatRate(0.20618)).toBe('0,21 kg/vecka');
     expect(decimalInput(1.5)).toBe('1,5');
     expect(decimalInput(60)).toBe('60');
+  });
+});
+
+describe('parseAmount', () => {
+  it('tolkar decimaltal och bråk som i ett recept', () => {
+    expect(parseAmount('1,5')).toBe(1.5);
+    expect(parseAmount(' 2 ')).toBe(2);
+    expect(parseAmount('1/2')).toBe(0.5);
+    expect(parseAmount('1 1/2')).toBe(1.5);
+    expect(parseAmount('½')).toBe(0.5);
+    expect(parseAmount('1½')).toBe(1.5);
+    expect(parseAmount('2 ¾')).toBe(2.75);
+    expect(parseAmount('11/2')).toBe(5.5);
+  });
+
+  it('underkänner annat', () => {
+    expect(parseAmount('')).toBeNull();
+    expect(parseAmount('1/0')).toBeNull();
+    expect(parseAmount('en halv')).toBeNull();
+    expect(parseAmount('1/2/3')).toBeNull();
   });
 });

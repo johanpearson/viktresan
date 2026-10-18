@@ -8,9 +8,10 @@
  * får en kopia av värdena per 100 g och av receptet (`LoggedRecipe`), så att en senare
  * ändring av receptet bara påverkar framtida loggar.
  */
-import type { LoggedRecipe, MealIngredient, Recipe } from '../db/db.ts';
+import type { FoodLogEntry, LoggedRecipe, MealIngredient, Recipe } from '../db/db.ts';
 import type { FoodItem } from './foodSearch.ts';
 import { ZERO, scaleNutrients, totalOf, type Nutrients } from './nutrition.ts';
+import { decimalInput } from './format.ts';
 import { round1, type FoodUnit } from './units.ts';
 
 export const RECIPE_PREFIX = 'recept:';
@@ -136,6 +137,8 @@ export function recipeToSave(
     cookedWeightG: number | null;
     /** Källan för ett importerat recept (ett befintligt behåller sin). */
     sourceUrl?: string | undefined;
+    /** Engångsrätt (inte bland recepten); utan värde behålls det befintliga. */
+    oneOff?: boolean | undefined;
   },
   now = Date.now(),
 ): Recipe {
@@ -149,6 +152,9 @@ export function recipeToSave(
   if (fields.cookedWeightG !== null) saved.cookedWeightG = fields.cookedWeightG;
   const sourceUrl = existing?.sourceUrl ?? fields.sourceUrl;
   if (sourceUrl !== undefined) saved.sourceUrl = sourceUrl;
+  if (fields.oneOff ?? existing?.oneOff === true) saved.oneOff = true;
+  // Pågående matlådor följer med en ändring av receptet.
+  if (existing?.batch) saved.batch = existing.batch;
   if (existing) saved.updatedAt = now;
   return saved;
 }
@@ -163,4 +169,106 @@ export function yieldText(y: RecipeYield, formatGrams: (g: number) => string): s
   }
   if (y.cooked) parts.push(`${formatGrams(y.yieldG)} tillagad`);
   return parts.join(' · ');
+}
+
+const DAY_MS = 86_400_000;
+
+/** Matlådor visas så här många dagar efter att omgången lagades. */
+export const BATCH_DAYS = 7;
+
+/** Recept som inte loggats eller ändrats på så här många dagar hamnar i Arkiv. */
+export const ARCHIVE_DAYS = 60;
+
+type LogRef = Pick<FoodLogEntry, 'foodId' | 'unit' | 'amount' | 'grams' | 'createdAt'>;
+
+/** Portioner av omgången som loggats (i portioner, annars gram ÷ portionens vikt). */
+export function batchPortionsUsed(recipe: Recipe, log: readonly LogRef[]): number {
+  const { batch } = recipe;
+  if (!batch) return 0;
+  const id = recipeFoodId(recipe.id);
+  const { portionG } = recipeYield(recipe);
+  let used = 0;
+  for (const e of log) {
+    if (e.foodId !== id || e.createdAt < batch.startedAt) continue;
+    if (e.unit === PORTION_UNIT) used += e.amount;
+    else if (portionG) used += e.grams / portionG;
+  }
+  return used;
+}
+
+export interface Leftover {
+  recipe: Recipe;
+  /** Portioner kvar (avrundat till halva). */
+  left: number;
+}
+
+/**
+ * Matlådor: recept med en lagad omgång de senaste `BATCH_DAYS` dagarna som har minst en
+ * halv portion kvar, senast lagade först.
+ */
+export function leftovers(
+  recipes: readonly Recipe[],
+  log: readonly LogRef[],
+  now = Date.now(),
+): Leftover[] {
+  const result: Leftover[] = [];
+  for (const recipe of recipes) {
+    const { batch } = recipe;
+    if (!batch || now - batch.startedAt > BATCH_DAYS * DAY_MS) continue;
+    const left = Math.round((batch.portions - batchPortionsUsed(recipe, log)) * 2) / 2;
+    if (left >= 0.5) result.push({ recipe, left });
+  }
+  return result.sort((a, b) => (b.recipe.batch?.startedAt ?? 0) - (a.recipe.batch?.startedAt ?? 0));
+}
+
+/**
+ * Erbjud "Resten blir matlådor" när receptet loggas: minst två portioner och ingen
+ * pågående omgång med portioner kvar.
+ */
+export function canStartBatch(recipe: Recipe, log: readonly LogRef[], now = Date.now()): boolean {
+  if (recipe.servings === undefined || recipe.servings < 2) return false;
+  return leftovers([recipe], log, now).length === 0;
+}
+
+/** Receptet med en ny omgång som lagades `startedAt` (första portionen loggas samtidigt). */
+export function withBatch(recipe: Recipe, startedAt: number): Recipe {
+  return { ...recipe, batch: { startedAt, portions: recipe.servings ?? 1 } };
+}
+
+/** Receptet utan omgång ("Slut" på en matlåda). */
+export function withoutBatch(recipe: Recipe): Recipe {
+  const rest = { ...recipe };
+  delete rest.batch;
+  return rest;
+}
+
+/** Senaste aktivitet: skapat, ändrat eller loggat. */
+export function lastUsedAt(recipe: Recipe, log: readonly LogRef[]): number {
+  const id = recipeFoodId(recipe.id);
+  let last = Math.max(recipe.createdAt, recipe.updatedAt ?? 0);
+  for (const e of log) if (e.foodId === id && e.createdAt > last) last = e.createdAt;
+  return last;
+}
+
+/** Arkiv: engångsrätter och recept som inte använts på `ARCHIVE_DAYS` dagar. */
+export function isArchived(recipe: Recipe, log: readonly LogRef[], now = Date.now()): boolean {
+  return recipe.oneOff === true || now - lastUsedAt(recipe, log) > ARCHIVE_DAYS * DAY_MS;
+}
+
+/** "1 portion" / "2,5 portioner". */
+export function portionsText(n: number): string {
+  return n === 1 ? '1 portion' : `${decimalInput(n)} portioner`;
+}
+
+/** Dagnummer i lokal tid (för "lagad igår"). */
+function localDay(ms: number): number {
+  const d = new Date(ms);
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS;
+}
+
+/** "lagad idag" / "lagad igår" / "lagad för 3 dagar sedan". */
+export function cookedAgoText(startedAt: number, now = Date.now()): string {
+  const days = Math.round(localDay(now) - localDay(startedAt));
+  if (days <= 0) return 'lagad idag';
+  return days === 1 ? 'lagad igår' : `lagad för ${String(days)} dagar sedan`;
 }

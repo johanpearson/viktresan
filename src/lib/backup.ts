@@ -1208,6 +1208,17 @@ function parseRecipeRecord(value: unknown, index: number): Recipe {
     if (typeof value.sourceUrl !== 'string' || !isHttpUrl(value.sourceUrl)) throw bad();
     recipe.sourceUrl = value.sourceUrl;
   }
+  if (value.oneOff !== undefined) {
+    if (value.oneOff !== true) throw bad();
+    recipe.oneOff = true;
+  }
+  if (value.batch !== undefined) {
+    const { batch } = value;
+    if (!isRecord(batch) || !isTimestamp(batch.startedAt) || !isPositive(batch.portions)) {
+      throw bad();
+    }
+    recipe.batch = { startedAt: batch.startedAt, portions: batch.portions };
+  }
   return recipe;
 }
 

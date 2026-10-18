@@ -27,6 +27,11 @@ interface RecipeBuilderProps {
   onCancel: () => void;
   /** Visar "Ta bort receptet" längst ner (bara vid redigering). */
   onDelete?: () => void;
+  /**
+   * "Laga en rätt" i sök-sheeten: en engångsrätt som loggas direkt. Rubriken och knappen
+   * ändras och "Spara bland mina recept" är avbockat från början.
+   */
+  cookOnce?: boolean;
 }
 
 /** Tolkar ett valfritt tal i ett intervall: `null` = tomt, `undefined` = ogiltigt. */
@@ -48,6 +53,7 @@ export function RecipeBuilder({
   onDuplicated,
   onCancel,
   onDelete,
+  cookOnce = false,
 }: RecipeBuilderProps) {
   const ingredients = useIngredients(recipe?.items ?? [], source.foodData, source.livsmedel);
   const [name, setName] = useState(recipe?.name ?? '');
@@ -57,6 +63,8 @@ export function RecipeBuilder({
   const [cooked, setCooked] = useState(
     recipe?.cookedWeightG !== undefined ? decimalInput(recipe.cookedWeightG) : '',
   );
+  // Engångsrätter ligger under Arkiv i Egna; bocka i för att spara bland recepten.
+  const [keep, setKeep] = useState(recipe ? recipe.oneOff !== true : !cookOnce);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,7 +81,7 @@ export function RecipeBuilder({
     event.preventDefault();
     const trimmed = name.trim();
     if (trimmed === '' || trimmed.length > 120) {
-      setError('Ge receptet ett namn.');
+      setError(cookOnce ? 'Ge rätten ett namn.' : 'Ge receptet ett namn.');
       return;
     }
     if (ingredients.rows.length === 0) {
@@ -103,6 +111,7 @@ export function RecipeBuilder({
       items: result.items,
       servings: servingsValue,
       cookedWeightG: cookedValue,
+      oneOff: !keep,
     });
     await putRecipe(saved);
     onSaved(saved);
@@ -125,10 +134,10 @@ export function RecipeBuilder({
         data-testid="recipe-form"
       >
         <h2 className="card-title" id="recipe-builder-title">
-          {recipe ? 'Redigera recept' : 'Nytt recept'}
+          {recipe ? 'Redigera recept' : cookOnce ? 'Laga en rätt' : 'Nytt recept'}
         </h2>
         <label className="field">
-          <span className="field-label">Receptets namn</span>
+          <span className="field-label">{cookOnce ? 'Rättens namn' : 'Receptets namn'}</span>
           <input
             className="input"
             autoComplete="off"
@@ -217,6 +226,26 @@ export function RecipeBuilder({
             />
           </ul>
         )}
+        <label className="switch-row" data-testid="recipe-keep">
+          <span className="switch-text">
+            <span className="switch-label">Spara bland mina recept</span>
+            <span className="switch-description" id="recipe-keep-desc">
+              {keep
+                ? 'Visas under Recept i Egna och under Måltider när du loggar.'
+                : 'Lagas en gång: hamnar under Arkiv i Egna och finns kvar i sökningen.'}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={keep}
+            aria-describedby="recipe-keep-desc"
+            onChange={(e) => {
+              setKeep(e.target.checked);
+            }}
+          />
+        </label>
         {recipe && (
           <p className="form-note muted">
             Ändringar gäller nya loggar – det du redan loggat behåller sina värden.
@@ -229,7 +258,7 @@ export function RecipeBuilder({
         )}
         <div className="button-row">
           <button type="submit" className="button">
-            Spara recept
+            {cookOnce ? 'Fortsätt till loggning' : 'Spara recept'}
           </button>
           <button type="button" className="button button-secondary" onClick={onCancel}>
             Avbryt

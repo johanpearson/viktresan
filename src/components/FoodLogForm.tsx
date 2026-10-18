@@ -22,6 +22,8 @@ import {
   amountLabel,
   baseOf,
   builtInUnits,
+  convertAmount,
+  equivalents,
   confirmGuess,
   formatBase,
   gramsPerUnit,
@@ -35,7 +37,7 @@ import {
   type FoodUnit,
   type Usage,
 } from '../lib/units.ts';
-import { PORTION_UNIT, RECIPE_PORTIONS } from '../lib/recipes.ts';
+import { PORTION_UNIT, RECIPE_PORTIONS, portionsText } from '../lib/recipes.ts';
 import { ClaimTags } from './ClaimTags.tsx';
 import { ListRow } from './ListRow.tsx';
 import { LogUpdateOffer } from './LogUpdateOffer.tsx';
@@ -81,6 +83,11 @@ interface FoodLogFormProps {
   onFoodChange?: (food: FoodItem) => void;
   /** Tidigare loggposter fick de nya värdena (föräldern läser om matloggen). */
   onLogUpdated?: () => void;
+  /**
+   * Ett recept med flera portioner: "Resten blir matlådor" (på som standard). `onStart`
+   * får postens `createdAt` och sparar omgången innan `onSaved`.
+   */
+  batchOffer?: { portions: number; onStart: (startedAt: number) => Promise<void> } | undefined;
 }
 
 interface UnitAmount {
@@ -112,6 +119,7 @@ export function FoodLogForm({
   fiberSource = null,
   onFoodChange,
   onLogUpdated,
+  batchOffer,
 }: FoodLogFormProps) {
   const builtIn = builtInUnits(food);
   const base = baseOf(food);
@@ -135,6 +143,8 @@ export function FoodLogForm({
   /** Efter en komplettering: livsmedlet med nya värden (erbjud att uppdatera tidigare loggar). */
   const [offer, setOffer] = useState<FoodItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [startBatch, setStartBatch] = useState(true);
+  const offerBatch = batchOffer !== undefined && editing === null && purpose === 'log';
 
   const parsed = parseUnitAmount(amount, unit, units);
   const preview = parsed.ok ? scaleNutrients(food.per100, parsed.value.grams) : null;
@@ -144,16 +154,33 @@ export function FoodLogForm({
   // Detaljer: per 100 g och per livsmedlets första enhet med vikt (portion, skiva …).
   const portion = units[0];
   // Recept i portioner: ½, 1, 1½, 2. Övriga enheter som räknas i antal: ½, 1, 2.
-  const recipePortions = food.source === 'recept' && unit === PORTION_UNIT;
+  const isPortion = unit === PORTION_UNIT;
+  const recipePortions = food.source === 'recept' && isPortion;
   const quickAmounts = recipePortions ? RECIPE_PORTIONS : QUICK_AMOUNTS;
   const quick = recipePortions || QUICK_AMOUNT_UNITS.includes(unit);
   const selected = units.find((u) => u.name === unit);
+  // Det som blir kvar av omgången efter den här posten (i portioner, även när den loggas i gram).
+  const portionG = gramsPerUnit(units, PORTION_UNIT);
+  const loggedPortions = !parsed.ok
+    ? 1
+    : isPortion
+      ? parsed.value.amount
+      : portionG
+        ? parsed.value.grams / portionG
+        : 1;
+  const batchLeft = Math.max(0, Math.round(((batchOffer?.portions ?? 0) - loggedPortions) * 2) / 2);
   const guess = isGuess(selected) ? selected : undefined;
 
-  function changeUnit(next: string) {
-    if (next === unit) return;
-    // Till gram: behåll mängden. Till en annan enhet: börja på 1.
-    setAmount(isGram(next) ? decimalInput(parsed.ok ? parsed.value.grams : 100) : '1');
+  /**
+   * Byter enhet och räknar om mängden till samma vikt, köksvänligt avrundad (150 g
+   * havregryn → 4,5 dl). Utan giltig mängd, eller med `amountOverride` (ny egen enhet,
+   * en tryckt omräkning), gäller det värdet i stället.
+   */
+  function changeUnit(next: string, amountOverride?: number) {
+    if (next === unit && amountOverride === undefined) return;
+    const converted = parsed.ok ? convertAmount(parsed.value.grams, next, units) : null;
+    const fallback = isGram(next) ? 100 : 1;
+    setAmount(decimalInput(amountOverride ?? converted ?? fallback));
     setUnit(next);
     setError(null);
     setAdjusting(false);
@@ -202,6 +229,7 @@ export function FoodLogForm({
     // Receptet som det ser ut nu (eller som posten loggades) följer med posten.
     if (food.recipe) entry.recipe = food.recipe;
     await putFoodLog(entry);
+    if (offerBatch && startBatch) await batchOffer.onStart(entry.createdAt);
     onSaved(
       `${editing ? 'Uppdaterade' : 'Loggade'} ${food.name} (${loggedAmountText(entry)}) till ${mealName(mealSlots, meal).toLowerCase()}.`,
       meal,
@@ -209,6 +237,8 @@ export function FoodLogForm({
   }
 
   const unitLabel = isGram(unit) ? 'g' : unit;
+  // Samma mängd i andra enheter – tryck byter till den.
+  const same = parsed.ok ? equivalents(parsed.value.grams, unit, units) : [];
   const showStatus = editing === null && hasNutritionStatus(food);
 
   if (completing) {
@@ -477,6 +507,51 @@ export function FoodLogForm({
             </p>
           )}
         </div>
+        {same.length > 0 && (
+          <div
+            className="unit-equivalents"
+            role="group"
+            aria-label="Samma mängd i andra enheter"
+            data-testid="unit-equivalents"
+          >
+            <span aria-hidden="true" className="unit-equivalents-sign">
+              ≈
+            </span>
+            {same.map((e) => (
+              <button
+                key={e.unit}
+                type="button"
+                className="chip chip-small"
+                aria-label={`Byt till ${e.label}`}
+                onClick={() => {
+                  changeUnit(e.unit, e.amount);
+                }}
+              >
+                {e.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {offerBatch && (
+          <label className="switch-row" data-testid="batch-offer">
+            <span className="switch-text">
+              <span className="switch-label">Resten blir matlådor</span>
+              <span className="switch-description" id="batch-offer-desc">
+                {portionsText(batchLeft)} kvar visas överst när du loggar mat den närmaste veckan.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch"
+              checked={startBatch}
+              aria-describedby="batch-offer-desc"
+              onChange={(e) => {
+                setStartBatch(e.target.checked);
+              }}
+            />
+          </label>
+        )}
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -502,9 +577,9 @@ export function FoodLogForm({
                 (u) => !customUnits.some((c) => c.name.toLowerCase() === u.name.toLowerCase()),
               );
               await onUnitsChange(next);
-              // Ny egen enhet: välj den direkt.
+              // Ny egen enhet: välj den direkt, en styck.
               if (added) {
-                changeUnit(added.name);
+                changeUnit(added.name, 1);
                 return;
               }
               // Borttagen enhet: byt till gram med samma mängd.

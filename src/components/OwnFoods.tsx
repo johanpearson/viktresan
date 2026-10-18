@@ -22,12 +22,13 @@ import {
 } from '../lib/foodCatalog.ts';
 import { formatGrams, formatKcal } from '../lib/format.ts';
 import { totalOf } from '../lib/nutrition.ts';
-import { recipeFoodId, recipeToItem, recipeYield, yieldText } from '../lib/recipes.ts';
+import { isArchived, recipeFoodId, recipeToItem, recipeYield, yieldText } from '../lib/recipes.ts';
 import { loggedAmountText } from '../lib/units.ts';
 import { setPendingShare } from '../lib/shareTarget.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
 import { BottomSheet } from './BottomSheet.tsx';
 import { Card } from './Card.tsx';
+import { Disclosure } from './Disclosure.tsx';
 import { ClaimTags } from './ClaimTags.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import type { FoodSource } from './FoodPicker.tsx';
@@ -100,6 +101,12 @@ export function OwnFoods({
   const [importing, setImporting] = useState<string | null>(initialImport);
   const toast = useUndoToast();
   const own = useMemo(() => foods.filter((f) => f.source === 'egen'), [foods]);
+  // Engångsrätter och recept som inte använts på 60 dagar ligger hopfällda under Arkiv.
+  const { foodLog } = source;
+  const [activeRecipes, archivedRecipes] = useMemo(() => {
+    const archived = recipes.filter((r) => isArchived(r, foodLog));
+    return [recipes.filter((r) => !archived.includes(r)), archived];
+  }, [recipes, foodLog]);
   const customUnits = useMemo(
     () => new Map(foodUnits.map((u) => [u.foodId, u.units])),
     [foodUnits],
@@ -151,6 +158,38 @@ export function OwnFoods({
     setImporting(null);
     setPendingShare(null);
     onImportClosed?.();
+  }
+
+  function recipeRow(recipe: Recipe) {
+    const y = recipeYield(recipe);
+    return (
+      <ListRow
+        key={recipe.id}
+        testId="own-recipe"
+        primary={
+          <>
+            {recipe.name}
+            <ClaimTags claims={claimsFor(recipeToItem(recipe), fiberSource)} />
+          </>
+        }
+        secondary={yieldText(y, formatGrams)}
+        value={
+          <span className="kcal">
+            {y.perPortion
+              ? `${formatKcal(y.perPortion.kcal)}/portion`
+              : `${formatKcal(y.per100.kcal)}/100 g`}
+          </span>
+        }
+        onClick={() => {
+          toast.close();
+          setEditing({ kind: 'recipe', recipe });
+        }}
+        swipeLeft={{
+          label: 'Ta bort',
+          onSwipe: () => void remove({ kind: 'recipe', recipe }),
+        }}
+      />
+    );
   }
 
   const toastView = toast.toast && (
@@ -280,7 +319,7 @@ export function OwnFoods({
           </button>
         }
       >
-        {recipes.length === 0 && (
+        {activeRecipes.length === 0 && (
           <p className="muted">
             Lägg in grytor och annat du lagar i omgångar, så loggar du en portion eller vägd mängd.
           </p>
@@ -296,38 +335,18 @@ export function OwnFoods({
               setImporting('');
             }}
           />
-          {recipes.map((recipe) => {
-            const y = recipeYield(recipe);
-            return (
-              <ListRow
-                key={recipe.id}
-                testId="own-recipe"
-                primary={
-                  <>
-                    {recipe.name}
-                    <ClaimTags claims={claimsFor(recipeToItem(recipe), fiberSource)} />
-                  </>
-                }
-                secondary={yieldText(y, formatGrams)}
-                value={
-                  <span className="kcal">
-                    {y.perPortion
-                      ? `${formatKcal(y.perPortion.kcal)}/portion`
-                      : `${formatKcal(y.per100.kcal)}/100 g`}
-                  </span>
-                }
-                onClick={() => {
-                  toast.close();
-                  setEditing({ kind: 'recipe', recipe });
-                }}
-                swipeLeft={{
-                  label: 'Ta bort',
-                  onSwipe: () => void remove({ kind: 'recipe', recipe }),
-                }}
-              />
-            );
-          })}
+          {activeRecipes.map(recipeRow)}
         </ul>
+        {archivedRecipes.length > 0 && (
+          <Disclosure summary={`Arkiv (${String(archivedRecipes.length)})`} testId="recipe-archive">
+            <p className="form-note muted">
+              Engångsrätter och recept du inte använt på 60 dagar. Allt finns kvar i sökningen. Ett
+              recept som loggas igen kommer tillbaka; en engångsrätt flyttar du med Spara bland mina
+              recept.
+            </p>
+            <ul className="list">{archivedRecipes.map(recipeRow)}</ul>
+          </Disclosure>
+        )}
       </Card>
       <Card
         title="Egna livsmedel"

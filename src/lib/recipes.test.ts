@@ -4,8 +4,14 @@ import { loggedMealIngredients } from './foodDay.ts';
 import { dayNutrition } from './micronutrients.ts';
 import { scaleNutrients } from './nutrition.ts';
 import {
+  canStartBatch,
   duplicateRecipe,
+  isArchived,
+  leftovers,
   loggedRecipe,
+  portionsText,
+  withBatch,
+  withoutBatch,
   recipeFoodId,
   recipeParts,
   recipeToItem,
@@ -186,5 +192,94 @@ describe('redigering av recept', () => {
     expect(recipeToSave(imported, fields, 2).sourceUrl).toBe('https://ica.se/r/1');
     expect(duplicateRecipe(imported, 'y', 3).sourceUrl).toBe('https://ica.se/r/1');
     expect(recipeToSave(null, fields, 1)).not.toHaveProperty('sourceUrl');
+  });
+});
+
+describe('matlådor', () => {
+  const DAY = 86_400_000;
+  const cooked = 10 * DAY;
+  const log = (createdAt: number, amount: number, unit = 'portion', grams = 300) => ({
+    foodId: recipeFoodId('gryta'),
+    unit,
+    amount,
+    grams,
+    createdAt,
+  });
+
+  it('räknar portioner kvar ur loggen sedan omgången lagades', () => {
+    const batch = withBatch(stew, cooked);
+    expect(batch.batch).toEqual({ startedAt: cooked, portions: 6 });
+    const entries = [
+      log(cooked - 1, 1), // före omgången
+      log(cooked, 1),
+      log(cooked + DAY, 1.5),
+      // 300 g av en portion på 300 g (1 800 g / 6).
+      log(cooked + 2 * DAY, 300, 'g', 300),
+      { ...log(cooked + DAY, 1), foodId: 'recept:annat' },
+    ];
+    expect(leftovers([batch], entries, cooked + 2 * DAY)).toEqual([{ recipe: batch, left: 2.5 }]);
+    expect(portionsText(2.5)).toBe('2,5 portioner');
+    expect(portionsText(1)).toBe('1 portion');
+  });
+
+  it('visas inte när allt är uppätet, efter en vecka eller utan omgång', () => {
+    const batch = withBatch({ ...stew, servings: 2 }, cooked);
+    expect(leftovers([batch], [log(cooked, 2)], cooked)).toEqual([]);
+    expect(leftovers([batch], [], cooked + 8 * DAY)).toEqual([]);
+    expect(leftovers([withoutBatch(batch)], [], cooked)).toEqual([]);
+    expect(withoutBatch(batch)).not.toHaveProperty('batch');
+  });
+
+  it('erbjuds för recept med minst två portioner utan pågående omgång', () => {
+    expect(canStartBatch(stew, [], cooked)).toBe(true);
+    expect(canStartBatch({ ...stew, servings: 1 }, [], cooked)).toBe(false);
+    expect(canStartBatch(withBatch(stew, cooked), [log(cooked, 1)], cooked)).toBe(false);
+    // Uppäten omgång: en ny kan börja.
+    expect(canStartBatch(withBatch(stew, cooked), [log(cooked, 6)], cooked)).toBe(true);
+  });
+
+  it('följer med en ändring av receptet men inte en kopia', () => {
+    const batch = withBatch(stew, cooked);
+    const fields = {
+      id: 'x',
+      name: 'Linsgryta',
+      items: stew.items,
+      servings: 6,
+      cookedWeightG: null,
+    };
+    expect(recipeToSave(batch, fields, 2).batch).toEqual(batch.batch);
+    expect(duplicateRecipe(batch, 'y', 3)).not.toHaveProperty('batch');
+  });
+});
+
+describe('engångsrätter och arkiv', () => {
+  const DAY = 86_400_000;
+  const fields = { id: 'x', name: 'Lasagne', items: stew.items, servings: 4, cookedWeightG: null };
+
+  it('en engångsrätt sparas som sådan och kan flyttas till recepten', () => {
+    const once = recipeToSave(null, { ...fields, oneOff: true }, 1);
+    expect(once.oneOff).toBe(true);
+    // Utan val behålls det, avbockat blir det ett vanligt recept.
+    expect(recipeToSave(once, fields, 2).oneOff).toBe(true);
+    expect(recipeToSave(once, { ...fields, oneOff: false }, 2)).not.toHaveProperty('oneOff');
+    expect(duplicateRecipe(once, 'y', 3)).not.toHaveProperty('oneOff');
+  });
+
+  it('engångsrätter och recept som inte använts på 60 dagar arkiveras', () => {
+    const now = 100 * DAY;
+    const old = { ...stew, createdAt: now - 61 * DAY };
+    expect(isArchived(old, [], now)).toBe(true);
+    expect(isArchived({ ...old, updatedAt: now - DAY }, [], now)).toBe(false);
+    const logged = [
+      {
+        foodId: recipeFoodId('gryta'),
+        unit: 'portion',
+        amount: 1,
+        grams: 300,
+        createdAt: now - 5 * DAY,
+      },
+    ];
+    expect(isArchived(old, logged, now)).toBe(false);
+    expect(isArchived({ ...stew, createdAt: now, oneOff: true }, [], now)).toBe(true);
   });
 });

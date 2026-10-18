@@ -29,15 +29,21 @@ Bakgrunden finns i [ui-audit.md](ui-audit.md). Tokens ligger överst i `src/inde
 | `--space-5` | 24  | Mellan grupper i en panel, tomma lägen       |
 | `--space-6` | 32  | Stora avbrott (sällan)                       |
 
-### Typografi – fem storlekar
+### Typografi – fem storlekar och två rubrikstorlekar
 
-| Token       | Storlek | Används till                                    |
-| ----------- | ------- | ----------------------------------------------- |
-| `--text-xs` | 13 px   | Metadata, sekundärtext, etiketter, bildtexter   |
-| `--text-sm` | 15 px   | Knappar i segment, täta tabeller                |
-| `--text-md` | 16 px   | Brödtext, radrubriker, kortrubriker (fet)       |
-| `--text-lg` | 20 px   | Nyckeltal (827 kcal), panelrubriker, ikoner (⋯) |
-| `--text-xl` | 28 px   | Sidrubrik, huvudsiffra (trendvikt)              |
+Typsnittet är **Inter** (variabel vikt, latinska tecken, OFL 1.1) som bundlas med appen
+(`@fontsource-variable/inter`, `@font-face` överst i `index.css`, precachas) – inga externa typsnitt. Tecken
+utanför intervallet (≈, µ …) tas ur systemets typsnitt.
+
+| Token            | Storlek | Används till                                                    |
+| ---------------- | ------- | --------------------------------------------------------------- |
+| `--text-xs`      | 13 px   | Metadata, sekundärtext, etiketter, bildtexter                   |
+| `--text-sm`      | 15 px   | Knappar i segment, täta tabeller                                |
+| `--text-md`      | 16 px   | Brödtext, radrubriker, kortrubriker (fet)                       |
+| `--text-lg`      | 20 px   | Nyckeltal (827 kcal), panelrubriker, ikoner (⋯)                 |
+| `--text-xl`      | 28 px   | Stora nyckeltal                                                 |
+| `--text-title`   | 32 px   | Sidrubriken (`Page`, 800, tätare spärrning, krymper vid scroll) |
+| `--text-display` | 44 px   | Översikts huvudsiffra (trendvikt)                               |
 
 - **Siffror**: alltid `font-variant-numeric: tabular-nums` (klasserna `.num`, `.kcal`, `.list-row-value`,
   `.stat-bar-value`) så att kolumner linjerar och värden inte hoppar när de ändras.
@@ -47,23 +53,31 @@ Bakgrunden finns i [ui-audit.md](ui-audit.md). Tokens ligger överst i `src/inde
 
 ### Radier och skuggor
 
-| Token            | Värde | Används till                               |
-| ---------------- | ----- | ------------------------------------------ |
-| `--radius-sm`    | 8 px  | Skeleton-rader, små markeringar            |
-| `--radius-md`    | 12 px | Knappar, fält, fokusringar, segmentknappar |
-| `--radius-lg`    | 16 px | Kort, sektioner, tomma lägen               |
-| `--radius-sheet` | 20 px | Panelens övre hörn                         |
-| `--radius-full`  | 999px | Chips, staplar, statusmärken               |
-| `--shadow-sm`    |       | Vald segmentknapp                          |
-| `--shadow-md`    |       | Toast                                      |
-| `--shadow-lg`    |       | Firande (modal)                            |
+| Token            | Värde | Används till                             |
+| ---------------- | ----- | ---------------------------------------- |
+| `--radius-sm`    | 8 px  | Skeleton-rader, små markeringar          |
+| `--radius-md`    | 14 px | Fält, fokusringar                        |
+| `--radius-lg`    | 20 px | Kort, sektioner, tomma lägen             |
+| `--radius-sheet` | 28 px | Panelens övre hörn                       |
+| `--radius-full`  | 999px | Knappar, segment, chips, staplar, märken |
+| `--shadow-sm`    |       | Vald segmentknapp                        |
+| `--shadow-card`  |       | Kort (mjuk skugga, ingen i mörkt tema)   |
+| `--shadow-md`    |       | Toast                                    |
+| `--shadow-lg`    |       | Firande (modal)                          |
 
-Kort har ingen skugga – bara en 1 px ram (`--border`). Sticky rader får en 1 px linje när de "fastnat".
+Kort har en mjuk skugga (`--shadow-card`) och en nästan osynlig ram (`--card-border`) mot en svagt grå
+bakgrund – inget kort-i-kort (kort i en panel har varken ram eller skugga). Sticky rader får en 1 px linje när
+de "fastnat". Knappar och segment är "piller" (`--radius-full`). Översikts viktkort har en svag ton av
+accentfärgen (`--accent-soft`). Bottennavigeringen är halvgenomskinlig med `backdrop-filter` (innehållet
+skymtar suddigt bakom) och den aktiva fliken har ikonen i en tonad pill (`--accent-soft`).
+
+Rörelse: sidbyte = innehållet glider in 8 px (`page-enter`), knappar trycks ner till 98 % – båda av med
+`prefers-reduced-motion`.
 
 ### Färger
 
-Ytor och text: `--bg`, `--surface`, `--text`, `--muted`, `--border`, `--track`, `--accent`
-(interaktivt: länkar, knappar, fokus), `--accent-contrast`.
+Ytor och text: `--bg`, `--surface`, `--text`, `--muted`, `--border`, `--card-border`, `--track`, `--accent`
+(interaktivt: länkar, knappar, fokus), `--accent-contrast`, `--accent-soft` (svag ton av accenten).
 
 Semantiska färger – samma betydelse överallt:
 

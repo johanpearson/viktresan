@@ -235,8 +235,26 @@ export interface Recipe {
   cookedWeightG?: number;
   /** Receptets webbadress (receptimporten) – visas som länk i receptet. Ingen schemaändring. */
   sourceUrl?: string;
+  /**
+   * Engångsrätt ("Laga en rätt" i sök-sheeten): visas under Arkiv i Egna, inte bland recepten.
+   * Ingen schemaändring.
+   */
+  oneOff?: true;
+  /** Pågående matlådor: lagad omgång vars portioner loggas efter hand. Ingen schemaändring. */
+  batch?: RecipeBatch;
   createdAt: number;
   updatedAt?: number;
+}
+
+/**
+ * En lagad omgång av ett recept. Det som finns kvar räknas fram ur matloggen (poster av
+ * receptet loggade från `startedAt`), så att borttagna eller ändrade poster alltid stämmer.
+ */
+export interface RecipeBatch {
+  /** Tidpunkten (ms) då omgången lagades = första portionens `createdAt`. */
+  startedAt: number;
+  /** Antal portioner i omgången. */
+  portions: number;
 }
 
 /**

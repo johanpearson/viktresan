@@ -7,6 +7,9 @@ import {
   VOLUME_UNITS,
   amountLabel,
   builtInUnits,
+  convertAmount,
+  equivalents,
+  friendlyAmount,
   categoryFromGroup,
   categoryFromName,
   confirmGuess,
@@ -584,5 +587,45 @@ describe('parsePackage (hela förpackningen)', () => {
     expect(parsePackage(0, 'g', undefined, 'g')).toBeNull();
     expect(parsePackage(10, 'kg', undefined, 'g')).toBeNull();
     expect(parsePackage(undefined, undefined, 'en back', 'g')).toBeNull();
+  });
+});
+
+describe('omräkning mellan enheter', () => {
+  const oats = [
+    { name: 'dl', grams: 35, source: 'volym' as const },
+    { name: 'msk', grams: 5.3, source: 'volym' as const },
+  ];
+
+  it('avrundar till mängder man kan mäta upp', () => {
+    expect(friendlyAmount(4.29, 'dl')).toBe(4.5);
+    expect(friendlyAmount(0.34, 'dl')).toBe(0.3);
+    expect(friendlyAmount(12.4, 'dl')).toBe(12);
+    expect(friendlyAmount(0.3, 'msk')).toBe(0.5);
+    expect(friendlyAmount(1.7, 'st')).toBe(1.5);
+    expect(friendlyAmount(0.1, 'st')).toBe(0.5);
+    expect(friendlyAmount(213, 'ml')).toBe(215);
+    expect(friendlyAmount(134.6, 'g')).toBe(135);
+    expect(friendlyAmount(7.26, 'g')).toBe(7.3);
+    expect(friendlyAmount(0, 'dl')).toBe(0);
+  });
+
+  it('räknar om en vikt till en annan enhet', () => {
+    expect(convertAmount(150, 'dl', oats)).toBe(4.5);
+    expect(convertAmount(150, 'g', oats)).toBe(150);
+    expect(convertAmount(150, 'skiva', oats)).toBeNull();
+  });
+
+  it('visar samma mängd i andra enheter och sist gram', () => {
+    expect(equivalents(150, 'dl', oats)).toEqual([{ unit: 'g', amount: 150, label: '150 g' }]);
+    expect(equivalents(35, 'g', oats).map((e) => e.label)).toEqual(['1 dl', '6,5 msk']);
+    // 52,5 g = 10 msk – fler skedar än så visas inte.
+    expect(equivalents(52.5, 'g', oats).map((e) => e.label)).toEqual(['1,5 dl']);
+  });
+
+  it('hoppar över enheter där avrundningen blir för grov', () => {
+    const eggs = [{ name: 'st', grams: 60, source: 'standard' as const }];
+    // 7 g ≈ 0,12 ägg – "0,5 st" vore missvisande.
+    expect(equivalents(7, 'g', eggs)).toEqual([]);
+    expect(equivalents(120, 'g', eggs).map((e) => e.label)).toEqual(['2 st']);
   });
 });
