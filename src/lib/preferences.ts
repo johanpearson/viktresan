@@ -44,6 +44,8 @@ export interface Preferences {
   whatToEatTipSeen: boolean;
   /** Notisen om att äldre nedladdade säkerhetskopior kan tas bort i Filer-appen har visats. */
   backupDownloadHintSeen: boolean;
+  /** Dagar utan matlogg där "Hoppa över" valts i Att göra idag (bara de senaste veckorna sparas). */
+  missedDaysSkipped: readonly string[];
 }
 
 export const GHOST_OPACITY_MIN = 0.1;
@@ -65,6 +67,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   claimsHidden: [],
   whatToEatTipSeen: false,
   backupDownloadHintSeen: false,
+  missedDaysSkipped: [],
 };
 
 /** Tolkar det lagrade värdet; okända eller felaktiga fält får standardvärdet. */
@@ -103,6 +106,11 @@ export function parsePreferences(raw: unknown): Preferences {
       : [],
     whatToEatTipSeen: stored.whatToEatTipSeen === true,
     backupDownloadHintSeen: stored.backupDownloadHintSeen === true,
+    missedDaysSkipped: Array.isArray(stored.missedDaysSkipped)
+      ? stored.missedDaysSkipped.filter(
+          (d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d),
+        )
+      : [],
   };
 }
 

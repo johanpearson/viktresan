@@ -32,7 +32,7 @@ export type PlanResult =
 export function buildPlan(
   profile: PlanProfile,
   weights: readonly DatedWeight[],
-  foodLog: readonly DatedPortion[],
+  foodLog: readonly (DatedPortion & { usual?: true })[],
   today: string,
 ): PlanResult {
   const energy = energyProfileFrom(profile);
@@ -47,7 +47,9 @@ export function buildPlan(
       energy.heightCm,
       ageFromBirthYear(energy.birthYear, today),
     ) * activityFactor(energy.activityLevel);
-  const adaptive = adaptiveTdee({ daily, intake: dailyIntake(foodLog), today, formulaTdee });
+  // "Som vanligt"-dagar är gissningar: förbrukningen ska bara lära sig av riktiga loggar.
+  const intake = dailyIntake(foodLog.filter((e) => !e.usual));
+  const adaptive = adaptiveTdee({ daily, intake, today, formulaTdee });
   const plan = caloriePlan({
     profile: energy,
     trendKg,

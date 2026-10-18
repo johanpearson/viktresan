@@ -4,9 +4,10 @@
  * målet; veckan är en överblick. Rena funktioner utan I/O.
  *
  * - Dagar utan matlogg räknas som 0 kcal (de markeras "ej loggad" i veckopanelen).
- * - "≈ … /dag resten av veckan" = det som är kvar av budgeten när dagen började delat på
- *   dagarna som är kvar, idag medräknad. Det räknas på dagarna före idag, så det står still
- *   under dagen.
+ * - "≈ … /dag" = det som blir kvar för dagarna efter idag, om idag blir minst dagsmålet:
+ *   (budget − dagarna före idag − max(idag, dagsmålet)) / dagar efter idag. Det står still
+ *   under dagen tills dagens intag passerar dagsmålet. Veckans sista dag finns inget per dag –
+ *   då visas bara det som är kvar (annars stod hela dagens utrymme bredvid "kvar").
  * - Per dag-förslaget går aldrig under kalorigolvet. Räcker inte budgeten sägs det sakligt
  *   och överskottet föreslås fördelat över nästa vecka i stället.
  * - Saldot = loggat − planerat (dagsmålet per dag) för dagarna före idag – neutralt, utan
@@ -60,7 +61,10 @@ export interface WeekBudget {
   remainingKcal: number;
   /** Dagar kvar i veckan, idag medräknad (0 när veckan är slut). */
   daysLeft: number;
-  /** Per dag resten av veckan (aldrig under golvet), `null` när veckan är slut. */
+  /**
+   * Per dag för dagarna efter idag om idag blir minst dagsmålet (aldrig under golvet), `null`
+   * på veckans sista dag och när veckan är slut.
+   */
   perDayKcal: number | null;
   /** Loggat − planerat för dagarna före idag (hela veckan när den är slut). */
   balanceKcal: number;
@@ -110,14 +114,20 @@ export function weekBudget({
   let perDayKcal: number | null = null;
   let shortfall: WeekShortfall | null = null;
   if (daysLeft > 0) {
-    const available = budgetKcal - eatenBefore;
-    perDayKcal = Math.round(available / daysLeft);
+    const daysAfter = daysLeft - 1;
+    if (daysAfter > 0) {
+      const todayCounted = Math.max(eatenToday, target);
+      perDayKcal = Math.max(
+        floorKcal,
+        Math.round((budgetKcal - eatenBefore - todayCounted) / daysAfter),
+      );
+    }
     // Resten av veckan på golvet (idag minst det som redan ätits): går veckan ändå över
     // budgeten räcker den inte – förslaget blir golvet och resten föreslås till nästa vecka.
-    const projected = eatenBefore + Math.max(eatenToday, floorKcal) + floorKcal * (daysLeft - 1);
+    const projected = eatenBefore + Math.max(eatenToday, floorKcal) + floorKcal * daysAfter;
     const over = Math.round(projected - budgetKcal);
-    if (over > 0 || perDayKcal < floorKcal) {
-      perDayKcal = floorKcal;
+    if (over > 0) {
+      if (perDayKcal !== null) perDayKcal = floorKcal;
       shortfall = {
         exceeded: remainingKcal < 0,
         exceededKcal: Math.max(0, -remainingKcal),

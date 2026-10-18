@@ -90,8 +90,8 @@ export function WeekBudgetSheet({ week, onClose }: WeekBudgetSheetProps) {
           />
           {week.perDayKcal !== null && (
             <ListRow
-              primary="Per dag resten av veckan"
-              secondary="Idag medräknad, aldrig under kalorigolvet"
+              primary="Per dag efter idag"
+              secondary="Om idag blir minst dagsmålet, aldrig under kalorigolvet"
               value={<span className="num">≈ {formatKcal(week.perDayKcal)}</span>}
             />
           )}

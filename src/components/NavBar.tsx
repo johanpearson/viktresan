@@ -16,7 +16,7 @@ export function NavBar({ routes, current }: NavBarProps) {
           return (
             <li key={route.id}>
               <a
-                className="nav-link"
+                className={route.id === 'logga' ? 'nav-link nav-link-add' : 'nav-link'}
                 href={hrefFor(route)}
                 aria-current={active ? 'page' : undefined}
               >

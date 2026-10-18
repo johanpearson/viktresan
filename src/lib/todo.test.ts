@@ -38,6 +38,7 @@ const empty: TodoInput = {
   workoutPlans: [],
   enabled: { tillskott: true, glp1: true, traning: true },
   backupDue: false,
+  missedFood: [],
 };
 
 describe('buildTodo', () => {

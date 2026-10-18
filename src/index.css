@@ -463,6 +463,19 @@ body {
   background: var(--accent-soft);
 }
 
+/* Logga = plusknappen i mitten: ikonen i en fylld pill i accentfärgen, även när fliken inte är aktiv. */
+.nav-link-add .nav-icon,
+.nav-link-add[aria-current='page'] .nav-icon {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-link-add {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .nav-link:focus-visible,
 .button:focus-visible,
 .segmented-button:focus-visible {
@@ -1893,12 +1906,14 @@ a.button {
   width: 100%;
   min-height: var(--tap);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border);
+  border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
   background: var(--surface);
+  box-shadow: var(--shadow-card);
   color: var(--text);
   font: inherit;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -1912,6 +1927,10 @@ a.button {
 }
 
 /* Ikonen i datatypens färg – samma som i kalendern och graferna. */
+.log-tile[data-type='mat'] .log-tile-icon {
+  color: var(--data-food);
+}
+
 .log-tile[data-type='vikt'] .log-tile-icon {
   color: var(--data-weight);
 }

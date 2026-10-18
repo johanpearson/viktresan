@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
+  deleteFoodLog,
   deleteSupplementIntake,
+  listMealSlots,
+  newId,
+  putFoodLogEntries,
   putSupplementIntake,
   putWorkout,
   type Supplement,
@@ -9,9 +13,20 @@ import { setAppBadge } from '../lib/appBadge.ts';
 import { BACKUP_REMINDER_DAYS } from '../lib/backupReminder.ts';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
-import { formatShortDate } from '../lib/format.ts';
+import { formatKcal, formatShortDate } from '../lib/format.ts';
 import { describeDose } from '../lib/glp1.ts';
 import { haptic } from '../lib/haptics.ts';
+import type { MealSlot } from '../lib/mealSlots.ts';
+import {
+  missedDayText,
+  missedFoodDays,
+  usualDay,
+  usualEntries,
+  usualKcal,
+  withSkipped,
+} from '../lib/missedDays.ts';
+import { navigate } from '../lib/navigation.ts';
+import { setPreference, usePreferences } from '../lib/preferences.ts';
 import { intakeFor } from '../lib/supplements.ts';
 import { buildTodo, nextDoseText } from '../lib/todo.ts';
 import type { AppData } from '../lib/useAppData.ts';
@@ -34,6 +49,9 @@ interface TodoCardProps {
 /** Så många obesvarade pass visas innan "Visa alla". */
 const UNANSWERED_VISIBLE = 3;
 
+/** Högst så många dagar utan matlogg på en gång (nästa visas när en är besvarad). */
+const MISSED_VISIBLE = 3;
+
 /**
  * Översikt → Att göra idag: bara det som väntar idag, som listrader. Tillskott bockas av med ett
  * tryck (Ångra i en toast), dosen öppnar Logga → GLP-1, ett pass öppnar en radmeny med Klar / Hoppa
@@ -49,7 +67,27 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
   // Radmenyn för ett pass: Klar / Hoppa över ("Hoppade över" för ett obesvarat).
   const [menu, setMenu] = useState<{ item: WorkoutItem; prompt: boolean } | null>(null);
   const [allUnanswered, setAllUnanswered] = useState(false);
+  // Radmenyn för en dag utan matlogg: Som vanligt / Fyll i / Hoppa över.
+  const [missedMenu, setMissedMenu] = useState<string | null>(null);
+  const { prefs } = usePreferences();
   const today = todayIso(now);
+  const missedFood = features.isEnabled('mat')
+    ? missedFoodDays(data.foodLog, today, prefs.missedDaysSkipped).slice(0, MISSED_VISIBLE)
+    : [];
+  // Måltiderna behövs för "Som vanligt" – läses bara när det finns en dag att fråga om.
+  const [slots, setSlots] = useState<MealSlot[] | null>(null);
+  const needSlots = missedFood.length > 0 && slots === null;
+  useEffect(() => {
+    if (!needSlots) return;
+    let active = true;
+    void listMealSlots().then((list) => {
+      if (active) setSlots(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, [needSlots]);
+  const usual = slots ? usualDay(data.foodLog, slots, today) : [];
   const todo = buildTodo(
     {
       ...data,
@@ -59,6 +97,7 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
         traning: features.isEnabled('traning'),
       },
       backupDue: backup.status?.due === true,
+      missedFood,
     },
     now,
   );
@@ -67,6 +106,7 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
     todo.doses.length +
     todo.workouts.length +
     todo.unanswered.length +
+    todo.missedFood.length +
     (todo.backup ? 1 : 0);
 
   // Siffran på appikonen följer listan.
@@ -92,6 +132,32 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
     );
   }
 
+  /** "Som vanligt": en uppskattad post per måltid den dagen, med Ångra. */
+  async function fillUsual(date: string) {
+    toast.close();
+    const entries = usualEntries(usual, date, newId);
+    await putFoodLogEntries(entries);
+    haptic('success');
+    await onChange();
+    toast.show(
+      `La in en vanlig dag för ${missedDayText(date, today)} (≈ ${formatKcal(usualKcal(usual))}).`,
+      async () => {
+        for (const e of entries) await deleteFoodLog(e.id);
+        await onChange();
+      },
+    );
+  }
+
+  /** "Hoppa över": dagen förblir ologgad och frågas inte om igen. */
+  async function skipDay(date: string) {
+    toast.close();
+    const before = prefs.missedDaysSkipped;
+    await setPreference('missedDaysSkipped', withSkipped(before, date, today));
+    toast.show(`Hoppade över ${missedDayText(date, today)}.`, async () => {
+      await setPreference('missedDaysSkipped', before);
+    });
+  }
+
   async function skip(item: WorkoutItem) {
     await putWorkout(answerWorkout(item, { status: 'hoppad' }));
     await onChange();
@@ -105,7 +171,7 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
   );
   const toastView = toast.toast && (
     <Toast
-      label="Tillskott"
+      label="Att göra"
       testId="supplement-toast"
       message={toast.toast.message}
       onUndo={toast.onUndo}
@@ -133,6 +199,36 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
       }}
     />
   );
+  const missedSheet = missedMenu && (
+    <ActionSheet
+      title={`Ingen mat loggad ${missedDayText(missedMenu, today)}`}
+      description={
+        usual.length > 0
+          ? 'Som vanligt lägger in en uppskattad dag ur dina vanliga måltider de senaste 4 veckorna. Den räknas i dagens och veckans summor men inte när förbrukningen räknas ut.'
+          : 'Det finns för lite matlogg för att uppskatta en vanlig dag – fyll i dagen eller hoppa över den.'
+      }
+      actions={[
+        ...(usual.length > 0
+          ? [
+              {
+                label: `Som vanligt (≈ ${formatKcal(usualKcal(usual))})`,
+                onSelect: () => void fillUsual(missedMenu),
+              },
+            ]
+          : []),
+        {
+          label: 'Fyll i',
+          onSelect: () => {
+            navigate(`#/mat/logga/${missedMenu}`);
+          },
+        },
+        { label: 'Hoppa över', onSelect: () => void skipDay(missedMenu) },
+      ]}
+      onClose={() => {
+        setMissedMenu(null);
+      }}
+    />
+  );
   const sheet = completing && (
     <CompleteWorkoutSheet
       item={completing}
@@ -153,6 +249,7 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
         {nextDose}
         {toastView}
         {menuSheet}
+        {missedSheet}
         {sheet}
       </div>
     );
@@ -238,6 +335,19 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
             }}
           />
         ))}
+        {todo.missedFood.map((date) => (
+          <ListRow
+            key={date}
+            testId="todo-missed"
+            leading={<span className="calendar-dot dot-mat" aria-hidden="true" />}
+            primary={`Ingen mat loggad ${missedDayText(date, today)}`}
+            secondary="Som vanligt, fyll i eller hoppa över"
+            chevron
+            onClick={() => {
+              setMissedMenu(date);
+            }}
+          />
+        ))}
         {todo.backup && (
           <ListRow
             testId="backup-reminder"
@@ -264,6 +374,7 @@ export function TodoCard({ data, now, onChange }: TodoCardProps) {
       {nextDose}
       {toastView}
       {menuSheet}
+      {missedSheet}
       {sheet}
     </Card>
   );

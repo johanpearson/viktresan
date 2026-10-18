@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const SECTIONS = ['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg'] as const;
+const SECTIONS = ['Översikt', 'Mat', 'Logga', 'Kalender', 'Framsteg'] as const;
 
 /** Samlar CSP-överträdelser och konsolfel så att varje test kan kräva noll. */
 function collectErrors(page: Page): string[] {

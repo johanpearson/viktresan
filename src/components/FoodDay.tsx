@@ -61,6 +61,8 @@ interface FoodDayProps {
   /** Öppna sök-sheeten direkt (genvägen "Logga mat", `#/mat/logga`). */
   initialPicker?: boolean;
   /** Slå upp streckkoden i sök-sheeten direkt (`#/mat/ean/<ean>`, från Tillskott). */
+  /** Dagen som visas först (annars idag), t.ex. "Fyll i" för en dag utan matlogg. */
+  initialDate?: string | undefined;
   initialEan?: string | undefined;
   reloadLog: () => Promise<unknown>;
   /** Det som kan tas med i "Fråga AI" (profil, mål, GLP-1 …), `null` tills datan är läst. */
@@ -117,6 +119,7 @@ export function FoodDay({
   proteinGoalG,
   fiberGoalOn,
   initialPicker = false,
+  initialDate,
   initialEan,
   reloadLog,
   aiContext = null,
@@ -124,7 +127,7 @@ export function FoodDay({
 }: FoodDayProps) {
   const { foodData, livsmedel, foodLog, reloadFood } = source;
   const today = todayIso();
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(initialDate ?? today);
   const [picker, setPicker] = useState<Picker | null>(() =>
     initialEan
       ? { meal: null, scan: false, focus: false, ean: initialEan }

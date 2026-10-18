@@ -75,7 +75,9 @@ src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
 src/lib/overview.ts     Översikts nyckeltal på en gemensam viktkälla (trend eller dag): overviewStats; goalEta = en enda
                         måldatumsuppgift (trendprognos, annars "enligt plan" med vald takt)
 src/lib/overviewItems.ts  Ringar och kort som kan döljas på Översikt (OVERVIEW_ITEMS, preferences.overviewHidden)
-src/lib/todo.ts         Översikt → Att göra idag: buildTodo (tillskott, dos, pass, obesvarade, backup) + raden Nästa dos
+src/lib/todo.ts         Översikt → Att göra idag: buildTodo (tillskott, dos, pass, obesvarade, dagar utan matlogg, backup) + raden Nästa dos
+src/lib/missedDays.ts   Dagar utan matlogg (missedFoodDays: 7 dagar bakåt, aktiv matloggare), "Som vanligt" (usualDay/usualEntries:
+                        en uppskattad post per måltid ur typicalMeal, `usual: true`), Hoppa över (withSkipped)
 src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos (forecastGoal: spärrar, tak,
                         intervall – se Trendvikt)
 src/lib/energy.ts       BMR (Mifflin-St Jeor), TDEE, kalorimål, spärrar, måldatumskontroll
@@ -196,6 +198,8 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         food.spec.ts blockerar service workern och mockar livsmedel.json,
                         Open Food Facts (page.route) och BarcodeDetector/kamera (addInitScript); svep görs med
                         dispatchEvent('pointer…') (`swipeLeft` i helpers.ts) och pågående måltid styrs med page.clock.setFixedTime
+                        missedDays.spec.ts = Glömt logga (Som vanligt + Ångra, Fyll i på gårdagen, Hoppa över) och plusknappen
+                        (navigeringens ordning, Mat-rutan i Logga).
                         recipesAndUnits.spec.ts = enhetsbyte med omräkning och bråk, omräkningsraden, matlådor (logga, kvar, Slut
                         + Ångra), "Laga en rätt" → Arkiv i Egna och sökningen i Inställningar.
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
@@ -206,8 +210,9 @@ public/fineli.json      Finelis data (THL), samma format, id:n `fi:<FOODID>`, gr
 
 - **Routing** är hash-baserad (`#/logga`) – GitHub Pages saknar SPA-fallback och det
   fungerar offline utan serverstöd. Ny sida: lägg till i `ROUTES` + `PAGES` i `App.tsx`.
-  Bottennavigeringen: Översikt, Logga, Mat, Kalender, Framsteg (routes med `inNav: true`,
-  filtrerade på funktioner); Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
+  Bottennavigeringen: Översikt, Mat, Logga, Kalender, Framsteg (routes med `inNav: true`,
+  filtrerade på funktioner); Logga är plusknappen i mitten (`nav-link-add`, ikonen i en fylld pill i accentfärgen) och
+  Logga-rutnätet har först rutan Mat (`log-tile-mat`, länk till `#/mat/logga`) – allt loggas därifrån med ett tryck; Inställningar nås via kugghjulet i Översikts rubrikrad. Inställningar är
   grupperade rader (`GROUPS` i `Installningar.tsx`, med `feature`) som öppnar en panel; `#/installningar/<panel>`
   (`profil`, `protein`, `fiber`, `dryck`, `matpreferenser`, `maltider`, `matsokning`, `funktioner`, `visning`, `oversikt`, `bilder`, `las`, `sakerhetskopia`,
   `lagring`, `om`) öppnar panelen direkt. Sökfältet överst (`settings-search`) filtrerar raderna på rubrik, grupp och
@@ -271,7 +276,9 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   närmast postens `createdAt` (lokal tid, runt dygnet), annars Eftermiddagsmellanmål. `StoredFood` har utan schemaändring valfria `sugarG` och
   `missing` (makron som saknades i OFF och sparades som 0). Matloggposter har sedan v11 (utan datamigrering) valfria `estimated: true` (snabblogg: 1 portion = 100 "g",
   `per100` = hela värdet, ingår inte i vitaminer/mineraler – `DayNutrition.estimatedEntries`) och `recipe` (`{ yieldG, items }`,
-  receptet som det såg ut vid loggningen – `partsOf`/ingredienser läser kopian, så en receptändring bara påverkar nya loggar).
+  receptet som det såg ut vid loggningen – `partsOf`/ingredienser läser kopian, så en receptändring bara påverkar nya loggar)
+  och valfri `usual: true` ("Som vanligt" för en dag utan matlogg, alltid med `estimated`; räknas inte i den adaptiva
+  förbrukningen – `buildPlan` filtrerar bort dem – och visas inte under Senaste).
   `SavedMeal` har sedan v10 en valfri `ean` (ingen schemaändring – skanning hittar måltiden).
   Migreringen v8 → v9 (`groupLegacyPhotos`, även för säkerhetskopior version 1–7) grupperar befintliga bilder i ett
   tillfälle per datum (id `migrerad:<datum>`, samma på alla enheter), vinkel `okand`; bildens vikt flyttas till tillfället
@@ -299,7 +306,7 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
   när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
-  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats, `backupDownloadHintSeen` – notisen om äldre nedladdade kopior har visats), `backupFile` (filhandtaget som säkerhetskopian skrivs över i), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). `features`, `preferences` och `ingredientMatches` ingår i säkerhetskopior (sedan version 14); `lock` (passkeyn
+  `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats, `backupDownloadHintSeen` – notisen om äldre nedladdade kopior har visats, `missedDaysSkipped` – dagar utan matlogg där "Hoppa över" valts, högst två veckor bakåt), `backupFile` (filhandtaget som säkerhetskopian skrivs över i), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). `features`, `preferences` och `ingredientMatches` ingår i säkerhetskopior (sedan version 14); `lock` (passkeyn
   finns bara på enheten – en återställd nyckel på en annan enhet skulle låsa ute användaren), `backupFile` och `lastExportAt` ingår inte.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
@@ -316,8 +323,10 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
 - **Dag och vecka** (`weekBudget.ts`, alltid båda – ingen inställning): dagsmålet (planen) är primärt – kcal-ringen på
   Översikt → Idag och kcal-stapeln i Mat → Dag visar dagens intag mot det. Under ringen/makroraden står veckoraden
   (`WeekBudgetRow`, samma korta rad på Översikt och i Mat → Dag): "Vecka: [X] kcal kvar · ≈ [Y]/dag" (mån–sön); saldot
-  ("Saldo hittills ±N kcal" = loggat − dagsmålet för dagarna före idag, neutral färg) finns i panelen. Y = (budget − intag före idag) /
-  dagar kvar inkl. idag, så det står still under dagen. Dagar utan matlogg räknas som 0 kcal. Y går aldrig under golvet
+  ("Saldo hittills ±N kcal" = loggat − dagsmålet för dagarna före idag, neutral färg) finns i panelen. Y = per dag för dagarna
+  efter idag om idag blir minst dagsmålet: (budget − intag före idag − max(intag idag, dagsmålet)) / dagar efter idag – står
+  still tills dagens intag passerar dagsmålet. Veckans sista dag finns inget Y (bara "kvar"). Dagar utan matlogg räknas som
+  0 kcal (Att göra idag frågar om dem, se Glömt logga). Y går aldrig under golvet
   (`floorKcal`); räcker inte budgeten (resten av veckan på golvet går över budgeten) visas i panelen `WeekShortfallNote`
   ("Veckobudgeten är överskriden med X kcal" / "räcker inte till kalorigolvet") med förslag att sprida resten över nästa
   vecka. Tryck på raden = `WeekBudgetSheet`: sju staplar mot dagsmålet (streckad linje), "ej loggad", kvar, per dag och
@@ -352,6 +361,13 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   ("Spara bland mina recept" av = `oneOff: true`) och sedan loggformuläret med 1 portion. Mat → Egna visar recept som
   inte är arkiverade; engångsrätter och recept utan loggning/ändring på 60 dagar (`ARCHIVE_DAYS`) ligger hopfällda under
   "Arkiv (N)" (`recipe-archive`). Arkiverade recept finns kvar i sökningen men inte under Måltider i sök-sheeten.
+- **Glömt logga** (`missedDays.ts`, `TodoCard`, bakom `mat`): Översikt → Att göra idag får raden "Ingen mat loggad igår"
+  (`todo-missed`, högst 3 åt gången) för dagar de senaste 7 dagarna utan matlogg – inte före första loggade dagen och bara
+  om något loggats de senaste 14 dagarna. Tryck = radmeny: "Som vanligt (≈ X kcal)" (en snabbloggpost per måltid med
+  måltidens typiska kcal och protein de senaste 28 dagarna – `typicalMeal`, minst 3 dagar; för lite underlag = valet saknas),
+  "Fyll i" (`#/mat/logga/<datum>`: Mat → Dag på den dagen med sök-sheeten öppen) och "Hoppa över"
+  (`preferences.missedDaysSkipped`). Som vanligt och Hoppa över har Ångra. Raderna räknas i appikonens siffra. Ingen
+  systemnotis (ingen server) – frågan visas när appen öppnas.
 - **Dryck** (i UI:t "Dryck"; internt heter det fortfarande `water`/`vatten` – store, funktion, route
   `#/logga/vatten`): mål = eget `waterGoalMl`, annars standardmål efter kön: 2 000 ml (man) / 1 600 ml
   (kvinna), 1 800 ml utan kön – dryckesdelen (~80 %) av EFSA:s totala vätskeintag. Ingen koppling till

@@ -100,7 +100,8 @@ export function recentFoods(
   const seen = new Set<string>();
   const result: FoodItem[] = [];
   for (const entry of sorted) {
-    if (seen.has(entry.foodId)) continue;
+    // "Som vanligt" (en uppskattad dag) är inget man väljer igen.
+    if (entry.usual || seen.has(entry.foodId)) continue;
     seen.add(entry.foodId);
     const item = catalog.get(entry.foodId) ?? entryToItem(entry);
     if (!include(item)) continue;
