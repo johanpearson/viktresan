@@ -130,11 +130,11 @@ test.beforeEach(async ({ page }) => {
 test('allt på som standard', async ({ page }) => {
   const errors = collectErrors(page);
   const v = await observe(page);
-  expect(v.navLabels).toEqual(['Översikt', 'Logga', 'Mat', 'Kalender', 'Framsteg']);
+  expect(v.navLabels).toEqual(['Översikt', 'Mat', 'Logga', 'Kalender', 'Framsteg']);
   expect(v.todayLabels).toEqual(['Dryck', 'Kalorier', 'Protein', 'Steg', 'Träning']);
   expect(v.calorieCard).toBe(1);
   expect(v.rings).toBe(2);
-  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Steg', 'Dryck', 'Träning']);
+  expect(v.tiles).toEqual(['Mat', 'Vikt', 'Midja', 'Steg', 'Dryck', 'Träning']);
   expect(v.tabs).toEqual(['Historik', 'Veckor', 'Bilder', 'Milstolpar', 'Rapport']);
   expect(v.sections).toEqual(expect.arrayContaining(['Steg', 'Midjemått']));
   expect(v.legend).toEqual(['Vikt', 'Midja', 'Steg', 'Mat', 'Dryck', 'Träning', 'Bilder']);
@@ -145,7 +145,7 @@ test('allt på som standard', async ({ page }) => {
 test('steg av döljer steg i Logga, Översikt, Kalender och grafer', async ({ page }) => {
   await setFeature(page, /^Steg/, false);
   const v = await observe(page);
-  expect(v.tiles).toEqual(['Vikt', 'Midja', 'Dryck', 'Träning']);
+  expect(v.tiles).toEqual(['Mat', 'Vikt', 'Midja', 'Dryck', 'Träning']);
   expect(v.todayLabels).not.toContain('Steg');
   expect(v.sections).not.toContain('Steg');
   await page.goto('./#/framsteg');
@@ -160,7 +160,7 @@ test('steg av döljer steg i Logga, Översikt, Kalender och grafer', async ({ pa
 test('midjemått av döljer midja i Logga, Översikt, Kalender och historik', async ({ page }) => {
   await setFeature(page, /^Midjemått/, false);
   const v = await observe(page);
-  expect(v.tiles).toEqual(['Vikt', 'Steg', 'Dryck', 'Träning']);
+  expect(v.tiles).toEqual(['Mat', 'Vikt', 'Steg', 'Dryck', 'Träning']);
   expect(v.todayLabels).not.toContain('Midja');
   expect(v.sections).not.toContain('Midjemått');
   expect(v.legend).not.toContain('Midja');

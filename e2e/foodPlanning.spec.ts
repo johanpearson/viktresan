@@ -271,10 +271,10 @@ test('veckoraden: loggar mat flera dagar och ser veckan i Mat, på Översikt och
   const target = dailyTarget();
   const budget = target * 7;
 
-  // Innan något loggats (onsdag): mån och tis räknas som 0 kcal, så hela budgeten delas på
-  // de fem dagarna som är kvar. Mat → Dag har samma korta veckorad som Översikt (utan saldo).
+  // Innan något loggats (onsdag): mån och tis räknas som 0 kcal; idag räknas som dagsmålet och
+  // resten delas på de fyra dagarna efter idag. Mat → Dag har samma korta veckorad som Översikt.
   await expect(page.getByTestId('week-row-text')).toHaveText(
-    `Vecka: ${kcalText(budget)} kcal kvar · ≈ ${kcalText(Math.round(budget / 5))}/dag`,
+    `Vecka: ${kcalText(budget)} kcal kvar · ≈ ${kcalText(Math.round((budget - target) / 4))}/dag`,
   );
   await expect(page.getByTestId('week-balance')).toHaveCount(0);
 
@@ -282,8 +282,8 @@ test('veckoraden: loggar mat flera dagar och ser veckan i Mat, på Översikt och
   await page.getByRole('button', { name: 'Föregående dag' }).tap();
   await page.getByRole('button', { name: 'Föregående dag' }).tap();
   await quickLog(page, 3000);
-  // En tidigare dag i veckan visar samma vecka (per dag räknas från idag).
-  const perDay = Math.round((budget - 3000) / 5);
+  // En tidigare dag i veckan visar samma vecka (per dag räknas från idag; idag = dagsmålet).
+  const perDay = Math.round((budget - 3000 - target) / 4);
   const row = `Vecka: ${kcalText(budget - 3600)} kcal kvar · ≈ ${kcalText(perDay)}/dag`;
   await page.getByRole('button', { name: 'Nästa dag' }).tap();
   await page.getByRole('button', { name: 'Nästa dag' }).tap();
