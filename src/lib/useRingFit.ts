@@ -28,18 +28,40 @@ function measureLine(el: HTMLElement, minPx: number): RingLine {
   };
 }
 
+/** Raderna i varje ring, uppmätta i den storlek de har just nu. */
+function measureRings(row: HTMLElement, minPx: number) {
+  return [...row.querySelectorAll<HTMLElement>('.goal-ring')].map((ring) => ({
+    diameter: ring.getBoundingClientRect().width,
+    lines: [...ring.querySelectorAll<HTMLElement>('.goal-ring-line')].map((el) =>
+      measureLine(el, minPx),
+    ),
+  }));
+}
+
 /** Mät raden och sätt `--ring-scale`: samma textstorlek i alla ringar, styrd av den längsta texten. */
 function fitRow(row: HTMLElement) {
   // Mät vid bastorleken (skala 1).
   row.style.setProperty('--ring-scale', '1');
   const minPx = minTextPx(row);
-  const scales = [...row.querySelectorAll<HTMLElement>('.goal-ring')].map((ring) => {
-    const lines = [...ring.querySelectorAll<HTMLElement>('.goal-ring-line')].map((el) =>
-      measureLine(el, minPx),
-    );
-    return ringTextScale(lines, ring.getBoundingClientRect().width);
-  });
-  row.style.setProperty('--ring-scale', String(rowTextScale(scales)));
+  const base = measureRings(row, minPx);
+  const scale = rowTextScale(base.map((r) => ringTextScale(r.lines, r.diameter)));
+  row.style.setProperty('--ring-scale', String(scale));
+  if (scale === 1) return;
+  // Text skalar inte helt linjärt (små storlekar blir relativt bredare): mät igen i den nya
+  // storleken – bredd och höjd per px därifrån, bastorleken från första mätningen – och krymp
+  // ytterligare om det behövs.
+  const scaled = measureRings(row, minPx);
+  const corrected = scaled.map((r, i) =>
+    ringTextScale(
+      r.lines.map((line, j) => {
+        const first = base[i]?.lines[j];
+        return first ? { ...line, basePx: first.basePx, minPx: first.minPx } : line;
+      }),
+      r.diameter,
+    ),
+  );
+  const next = Math.min(scale, rowTextScale(corrected));
+  if (next < scale) row.style.setProperty('--ring-scale', String(next));
 }
 
 /**

@@ -670,6 +670,9 @@ for (const theme of ['light', 'dark'] as const) {
       // ett fast läge (rubriken fastnad) så att bakgrunden inte beror på när scrollen hann klart.
       // Varningen för övre gränsvärden läser livsmedelsdatan och dyker upp ovanför – vänta in den.
       await expect(page.getByText('Över övre gränsvärdet idag')).toBeVisible();
+      // Raderna ovanför passet (dos och tillskott) läses också in efter hand.
+      await expect(page.getByText('Dos idag: Wegovy 0,5 mg')).toBeVisible();
+      await expect(page.getByText('Magnesium + zink')).toBeVisible();
       const todo = page.getByTestId('todo-workout');
       await todo.evaluate((el) => {
         el.scrollIntoView({ block: 'center' });

@@ -71,8 +71,8 @@ de "fastnat". Knappar och segment är "piller" (`--radius-full`). Översikts vik
 accentfärgen (`--accent-soft`). Bottennavigeringen är solid (innehållet syns aldrig igenom) och den aktiva fliken har
 ikonen i en tonad pill (`--accent-soft`).
 
-Rörelse: sidbyte = innehållet glider in 8 px (`page-enter`), knappar trycks ner till 98 % – båda av med
-`prefers-reduced-motion`.
+Rörelse: knappar trycks ner till 98 % (av med `prefers-reduced-motion`). Ingen animation vid sidbyte –
+innehållet ska ligga still när det mäts och scrollas till direkt efter laddning.
 
 ### Färger
 

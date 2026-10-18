@@ -308,17 +308,6 @@ body {
   transform: scale(0.64);
 }
 
-/* Sidbyte: innehållet glider in en aning (av med prefers-reduced-motion). */
-.page {
-  animation: page-enter var(--duration-base) var(--ease-out);
-}
-
-@keyframes page-enter {
-  from {
-    translate: 0 8px;
-  }
-}
-
 .page-title:focus {
   outline: none;
 }
