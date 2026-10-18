@@ -668,6 +668,8 @@ for (const theme of ['light', 'dark'] as const) {
       const sheet = page.getByRole('dialog');
       // Tryck på passet i Att göra idag: radmenyn, sedan Klar. Sidan bakom scrollas först till
       // ett fast läge (rubriken fastnad) så att bakgrunden inte beror på när scrollen hann klart.
+      // Varningen för övre gränsvärden läser livsmedelsdatan och dyker upp ovanför – vänta in den.
+      await expect(page.getByText('Över övre gränsvärdet idag')).toBeVisible();
       const todo = page.getByTestId('todo-workout');
       await todo.evaluate((el) => {
         el.scrollIntoView({ block: 'center' });
