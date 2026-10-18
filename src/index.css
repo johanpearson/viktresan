@@ -74,8 +74,7 @@
   --accent-contrast: #ffffff;
   /* Accentfärgen som svag ton: aktiv flik i navigeringen, hjältekortet. */
   --accent-soft: rgb(15 118 110 / 0.12);
-  /* Halvgenomskinlig: innehållet skymtar suddigt bakom navigeringen (backdrop-filter). */
-  --nav-bg: rgb(255 255 255 / 0.86);
+  --nav-bg: #ffffff;
 
   /* Semantiska färger */
   --success: #047857;
@@ -136,7 +135,7 @@
     --accent: #2dd4bf;
     --accent-contrast: #042f2e;
     --accent-soft: rgb(45 212 191 / 0.16);
-    --nav-bg: rgb(11 17 32 / 0.86);
+    --nav-bg: #0b1120;
 
     --success: #34d399;
     --warning: #fbbf24;
@@ -428,8 +427,6 @@ body {
   inset: auto 0 0;
   z-index: 10;
   background: var(--nav-bg);
-  -webkit-backdrop-filter: saturate(1.8) blur(16px);
-  backdrop-filter: saturate(1.8) blur(16px);
   box-shadow: 0 -1px 0 var(--card-border);
   padding-bottom: env(safe-area-inset-bottom);
 }

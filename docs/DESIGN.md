@@ -68,8 +68,8 @@ utanför intervallet (≈, µ …) tas ur systemets typsnitt.
 Kort har en mjuk skugga (`--shadow-card`) och en nästan osynlig ram (`--card-border`) mot en svagt grå
 bakgrund – inget kort-i-kort (kort i en panel har varken ram eller skugga). Sticky rader får en 1 px linje när
 de "fastnat". Knappar och segment är "piller" (`--radius-full`). Översikts viktkort har en svag ton av
-accentfärgen (`--accent-soft`). Bottennavigeringen är halvgenomskinlig med `backdrop-filter` (innehållet
-skymtar suddigt bakom) och den aktiva fliken har ikonen i en tonad pill (`--accent-soft`).
+accentfärgen (`--accent-soft`). Bottennavigeringen är solid (innehållet syns aldrig igenom) och den aktiva fliken har
+ikonen i en tonad pill (`--accent-soft`).
 
 Rörelse: sidbyte = innehållet glider in 8 px (`page-enter`), knappar trycks ner till 98 % – båda av med
 `prefers-reduced-motion`.
