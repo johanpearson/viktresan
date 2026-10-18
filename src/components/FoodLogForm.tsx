@@ -511,7 +511,7 @@ export function FoodLogForm({
           <div
             className="unit-equivalents"
             role="group"
-            aria-label="Samma mängd i andra enheter"
+            aria-label="Omräknat till andra mått"
             data-testid="unit-equivalents"
           >
             <span aria-hidden="true" className="unit-equivalents-sign">
