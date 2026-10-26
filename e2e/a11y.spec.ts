@@ -165,6 +165,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(sheet.getByTestId('supplement').first()).toBeVisible();
       await expectNoViolations(page, 'Logga tillskott');
       await sheet.getByTestId('supplement').first().tap();
+      const detail = page.getByTestId('supplement-detail');
+      await expect(detail).toBeVisible();
+      await expectNoViolations(page, 'Tillskott detaljvy');
+      await detail.getByRole('button', { name: 'Redigera' }).tap();
       await expect(sheet.getByTestId('supplement-form')).toBeVisible();
       await expectNoViolations(page, 'Tillskott formulär');
       await sheet.getByRole('button', { name: 'Avbryt' }).tap();
@@ -209,13 +213,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await sheet.getByLabel('AI-tjänstens svar (JSON)').fill(JSON.stringify(answer));
       await sheet.getByRole('button', { name: 'Granska svaret' }).tap();
       await sheet.getByRole('button', { name: 'Granska ingredienser' }).tap();
-      await expect(sheet.getByTestId('import-row')).toHaveCount(3);
+      await expect(sheet.getByTestId('recipe-ingredient')).toHaveCount(3);
       await expect(sheet.getByTestId('import-summary')).toBeVisible();
-      await sheet.getByRole('button', { name: 'Hoppa över salt' }).tap();
+      await expect(sheet.getByTestId('uncounted-tag')).toHaveCount(1);
       await expectNoViolations(page, 'Receptimport granskning');
+      await sheet.getByTestId('recipe-ingredient').first().getByRole('button').first().tap();
+      await expect(page.getByTestId('ingredient-sheet')).toBeVisible();
+      await expectNoViolations(page, 'Receptimport ingrediens');
     });
 
     test('sidor med data saknar tillgänglighetsfel', async ({ page }) => {
+      // Ett tjugotal axe-körningar: ~25 s ensam, över 30 s när flera tester körs parallellt.
+      test.setTimeout(60_000);
       await seedData(page);
       for (const [label, path] of ROUTES) {
         await page.goto(path);
@@ -358,6 +367,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Stäng', exact: true }).tap();
       await page.getByRole('button', { name: 'Egna', exact: true }).tap();
       await page.getByTestId('own-recipe').getByRole('button').first().tap();
+      await expect(page.getByTestId('own-detail')).toBeVisible();
+      await expectNoViolations(page, 'Receptets detaljvy');
+      await page.getByTestId('own-detail').getByRole('button', { name: 'Redigera' }).tap();
       await expect(page.getByTestId('recipe-per-portion')).toBeVisible();
       await expectNoViolations(page, 'Receptformulär');
       await page.goto('./');
@@ -460,7 +472,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
         .getByRole('button')
         .tap();
       await expect(page.getByRole('dialog')).toBeVisible();
-      await expectNoViolations(page, 'Kalender radmeny');
+      await expectNoViolations(page, 'Kalender passets detaljvy');
       await page.getByRole('dialog').getByRole('button', { name: 'Stäng', exact: true }).tap();
       await expect(page.getByRole('dialog')).toBeHidden();
       await page.getByRole('button', { name: 'Vecka', exact: true }).tap();

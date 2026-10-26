@@ -2,27 +2,34 @@ import { useState } from 'react';
 import { deleteWorkout, putWorkout } from '../db/db.ts';
 import type { LoggedValue } from '../lib/dayMarkers.ts';
 import { formatDate } from '../lib/format.ts';
+import { workoutRemovalText } from '../lib/removal.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
 import {
   answerWorkout,
   describeWorkout,
   displayStatus,
   DISPLAY_STATUS_LABELS,
+  intensityLabel,
   type WorkoutItem,
   type WorkoutStatus,
 } from '../lib/workouts.ts';
-import { ActionSheet, type SheetAction } from './ActionSheet.tsx';
+import type { SheetAction } from './ActionSheet.tsx';
+import { BottomSheet } from './BottomSheet.tsx';
 import { Card } from './Card.tsx';
 import { CompleteWorkoutSheet } from './CompleteWorkoutSheet.tsx';
+import { DetailSheet } from './DetailSheet.tsx';
 import { ListRow } from './ListRow.tsx';
 import { Parts } from './Parts.tsx';
 import { Toast } from './Toast.tsx';
+import { WorkoutForm } from './WorkoutForm.tsx';
 
 interface CalendarDayProps {
   date: string;
   /** Loggade värden (utom träning – passen listas var för sig). */
   logged: readonly LoggedValue[];
   workouts: readonly WorkoutItem[];
+  /** Passtyper för formuläret (förval och egna). */
+  types: readonly string[];
   now: Date;
   onChange: () => Promise<unknown>;
 }
@@ -42,11 +49,12 @@ function removable(item: WorkoutItem): boolean {
 
 /**
  * Kalenderns dagsvy: en rad per loggtyp (prick i datatypens färg, värdet till höger) och
- * en rad per pass. Tryck på ett pass = radmeny (Klar, Hoppade över, Ta bort); svep vänster
- * tar bort med Ångra.
+ * en rad per pass. Tryck på ett pass = detaljvyn (Klar, Hoppade över, Redigera, Ta bort med
+ * bekräftelse); svep vänster tar bort med Ångra.
  */
-export function CalendarDay({ date, logged, workouts, now, onChange }: CalendarDayProps) {
+export function CalendarDay({ date, logged, workouts, types, now, onChange }: CalendarDayProps) {
   const [menu, setMenu] = useState<WorkoutItem | null>(null);
+  const [editing, setEditing] = useState<WorkoutItem | null>(null);
   const [completing, setCompleting] = useState<WorkoutItem | null>(null);
   const toast = useUndoToast();
 
@@ -59,6 +67,7 @@ export function CalendarDay({ date, logged, workouts, now, onChange }: CalendarD
   async function remove(item: WorkoutItem) {
     const { stored, ...workout } = item;
     if (!stored) return;
+    setMenu(null);
     await deleteWorkout(item.id);
     await onChange();
     toast.show(`Tog bort ${item.type}.`, async () => {
@@ -86,9 +95,6 @@ export function CalendarDay({ date, logged, workouts, now, onChange }: CalendarD
         label: 'Markera som planerad',
         onSelect: () => void setStatus(item, 'planerad'),
       });
-    }
-    if (removable(item)) {
-      actions.push({ label: 'Ta bort passet', danger: true, onSelect: () => void remove(item) });
     }
     return actions;
   }
@@ -146,14 +152,78 @@ export function CalendarDay({ date, logged, workouts, now, onChange }: CalendarD
         </ul>
       )}
       {menu && (
-        <ActionSheet
+        <DetailSheet
           title={menu.type}
-          description={`${formatDate(menu.date)} ${menu.time ?? 'Hela dagen'} · ${DISPLAY_STATUS_LABELS[displayStatus(menu, now)]}`}
-          actions={actionsFor(menu)}
+          testId="workout-detail"
           onClose={() => {
             setMenu(null);
           }}
-        />
+          onEdit={() => {
+            toast.close();
+            setEditing(menu);
+            setMenu(null);
+          }}
+          extra={
+            <ul className="list action-list" aria-label="Status">
+              {actionsFor(menu).map((a) => (
+                <ListRow
+                  key={a.label}
+                  primary={a.label}
+                  chevron
+                  onClick={() => {
+                    setMenu(null);
+                    a.onSelect();
+                  }}
+                />
+              ))}
+            </ul>
+          }
+          remove={
+            removable(menu)
+              ? {
+                  label: 'Ta bort passet',
+                  title: `Ta bort ${menu.type} ${formatDate(menu.date)}?`,
+                  consequence: workoutRemovalText(),
+                  onConfirm: () => void remove(menu),
+                }
+              : undefined
+          }
+        >
+          <ListRow primary="Status" value={DISPLAY_STATUS_LABELS[displayStatus(menu, now)]} />
+          <ListRow primary="När" value={`${formatDate(menu.date)} ${menu.time ?? 'Hela dagen'}`} />
+          <ListRow primary="Längd" value={`${String(menu.durationMin)} min`} />
+          {menu.intensity && (
+            <ListRow primary="Intensitet" value={intensityLabel(menu.intensity)} />
+          )}
+          {menu.note && <ListRow primary="Anteckning" secondary={menu.note} />}
+          {menu.planId !== undefined && (
+            <ListRow
+              primary="Från ett schema"
+              secondary="Ta bort schemat under Logga → Träning → Återkommande."
+            />
+          )}
+        </DetailSheet>
+      )}
+      {editing && (
+        <BottomSheet
+          title="Redigera pass"
+          onClose={() => {
+            setEditing(null);
+          }}
+        >
+          <WorkoutForm
+            types={types}
+            workout={editing}
+            onChange={onChange}
+            onSaved={(saved) => {
+              setEditing(null);
+              toast.show(`Sparade ${saved.type} ${formatDate(saved.date)}.`);
+            }}
+            onCancel={() => {
+              setEditing(null);
+            }}
+          />
+        </BottomSheet>
       )}
       {completing && (
         <CompleteWorkoutSheet

@@ -1,24 +1,16 @@
-import { useState, type SyntheticEvent } from 'react';
-import { deleteWorkoutPlan, newId, putWorkoutPlan, type WorkoutPlan } from '../db/db.ts';
-import { todayIso } from '../lib/dates.ts';
+import { useState } from 'react';
+import { deleteWorkoutPlan, putWorkoutPlan, type WorkoutPlan } from '../db/db.ts';
 import { formatDate } from '../lib/format.ts';
+import { planRemovalText } from '../lib/removal.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
-import { parsePlanFields } from '../lib/validation.ts';
-import {
-  describePlan,
-  describeWorkout,
-  PRESET_WORKOUT_TYPES,
-  WEEKDAYS,
-  workoutTypes,
-} from '../lib/workouts.ts';
-import { ActionSheet } from './ActionSheet.tsx';
+import { describePlan, describeWorkout, workoutTypes } from '../lib/workouts.ts';
+import { BottomSheet } from './BottomSheet.tsx';
 import { Card } from './Card.tsx';
-import { IntensityField } from './IntensityField.tsx';
+import { DetailSheet } from './DetailSheet.tsx';
 import { ListRow } from './ListRow.tsx';
 import { Toast } from './Toast.tsx';
-import { WorkoutTypeField } from './WorkoutTypeField.tsx';
-import { ChipGroup } from './ChipGroup.tsx';
+import { WorkoutPlanForm } from './WorkoutPlanForm.tsx';
 
 interface WorkoutPlansProps {
   data: AppData;
@@ -27,51 +19,15 @@ interface WorkoutPlansProps {
 
 /** Logga → Träning → Återkommande: scheman som mån/ons/fre 07:00. */
 export function WorkoutPlans({ data, onChange }: WorkoutPlansProps) {
-  const [type, setType] = useState(PRESET_WORKOUT_TYPES[0] ?? '');
-  const [weekdays, setWeekdays] = useState<number[]>([]);
-  const [time, setTime] = useState('07:00');
-  const [duration, setDuration] = useState('30');
-  const [intensity, setIntensity] = useState('');
-  const [startDate, setStartDate] = useState(todayIso);
-  const [endDate, setEndDate] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
   const [menu, setMenu] = useState<WorkoutPlan | null>(null);
+  const [editing, setEditing] = useState<WorkoutPlan | null>(null);
   const toast = useUndoToast();
 
-  function toggleDay(day: number) {
-    setWeekdays((days) => (days.includes(day) ? days.filter((d) => d !== day) : [...days, day]));
-  }
-
-  async function handleSubmit(event: SyntheticEvent) {
-    event.preventDefault();
-    const parsed = parsePlanFields({
-      type,
-      weekdays,
-      time,
-      duration,
-      intensity,
-      startDate,
-      endDate,
-    });
-    if (!parsed.ok) {
-      setError(parsed.error);
-      return;
-    }
-    const plan: WorkoutPlan = { id: newId(), ...parsed.value, createdAt: Date.now() };
-    await putWorkoutPlan(plan);
-    await onChange();
-    setError(null);
-    setWeekdays([]);
-    toast.close();
-    setStatus(`Schemat är sparat: ${plan.type} ${describePlan(plan)}.`);
-  }
-
-  /** Tar bort schemat direkt (svep eller radmenyn) – Ångra lägger tillbaka det. */
+  /** Tar bort schemat (svep direkt, detaljvyn efter bekräftelse) – Ångra lägger tillbaka det. */
   async function remove(plan: WorkoutPlan) {
+    setMenu(null);
     await deleteWorkoutPlan(plan.id);
     await onChange();
-    setStatus(null);
     toast.show(`Tog bort schemat ${plan.type}. Besvarade pass ligger kvar.`, async () => {
       await putWorkoutPlan(plan);
       await onChange();
@@ -93,6 +49,7 @@ export function WorkoutPlans({ data, onChange }: WorkoutPlansProps) {
                 secondary={`${describePlan(plan)} · från ${formatDate(plan.startDate)}${
                   plan.endDate ? ` till ${formatDate(plan.endDate)}` : ''
                 }`}
+                chevron
                 onClick={() => {
                   setMenu(plan);
                 }}
@@ -102,99 +59,63 @@ export function WorkoutPlans({ data, onChange }: WorkoutPlansProps) {
           </ul>
         )}
       </Card>
-      <form className="card form" onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <h2 className="card-title">Nytt schema</h2>
-        <WorkoutTypeField
-          value={type}
-          onChange={setType}
-          types={workoutTypes(data.workouts, data.workoutPlans)}
-        />
-        <ChipGroup
-          label="Veckodagar"
-          columns={7}
-          options={WEEKDAYS.map(([short, long], day) => ({
-            id: String(day),
-            label: short,
-            ariaLabel: long,
-          }))}
-          selected={weekdays.map(String)}
-          onToggle={(day) => {
-            toggleDay(Number(day));
-          }}
-        />
-        <div className="field-row">
-          <label className="field">
-            <span className="field-label">Tid</span>
-            <input
-              className="input"
-              type="time"
-              value={time}
-              onChange={(e) => {
-                setTime(e.target.value);
-              }}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Längd (min)</span>
-            <input
-              className="input"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoComplete="off"
-              value={duration}
-              onChange={(e) => {
-                setDuration(e.target.value);
-              }}
-            />
-          </label>
-        </div>
-        <IntensityField value={intensity} onChange={setIntensity} />
-        <div className="field-row">
-          <label className="field">
-            <span className="field-label">Från</span>
-            <input
-              className="input"
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-              }}
-            />
-          </label>
-          <label className="field">
-            <span className="field-label">Till (valfri)</span>
-            <input
-              className="input"
-              type="date"
-              value={endDate}
-              min={startDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
-              }}
-            />
-          </label>
-        </div>
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="button">
-          Spara schema
-        </button>
-        <p className="form-ok" role="status">
-          {status}
-        </p>
-      </form>
+      <WorkoutPlanForm
+        types={workoutTypes(data.workouts, data.workoutPlans)}
+        onSaved={async (plan) => {
+          await onChange();
+          toast.close();
+          return `Schemat är sparat: ${plan.type} ${describePlan(plan)}.`;
+        }}
+      />
       {menu && (
-        <ActionSheet
+        <DetailSheet
           title={menu.type}
-          description={`${describePlan(menu)} · från ${formatDate(menu.startDate)}`}
-          actions={[{ label: 'Ta bort schema', danger: true, onSelect: () => void remove(menu) }]}
+          testId="plan-detail"
           onClose={() => {
             setMenu(null);
           }}
-        />
+          onEdit={() => {
+            toast.close();
+            setEditing(menu);
+            setMenu(null);
+          }}
+          remove={{
+            label: 'Ta bort schemat',
+            title: `Ta bort schemat ${menu.type}?`,
+            consequence: planRemovalText(),
+            onConfirm: () => void remove(menu),
+          }}
+        >
+          <ListRow primary="Pass" value={describeWorkout(menu)} wrapValue />
+          <ListRow primary="När" value={describePlan(menu)} wrapValue />
+          <ListRow
+            primary="Period"
+            value={`från ${formatDate(menu.startDate)}${menu.endDate ? ` till ${formatDate(menu.endDate)}` : ''}`}
+            wrapValue
+          />
+        </DetailSheet>
+      )}
+      {editing && (
+        <BottomSheet
+          title="Redigera schema"
+          onClose={() => {
+            setEditing(null);
+          }}
+        >
+          <WorkoutPlanForm
+            types={workoutTypes(data.workouts, data.workoutPlans)}
+            plan={editing}
+            onSaved={async (plan) => {
+              setEditing(null);
+              await onChange();
+              toast.show(`Sparade schemat ${plan.type}.`);
+              return null;
+            }}
+            onCancel={() => {
+              setEditing(null);
+            }}
+          />
+        </BottomSheet>
       )}
       {toast.toast && (
         <Toast

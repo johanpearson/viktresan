@@ -20,8 +20,6 @@ interface MealSlotFormProps {
   /** Övriga måltider (namnet måste vara unikt). */
   others: readonly MealSlot[];
   onSave: (values: MealSlotValues) => void;
-  /** "Ta bort måltiden" längst ner (saknas för en ny måltid och för den enda måltiden). */
-  onRemove?: (() => void) | undefined;
 }
 
 const KIND_OPTIONS = (['huvudmal', 'mellanmal'] as const).map((id) => ({
@@ -30,7 +28,7 @@ const KIND_OPTIONS = (['huvudmal', 'mellanmal'] as const).map((id) => ({
 }));
 
 /** Inställningar → Måltider: namn, ungefärlig tid och typ för en måltid. */
-export function MealSlotForm({ slot, others, onSave, onRemove }: MealSlotFormProps) {
+export function MealSlotForm({ slot, others, onSave }: MealSlotFormProps) {
   const [name, setName] = useState(slot?.name ?? '');
   const [time, setTime] = useState(slot?.time ?? '');
   const [kind, setKind] = useState<MealKind>(slot?.kind ?? 'mellanmal');
@@ -92,15 +90,6 @@ export function MealSlotForm({ slot, others, onSave, onRemove }: MealSlotFormPro
       <button type="submit" className="button">
         Spara måltid
       </button>
-      {onRemove && (
-        <button
-          type="button"
-          className="button button-ghost button-small button-danger-text"
-          onClick={onRemove}
-        >
-          Ta bort måltiden
-        </button>
-      )}
     </form>
   );
 }

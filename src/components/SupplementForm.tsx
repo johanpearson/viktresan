@@ -42,8 +42,6 @@ interface SupplementFormProps {
   note?: string | undefined;
   onSaved: (supplement: Supplement) => void;
   onCancel: () => void;
-  /** Visar "Ta bort tillskottet" längst ner (bara vid redigering). */
-  onDelete?: () => void;
 }
 
 const WEEKDAYS = [
@@ -85,7 +83,6 @@ export function SupplementForm({
   note,
   onSaved,
   onCancel,
-  onDelete,
 }: SupplementFormProps) {
   const [fields, setFields] = useState<SupplementFields>(() => fieldsFor(supplement, prefill));
   const [error, setError] = useState<string | null>(null);
@@ -334,15 +331,6 @@ export function SupplementForm({
           Avbryt
         </button>
       </div>
-      {onDelete && (
-        <button
-          type="button"
-          className="button button-ghost button-small button-danger-text"
-          onClick={onDelete}
-        >
-          Ta bort tillskottet
-        </button>
-      )}
     </form>
   );
 }

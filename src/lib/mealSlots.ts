@@ -216,3 +216,17 @@ export function initialMealId(
   if (preferred) return resolveMealId(slots, preferred.meal, preferred.createdAt ?? now.getTime());
   return currentMealId(slots, now) ?? '';
 }
+
+/**
+ * Måltiden som en borttagen måltids poster flyttas till som förval: den vars tid ligger närmast,
+ * samma typ (huvudmåltid/mellanmål) först.
+ */
+export function moveTargetFor(slot: MealSlot, others: readonly MealSlot[]): MealSlot | null {
+  const minutes = minutesOf(slot.time);
+  return (
+    nearestMeal(
+      others.filter((m) => m.kind === slot.kind),
+      minutes,
+    ) ?? nearestMeal(others, minutes)
+  );
+}

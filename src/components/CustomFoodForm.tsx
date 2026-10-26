@@ -17,8 +17,6 @@ interface CustomFoodFormProps {
   prefill?: FoodLabel | undefined;
   onSaved: (food: StoredFood) => void;
   onCancel: () => void;
-  /** Visar "Ta bort livsmedlet" längst ner (bara vid redigering, Mat → Egna). */
-  onDelete?: () => void;
 }
 
 function fieldsFor(
@@ -59,7 +57,6 @@ export function CustomFoodForm({
   prefill,
   onSaved,
   onCancel,
-  onDelete,
 }: CustomFoodFormProps) {
   const [fields, setFields] = useState<FoodFields>(() => fieldsFor(food, ean, prefill));
   // En portion från AI-importen blir en egen enhet (kan tas bort under Enheter).
@@ -168,15 +165,6 @@ export function CustomFoodForm({
           Avbryt
         </button>
       </div>
-      {onDelete && (
-        <button
-          type="button"
-          className="button button-ghost button-small button-danger-text"
-          onClick={onDelete}
-        >
-          Ta bort livsmedlet
-        </button>
-      )}
     </form>
   );
 }

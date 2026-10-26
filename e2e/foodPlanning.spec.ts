@@ -123,8 +123,12 @@ test('snabbloggar en restaurangmiddag som räknas men märks uppskattad', async 
   await expect(row).toContainText('850 kcal');
   await expect(page.getByTestId('intake')).toHaveText(`850 / ${kcalText(target)} kcal`);
 
-  // Tryck = redigera i snabbloggens formulär.
+  // Tryck = detaljvyn; Redigera öppnar snabbloggens formulär.
   await row.getByRole('button').first().tap();
+  const quickDetail = page.getByTestId('quick-detail');
+  await expect(quickDetail).toContainText('850 kcal');
+  await expect(quickDetail).toContainText('40 g');
+  await quickDetail.getByRole('button', { name: 'Redigera' }).tap();
   const edit = page.getByRole('dialog', { name: 'Redigera post' });
   await expect(edit.getByLabel('Kcal')).toHaveValue('850');
   await edit.getByLabel('Kcal').fill('900');
@@ -221,6 +225,7 @@ test('skapar en gryta med 6 portioner, loggar 1 och en ändring påverkar inte l
   // Ändra receptet: 8 portioner. Den loggade portionen är oförändrad.
   await page.getByRole('button', { name: 'Egna', exact: true }).tap();
   await recipeRow.getByRole('button').first().tap();
+  await page.getByTestId('own-detail').getByRole('button', { name: 'Redigera' }).tap();
   await page.getByLabel('Antal portioner').fill('8');
   await page.getByRole('button', { name: 'Spara recept' }).tap();
   await expect(recipeRow).toContainText('222 kcal/portion');
@@ -230,7 +235,7 @@ test('skapar en gryta med 6 portioner, loggar 1 och en ändring påverkar inte l
   // Duplicera för en variant.
   await page.getByRole('button', { name: 'Egna', exact: true }).tap();
   await recipeRow.getByRole('button').first().tap();
-  await page.getByRole('button', { name: 'Duplicera recept' }).tap();
+  await page.getByTestId('own-detail').getByRole('button', { name: 'Duplicera recept' }).tap();
   await expect(page.getByLabel('Receptets namn')).toHaveValue('Veckans gryta (kopia)');
   await page.getByLabel('Receptets namn').fill('Gryta utan ägg');
   await page.getByRole('button', { name: 'Ta bort ingrediensen Ägg kokt' }).tap();

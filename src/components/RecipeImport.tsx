@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Recipe } from '../db/db.ts';
 import { decimalInput } from '../lib/format.ts';
-import { EMPTY_MEMORY, loadMatchMemory, type MatchMemory } from '../lib/matchMemory.ts';
+import { loadMatchMemory, type MatchMemory } from '../lib/matchMemory.ts';
 import {
   hostOf,
   parseRecipeImport,
@@ -12,7 +12,7 @@ import {
 import { AiJsonImport } from './AiJsonImport.tsx';
 import type { FoodSource } from './FoodPicker.tsx';
 import { ListRow } from './ListRow.tsx';
-import { RecipeImportReview } from './RecipeImportReview.tsx';
+import { RecipeEditor } from './RecipeEditor.tsx';
 
 interface RecipeImportProps {
   source: FoodSource;
@@ -50,12 +50,13 @@ export function RecipeImport({ source, initialInput, onSaved, onCancel }: Recipe
 
   if (imported) {
     return (
-      <RecipeImportReview
-        recipe={imported}
+      <RecipeEditor
+        recipe={null}
+        imported={{ recipe: imported, memory }}
         source={source}
-        memory={memory ?? EMPTY_MEMORY}
         onSaved={onSaved}
-        onBack={() => {
+        cancelLabel="Tillbaka"
+        onCancel={() => {
           setImported(null);
         }}
       />

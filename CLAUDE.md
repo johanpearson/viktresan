@@ -99,7 +99,10 @@ src/lib/recipeImport.ts Receptimport: prompt (länk/text/bild), JSON-validering,
                         med enhetssystemet (resolveAmount), matchning (matchFood) och säkerhetsnivå (hög/osäker/ingen)
 src/lib/matchMemory.ts  Minnet av manuella matchningar i receptimporten (settings `ingredientMatches`: text → livsmedels-id)
 src/lib/shareTarget.ts  Web Share Target: manifestets parametrar (SHARE_PARAMS), tolkning av delad länk/text, väntande delning
-src/lib/useIngredients.ts  Hook: ingrediensrader för egna måltider och recept (IngredientEditor)
+src/lib/useIngredients.ts  Hook: ingrediensrader för egna måltider (IngredientEditor)
+src/lib/recipeEditor.ts Receptets redigeringsvy (RecipeEditor, samma för nytt/befintligt/importerat): rader (EditorRow: livsmedel,
+                        mängd, enhet, `counted` = räknas inte, säkerhet), rader ur importen/receptet, totaler per portion (editorTotals)
+src/lib/removal.ts      Bekräftelsetexterna vid Ta bort (vad som händer, vad som finns kvar) och countLogged
 src/lib/weekBudget.ts   Veckoraden: 7 × dagsmål, kvar, per dag resten av veckan (golvspärr), saldo, dagar (ej loggad = 0 kcal)
 src/lib/whatToEat.ts    Gapraden (protein/fiber > 10 % kvar, `largeGaps`/`gapText`), chips först i sök-sheeten (`gapClaims`) och
                         underlaget till "Vad ska jag äta?" (typisk kcal för måltiden, 20 vanligaste livsmedlen, `whatToEatSubject`)
@@ -162,7 +165,10 @@ src/components/         Delade komponenter (NavBar, Page, WeightChart, StepsChar
                         ChoiceList (valrader i stället för radioknappar), ChipGroup (val som chips),
                         Macros ("P 6 g · K 30 g · F 2 g · Fi 4 g" i matloggningen), DiscardPrompt ("Kasta ändringar?"),
                         IconTipButton (ikonknapp med tooltip: långtryck/första gången), MealSettings (Inställningar → Måltider),
-                        FoodSearchSettings (Inställningar → Matsökning: källor, kategorier, dolda livsmedel)
+                        FoodSearchSettings (Inställningar → Matsökning: källor, kategorier, dolda livsmedel),
+                        DetailSheet (detaljvyn för det användaren skapat: värden, Redigera, Ta bort med bekräftelse),
+                        OwnFoodDetail/LeftoverDetail/MealSlotDetail (detaljvyer), RecipeEditor + IngredientSheet (recept),
+                        WorkoutPlanForm (schema, nytt och redigera)
 src/lib/useSwipe.ts     Svep med pekarhändelser (ListRow): vänster = ta bort, höger = t.ex. favorit
 src/lib/useUndoToast.ts Toast med Ångra efter borttagning i en lista (Logga-panelerna)
 src/lib/tones.ts        Färgtoner per datatyp (`tone-food` → `--tone`) för staplar och ringar
@@ -181,7 +187,7 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         (visas/döljs, inte andra dagar), chipsens ordning i sök-sheeten och "Vad ska jag äta?" (12:30 = lunch, page.clock; ikonknappen i
                         datumraden – plats, 44 px, tooltip första gången och vid långtryck – och ⋯ på
                         tom måltid, promptens värden, Dela/Kopiera mockade, kryssrutor, axe). foodSearchNoise.spec.ts = dölj med svep/långtryck + Ångra, dold kategori och avstängd källa
-                        i sökningen, Återställ i Inställningar → Matsökning, ta bort egen vara (bekräftelse, loggen och fibern kvar),
+                        i sökningen, Återställ i Inställningar → Matsökning, ta bort egen vara (svep + Ångra, långtryck = bekräftelse, loggen och fibern kvar),
                         rankning och "Visa fler varianter" (mockad livsmedel.json). recipeImport.spec.ts = receptimporten (delning via
                         `?share-text=…`, AI-svar, lös osäker/ingen träff i sök-sheeten, matchningsminnet, logga 1 portion). fiberLogging.spec.ts mockar livsmedel.json (med och utan fiber) och kontrollerar
                         fiber i sheet, rad och summor ("–", "*"). fiber.spec.ts styr tiden med page.clock (GLP-1 → fiberring, dryckesmål, diarré). fineli.spec.ts = sökträff från den bundlade
@@ -200,7 +206,7 @@ e2e/                    Playwright-tester. mealHeaders.spec.ts = måltidsrubrike
                         dispatchEvent('pointer…') (`swipeLeft` i helpers.ts) och pågående måltid styrs med page.clock.setFixedTime
                         missedDays.spec.ts = Glömt logga (Som vanligt + Ångra, Fyll i på gårdagen, Hoppa över) och plusknappen
                         (navigeringens ordning, Mat-rutan i Logga).
-                        recipesAndUnits.spec.ts = enhetsbyte med omräkning och bråk, omräkningsraden, matlådor (logga, kvar, Slut
+                        recipesAndUnits.spec.ts = enhetsbyte med omräkning och bråk, omräkningsraden, matlådor (detaljvy, logga, kvar, Redigera, Ta bort
                         + Ångra), "Laga en rätt" → Arkiv i Egna och sökningen i Inställningar.
 lighthouserc.json       Lighthouse CI-krav: installerbar PWA, tillgänglighet ≥ 0,9
 scripts/                Engångsskript (ikongenerering inkl. genvägsikoner shortcut-*.svg, fetch-livsmedel.ts, fetch-fineli.ts)
@@ -332,7 +338,13 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   vecka. Tryck på raden = `WeekBudgetSheet`: sju staplar mot dagsmålet (streckad linje), "ej loggad", kvar, per dag och
   saldo. Mat → Dag visar veckan för det valda datumet (en avslutad vecka: bara kvar/över). Veckosummeringen har raden
   `budget` (budget mot utfall) när det finns ett kalorimål.
-- **Receptimport** (`recipeImport.ts`, `RecipeImport`, `RecipeImportReview`): ingångar Mat → Egna → Recept → raden
+- **Detaljvy, Redigera och Ta bort** (docs/DESIGN.md → Det användaren skapat, `DetailSheet`, `removal.ts`): matlådor, egna
+  livsmedel, måltider, recept, snabbloggar, tillskott, egna enheter, fototillfällen, träningspass/scheman och måltidsnamn:
+  tryck på raden = detaljvyn (Redigera öppnar formuläret – formulären har ingen Ta bort-knapp), "Ta bort …" i detaljvyn
+  frågar först (`ActionSheet`, texten säger vad som händer med loggar, matlådor, bilder och poster), svep vänster i listan
+  tar bort direkt med Ångra. Borttagning ändrar aldrig loggar eller historik (`src/db/removal.test.ts`). Undantag:
+  ingrediensrader i `RecipeEditor` (tryck = `IngredientSheet`, borttagning med Ångra utan bekräftelse).
+- **Receptimport** (`recipeImport.ts`, `RecipeImport`, `RecipeEditor`): ingångar Mat → Egna → Recept → raden
   "Importera recept" och delningsmenyn (Web Share Target, `shareTarget.ts`): manifestets `share_target` (GET, action = appens
   bas) öppnar appen med `?share-title=…&share-text=…&share-url=…`; `useShortcut` läser dem en gång, tar bort dem ur adressen,
   sparar delningen (`setPendingShare`) och navigerar till `#/mat/importera` (Egna + importpanelen, förifylld med länken –
@@ -345,19 +357,24 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   densitet (`foodProfile`, saknas den: 1 g/ml och osäker), styck och andra enheter ur `unitsFor` (gissning = osäker).
   Matchning: minnet först (säker), sedan fuzzy-sökning bland egna livsmedel (inkl. cachade OFF) och Livsmedelsverkets –
   hela namnet, sedan delar; säker = alla ord finns som hela ord och högst två ord till. Fineli ingår bland kandidaterna.
-  Tryck på en rad = sök-sheeten (`FoodPicker` med `title`, `initialQuery`, `initialUsage`, skanner); salt/peppar/vatten/
-  "efter smak" (`isSkippable`) och rader utan träff har chipet "Hoppa över". Spara = vanligt recept med portioner och
-  `sourceUrl`; manuella val sparas i matchningsminnet. Källan visas som länk i receptet (`RecipeBuilder`, `recipe-source`).
+  Granskningen är receptets vanliga redigeringsvy (`RecipeEditor`, ingen egen implementation): namn, portioner, tillagad
+  vikt, rader (`recipe-ingredient`) och totaler per portion (kcal, P/K/F, fiber) som räknas om direkt (`editorTotals`).
+  Tryck på en rad = `IngredientSheet` (originaltexten skrivskyddad, matchningen byts i `FoodPicker` med `title`,
+  `initialQuery`, `initialUsage` och skanner, mängd, enhet, switchen "Räkna in i receptet"); svep vänster eller
+  papperskorgen tar bort med Ångra (`recipe-toast`); "Lägg till ingrediens" = sök-sheeten. Salt/peppar/vatten/"efter
+  smak" (`isSkippable`) föreslås som "räknas inte" (`tag-uncounted`) och sparas inte. Spara = vanligt recept med
+  portioner och `sourceUrl`; manuella val sparas i matchningsminnet. Källan visas som länk i receptet (`recipe-source`).
 - **Snabblogg och recept**: sök-sheeten har raden "Snabblogg" (`QuickLogForm`); snabbval under Senaste/Favoriter
-  ("≈ 700 kcal") öppnar den förifylld. Recept (Mat → Egna, `RecipeBuilder`) söks och listas under Måltider i sök-sheeten,
+  ("≈ 700 kcal") öppnar den förifylld. Recept (Mat → Egna, `RecipeEditor`) söks och listas under Måltider i sök-sheeten,
   loggas i portioner (½, 1, 1½, 2) eller gram och kan dupliceras.
 - **Matlådor** (`recipes.ts`, `FoodLogForm` `batchOffer`, `FoodPicker`): när ett recept med ≥ 2 portioner loggas och
   ingen omgång pågår visas "Resten blir matlådor" (på som standard); då sparas `batch` `{ startedAt = postens createdAt,
 portions = servings }` på receptet. Kvar = portioner − poster av receptet loggade från `startedAt` (portion, annars
   gram ÷ portionens vikt) – räknas alltid ur loggen, så ändrade/borttagna poster stämmer. Sök-sheeten visar "Matlådor"
-  överst (`leftover`, ≥ ½ portion kvar, högst 7 dagar, "3 portioner kvar · lagad igår"); tryck = loggformuläret med
-  1 portion, svep vänster = "Slut" (tar bort `batch`, Ångra).
-- **Laga en rätt och arkiv**: sök-sheetens rad "Laga en rätt" (`cook-once-open`) öppnar `RecipeBuilder` med `cookOnce`
+  överst (`leftover`, ≥ ½ portion kvar, högst 7 dagar, "3 portioner kvar · lagad igår"); tryck = detaljvyn
+  (`LeftoverDetail`: Logga 1 portion, Redigera = portioner kvar – `batch.portions` = kvar + loggat, Ta bort med
+  bekräftelse), svep vänster = ta bort (tar bort `batch`, Ångra).
+- **Laga en rätt och arkiv**: sök-sheetens rad "Laga en rätt" (`cook-once-open`) öppnar `RecipeEditor` med `cookOnce`
   ("Spara bland mina recept" av = `oneOff: true`) och sedan loggformuläret med 1 portion. Mat → Egna visar recept som
   inte är arkiverade; engångsrätter och recept utan loggning/ändring på 60 dagar (`ARCHIVE_DAYS`) ligger hopfällda under
   "Arkiv (N)" (`recipe-archive`). Arkiverade recept finns kvar i sökningen men inte under Måltider i sök-sheeten.
@@ -391,7 +408,9 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   visas som "Blev passet av?" i Översikt → Att göra idag (`findUnanswered`, 28 dagar bakåt). Att göra idag visar
   dagens planerade pass med Klar / Hoppa över; Klar öppnar `CompleteWorkoutSheet` med planens längd
   och intensitet förifyllda. Genomförda pass idag = chip i Idag. Översikt har inget "Kommande". Kalenderns dagsvy (`CalendarDay`) listar passen
-  som rader: tryck = radmeny (Klar, Hoppade över, Markera som planerad, Ta bort passet), svep vänster = ta bort med Ångra. Prickar: genomfört fylld, planerat ring, obesvarat röd,
+  som rader: tryck = detaljvyn (Redigera = `WorkoutForm` med `workout`, Klar, Hoppade över, Markera som planerad, Ta bort
+  passet med bekräftelse – inte schemapass), svep vänster = ta bort med Ångra. Scheman: tryck = detaljvyn (Redigera =
+  `WorkoutPlanForm` med `plan`, samma id), svep = ta bort med Ångra. Prickar: genomfört fylld, planerat ring, obesvarat röd,
   hoppat grå fyrkant (`DayMarker.dots`).
 - **GLP-1** (`glp1.ts`, bakom brytaren `glp1`): `Medication` har namn (förval Wegovy/Ozempic/Mounjaro/
   Saxenda + fritext), `frequency` `vecka` (med `weekday`, 0 = mån) eller `dag`, tid och en dostrappa
@@ -517,8 +536,8 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   Filterchips i sök-sheeten (`claim-filter-*`, alla valda måste gälla; sökningen tar 400 träffar och visar 20). Inställningar →
   Visning → Näringsetiketter döljer etiketter och chips (`preferences.claimsHidden`).
 - **Tillskott** (`supplements.ts`, bakom brytaren `tillskott`, av som standard): Logga → Tillskott (`SupplementsLog`):
-  dagens chips, "Lägg till" (skanna, AI från etikett, manuellt) och "Mina tillskott" (tryck = formulär, svep = ta bort
-  med Ångra). `SupplementForm`: namn, enhet (tablett, kapsel, droppe, ml, brustablett), mängd per dos, näringsämnen ur
+  dagens chips, "Lägg till" (skanna, AI från etikett, manuellt) och "Mina tillskott" (tryck = detaljvyn med Redigera
+  och Ta bort, svep = ta bort med Ångra). `SupplementForm`: namn, enhet (tablett, kapsel, droppe, ml, brustablett), mängd per dos, näringsämnen ur
   `SUPPLEMENT_NUTRIENTS` (vitaminer och mineraler i `NUTRIENTS`) med egen enhet; D-vitamin i µg eller IE med omräkning.
   Förifylls från Open Food Facts (`parseOffSupplement`: `<ämne>_serving` i gram → ämnets enhet) när värdena finns.
   AI-import (`aiLabel.ts`, `AiLabelImport`): prompten ber om ENDAST JSON `{ namn, enhet, mangdPerDos, naringsamnen:
@@ -574,10 +593,11 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   med mängd och enhet – loggade måltider delas upp i ingredienser i gram; syns direkt under Måltider i sök-sheeten) och
   "Analysera" (`MealAnalysisView`).
 - **Måltider** (`mealSlots.ts`, `MealSettings`, `MealSlotForm`, `MealSlotRemove`, Inställningar → Måltider, bakom `mat`): lista
-  med namn, ungefärlig tid och typ (Huvudmåltid/Mellanmål). Tryck = redigera (namn unikt, tid "HH:MM"), "Lägg till måltid",
-  dra-handtaget till höger (`useDragReorder`: pekarhändelser, piltangenter, uppläst plats) ändrar ordningen, svep vänster eller
-  "Ta bort måltiden" tar bort (inte den sista). En måltid med poster frågar vart de ska flyttas (förval: närmaste i tid, samma
-  typ först); en tom tas bort direkt. Båda med Ångra (`putMealSlots` + `putFoodLogEntries`). Allt som visar måltider läser
+  med namn, ungefärlig tid och typ (Huvudmåltid/Mellanmål). Tryck = detaljvyn (`MealSlotDetail`; Redigera: namn unikt, tid "HH:MM"),
+  "Lägg till måltid", dra-handtaget till höger (`useDragReorder`: pekarhändelser, piltangenter, uppläst plats) ändrar ordningen.
+  Ta bort (inte den sista): måltidens poster flyttas alltid (förval `moveTargetFor`: närmaste i tid, samma typ först) – svep
+  vänster flyttar till förvalet direkt, "Ta bort måltiden" i detaljvyn bekräftar ("Ta bort och flytta till …", "Välj en annan
+  måltid" = `MealSlotRemove`). Alla med Ångra (`putMealSlots` + `putFoodLogEntries`). Allt som visar måltider läser
   inställningen (`FoodData.mealSlots`): sektionerna i Mat → Dag, måltidsvalet i `FoodLogForm`/`QuickLogForm` (även när egna
   måltider och recept loggas), sök-sheetens rubrik, "Spara som egen måltid", analysen, "Fråga AI" (`mealSubject`/`daySubject`
   med namnen, dagen i måltidernas ordning) och "Vad ska jag äta?" (namn + typisk kcal per måltids-id). Mat → Historik och
@@ -623,8 +643,8 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   (`tag tag-source`: LV, Fineli, OFF, Egen; skärmläsare "Källa: …") före energin.
 - **Mindre brus i matsökningen** (`foodFilters.ts`, `foodRanking.ts`, `FoodSearchSettings`, docs/DESIGN.md): i sök-sheeten
   (sökträffar, Senaste, Favoriter) ger svep vänster "Dölj" direkt med Ångra-toast (`picker-toast`) och långtryck en
-  `ActionSheet` med Dölj; för egna livsmedel, måltider och recept i stället "Ta bort" med bekräftelse (`ActionSheet`,
-  permanent i UI:t – se `deletedAt` ovan). Dolda livsmedel visas aldrig i sökningen, Senaste/Favoriter, receptimportens
+  `ActionSheet` med Dölj; för egna livsmedel, måltider och recept i stället "Ta bort": svep direkt med Ångra, långtryck
+  med bekräftelse (`ActionSheet`; se `deletedAt` ovan). Dolda livsmedel visas aldrig i sökningen, Senaste/Favoriter, receptimportens
   matchning, bytesförslagen eller "brukar finnas hemma" i "Vad ska jag äta?" (`commonFoods(…, hidden)`). Inställningar →
   Matsökning (bakom `mat`): källor (LV, Fineli, OFF; egna alltid på), kategorier ur databaserna mappade med `foodProfile`
   (switch = visas, gäller bara databaskällorna; förslag = aldrig loggade, flest livsmedel först, högst 5, inte Övrigt) och

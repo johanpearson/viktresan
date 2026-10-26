@@ -10,7 +10,14 @@ import {
 import { lookupBarcode } from '../lib/barcodeLookup.ts';
 import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
-import { describeSupplement } from '../lib/supplements.ts';
+import { formatInt } from '../lib/format.ts';
+import { supplementRemovalText } from '../lib/removal.ts';
+import {
+  describeSupplement,
+  formatDoseAmount,
+  nutrientText,
+  scheduleText,
+} from '../lib/supplements.ts';
 import type { AppData } from '../lib/useAppData.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
 import { AiLabelImport } from './AiLabelImport.tsx';
@@ -18,6 +25,7 @@ import { BarcodeElsewhere } from './BarcodeElsewhere.tsx';
 import { BarcodeNotFound } from './BarcodeNotFound.tsx';
 import { BarcodeScanner } from './BarcodeScanner.tsx';
 import { Card } from './Card.tsx';
+import { DetailSheet } from './DetailSheet.tsx';
 import { ListRow } from './ListRow.tsx';
 import { SupplementForm, type SupplementPrefill } from './SupplementForm.tsx';
 import { SupplementsToday } from './SupplementsToday.tsx';
@@ -48,7 +56,7 @@ type Lookup =
   | { kind: 'error'; message: string };
 
 /**
- * Logga → Tillskott: dagens avbockning, egna tillskott (tryck = redigera, svep = ta bort
+ * Logga → Tillskott: dagens avbockning, egna tillskott (tryck = detaljvyn, svep = ta bort
  * med Ångra) och tre sätt att lägga till: skanna, AI från etikett eller manuellt.
  */
 export function SupplementsLog({ data, onChange, initialEan }: SupplementsLogProps) {
@@ -56,6 +64,8 @@ export function SupplementsLog({ data, onChange, initialEan }: SupplementsLogPro
   const [view, setView] = useState<View>({ kind: 'list' });
   const [scanning, setScanning] = useState(false);
   const [lookup, setLookup] = useState<Lookup>({ kind: 'idle' });
+  /** Detaljvyn (tryck på ett tillskott). */
+  const [detail, setDetail] = useState<Supplement | null>(null);
   const toast = useUndoToast();
   const today = todayIso();
 
@@ -111,11 +121,13 @@ export function SupplementsLog({ data, onChange, initialEan }: SupplementsLogPro
     void handleEan(initialEan);
   });
 
+  /** Tar bort tillskottet (svep direkt, detaljvyn efter bekräftelse); tagna doser ligger kvar. */
   async function remove(supplement: Supplement) {
     await deleteSupplement(supplement.id);
+    setDetail(null);
     setView({ kind: 'list' });
     await onChange();
-    toast.show(`Tog bort ${supplement.name}.`, async () => {
+    toast.show(`Tog bort ${supplement.name}. Tagna doser finns kvar.`, async () => {
       await putSupplement(supplement);
       await onChange();
     });
@@ -149,7 +161,6 @@ export function SupplementsLog({ data, onChange, initialEan }: SupplementsLogPro
           onCancel={() => {
             setView({ kind: 'list' });
           }}
-          {...(supplement ? { onDelete: () => void remove(supplement) } : {})}
         />
         {toastView}
       </>
@@ -269,7 +280,8 @@ export function SupplementsLog({ data, onChange, initialEan }: SupplementsLogPro
                 secondary={describeSupplement(s)}
                 chevron
                 onClick={() => {
-                  setView({ kind: 'form', supplement: s });
+                  toast.close();
+                  setDetail(s);
                 }}
                 swipeLeft={{ label: 'Ta bort', onSwipe: () => void remove(s) }}
               />
@@ -295,6 +307,44 @@ export function SupplementsLog({ data, onChange, initialEan }: SupplementsLogPro
             setScanning(false);
           }}
         />
+      )}
+      {detail && (
+        <DetailSheet
+          title={detail.name}
+          testId="supplement-detail"
+          onClose={() => {
+            setDetail(null);
+          }}
+          onEdit={() => {
+            setView({ kind: 'form', supplement: detail });
+            setDetail(null);
+          }}
+          remove={{
+            label: 'Ta bort tillskottet',
+            title: `Ta bort ${detail.name}?`,
+            consequence: supplementRemovalText(
+              data.supplementLog.filter((i) => i.supplementId === detail.id).length,
+            ),
+            onConfirm: () => void remove(detail),
+          }}
+        >
+          <ListRow primary="Dos" value={formatDoseAmount(detail.form, detail.amountPerDose)} />
+          <ListRow primary="Schema" value={scheduleText(detail)} wrapValue />
+          {detail.nutrients.map((n) => (
+            <ListRow key={n.key} primary={nutrientText(n)} secondary="Per dos" />
+          ))}
+          {detail.ean !== undefined && (
+            <ListRow primary="Streckkod" value={<span className="num">{detail.ean}</span>} />
+          )}
+          <ListRow
+            primary="Tagna doser"
+            value={formatInt(
+              data.supplementLog
+                .filter((i) => i.supplementId === detail.id)
+                .reduce((n, i) => n + i.doses, 0),
+            )}
+          />
+        </DetailSheet>
       )}
       {toastView}
     </>

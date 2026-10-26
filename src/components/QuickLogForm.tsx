@@ -24,8 +24,6 @@ interface QuickLogFormProps {
   /** Växlar favorit för snabbloggen med de ifyllda värdena. */
   onToggleFavorite: (foodId: string) => void;
   onSaved: (message: string, meal: MealId) => void;
-  /** Visar "Ta bort posten" längst ner (vid redigering). */
-  onDelete?: () => void;
   onCancel: () => void;
 }
 
@@ -42,7 +40,6 @@ export function QuickLogForm({
   favoriteIds,
   onToggleFavorite,
   onSaved,
-  onDelete,
   onCancel,
 }: QuickLogFormProps) {
   const [name, setName] = useState(initial?.name ?? '');
@@ -181,15 +178,6 @@ export function QuickLogForm({
           Avbryt
         </button>
       </div>
-      {onDelete && (
-        <button
-          type="button"
-          className="button button-ghost button-small button-danger-text"
-          onClick={onDelete}
-        >
-          Ta bort posten
-        </button>
-      )}
     </form>
   );
 }

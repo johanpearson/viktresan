@@ -10,8 +10,9 @@ Bakgrunden finns i [ui-audit.md](ui-audit.md). Tokens ligger överst i `src/inde
    kort i en lista (måltider). Hellre en rad med värdet till höger än etikett och värde på varsin rad.
 2. **En sak per färg.** Varje datatyp har en färg som används överallt: graf, kalenderprick, ikon, ring
    och stapel. Semantiska färger (success/warning/danger) betyder alltid samma sak.
-3. **Listor är listor.** Tryck på en rad = öppna/redigera, svep = ta bort (med Ångra). Inga
-   Redigera/Ta bort-knappar i listor.
+3. **Listor är listor.** Tryck på en rad = öppna (detaljvy eller formulär), svep = ta bort (med Ångra).
+   Inga Redigera/Ta bort-knappar i listor. Det användaren skapat har en detaljvy med Redigera och Ta bort
+   (med bekräftelse) – se [Det användaren skapat](#det-användaren-skapat-detaljvy-redigera-ta-bort).
 4. **En tydlig nästa handling.** En primärknapp per vy (eller panel); allt annat är sekundärt eller text.
 5. **Lugn rörelse.** Korta övergångar (150–200 ms) som förklarar var saker kommer ifrån. Ingen rörelse
    alls vid `prefers-reduced-motion`.
@@ -165,8 +166,14 @@ Vid `prefers-reduced-motion: reduce` sätts båda längderna till 0 och alla ani
 | `BarcodeElsewhere`   | `BarcodeElsewhere.tsx`   | Streckkoden finns på annat ställe (tillskott i Mat och tvärtom) – länk dit        |
 | `AiJsonImport`       | `AiJsonImport.tsx`       | AI-flöden med JSON-svar: prompt (kopiera/dela) → klistra in → validering          |
 | `AiLabelImport`      | `AiLabelImport.tsx`      | `AiJsonImport` för etiketter (tillskott per dos, livsmedel per 100 g)             |
-| `RecipeImport`       | `RecipeImport.tsx`       | "Importera recept": länk/text → `AiJsonImport` → granskning (`…Review.tsx`)       |
-| `IngredientEditor`   | `IngredientEditor.tsx`   | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider och recept         |
+| `RecipeImport`       | `RecipeImport.tsx`       | "Importera recept": länk/text → `AiJsonImport` → granskning i `RecipeEditor`      |
+| `RecipeEditor`       | `RecipeEditor.tsx`       | Receptets redigeringsvy: nytt, befintligt, importerat och "Laga en rätt"          |
+| `IngredientSheet`    | `IngredientSheet.tsx`    | En ingrediens: originaltext, matchning (sök/skanner), mängd, enhet, räknas in     |
+| `IngredientEditor`   | `IngredientEditor.tsx`   | Ingrediensrader (mängd, enhet, Ta bort) + summa; egna måltider                    |
+| `DetailSheet`        | `DetailSheet.tsx`        | Detaljvy: värden som rader, Redigera, "Ta bort …" med bekräftelse                 |
+| `OwnFoodDetail`      | `OwnFoodDetail.tsx`      | Detaljvyn för eget livsmedel, måltid och recept (Mat → Egna)                      |
+| `LeftoverDetail`     | `LeftoverDetail.tsx`     | Detaljvyn för matlådor: Logga 1 portion, Redigera (portioner kvar), Ta bort       |
+| `MealSlotDetail`     | `MealSlotDetail.tsx`     | Detaljvyn för en måltid (Inställningar → Måltider), Ta bort förklarar flytten     |
 | `WeekBudgetRow`      | `WeekBudgetRow.tsx`      | Veckoraden under kcal-ringen/-stapeln: en rad, kvar och ≈ per dag → panel         |
 | `WeekBudgetSheet`    | `WeekBudgetSheet.tsx`    | Veckopanelen: sju staplar mot dagsmålet, "ej loggad", kvar, per dag och saldo     |
 | `SvgChart`           | `SvgChart.tsx`           | Statisk graf som SVG (linje, punkter, staplar) – rapporten och utskrift           |
@@ -303,8 +310,41 @@ full).
 ```
 
 En fylld knapp (Spara …), eventuellt Avbryt som sekundär bredvid. "Ta bort …" är **sist** i panelen som destruktiv
-textknapp – aldrig en helbreddsknapp med ram under Spara – och tar bort direkt med en `Toast` och Ångra (samma som
-svepet). Gäller Logga-panelerna, Mat → Egna och Mats "Redigera post".
+textknapp – aldrig en helbreddsknapp med ram under Spara. För loggposter (Logga-panelerna, Mats "Redigera post") tar den
+bort direkt med en `Toast` och Ångra (samma som svepet). För det användaren skapat (recept, tillskott, scheman …) ligger
+"Ta bort …" i **detaljvyn** och frågar först – se nästa avsnitt; formulären har då ingen Ta bort-knapp.
+
+### Det användaren skapat: detaljvy, Redigera, Ta bort
+
+Allt användaren skapat har samma mönster (`DetailSheet`):
+
+- **Tryck på raden** öppnar detaljvyn: en panel med värdena som `list list-flush` + `ListRow` (etikett till vänster,
+  värde till höger), **Redigera** som primärknapp (sekundär bredvid en viktigare handling, t.ex. "Logga 1 portion"),
+  ev. små ghost-textknappar (Duplicera recept) och sist "Ta bort …" som destruktiv textknapp.
+- **"Ta bort …" i detaljvyn** öppnar en bekräftelse (`ActionSheet` ovanpå) med rubriken "Ta bort X?", en kort förklaring
+  av vad som händer – och vad som finns kvar – och **Ta bort** i fel-färg. Texterna ligger i `src/lib/removal.ts`. Efteråt
+  en `Toast` med Ångra.
+- **Svep vänster i listan** tar bort direkt med en `Toast` och Ångra – ingen bekräftelse.
+- **Borttagning påverkar aldrig loggar och historik**: loggposter, tagna doser och besvarade pass har egna kopior av
+  värdena; borttagna egna livsmedel och måltider markeras med `deletedAt` så att tidigare loggars fiber är oförändrad. Är
+  något kopplat (loggade portioner, matlådor, bilder, poster i en måltid) säger bekräftelsen vad som händer med det.
+
+| Typ              | Var (lista)                                  | Detaljvy och Redigera                                                   | Ta bort (svep + Ångra / knapp + bekräftelse)                                        |
+| ---------------- | -------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Matlådor         | Sök-sheeten → Matlådor (`leftover`)          | `LeftoverDetail`: Logga 1 portion, Redigera = portioner kvar            | Svep "Ta bort" · "Ta bort matlådorna" – receptet och loggen finns kvar              |
+| Egna livsmedel   | Mat → Egna → Egna livsmedel; sök-sheeten     | `OwnFoodDetail` → `CustomFoodForm`                                      | Svep (även i sök-sheeten) · "Ta bort livsmedlet" – N loggade poster finns kvar      |
+| Egna måltider    | Mat → Egna → Måltider; sök-sheeten           | `OwnFoodDetail` (ingredienser) → `MealBuilder`                          | Svep · "Ta bort måltiden" – loggade måltider finns kvar                             |
+| Recept           | Mat → Egna → Recept (och Arkiv); sök-sheeten | `OwnFoodDetail` (utbyte, per portion, matlådor) → `RecipeEditor`        | Svep · "Ta bort receptet" – loggade portioner har egen kopia, matlådorna försvinner |
+| Snabbloggar      | Mat → Dag (rad med "uppskattat")             | `DetailSheet` (kcal, protein, måltid, datum) → `QuickLogForm`           | Svep · "Ta bort posten" – bara den dagens post                                      |
+| Tillskott        | Logga → Tillskott → Mina tillskott           | `DetailSheet` (dos, schema, ämnen, tagna doser) → `SupplementForm`      | Svep · "Ta bort tillskottet" – tagna doser finns kvar                               |
+| Egna enheter     | Livsmedlets "Enheter för …" (`UnitList`)     | `DetailSheet` (vikt, källa) → `UnitForm` på raden                       | Svep · "Ta bort enheten" – loggade poster behåller sin vikt                         |
+| Fototillfällen   | Framsteg → Bilder → Tillfällen               | `DetailSheet` (datum, vikt, anteckning, bilder) → `SessionEditSheet`    | Svep · "Ta bort tillfället" – bilderna tas bort, viktloggen påverkas inte           |
+| Träningspass     | Kalender → dagsvyn                           | `DetailSheet` (status, när, längd …, Klar/Hoppade över) → `WorkoutForm` | Svep · "Ta bort passet" (inte schemapass – ta bort schemat)                         |
+| Träningsscheman  | Logga → Träning → Återkommande               | `DetailSheet` (pass, när, period) → `WorkoutPlanForm`                   | Svep · "Ta bort schemat" – besvarade pass ligger kvar                               |
+| Egna måltidsnamn | Inställningar → Måltider                     | `MealSlotDetail` (tid, typ, poster) → `MealSlotForm`                    | Svep (posterna flyttas till förvalet) · "Ta bort måltiden" (flytta till … / välj)   |
+
+Undantag: en ingrediensrad i `RecipeEditor` är en del av ett osparat formulär – tryck öppnar `IngredientSheet` direkt
+och borttagning (svep, papperskorgen eller knappen i sheeten) sker med Ångra utan bekräftelse.
 
 **Värden i en panel** (analysens nyckeltal, Om appen, Lagring) är `ListRow` med etiketten till vänster och värdet
 till höger – ett förbehåll eller en rekommendation som `secondary` under etiketten, inte i värdet. Sektioner i en
@@ -385,8 +425,8 @@ fungerar. `dangerOption` färgar ett destruktivt val (Ersätt all data) i `--dan
 />
 ```
 
-Valet stänger menyn och körs sedan. Ett destruktivt val tar bort direkt och följs av en `Toast` med
-Ångra – ingen bekräftelse i två steg.
+Valet stänger menyn och körs sedan. Ett destruktivt val i en radmeny för en loggpost tar bort direkt och följs av en
+`Toast` med Ångra. Samma komponent är bekräftelsen i `DetailSheet` ("Ta bort X?", förklaringen som `description`).
 
 ### DateBar
 
@@ -399,9 +439,10 @@ väljare. Formulär som planerar framåt (träningspass, scheman) behåller vanl
 
 `Card` med rubrik och en **sekundär** knapp i rubrikraden ("Ny måltid", "Nytt livsmedel" – `button-secondary
 button-small` via `action`), sedan en `list` med en `ListRow` per post: namn, sekundärtext (ingredienser eller
-"Per 100 g · 7 g protein") och kcal till höger. Tryck = formuläret (med "Ta bort …" som destruktiv textknapp längst
-ner), svep vänster = ta bort med `Toast` och Ångra. Ångra lägger tillbaka även favoritmarkeringen och de egna
-enheterna, som borttagningen tar med sig. Inga fyllda knappar i vyn – primärknappen är Spara i formuläret.
+"Per 100 g · 7 g protein") och kcal till höger. Tryck = detaljvyn (`OwnFoodDetail`: Redigera → formuläret, "Ta bort …"
+med bekräftelse), svep vänster = ta bort med `Toast` och Ångra. Ångra lägger tillbaka även favoritmarkeringen och de
+egna enheterna, som borttagningen tar med sig. Inga fyllda knappar i vyn – primärknappen är Redigera i detaljvyn och
+Spara i formuläret.
 
 ### Lista → panel (Framsteg → Veckor)
 
@@ -450,7 +491,7 @@ via `data-type`) och namnet (`--text-lg`) på samma rad, status (`--text-xs`, d�
 </Card>
 ```
 
-Poster med bilder är `ListRow` (tryck = öppna posten) med bilderna som `children` i ett rutnät (`session-photos`, tre
+Poster med bilder är `ListRow` (tryck = detaljvyn, svep = ta bort tillfället med Ångra) med bilderna som `children` i ett rutnät (`session-photos`, tre
 kolumner, samma storlek som `photo-grid` per vinkel, `--space-2` mellanrum). Bilderna är egna knappar (helskärm), en tom
 plats är en streckad ruta "+ Profil" (ett litet tomt läge). Ingen knapp per post. Tomt galleri = `EmptyState` med
 "Nytt fototillfälle"; kort som bara beskriver innehållet (lagring) visas först när det finns något.
@@ -521,8 +562,9 @@ veckovy och dagsvyn (med `ListRow` `wrapValue`).
 
 En `Card` med dagen som rubrik ("Torsdag 24 sep. 2026") och **en** `list`: en `ListRow` per loggtyp (prick i
 datatypens färg, värdet till höger) följt av en rad per pass (statusprick, typ · längd · intensitet, tid under,
-statusmärke till höger). Tryck på ett pass = `ActionSheet` (Klar → `CompleteWorkoutSheet`, Hoppade över,
-Markera som planerad, Ta bort passet); svep vänster = ta bort med Ångra. Inga knappar eller väljare i listan.
+statusmärke till höger). Tryck på ett pass = detaljvyn (`DetailSheet`: status, när, längd, intensitet, anteckning;
+Redigera → `WorkoutForm`, statusvalen Klar → `CompleteWorkoutSheet`, Hoppade över och Markera som planerad som rader, "Ta
+bort passet" med bekräftelse); svep vänster = ta bort med Ångra. Inga knappar eller väljare i listan.
 
 ### useUndoToast
 
@@ -701,10 +743,9 @@ gång (Livsmedelsverket före Fineli).
   syns bakom raden (samma svep och färg som `ListRow`) – och raden göms direkt med en `Toast` "Dolde X i sökningen." och
   Ångra. Långtryck (500 ms, `useLongPress`; även högerklick och menytangenten via `contextmenu`) öppnar en `ActionSheet`
   med livsmedlets namn och valet **Dölj**. Ett långtryck eller svep väljer aldrig livsmedlet.
-- **Ta bort** gäller användarens egna livsmedel, måltider och recept i stället för Dölj: svep eller långtryck öppnar en
-  `ActionSheet` som bekräftelse ("Ta bort X?", "Tas bort för gott … Tidigare loggar påverkas inte.") med **Ta bort** i
-  fel-färg och Stäng. Undantag från regeln "ingen bekräftelse i två steg": borttagningen kan inte ångras härifrån.
-  Stängs bekräftelsen glider raden tillbaka.
+- **Ta bort** gäller användarens egna livsmedel, måltider och recept i stället för Dölj: svep tar bort direkt med en
+  `Toast` och Ångra (som i Mat → Egna); långtryck öppnar en `ActionSheet` som bekräftelse ("Ta bort X?", "… Tidigare
+  loggar påverkas inte.") med **Ta bort** i fel-färg. Stängs bekräftelsen glider raden tillbaka.
 - **Inställningar → Matsökning** (`FoodSearchSettings`): tre `Card` i panelen – Källor (switchar för Livsmedelsverket,
   Fineli, Open Food Facts; "Egna livsmedel, måltider och recept visas alltid."), Kategorier (förslag "aldrig loggat: …"
   med den sekundära knappen "Dölj förslagen", sedan en switch per kategori med "N livsmedel · aldrig loggad"/"loggad N
@@ -722,19 +763,28 @@ gång (Livsmedelsverket före Fineli).
   tillfällen") och delningsmenyn (`#/mat/importera`). Panelen är en helskärms-`BottomSheet` ("Importera recept").
 - AI-steget är `AiJsonImport` med fältet "Länk eller receptext" överst och en dämpad rad om vad som skickas med (länk,
   text eller "bifoga en bild"). "Kopiera prompt" är primär tills svaret är granskat, sedan "Granska ingredienser".
-- Granskningen (`RecipeImportReview`): namn och portioner som fält, källan som dämpad rad med länk, `Card`
-  "Ingredienser" med en sammanfattning ("5 ingredienser · 2 att granska") och en `ListRow` per ingrediens:
-  originaltexten som `primary`, "Livsmedel · 400 g" + säkerhetsetikett som `secondary`, kcal till höger, `chevron`.
-  Etiketten är `tag tag-confidence-*` med ram i semantisk färg: `--success` Säker, `--warning` Osäker, `--danger` Ingen
-  träff – texten är alltid `--text`. Tryck = sök-sheeten (förifylld sökning och mängd, skanner). "Hoppa över" är ett
-  litet chip (`chip chip-small`, `aria-pressed`) under raden, bara för salt/peppar/vatten/"efter smak", rader utan träff
-  och överhoppade rader; en överhoppad rad är överstruken och dämpad. Under kortet "Per portion" och "Hela receptet" som
-  `list list-flush`. En primärknapp: "Spara recept"; "Tillbaka" sekundär.
+- Granskningen är receptets vanliga redigeringsvy (`RecipeEditor`) – samma vy som när ett befintligt recept redigeras,
+  ingen egen implementation: namn, antal portioner och tillagad vikt som fält, källan som dämpad rad med länk, sedan
+  "Ingredienser" med en sammanfattning ("5 ingredienser · 2 att granska · 1 räknas inte") och en `ListRow` per
+  ingrediens: originaltexten som `primary`, "Livsmedel · 400 g" + etikett som `secondary`, kcal till höger och
+  papperskorgen (`row-remove`, 44 px, `--muted`) som `trailing`. Etiketten är `tag tag-confidence-*` med ram i semantisk
+  färg: `--success` Säker, `--warning` Osäker, `--danger` Ingen träff – texten är alltid `--text`.
+- **Tryck på en rad** = `IngredientSheet`: "I receptet" (originaltexten, skrivskyddad, tonad ruta), matchningen som
+  `ListRow` med `chevron` (sök-sheeten med förifylld sökning och mängd, skanner), Mängd och Enhet, switchen "Räkna in i
+  receptet", Klar (primär), Avbryt och "Ta bort ingrediensen" sist.
+- **Ta bort**: svep vänster eller papperskorgen – direkt, med `Toast` och Ångra (raden kommer tillbaka på sin plats).
+  "Lägg till ingrediens" (sekundär) under listan öppnar sök-sheeten.
+- **Räknas inte**: salt, peppar, vatten och "efter smak" föreslås som "räknas inte" – etiketten `tag tag-uncounted`
+  (streckad ram i `--muted`) och dämpad rubrik. Raden ändras som andra rader (switchen i sheeten) och sparas inte i
+  receptet.
+- Totalerna ("Per portion" med P/K/F/Fi, "Per 100 g", "Hela receptet") som `list list-flush` räknas om direkt när en rad,
+  portionerna eller vikten ändras. En primärknapp: "Spara recept"; "Tillbaka" (importen) eller "Avbryt" sekundär.
 
 ### Tillskott
 
 Dagens tillskott är chips (`ChipGroup`, `hideLabel` när kortets rubrik redan säger det): tryck = tagen/inte tagen,
 vid behov med `hint`. "Alla tagna" är en sekundär liten knapp i kortets rubrikrad och följs av en `Toast` med Ångra.
+Mina tillskott: tryck = detaljvyn (dos, schema, ämnen, tagna doser; Redigera → formuläret), svep = ta bort med Ångra.
 Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (mängd, enhet – bara D-vitamin har ett val,
 µg/IE med omräkning – och "Ta bort") och "+ Lägg till näringsämne" som en `select`.
 
@@ -760,25 +810,28 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
 
 - Listan är `list list-flush` med en `ListRow` per måltid: namn, "07:00 · Huvudmåltid" som `secondary` och ett
   **dra-handtag** (sex prickar, `drag-handle`, 56 × 44 px, `--muted`, `touch-action: none`) som `trailing` till höger.
-  Tryck på raden = panel med formuläret (Namn, Ungefärlig tid, Typ som `ChoiceList`, primärknappen "Spara måltid", "Ta bort
-  måltiden" som destruktiv textknapp). Svep vänster = ta bort.
+  Tryck på raden = detaljvyn (`MealSlotDetail`: tid, typ, antal poster; Redigera → formuläret med Namn, Ungefärlig tid, Typ
+  som `ChoiceList` och primärknappen "Spara måltid"; "Ta bort måltiden" med bekräftelse). Svep vänster = ta bort direkt.
 - Dra i handtaget (`useDragReorder`): raden följer fingret (`ListRow` `dragOffset`, `--shadow-md`, handtaget i `--accent`) och
   byter plats med grannen vid halva radhöjden; ordningen sparas när den släpps. Piltangenterna på handtaget flyttar ett steg
   och platsen läses upp (`role="status"`). Sekundärknappen "Lägg till måltid" står under listan.
-- Ta bort en måltid med poster: en panel frågar vart posterna ska flyttas (`ChoiceList`, förval närmaste i tid) med
-  `button-danger` "Ta bort och flytta posterna". En tom måltid tas bort direkt. Båda ger `Toast` med Ångra. Den sista
-  måltiden kan inte tas bort.
+- Ta bort en måltid med poster: posterna flyttas alltid (förval: närmaste i tid, samma typ först) – svepet flyttar till
+  förvalet, bekräftelsen i detaljvyn har "Ta bort och flytta till Middag" och "Välj en annan måltid" (panel med
+  `ChoiceList` och `button-danger` "Ta bort och flytta posterna"). Alla ger `Toast` med Ångra. Den sista måltiden kan inte
+  tas bort.
 
 ### Snabblogg, recept och veckoraden
 
 - **Snabblogg** är en vanlig `ListRow` i dagsvyn med etiketten `tag tag-estimated` ("uppskattat", dämpad ram och text –
   ingen datafärg) efter namnet och protein som `secondary`. Den öppnas från raden "Snabblogg" (`ListRow` med `chevron`)
-  överst i sök-sheeten, även via måltidens +. Formuläret (`QuickLogForm`) har samma form som `FoodLogForm`: stjärnan i
-  rubrikraden, en primärknapp och "Ta bort posten" sist vid redigering.
-- **Recept** ligger som eget `Card` under Mat → Egna (samma mönster som Måltider). `RecipeBuilder` använder
-  `IngredientEditor` och visar näringen som `list list-flush` med `ListRow` ("Per portion", "Per 100 g", värdet till
-  höger). "Duplicera recept" är en ghost-textknapp ovanför den destruktiva "Ta bort receptet". Sök-sheeten öppnas
-  **utanför** formuläret (syskon), eftersom den har egna formulär. Portioner loggas med chips ½ · 1 · 1½ · 2.
+  överst i sök-sheeten, även via måltidens +. Tryck på en loggad snabblogg = detaljvyn (kcal, protein, måltid, datum;
+  Redigera, "Ta bort posten" med bekräftelse). Formuläret (`QuickLogForm`) har samma form som `FoodLogForm`: stjärnan i
+  rubrikraden och en primärknapp.
+- **Recept** ligger som eget `Card` under Mat → Egna (samma mönster som Måltider). `RecipeEditor` (se Receptimport)
+  visar näringen som `list list-flush` med `ListRow` ("Per portion", "Per 100 g", "Hela receptet", värdet till höger).
+  "Duplicera recept" är en ghost-textknapp i detaljvyn ovanför den destruktiva "Ta bort receptet". Sök-sheeten och
+  `IngredientSheet` öppnas **utanför** formuläret (syskon), eftersom de har egna formulär. Portioner loggas med chips
+  ½ · 1 · 1½ · 2.
 - **Veckoraden** (`WeekBudgetRow`) ligger inuti summeringskortet (Mat → Dag) och Idag-kortet (Översikt) under en 1 px
   linje – aldrig som eget kort i ett kort. Samma kompakta rad på båda ställena: "Vecka: 9 441 kcal kvar · ≈ 1 804/dag"
   som en knapp (minst `--tap-min`, › till höger) i `--text-sm` (`--text-xs` under 380 px så att den ryms på en rad).

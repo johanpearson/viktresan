@@ -215,13 +215,20 @@ test('ta bort en egen vara – tidigare loggar finns kvar', async ({ page }) => 
   const picker = await openPicker(page);
   await search(picker, 'knäckebröd');
   await expect(hit(picker, 'Knäckebröd hemma')).toHaveCount(1);
+  // Svep tar bort direkt med Ångra.
   await swipeLeft(hit(picker, 'Knäckebröd hemma'));
+  const toast = picker.getByTestId('picker-toast');
+  await expect(toast).toContainText('Tog bort Knäckebröd hemma. Tidigare loggar finns kvar.');
+  await expect(hit(picker, 'Knäckebröd hemma')).toHaveCount(0);
+  await toast.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(hit(picker, 'Knäckebröd hemma')).toHaveCount(1);
 
-  // Bekräftelse innan den tas bort för gott.
+  // Långtryck: bekräftelse som säger att loggen finns kvar.
+  await longPress(hit(picker, 'Knäckebröd hemma'));
   const confirm = page.getByRole('dialog', { name: 'Ta bort Knäckebröd hemma?' });
-  await expect(confirm).toContainText('Tidigare loggar påverkas inte.');
-  await confirm.getByRole('button', { name: 'Ta bort' }).tap();
-  await expect(picker.getByTestId('picker-toast')).toContainText('Tog bort Knäckebröd hemma.');
+  await expect(confirm).toContainText('Tidigare loggar påverkas inte');
+  await confirm.getByRole('button', { name: 'Ta bort', exact: true }).tap();
+  await expect(toast).toContainText('Tog bort Knäckebröd hemma.');
   await expect(hit(picker, 'Knäckebröd hemma')).toHaveCount(0);
   // Inte heller i Senaste, trots att den loggats idag.
   await search(picker, '');
@@ -278,10 +285,6 @@ test('ett borttaget recept försvinner ur Senaste men loggen finns kvar', async 
   const recent = picker.getByTestId('quick-pick').filter({ hasText: 'Linsgryta' });
   await expect(recent).toHaveCount(1);
   await swipeLeft(picker.getByTestId('quick-pick-row').filter({ hasText: 'Linsgryta' }));
-  await page
-    .getByRole('dialog', { name: 'Ta bort Linsgryta?' })
-    .getByRole('button', { name: 'Ta bort' })
-    .tap();
   await expect(picker.getByTestId('picker-toast')).toContainText('Tog bort Linsgryta.');
   await expect(recent).toHaveCount(0);
   await picker.getByRole('button', { name: 'Stäng' }).first().tap();
@@ -294,7 +297,7 @@ test('avbruten borttagning lägger tillbaka raden', async ({ page }) => {
   });
   const picker = await openPicker(page);
   await search(picker, 'knäckebröd');
-  await swipeLeft(hit(picker, 'Knäckebröd hemma'));
+  await longPress(hit(picker, 'Knäckebröd hemma'));
   const confirm = page.getByRole('dialog', { name: 'Ta bort Knäckebröd hemma?' });
   await confirm.getByRole('button', { name: 'Stäng' }).tap();
   await expect(confirm).toBeHidden();

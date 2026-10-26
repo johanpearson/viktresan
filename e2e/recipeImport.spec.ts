@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { collectErrors, dump, seed } from './helpers.ts';
+import { collectErrors, dump, seed, swipeLeft } from './helpers.ts';
 
 /**
  * Receptimport: delning via share target (simulerad med manifestets GET-parametrar),
@@ -51,7 +51,11 @@ function importSheet(page: Page): Locator {
 }
 
 function importRow(page: Page, text: string): Locator {
-  return importSheet(page).getByTestId('import-row').filter({ hasText: text });
+  return importSheet(page).getByTestId('recipe-ingredient').filter({ hasText: text });
+}
+
+function ingredientSheet(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Ingrediens' });
 }
 
 async function pasteAnswer(page: Page, answer: string) {
@@ -60,14 +64,26 @@ async function pasteAnswer(page: Page, answer: string) {
   await ai.getByRole('button', { name: 'Granska svaret' }).tap();
 }
 
-/** Väljer ett livsmedel i sök-sheeten som öppnas från en rad i granskningen. */
+/** Byter matchning för en rad: radens sheet → sök-sheeten → Lägg till → Klar. */
 async function resolve(page: Page, row: string, query: string, name: string) {
   await importRow(page, row).getByRole('button').first().tap();
+  await ingredientSheet(page).getByTestId('ingredient-food').getByRole('button').tap();
   const picker = page.getByRole('dialog', { name: 'Välj livsmedel' });
   await picker.getByLabel('Sök livsmedel').fill(query);
   await picker.getByTestId('search-result').filter({ hasText: name }).first().tap();
   await picker.getByRole('button', { name: 'Lägg till', exact: true }).tap();
   await expect(picker).toHaveCount(0);
+  await ingredientSheet(page).getByRole('button', { name: 'Klar' }).tap();
+  await expect(ingredientSheet(page)).toHaveCount(0);
+}
+
+/** "Per portion: 296 kcal" → 296. */
+async function perPortionKcal(page: Page): Promise<number> {
+  const text = await importSheet(page)
+    .getByTestId('recipe-per-portion')
+    .locator('.kcal')
+    .innerText();
+  return Number(text.replace(/\D/g, ''));
 }
 
 test('delad länk → AI-svar → granskning → sparat recept med källa → logga 1 portion', async ({
@@ -115,7 +131,7 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
   // Granskning: säker, osäker och ingen träff.
   await expect(sheet.getByLabel('Receptets namn')).toHaveValue('Kycklinggryta');
   await expect(sheet.getByLabel('Antal portioner')).toHaveValue('4');
-  await expect(sheet.getByTestId('recipe-import-source')).toContainText('ica.se');
+  await expect(sheet.getByTestId('recipe-source')).toContainText('ica.se');
   await expect(importRow(page, '2 dl vetemjöl')).toContainText('Vetemjöl');
   await expect(importRow(page, '2 dl vetemjöl')).toContainText('Säker');
   await expect(importRow(page, 'krossade tomater')).toContainText(
@@ -125,18 +141,29 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
   await expect(importRow(page, 'kycklingfilé')).toContainText('Ingen träff');
   await expect(importRow(page, '2 msk smör')).toContainText('Smör normalsaltat 80% fett');
   await expect(importRow(page, '2 msk smör')).toContainText('Osäker');
-  await expect(sheet.getByTestId('import-summary')).toHaveText('5 ingredienser · 3 att granska');
+  // Salt och peppar efter smak föreslås som "räknas inte" – tydligt märkt.
+  await expect(importRow(page, 'salt och peppar').getByTestId('uncounted-tag')).toHaveText(
+    'Räknas inte',
+  );
+  await expect(sheet.getByTestId('import-summary')).toHaveText(
+    '5 ingredienser · 2 att granska · 1 räknas inte',
+  );
+  await expect(sheet.getByRole('button', { name: /Hoppa över/ })).toHaveCount(0);
 
-  // Spara kräver att allt är löst eller överhoppat.
+  // Spara kräver att varje rad som räknas har livsmedel och mängd.
   await sheet.getByRole('button', { name: 'Spara recept' }).tap();
   await expect(sheet.getByRole('alert')).toContainText('ca 500 g kycklingfilé');
 
-  // Salt och peppar hoppas över med ett tryck.
-  await sheet.getByRole('button', { name: 'Hoppa över salt och peppar efter smak' }).tap();
-  await expect(importRow(page, 'salt och peppar')).toContainText('Hoppas över');
-
-  // Lös den osäkra matchningen: sök-sheeten öppnas med "smör" och receptets 2 msk.
+  // Redigera en ingrediens: originaltexten är skrivskyddad, matchningen byts i sök-sheeten
+  // ("smör" och receptets 2 msk förifyllt).
   await importRow(page, '2 msk smör').getByRole('button').first().tap();
+  const ingredient = ingredientSheet(page);
+  await expect(ingredient.getByTestId('ingredient-original')).toHaveText('2 msk smör');
+  await expect(
+    ingredient.getByTestId('ingredient-original').locator('input, textarea'),
+  ).toHaveCount(0);
+  await expect(ingredient.getByLabel('Mängd')).toHaveValue('2');
+  await ingredient.getByTestId('ingredient-food').getByRole('button').tap();
   const picker = page.getByRole('dialog', { name: 'Välj livsmedel' });
   await expect(picker.getByLabel('Sök livsmedel')).toHaveValue('smör');
   await picker.getByLabel('Sök livsmedel').fill('bregott');
@@ -144,6 +171,9 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
   await expect(picker.getByLabel('Mängd (msk)')).toHaveValue('2');
   await picker.getByRole('button', { name: 'Lägg till', exact: true }).tap();
   await expect(picker).toHaveCount(0);
+  await expect(ingredient.getByTestId('ingredient-food')).toContainText('Bregott');
+  await ingredient.getByRole('button', { name: 'Klar' }).tap();
+  await expect(ingredient).toHaveCount(0);
   await expect(importRow(page, '2 msk smör')).toContainText('Bregott normalsaltat 75% fett');
   await expect(importRow(page, '2 msk smör')).toContainText('Säker');
 
@@ -151,12 +181,55 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
   await resolve(page, 'kycklingfilé', 'kyckling', 'Kyckling bröstfilé rå');
   await expect(importRow(page, 'kycklingfilé')).toContainText('Kyckling bröstfilé rå · 500 g');
   await expect(sheet.getByTestId('import-summary')).toHaveText(
-    '5 ingredienser · alla matchade · 1 hoppas över',
+    '5 ingredienser · alla matchade · 1 räknas inte',
   );
+
+  // Ändrad mängd: totalerna per portion räknas om direkt.
+  const before = await perPortionKcal(page);
+  await importRow(page, '2 dl vetemjöl').getByRole('button').first().tap();
+  await ingredientSheet(page).getByLabel('Mängd').fill('3');
+  await ingredientSheet(page).getByRole('button', { name: 'Klar' }).tap();
+  await expect(importRow(page, '2 dl vetemjöl')).toContainText('Vetemjöl · 3 dl');
+  await expect.poll(() => perPortionKcal(page)).toBeGreaterThan(before);
+
+  // Ta bort med ikonen och Ångra; sedan med svep.
+  const withTomatoes = await perPortionKcal(page);
+  await sheet.getByRole('button', { name: 'Ta bort ingrediensen Tomater krossade konserv' }).tap();
+  await expect(importRow(page, 'krossade tomater')).toHaveCount(0);
+  await expect.poll(() => perPortionKcal(page)).toBeLessThan(withTomatoes);
+  const toast = sheet.getByTestId('recipe-toast');
+  await expect(toast).toContainText('Tog bort 1 burk krossade tomater (400 g).');
+  await toast.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(importRow(page, 'krossade tomater')).toHaveCount(1);
+  await expect.poll(() => perPortionKcal(page)).toBe(withTomatoes);
+  await swipeLeft(importRow(page, 'krossade tomater'));
+  await expect(importRow(page, 'krossade tomater')).toHaveCount(0);
+
+  // Lägg till en ingrediens längst ner via sök-sheeten.
+  await sheet.getByRole('button', { name: 'Lägg till ingrediens' }).tap();
+  const add = page.getByRole('dialog', { name: 'Lägg till ingrediens' });
+  await add.getByLabel('Sök livsmedel').fill('smör');
+  await add.getByTestId('search-result').filter({ hasText: 'Smör normalsaltat' }).first().tap();
+  await add
+    .getByRole('group', { name: 'Enhet' })
+    .getByRole('button', { name: 'g', exact: true })
+    .tap();
+  await add.getByLabel('Mängd (g)').fill('10');
+  await add.getByRole('button', { name: 'Lägg till', exact: true }).tap();
+  await expect(add).toHaveCount(0);
+  await expect(sheet.getByTestId('recipe-ingredient').last()).toContainText(
+    'Smör normalsaltat 80% fett',
+  );
+
+  // Namn och portioner går att ändra i samma vy.
+  await sheet.getByLabel('Receptets namn').fill('Kycklinggryta med smör');
+  await sheet.getByLabel('Antal portioner').fill('5');
 
   await sheet.getByRole('button', { name: 'Spara recept' }).tap();
   await expect(sheet).toHaveCount(0);
-  await expect(page.getByTestId('own-toast')).toContainText('Sparade receptet Kycklinggryta.');
+  await expect(page.getByTestId('own-toast')).toContainText(
+    'Sparade receptet Kycklinggryta med smör.',
+  );
 
   const stored = await dump(page);
   expect(stored.recipes).toHaveLength(1);
@@ -172,12 +245,17 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
       per100: { kcal: number };
     }[];
   };
-  expect(recipe).toMatchObject({ name: 'Kycklinggryta', servings: 4, sourceUrl: RECIPE_URL });
+  expect(recipe).toMatchObject({
+    name: 'Kycklinggryta med smör',
+    servings: 5,
+    sourceUrl: RECIPE_URL,
+  });
+  // Salt och peppar (räknas inte) och de borttagna tomaterna sparas inte.
   expect(recipe.items.map((i) => [i.foodId, i.unit, i.amount])).toEqual([
-    ['lv:90001', 'dl', 2],
-    ['lv:90002', 'g', 400],
+    ['lv:90001', 'dl', 3],
     ['lv:90003', 'g', 500],
     ['lv:90005', 'msk', 2],
+    ['lv:90004', 'g', 10],
   ]);
   // De manuella valen sparas i matchningsminnet.
   expect(stored.settings.ingredientMatches).toMatchObject({
@@ -186,17 +264,22 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
   });
 
   const perPortion = Math.round(
-    recipe.items.reduce((s, i) => s + (i.grams * i.per100.kcal) / 100, 0) / 4,
+    recipe.items.reduce((s, i) => s + (i.grams * i.per100.kcal) / 100, 0) / 5,
   );
   const recipeRow = page.getByTestId('own-recipe').filter({ hasText: 'Kycklinggryta' });
   await expect(recipeRow).toContainText(`${String(perPortion)} kcal/portion`);
 
-  // Källan visas i receptets detaljvy.
+  // Källan visas i receptets detaljvy – och i redigeringsvyn, som är samma som granskningen.
   await recipeRow.getByRole('button').first().tap();
-  const source = page.getByTestId('recipe-source');
+  const detail = page.getByTestId('own-detail');
+  const source = detail.getByTestId('recipe-source');
   await expect(source).toContainText('ica.se');
   await expect(source.getByRole('link')).toHaveAttribute('href', RECIPE_URL);
-  await page.getByRole('button', { name: 'Avbryt' }).tap();
+  await detail.getByRole('button', { name: 'Redigera' }).tap();
+  const editor = page.getByTestId('recipe-form');
+  await expect(editor.getByTestId('recipe-source')).toContainText('ica.se');
+  await expect(editor.getByTestId('recipe-ingredient')).toHaveCount(4);
+  await editor.getByRole('button', { name: 'Avbryt' }).tap();
 
   // Nästa import: minnet föreslår Bregott direkt som säker träff.
   await page.getByTestId('recipe-import-open').getByRole('button').tap();
@@ -214,7 +297,7 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
   await page.getByRole('button', { name: 'Sök och logga mat' }).tap();
   const search = page.getByRole('dialog');
   await search.getByLabel('Sök livsmedel').fill('kycklinggryta');
-  await search.getByTestId('search-result').filter({ hasText: 'Kycklinggryta' }).tap();
+  await search.getByTestId('search-result').filter({ hasText: 'Kycklinggryta med smör' }).tap();
   const form = page.getByTestId('food-log-form');
   await form
     .getByRole('group', { name: 'Snabbval mängd' })
@@ -226,7 +309,7 @@ test('delad länk → AI-svar → granskning → sparat recept med källa → lo
     `${String(perPortion)} kcal`,
   );
   expect((await dump(page)).foodLog).toEqual([
-    expect.objectContaining({ name: 'Kycklinggryta', unit: 'portion', amount: 1 }),
+    expect.objectContaining({ name: 'Kycklinggryta med smör', unit: 'portion', amount: 1 }),
   ]);
 
   expect(external).toEqual([]);

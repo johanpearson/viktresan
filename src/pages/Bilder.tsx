@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { BottomSheet } from '../components/BottomSheet.tsx';
 import { Card } from '../components/Card.tsx';
+import { DetailSheet } from '../components/DetailSheet.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { ListRow } from '../components/ListRow.tsx';
 import { PhotoSessionFlow, type PhotoFlowMode } from '../components/PhotoSessionFlow.tsx';
@@ -12,6 +13,7 @@ import { Skeleton } from '../components/Skeleton.tsx';
 import { Toast } from '../components/Toast.tsx';
 import {
   deletePhoto,
+  deletePhotoSession,
   putPhoto,
   putPhotoSession,
   setPhotoAngle,
@@ -30,6 +32,7 @@ import {
   type SessionRow,
 } from '../lib/photoSessions.ts';
 import { usePreferences } from '../lib/preferences.ts';
+import { sessionRemovalText } from '../lib/removal.ts';
 import { formatBytes, getStorageStatus, type StorageStatus } from '../lib/storage.ts';
 import { useAppData } from '../lib/useAppData.ts';
 import { consumeSubPath } from '../lib/navigation.ts';
@@ -54,6 +57,8 @@ export function Bilder() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [flow, setFlow] = useState<PhotoFlowMode | null>(null);
   const [editing, setEditing] = useState<PhotoSession | null>(null);
+  /** Detaljvyn för ett tillfälle (tryck på raden). */
+  const [detailId, setDetailId] = useState<string | null>(null);
   // "#/framsteg/bilder/jamfor" (från milstolpen) öppnar jämförelsen: första mot senaste.
   // Adressen används en gång och blir sedan "#/framsteg/bilder"; jämförelsen får en egen post.
   const { sub } = useHashRoute();
@@ -112,6 +117,22 @@ export function Bilder() {
       await reload();
     });
   }
+
+  /** Tar bort tillfället med bilderna (svep direkt, detaljvyn efter bekräftelse) – med Ångra. */
+  async function removeSession(row: SessionRow<PhotoItem>) {
+    const { session } = row;
+    const all = [...row.fram, ...row.profil, ...row.okand];
+    setDetailId(null);
+    await deletePhotoSession(session.id);
+    await reload();
+    toast.show(`Tog bort tillfället ${formatDate(session.date)}.`, async () => {
+      await putPhotoSession(session);
+      for (const photo of all) await putPhoto(toEntry(photo));
+      await reload();
+    });
+  }
+
+  const detailRow = detailId !== null ? rows.find((r) => r.session.id === detailId) : undefined;
 
   const undoToast = toast.toast && (
     <Toast
@@ -186,7 +207,11 @@ export function Bilder() {
                     row={row}
                     labelFor={labelFor}
                     onView={setViewingId}
-                    onEdit={setEditing}
+                    onOpen={(session) => {
+                      toast.close();
+                      setDetailId(session.id);
+                    }}
+                    onRemove={() => void removeSession(row)}
                     onAdd={(session, angle) => {
                       setFlow({ kind: 'add', session, angle });
                     }}
@@ -248,6 +273,50 @@ export function Bilder() {
         />
       )}
 
+      {detailRow && (
+        <DetailSheet
+          title={`Tillfället ${formatDate(detailRow.session.date)}`}
+          testId="session-detail"
+          onClose={() => {
+            setDetailId(null);
+          }}
+          onEdit={() => {
+            setEditing(detailRow.session);
+            setDetailId(null);
+          }}
+          remove={{
+            label: 'Ta bort tillfället',
+            title: `Ta bort tillfället ${formatDate(detailRow.session.date)}?`,
+            consequence: sessionRemovalText(
+              detailRow.fram.length + detailRow.profil.length + detailRow.okand.length,
+            ),
+            onConfirm: () => void removeSession(detailRow),
+          }}
+        >
+          <ListRow primary="Datum" value={formatDate(detailRow.session.date)} />
+          <ListRow
+            primary="Vikt"
+            value={
+              detailRow.session.weightKg == null
+                ? 'Ingen vikt'
+                : formatKg(detailRow.session.weightKg)
+            }
+          />
+          {detailRow.session.note && (
+            <ListRow primary="Anteckning" secondary={detailRow.session.note} />
+          )}
+          <ListRow
+            primary="Bilder"
+            value={formatInt(
+              detailRow.fram.length + detailRow.profil.length + detailRow.okand.length,
+            )}
+            secondary={CAPTURE_ANGLES.map(
+              (a) => `${ANGLE_LABELS[a]} ${formatInt(detailRow[a].length)}`,
+            ).join(' · ')}
+          />
+        </DetailSheet>
+      )}
+
       {editing && (
         <SessionEditSheet
           session={editing}
@@ -299,15 +368,16 @@ interface SessionRowViewProps {
   row: SessionRow<PhotoItem>;
   labelFor: (photo: PhotoItem) => string;
   onView: (id: string) => void;
-  onEdit: (session: PhotoSession) => void;
+  onOpen: (session: PhotoSession) => void;
+  onRemove: () => void;
   onAdd: (session: PhotoSession, angle: CaptureAngle) => void;
 }
 
 /**
- * Ett tillfälle: en `ListRow` (datum, anteckning, vikt – tryck = ändra tillfället) med
- * framifrån och profil i ett rutnät under. Tom vinkel = "Lägg till".
+ * Ett tillfälle: en `ListRow` (datum, anteckning, vikt – tryck = detaljvyn, svep = ta bort med
+ * Ångra) med framifrån och profil i ett rutnät under. Tom vinkel = "Lägg till".
  */
-function SessionRowView({ row, labelFor, onView, onEdit, onAdd }: SessionRowViewProps) {
+function SessionRowView({ row, labelFor, onView, onOpen, onRemove, onAdd }: SessionRowViewProps) {
   const { session } = row;
   const date = formatDate(session.date);
   return (
@@ -318,8 +388,9 @@ function SessionRowView({ row, labelFor, onView, onEdit, onAdd }: SessionRowView
       value={session.weightKg == null ? 'Ingen vikt' : formatKg(session.weightKg)}
       chevron
       onClick={() => {
-        onEdit(session);
+        onOpen(session);
       }}
+      swipeLeft={{ label: 'Ta bort', onSwipe: onRemove }}
     >
       <ul className="session-photos" aria-label={`Bilder ${date}`}>
         {CAPTURE_ANGLES.flatMap((angle) =>

@@ -22,7 +22,12 @@ import { dosesBetween } from '../lib/glp1.ts';
 import { formatDate, formatShortDate } from '../lib/format.ts';
 import { useAppData } from '../lib/useAppData.ts';
 import { usePhotoDates } from '../lib/usePhotoDates.ts';
-import { DISPLAY_STATUS_LABELS, workoutsBetween, type DisplayStatus } from '../lib/workouts.ts';
+import {
+  DISPLAY_STATUS_LABELS,
+  workoutTypes,
+  workoutsBetween,
+  type DisplayStatus,
+} from '../lib/workouts.ts';
 
 const WEEKDAYS: readonly [short: string, long: string][] = [
   ['M', 'måndag'],
@@ -281,6 +286,7 @@ export function Kalender() {
         date={selected}
         logged={selectedLog}
         workouts={selectedWorkouts}
+        types={data ? workoutTypes(data.workouts, data.workoutPlans) : []}
         now={now}
         onChange={reload}
       />
