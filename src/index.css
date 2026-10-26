@@ -2684,8 +2684,8 @@ a.button {
   font-size: var(--text-md);
 }
 
-.unit-entry .entry-main {
-  align-items: baseline;
+.unit-edit {
+  padding: var(--space-2) 0;
 }
 
 /* Mål-ringar (Översikt → Idag, Logga → Dryck). Texten krymps av `RingRow` (useRingFit) så att den
@@ -5274,20 +5274,49 @@ p.plateau-reasons {
 /* Receptimport (Mat → Egna → Importera recept)                        */
 /* ------------------------------------------------------------------ */
 
-/* "Hoppa över" under raden: ett litet chip, indraget i linje med texten. */
-.import-row-actions {
-  padding: 0 var(--space-4) var(--space-3);
-}
-
 .chip-small {
   min-height: var(--tap-min);
   padding: 0 var(--space-3);
   font-size: var(--text-sm);
 }
 
-.import-row-skipped .list-row-primary {
+/* Receptets redigeringsvy: en rad som inte räknas (salt efter smak, vatten) är dämpad och märkt. */
+.recipe-ingredient-uncounted .list-row-primary {
   color: var(--muted);
-  text-decoration: line-through;
+}
+
+.tag-uncounted {
+  margin-left: 0;
+  border-style: dashed;
+  border-color: var(--muted);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* Papperskorgen till höger på raden (ta bort, med Ångra) – 44 px tryckyta, dämpad. */
+.icon-button.row-remove {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  margin-right: var(--space-2);
+  align-self: center;
+  color: var(--muted);
+}
+
+.recipe-ingredients {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.recipe-ingredients .subheading {
+  margin: 0;
+}
+
+/* Ingrediensens sheet: raden som den stod i receptet, skrivskyddad. */
+.ingredient-original {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--track);
 }
 
 /* Livsmedlets näringsvärden (logg-sheeten): status per värde och "Komplettera" */
@@ -5410,4 +5439,21 @@ p.plateau-reasons {
 
 .reorder-add {
   margin-top: var(--space-4);
+}
+
+/* Detaljvyn (DetailSheet): värdena som rader, Redigera, sedan Ta bort sist. */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.detail .button-row .button {
+  flex: 1 1 0;
+}
+
+/* Små textknappar i detaljvyn (Duplicera recept) står till vänster, som Ta bort. */
+.detail > .button-ghost {
+  align-self: flex-start;
+  padding: 0;
 }

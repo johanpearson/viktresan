@@ -65,8 +65,12 @@ test('glömt logga: "Som vanligt" lägger in en uppskattad dag med Ångra', asyn
     'La in en vanlig dag för igår (≈ 1 100 kcal).',
   );
   await expect(row).toHaveCount(0);
-  type Entry = { usual?: boolean };
-  const usualOf = (log: unknown[]) => (log as Entry[]).filter((e) => e.usual === true);
+  type Entry = { usual?: boolean; meal?: string };
+  // I måltidsordning (dumpen ordnas på id, som är slumpmässigt).
+  const usualOf = (log: unknown[]) =>
+    (log as Entry[])
+      .filter((e) => e.usual === true)
+      .sort((a, b) => (a.meal === b.meal ? 0 : a.meal === 'frukost' ? -1 : 1));
   let stored = await dump(page);
   const usual = usualOf(stored.foodLog);
   expect(usual).toEqual([

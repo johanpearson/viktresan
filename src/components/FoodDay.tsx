@@ -23,10 +23,11 @@ import { quickValuesOf } from '../lib/quickLog.ts';
 import { recipeToItem } from '../lib/recipes.ts';
 import { weekBudget } from '../lib/weekBudget.ts';
 import { filtersFrom, isVisible, visibleFoods } from '../lib/foodFilters.ts';
-import { fiberOfEntries, type FiberGoal } from '../lib/fiber.ts';
+import { fiberOfEntries, formatMacroG, type FiberGoal } from '../lib/fiber.ts';
 import { savedMealName } from '../lib/foodDay.ts';
 import type { FoodItem } from '../lib/foodSearch.ts';
-import { formatDate, formatDayMonth } from '../lib/format.ts';
+import { formatDate, formatDayMonth, formatKcal } from '../lib/format.ts';
+import { quickLogRemovalText } from '../lib/removal.ts';
 import { haptic } from '../lib/haptics.ts';
 import { currentMealId, mealName, resolveMealId, type MealId } from '../lib/mealSlots.ts';
 import { dailyIntake, totalOf } from '../lib/nutrition.ts';
@@ -37,6 +38,7 @@ import { AskAi } from './AskAi.tsx';
 import { BottomSheet } from './BottomSheet.tsx';
 import { DateBar } from './DateBar.tsx';
 import { DaySummary } from './DaySummary.tsx';
+import { DetailSheet } from './DetailSheet.tsx';
 import { FoodLogForm } from './FoodLogForm.tsx';
 import { FoodPicker, type FoodSource } from './FoodPicker.tsx';
 import { IconTipButton } from './IconTipButton.tsx';
@@ -136,6 +138,8 @@ export function FoodDay({
         : null,
   );
   const [editing, setEditing] = useState<FoodLogEntry | null>(null);
+  /** Detaljvyn för en snabblogg. */
+  const [quickDetail, setQuickDetail] = useState<FoodLogEntry | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [menu, setMenu] = useState<Target | null>(null);
   const [saving, setSaving] = useState<MealId | null>(null);
@@ -393,7 +397,11 @@ export function FoodDay({
         onAdd={(slot) => {
           setPicker({ meal: slot, scan: false, focus: false });
         }}
-        onEdit={setEditing}
+        onEdit={(entry) => {
+          // En snabblogg öppnar detaljvyn (Redigera, Ta bort); övriga poster formuläret direkt.
+          if (entry.estimated) setQuickDetail(entry);
+          else setEditing(entry);
+        }}
         onDelete={(entry) => void remove(entry)}
       />
       {picker && (
@@ -442,11 +450,6 @@ export function FoodDay({
                   setToast({ message });
                 });
               }}
-              onDelete={() => {
-                const entry = editing;
-                setEditing(null);
-                void remove(entry);
-              }}
               onCancel={() => {
                 setEditing(null);
               }}
@@ -486,6 +489,57 @@ export function FoodDay({
             />
           )}
         </BottomSheet>
+      )}
+      {quickDetail && (
+        <DetailSheet
+          title={quickDetail.name}
+          testId="quick-detail"
+          onClose={() => {
+            setQuickDetail(null);
+          }}
+          onEdit={() => {
+            setEditing(quickDetail);
+            setQuickDetail(null);
+          }}
+          remove={{
+            label: 'Ta bort posten',
+            title: `Ta bort ${quickDetail.name}?`,
+            consequence: quickLogRemovalText(),
+            onConfirm: () => {
+              const entry = quickDetail;
+              setQuickDetail(null);
+              void remove(entry);
+            },
+          }}
+        >
+          <ListRow
+            primary="Energi"
+            secondary="Uppskattat – ingår inte i vitaminer och mineraler"
+            value={
+              <span className="kcal">
+                {formatKcal((quickDetail.per100.kcal * quickDetail.grams) / 100)}
+              </span>
+            }
+          />
+          <ListRow
+            primary="Protein"
+            value={
+              <span className="num">
+                {quickDetail.per100.proteinG > 0
+                  ? formatMacroG((quickDetail.per100.proteinG * quickDetail.grams) / 100)
+                  : '–'}
+              </span>
+            }
+          />
+          <ListRow
+            primary="Måltid"
+            value={mealName(
+              mealSlots,
+              resolveMealId(mealSlots, quickDetail.meal, quickDetail.createdAt),
+            )}
+          />
+          <ListRow primary="Datum" value={formatDate(quickDetail.date)} />
+        </DetailSheet>
       )}
       {menu && (
         <BottomSheet

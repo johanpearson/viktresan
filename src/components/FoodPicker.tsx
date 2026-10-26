@@ -10,6 +10,8 @@ import {
   putFood,
   putHiddenFoods,
   putRecipe,
+  restoreFood,
+  restoreMeal,
   saveCustomUnits,
   setFavorite,
   type FoodLogEntry,
@@ -54,6 +56,7 @@ import {
   recipeYield,
   withBatch,
   withoutBatch,
+  type Leftover,
 } from '../lib/recipes.ts';
 import { lastUsage, type FoodUnit, type Usage } from '../lib/units.ts';
 import type { FoodData } from '../lib/useFoodData.ts';
@@ -67,9 +70,10 @@ import { BottomSheet } from './BottomSheet.tsx';
 import { CustomFoodForm } from './CustomFoodForm.tsx';
 import { FoodList } from './FoodList.tsx';
 import { FoodLogForm } from './FoodLogForm.tsx';
+import { LeftoverDetail } from './LeftoverDetail.tsx';
 import { ListRow } from './ListRow.tsx';
 import { QuickLogForm } from './QuickLogForm.tsx';
-import { RecipeBuilder } from './RecipeBuilder.tsx';
+import { RecipeEditor } from './RecipeEditor.tsx';
 import { ScanIcon } from './ScanIcon.tsx';
 import { Toast } from './Toast.tsx';
 
@@ -196,7 +200,9 @@ export function FoodPicker({
   const searchRef = useRef<HTMLInputElement>(null);
   /** Långtryck på en rad: meny med Dölj (eller bekräftelsen Ta bort för egna). */
   const [menu, setMenu] = useState<FoodItem | null>(null);
-  /** Ta bort ett eget livsmedel, en måltid eller ett recept – kräver bekräftelse. */
+  /** Matlådornas detaljvy (tryck på en matlåda). */
+  const [box, setBox] = useState<Leftover | null>(null);
+  /** Långtryck på ett eget livsmedel, en måltid eller ett recept: bekräftelsen Ta bort. */
   const [confirmRemove, setConfirmRemove] = useState<FoodItem | null>(null);
   /** Nytt värde ritar om raderna, så att en bortsvept rad kommer tillbaka (avbruten Ta bort). */
   const [rowsVersion, setRowsVersion] = useState(0);
@@ -447,26 +453,37 @@ export function FoodPicker({
     });
   }
 
-  /** Tar bort ett eget livsmedel, en måltid eller ett recept för gott (efter bekräftelse). */
+  /**
+   * Tar bort ett eget livsmedel, en måltid eller ett recept (svep direkt, långtryck efter
+   * bekräftelse). Ångra lägger tillbaka posten, favoriten och de egna enheterna. Tidigare loggar
+   * påverkas aldrig.
+   */
   async function remove(food: FoodItem) {
     const id = food.id.slice(food.id.indexOf(':') + 1);
+    const wasFavorite = foodData.favorites.find((f) => f.foodId === food.id);
+    const units = customUnits.get(food.id) ?? [];
+    const meal = foodData.meals.find((m) => m.id === id);
+    const recipe = foodData.recipes.find((r) => r.id === id);
+    const stored = foodData.foods.find((f) => f.id === food.id);
     if (food.source === 'maltid') await deleteMeal(id);
     else if (food.source === 'recept') await deleteRecipe(id);
     else await deleteFood(food.id);
     await reloadFood();
-    toast.show(`Tog bort ${food.name}. Tidigare loggar finns kvar.`);
+    toast.show(`Tog bort ${food.name}. Tidigare loggar finns kvar.`, async () => {
+      if (food.source === 'maltid') {
+        if (meal) await restoreMeal(meal);
+      } else if (food.source === 'recept') {
+        if (recipe) await putRecipe(recipe);
+      } else if (stored) await restoreFood(stored);
+      if (wasFavorite) await setFavorite(food.id, true, wasFavorite.createdAt);
+      if (units.length > 0) await saveCustomUnits(food.id, units);
+      await reloadFood();
+    });
   }
 
-  /** Svep vänster: Dölj direkt (med Ångra), Ta bort för egna efter bekräftelse. */
+  /** Svep vänster: Dölj direkt, egna tas bort direkt – båda med Ångra. */
   function rowAction(food: FoodItem): { label: string; run: () => void } {
-    if (isOwn(food)) {
-      return {
-        label: 'Ta bort',
-        run: () => {
-          setConfirmRemove(food);
-        },
-      };
-    }
+    if (isOwn(food)) return { label: 'Ta bort', run: () => void remove(food) };
     return { label: 'Dölj', run: () => void hide(food) };
   }
 
@@ -475,14 +492,18 @@ export function FoodPicker({
     else setMenu(food);
   }
 
-  /** "Slut": matlådorna försvinner ur listan (Ångra lägger tillbaka omgången). */
+  /** Ta bort matlådorna: de försvinner ur listan (Ångra lägger tillbaka omgången). */
   async function finishBatch(recipe: Recipe) {
+    setBox(null);
     await putRecipe(withoutBatch(recipe));
     await reloadFood();
-    toast.show(`Matlådorna med ${recipe.name} är slut.`, async () => {
-      await putRecipe(recipe);
-      await reloadFood();
-    });
+    toast.show(
+      `Tog bort matlådorna med ${recipe.name}. Receptet och loggen finns kvar.`,
+      async () => {
+        await putRecipe(recipe);
+        await reloadFood();
+      },
+    );
   }
 
   async function toggleFavorite(foodId: string) {
@@ -501,7 +522,7 @@ export function FoodPicker({
   let body;
   if (cooking && mode.kind === 'log') {
     body = (
-      <RecipeBuilder
+      <RecipeEditor
         recipe={null}
         source={source}
         cookOnce
@@ -747,11 +768,13 @@ export function FoodPicker({
                               <span className="kcal">{formatKcal(perPortion.kcal)}</span>
                             )
                           }
+                          chevron
                           onClick={() => {
-                            pick(recipeToItem(recipe), { unit: PORTION_UNIT, amount: 1 });
+                            toast.close();
+                            setBox({ recipe, left });
                           }}
                           swipeLeft={{
-                            label: 'Slut',
+                            label: 'Ta bort',
                             onSwipe: () => void finishBatch(recipe),
                           }}
                         />
@@ -854,6 +877,26 @@ export function FoodPicker({
             onClose={toast.close}
           />
         )}
+        {box && (
+          <LeftoverDetail
+            leftover={box}
+            foodLog={foodLog}
+            onLog={() => {
+              const { recipe } = box;
+              setBox(null);
+              pick(recipeToItem(recipe), { unit: PORTION_UNIT, amount: 1 });
+            }}
+            onSaved={async (message) => {
+              setBox(null);
+              await reloadFood();
+              toast.show(message);
+            }}
+            onRemove={() => void finishBatch(box.recipe)}
+            onClose={() => {
+              setBox(null);
+            }}
+          />
+        )}
         {menu && (
           <ActionSheet
             title={menu.name}
@@ -867,7 +910,7 @@ export function FoodPicker({
         {confirmRemove && (
           <ActionSheet
             title={`Ta bort ${confirmRemove.name}?`}
-            description="Tas bort för gott ur Egna, sökningen och snabbvalen. Det går inte att ångra. Tidigare loggar påverkas inte."
+            description="Försvinner ur Egna, sökningen och snabbvalen. Tidigare loggar påverkas inte – de har egna kopior av värdena."
             actions={[
               { label: 'Ta bort', danger: true, onSelect: () => void remove(confirmRemove) },
             ]}

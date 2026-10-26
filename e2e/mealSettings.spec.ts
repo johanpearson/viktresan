@@ -91,6 +91,10 @@ test('lägg till, byt namn och ändra ordning på måltider', async ({ page }) =
     .getByTestId('meal-slot-lunch')
     .getByRole('button', { name: /^Lunch/ })
     .tap();
+  // Tryck = detaljvyn; Redigera öppnar formuläret.
+  const lunch = page.getByTestId('meal-slot-detail');
+  await expect(lunch).toContainText('12:00');
+  await lunch.getByRole('button', { name: 'Redigera' }).tap();
   const edit = page.getByRole('dialog', { name: 'Lunch' });
   await edit.getByLabel('Namn').fill('Lunchlåda');
   await edit.getByLabel('Huvudmåltid').check();
@@ -193,7 +197,16 @@ test('loggar i Kvällsmål kl. 21:30 och flyttar posterna när måltiden tas bor
       name: 'Ta bort måltiden',
     })
     .tap();
-  const remove = page.getByRole('dialog', { name: 'Ta bort Kvällsmål' });
+  // Bekräftelsen säger vart posten flyttas – och att inget tas bort ur loggen.
+  const confirm = page.getByRole('dialog', { name: 'Ta bort Kvällsmål?' });
+  await expect(confirm).toContainText(
+    '1 loggad post flyttas till Eftermiddagsmellanmål – inget tas bort ur loggen.',
+  );
+  await expect(
+    confirm.getByRole('button', { name: 'Ta bort och flytta till Eftermiddagsmellanmål' }),
+  ).toBeVisible();
+  await confirm.getByRole('button', { name: 'Välj en annan måltid' }).tap();
+  const remove = page.getByRole('dialog', { name: 'Ta bort Kvällsmål', exact: true });
   await expect(remove).toContainText('Kvällsmål har 1 post i matloggen.');
   // Förval: närmaste mellanmål (15:00), övriga går att välja.
   await expect(remove.getByRole('radio', { name: /^Eftermiddagsmellanmål/ })).toBeChecked();
@@ -211,7 +224,7 @@ test('loggar i Kvällsmål kl. 21:30 och flyttar posterna när måltiden tas bor
     expect.objectContaining({ name: 'Kvarg naturell', meal: 'middag' }),
   ]);
 
-  // En tom måltid tas bort direkt (med Ångra).
+  // En tom måltid: bekräftelsen säger att inga poster finns, sedan Ångra.
   await panel(page)
     .getByTestId('meal-slot-formiddag')
     .getByRole('button', { name: /^Förmiddag/ })
@@ -220,6 +233,9 @@ test('loggar i Kvällsmål kl. 21:30 och flyttar posterna när måltiden tas bor
     .getByRole('dialog', { name: 'Förmiddagsmellanmål' })
     .getByRole('button', { name: 'Ta bort måltiden' })
     .tap();
+  const confirmEmpty = page.getByRole('dialog', { name: 'Ta bort Förmiddagsmellanmål?' });
+  await expect(confirmEmpty).toContainText('Inga poster är loggade i den.');
+  await confirmEmpty.getByRole('button', { name: 'Ta bort', exact: true }).tap();
   await expect(page.getByTestId('meal-settings-toast')).toContainText(
     'Tog bort Förmiddagsmellanmål.',
   );

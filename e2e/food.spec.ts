@@ -224,7 +224,9 @@ test('sök och logga livsmedel, redigera, ta bort och se summeringen', async ({ 
   expect(errors).toEqual([]);
 });
 
-test('Egna: svep tar bort med Ångra, tryck redigerar och kan ta bort', async ({ page }) => {
+test('Egna: svep tar bort med Ångra, tryck öppnar detaljvyn med Redigera och Ta bort', async ({
+  page,
+}) => {
   const errors = collectErrors(page);
   await openFood(page);
   await page.getByRole('button', { name: 'Egna', exact: true }).tap();
@@ -248,10 +250,22 @@ test('Egna: svep tar bort med Ångra, tryck redigerar och kan ta bort', async ({
     expect.objectContaining({ name: 'Mormors bulle', source: 'egen' }),
   ]);
 
-  // Tryck öppnar formuläret, som har "Ta bort livsmedlet" längst ner.
+  // Tryck öppnar detaljvyn: Redigera öppnar formuläret (utan Ta bort).
   await row.getByRole('button').tap();
+  const detail = page.getByRole('dialog', { name: 'Mormors bulle' });
+  await expect(detail.getByTestId('own-detail')).toContainText('380 kcal');
+  await detail.getByRole('button', { name: 'Redigera' }).tap();
   await expect(page.getByRole('heading', { name: 'Redigera livsmedel' })).toBeVisible();
-  await page.getByRole('button', { name: 'Ta bort livsmedlet' }).tap();
+  await expect(page.getByRole('button', { name: 'Ta bort livsmedlet' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Avbryt' }).tap();
+
+  // "Ta bort livsmedlet" i detaljvyn frågar först och säger att loggen finns kvar.
+  await row.getByRole('button').tap();
+  await detail.getByRole('button', { name: 'Ta bort livsmedlet' }).tap();
+  const confirm = page.getByRole('dialog', { name: 'Ta bort Mormors bulle?' });
+  await expect(confirm).toContainText('inget i loggen påverkas');
+  await confirm.getByRole('button', { name: 'Ta bort', exact: true }).tap();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(row).toHaveCount(0);
   await expect(toast).toContainText('Tog bort Mormors bulle.');
   // Borttaget = markerat och dolt överallt; finns kvar för tidigare loggars fiber.
@@ -419,7 +433,11 @@ test('enheter: logga 2 ägg i st, skapa en egen enhet och logga med den', async 
     /1 st ≈ 60 g\s*Standard \(ungefärlig\)/,
     /1 stort ägg = 70 g\s*Egen/,
   ]);
-  await details.getByRole('button', { name: 'Redigera enheten stort ägg' }).tap();
+  // Tryck på den egna enheten = detaljvyn med Redigera.
+  await details.getByTestId('unit-entry').last().getByRole('button').tap();
+  const unitDetail = page.getByRole('dialog', { name: 'Enheten stort ägg' });
+  await expect(unitDetail).toContainText('1 stort ägg = 70 g');
+  await unitDetail.getByRole('button', { name: 'Redigera' }).tap();
   await details.getByLabel('Gram per enhet').fill('75');
   await details.getByRole('button', { name: 'Spara enhet' }).tap();
   await expect(details.getByTestId('unit-entry').last()).toContainText('1 stort ägg = 75 g');
@@ -439,9 +457,13 @@ test('enheter: logga 2 ägg i st, skapa en egen enhet och logga med den', async 
   // Ta bort enheten.
   await searchAndPick(page, 'ägg', 'Ägg kokt');
   await details.getByText('Enheter för Ägg kokt').tap();
-  await details.getByRole('button', { name: 'Ta bort enheten stort ägg' }).tap();
-  await details.getByRole('button', { name: 'Bekräfta borttagning av stort ägg' }).tap();
+  await details.getByTestId('unit-entry').last().getByRole('button').tap();
+  await unitDetail.getByRole('button', { name: 'Ta bort enheten' }).tap();
+  const confirmUnit = page.getByRole('dialog', { name: 'Ta bort enheten stort ägg?' });
+  await expect(confirmUnit).toContainText('behåller sin vikt');
+  await confirmUnit.getByRole('button', { name: 'Ta bort', exact: true }).tap();
   await expect(details.getByTestId('unit-entry')).toHaveCount(1);
+  await expect(page.getByTestId('unit-toast')).toContainText('Tog bort enheten stort ägg.');
   await expect(page.getByLabel('Mängd (g)')).toHaveValue('150');
   await page.getByRole('button', { name: 'Avbryt' }).tap();
 

@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { formatGrams } from '../lib/format.ts';
+import { unitRemovalText } from '../lib/removal.ts';
 import { UNIT_SOURCE_LABELS, formatBase, type BaseUnit, type FoodUnit } from '../lib/units.ts';
+import { useUndoToast } from '../lib/useUndoToast.ts';
+import { DetailSheet } from './DetailSheet.tsx';
+import { ListRow } from './ListRow.tsx';
+import { Toast } from './Toast.tsx';
 import { UnitForm } from './UnitForm.tsx';
 
 interface UnitListProps {
@@ -15,45 +20,44 @@ interface UnitListProps {
   canAdd?: boolean;
 }
 
-/** Livsmedlets enheter med vikt och källa; egna enheter kan redigeras och tas bort. */
+/**
+ * Livsmedlets enheter med vikt och källa. En egen enhet: tryck = detaljvyn (Redigera, Ta bort
+ * med bekräftelse), svep vänster = ta bort direkt med Ångra. Loggade poster behåller sin vikt.
+ */
 export function UnitList({ builtIn, base = 'g', custom, onChange, canAdd = false }: UnitListProps) {
   // Index i `custom` som redigeras, 'ny' för en ny enhet.
   const [editing, setEditing] = useState<number | 'ny' | null>(null);
-  const [confirm, setConfirm] = useState<number | null>(null);
+  const [detail, setDetail] = useState<number | null>(null);
+  const toast = useUndoToast();
   const customNames = new Set(custom.map((u) => u.name.toLocaleLowerCase('sv')));
   const shown = builtIn.filter((u) => !customNames.has(u.name.toLocaleLowerCase('sv')));
+  const detailUnit = detail !== null ? custom[detail] : undefined;
 
   async function remove(index: number) {
-    if (confirm !== index) {
-      setConfirm(index);
-      return;
-    }
-    setConfirm(null);
+    const unit = custom[index];
+    if (!unit) return;
+    const before = [...custom];
+    setDetail(null);
+    setEditing(null);
     await onChange(custom.filter((_, i) => i !== index));
+    toast.show(`Tog bort enheten ${unit.name}.`, () => onChange(before));
   }
 
   return (
     <div className="unit-list">
-      <ul className="entry-list" aria-label="Enheter">
-        <li className="entry unit-entry">
-          <div className="entry-main">
-            <span className="entry-date">g</span>
-            <span className="muted-inline">Gram</span>
-          </div>
-        </li>
+      <ul className="list list-flush" aria-label="Enheter">
+        <ListRow primary="g" secondary="Gram" />
         {shown.map((u) => (
-          <li key={`${u.source}:${u.name}`} className="entry unit-entry" data-testid="unit-entry">
-            <div className="entry-main">
-              <span className="entry-date">
-                1 {u.name} ≈ {formatBase(u.grams, base)}
-              </span>
-              <span className="muted-inline">{UNIT_SOURCE_LABELS[u.source]}</span>
-            </div>
-          </li>
+          <ListRow
+            key={`${u.source}:${u.name}`}
+            testId="unit-entry"
+            primary={`1 ${u.name} ≈ ${formatBase(u.grams, base)}`}
+            secondary={UNIT_SOURCE_LABELS[u.source]}
+          />
         ))}
         {custom.map((u, i) =>
           editing === i ? (
-            <li key={`egen:${u.name}`} className="entry unit-entry">
+            <li key={`egen:${u.name}`} className="unit-edit">
               <UnitForm
                 unit={u}
                 others={custom.filter((_, j) => j !== i)}
@@ -67,39 +71,18 @@ export function UnitList({ builtIn, base = 'g', custom, onChange, canAdd = false
               />
             </li>
           ) : (
-            <li key={`egen:${u.name}`} className="entry unit-entry" data-testid="unit-entry">
-              <div className="entry-main">
-                <span className="entry-date">
-                  1 {u.name} = {formatGrams(u.grams)}
-                </span>
-                <span className="muted-inline">{UNIT_SOURCE_LABELS.egen}</span>
-              </div>
-              <div className="entry-actions">
-                <button
-                  type="button"
-                  className="button button-secondary button-small"
-                  aria-label={`Redigera enheten ${u.name}`}
-                  onClick={() => {
-                    setConfirm(null);
-                    setEditing(i);
-                  }}
-                >
-                  Redigera
-                </button>
-                <button
-                  type="button"
-                  className="button button-danger button-small"
-                  aria-label={
-                    confirm === i
-                      ? `Bekräfta borttagning av ${u.name}`
-                      : `Ta bort enheten ${u.name}`
-                  }
-                  onClick={() => void remove(i)}
-                >
-                  {confirm === i ? 'Bekräfta' : 'Ta bort'}
-                </button>
-              </div>
-            </li>
+            <ListRow
+              key={`egen:${u.name}`}
+              testId="unit-entry"
+              primary={`1 ${u.name} = ${formatGrams(u.grams)}`}
+              secondary={UNIT_SOURCE_LABELS.egen}
+              chevron
+              onClick={() => {
+                toast.close();
+                setDetail(i);
+              }}
+              swipeLeft={{ label: 'Ta bort', onSwipe: () => void remove(i) }}
+            />
           ),
         )}
       </ul>
@@ -121,7 +104,7 @@ export function UnitList({ builtIn, base = 'g', custom, onChange, canAdd = false
             type="button"
             className="button button-secondary button-small"
             onClick={() => {
-              setConfirm(null);
+              toast.close();
               setEditing('ny');
             }}
           >
@@ -132,6 +115,42 @@ export function UnitList({ builtIn, base = 'g', custom, onChange, canAdd = false
         Standard- och volymenheterna är ungefärliga (volym räknas om med en typisk densitet för
         livsmedlet). Ändrar du en enhet påverkas inte det du redan loggat.
       </p>
+      {detail !== null && detailUnit && (
+        <DetailSheet
+          title={`Enheten ${detailUnit.name}`}
+          testId="unit-detail"
+          onClose={() => {
+            setDetail(null);
+          }}
+          onEdit={() => {
+            setEditing(detail);
+            setDetail(null);
+          }}
+          remove={{
+            label: 'Ta bort enheten',
+            title: `Ta bort enheten ${detailUnit.name}?`,
+            consequence: unitRemovalText(),
+            onConfirm: () => void remove(detail),
+          }}
+        >
+          <ListRow
+            primary="Vikt"
+            value={
+              <span className="num">{`1 ${detailUnit.name} = ${formatGrams(detailUnit.grams)}`}</span>
+            }
+          />
+          <ListRow primary="Källa" value={UNIT_SOURCE_LABELS.egen} />
+        </DetailSheet>
+      )}
+      {toast.toast && (
+        <Toast
+          label="Enheter"
+          testId="unit-toast"
+          message={toast.toast.message}
+          onUndo={toast.onUndo}
+          onClose={toast.close}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from 'react';
-import { deletePhotoSession, putPhotoSession, type PhotoSession } from '../db/db.ts';
+import { putPhotoSession, type PhotoSession } from '../db/db.ts';
 import { todayIso } from '../lib/dates.ts';
 import { formatDate } from '../lib/format.ts';
 import { parsePhotoFields } from '../lib/validation.ts';
@@ -11,7 +11,7 @@ interface SessionEditSheetProps {
   onClose: () => void;
 }
 
-/** Ändra datum, vikt och anteckning för ett fototillfälle, eller ta bort det med bilderna. */
+/** Ändra datum, vikt och anteckning för ett fototillfälle (Redigera i detaljvyn). */
 export function SessionEditSheet({ session, onChanged, onClose }: SessionEditSheetProps) {
   const [date, setDate] = useState(session.date);
   const [weight, setWeight] = useState(
@@ -19,7 +19,6 @@ export function SessionEditSheet({ session, onChanged, onClose }: SessionEditShe
   );
   const [note, setNote] = useState(session.note ?? '');
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function handleSave(event: SyntheticEvent) {
@@ -37,21 +36,6 @@ export function SessionEditSheet({ session, onChanged, onClose }: SessionEditShe
         updatedAt: Date.now(),
         ...fields.value,
       });
-      await onChanged();
-      onClose();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    setBusy(true);
-    try {
-      await deletePhotoSession(session.id);
       await onChanged();
       onClose();
     } finally {
@@ -105,17 +89,14 @@ export function SessionEditSheet({ session, onChanged, onClose }: SessionEditShe
             {error}
           </p>
         )}
-        <button type="submit" className="button" disabled={busy}>
-          Spara
-        </button>
-        <button
-          type="button"
-          className="button button-danger"
-          disabled={busy}
-          onClick={() => void handleDelete()}
-        >
-          {confirmDelete ? 'Bekräfta: ta bort tillfället och bilderna' : 'Ta bort tillfället'}
-        </button>
+        <div className="button-row">
+          <button type="submit" className="button" disabled={busy}>
+            Spara
+          </button>
+          <button type="button" className="button button-secondary" onClick={onClose}>
+            Avbryt
+          </button>
+        </div>
       </form>
     </BottomSheet>
   );

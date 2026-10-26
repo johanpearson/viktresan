@@ -35,7 +35,8 @@ import type { FoodSource } from './FoodPicker.tsx';
 import { ListRow } from './ListRow.tsx';
 import { Macros } from './Macros.tsx';
 import { MealBuilder } from './MealBuilder.tsx';
-import { RecipeBuilder } from './RecipeBuilder.tsx';
+import { OwnFoodDetail, type OwnTarget } from './OwnFoodDetail.tsx';
+import { RecipeEditor } from './RecipeEditor.tsx';
 import { RecipeImport } from './RecipeImport.tsx';
 import { Toast } from './Toast.tsx';
 
@@ -58,10 +59,7 @@ type Editing =
   | { kind: 'recipe'; recipe: Recipe | null }
   | null;
 
-type Removable =
-  | { kind: 'food'; food: StoredFood }
-  | { kind: 'meal'; meal: SavedMeal }
-  | { kind: 'recipe'; recipe: Recipe };
+type Removable = OwnTarget;
 
 function foodIdOf(target: Removable): string {
   switch (target.kind) {
@@ -86,8 +84,9 @@ function nameOf(target: Removable): string {
 }
 
 /**
- * Mat → Egna: sparade måltider, recept och egna livsmedel som listor. Tryck = redigera,
- * svep vänster = ta bort (med Ångra). "Ny …" är sekundärknappar i kortens rubrikrad.
+ * Mat → Egna: sparade måltider, recept och egna livsmedel som listor. Tryck = detaljvyn
+ * (Redigera, Ta bort med bekräftelse), svep vänster = ta bort direkt med Ångra. "Ny …" är
+ * sekundärknappar i kortens rubrikrad. Borttagning påverkar aldrig loggen.
  */
 export function OwnFoods({
   source,
@@ -97,6 +96,8 @@ export function OwnFoods({
 }: OwnFoodsProps) {
   const { foods, meals, favorites, foodUnits, recipes } = source.foodData;
   const [editing, setEditing] = useState<Editing>(null);
+  /** Detaljvyn (tryck på en rad). */
+  const [detail, setDetail] = useState<Removable | null>(null);
   /** Importpanelen: förifylld länk eller text, `null` = stängd. */
   const [importing, setImporting] = useState<string | null>(initialImport);
   const toast = useUndoToast();
@@ -137,8 +138,9 @@ export function OwnFoods({
     else if (target.kind === 'meal') await deleteMeal(target.meal.id);
     else await deleteRecipe(target.recipe.id);
     setEditing(null);
+    setDetail(null);
     await onChange();
-    toast.show(`Tog bort ${name}.`, async () => {
+    toast.show(`Tog bort ${name}. Loggen påverkas inte.`, async () => {
       if (target.kind === 'food') await restoreFood(target.food);
       else if (target.kind === 'meal') await restoreMeal(target.meal);
       else await putRecipe(target.recipe);
@@ -182,7 +184,7 @@ export function OwnFoods({
         }
         onClick={() => {
           toast.close();
-          setEditing({ kind: 'recipe', recipe });
+          setDetail({ kind: 'recipe', recipe });
         }}
         swipeLeft={{
           label: 'Ta bort',
@@ -212,7 +214,6 @@ export function OwnFoods({
         onCancel={() => {
           setEditing(null);
         }}
-        {...(food ? { onDelete: () => void remove({ kind: 'food', food }) } : {})}
       />
     );
   }
@@ -220,22 +221,15 @@ export function OwnFoods({
     const { recipe } = editing;
     return (
       <>
-        <RecipeBuilder
+        <RecipeEditor
           // Ny nyckel när en kopia öppnas, så att formuläret fylls i på nytt.
           key={recipe?.id ?? 'nytt'}
           recipe={recipe}
           source={source}
           onSaved={(next) => void saved(`Sparade receptet ${next.name}.`)}
-          onDuplicated={(copy) => {
-            void onChange().then(() => {
-              setEditing({ kind: 'recipe', recipe: copy });
-              toast.show(`Skapade ${copy.name}. Ändra det du vill och spara.`);
-            });
-          }}
           onCancel={() => {
             setEditing(null);
           }}
-          {...(recipe ? { onDelete: () => void remove({ kind: 'recipe', recipe }) } : {})}
         />
         {toastView}
       </>
@@ -251,7 +245,6 @@ export function OwnFoods({
         onCancel={() => {
           setEditing(null);
         }}
-        {...(meal ? { onDelete: () => void remove({ kind: 'meal', meal }) } : {})}
       />
     );
   }
@@ -293,7 +286,7 @@ export function OwnFoods({
                 value={<span className="kcal">{formatKcal(totalOf(meal.items).kcal)}</span>}
                 onClick={() => {
                   toast.close();
-                  setEditing({ kind: 'meal', meal });
+                  setDetail({ kind: 'meal', meal });
                 }}
                 swipeLeft={{
                   label: 'Ta bort',
@@ -389,7 +382,7 @@ export function OwnFoods({
                 value={<span className="kcal">{formatKcal(food.per100.kcal)}</span>}
                 onClick={() => {
                   toast.close();
-                  setEditing({ kind: 'food', food });
+                  setDetail({ kind: 'food', food });
                 }}
                 swipeLeft={{
                   label: 'Ta bort',
@@ -401,6 +394,35 @@ export function OwnFoods({
         )}
       </Card>
       {toastView}
+      {detail && (
+        <OwnFoodDetail
+          target={detail}
+          source={source}
+          fiberSource={fiberSource}
+          onEdit={() => {
+            setDetail(null);
+            setEditing(
+              detail.kind === 'food'
+                ? { kind: 'food', food: detail.food }
+                : detail.kind === 'meal'
+                  ? { kind: 'meal', meal: detail.meal }
+                  : { kind: 'recipe', recipe: detail.recipe },
+            );
+          }}
+          onDuplicate={(copy) => {
+            void putRecipe(copy).then(async () => {
+              await onChange();
+              setDetail(null);
+              setEditing({ kind: 'recipe', recipe: copy });
+              toast.show(`Skapade ${copy.name}. Ändra det du vill och spara.`);
+            });
+          }}
+          onRemove={() => void remove(detail)}
+          onClose={() => {
+            setDetail(null);
+          }}
+        />
+      )}
       {importing !== null && (
         <BottomSheet title="Importera recept" full onClose={closeImport}>
           <RecipeImport

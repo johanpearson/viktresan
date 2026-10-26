@@ -112,7 +112,7 @@ test('enheter: bråk, omräkning vid enhetsbyte och tryck på en omräkning', as
   expect(errors).toEqual([]);
 });
 
-test('matlådor: resten av ett recept loggas portion för portion och kan markeras som slut', async ({
+test('matlådor: resten av ett recept loggas portion för portion, kan ändras och tas bort med Ångra', async ({
   page,
 }) => {
   const errors = collectErrors(page);
@@ -135,27 +135,51 @@ test('matlådor: resten av ett recept loggas portion för portion och kan marker
   await expect(box).toContainText('3 portioner kvar · lagad idag');
   await expect(box).toContainText('400 kcal');
 
-  // En matlåda: 1 portion förvald, ingen ny omgång.
+  // Tryck = matlådornas detaljvy; Logga 1 portion = loggformuläret med 1 portion, ingen ny omgång.
   await box.getByRole('button').tap();
+  const boxDetail = page.getByTestId('leftover-detail');
+  await expect(boxDetail).toContainText('3 portioner');
+  await boxDetail.getByRole('button', { name: 'Logga 1 portion' }).tap();
   await expect(form(page).getByLabel('Mängd (portion)')).toHaveValue('1');
   await expect(offer).toHaveCount(0);
   await form(page).getByRole('button', { name: 'Logga', exact: true }).tap();
   await expect(box).toContainText('2 portioner kvar');
 
-  // Svep = slut, med Ångra.
+  // Redigera: portioner kvar (det som redan loggats räknas inte om).
+  await box.getByRole('button').tap();
+  await boxDetail.getByRole('button', { name: 'Redigera' }).tap();
+  const boxEdit = page.getByRole('dialog', { name: 'Ändra matlådorna' });
+  await boxEdit.getByLabel('Portioner kvar').fill('1,5');
+  await boxEdit.getByRole('button', { name: 'Spara' }).tap();
+  await expect(boxEdit).toHaveCount(0);
+  await expect(box).toContainText('1,5 portioner kvar');
+  const toast = page.getByTestId('picker-toast');
+  await expect(toast).toContainText('Matlådorna med Linsgryta: 1,5 portioner kvar.');
+
+  // Svep = ta bort, med Ångra.
   await swipeLeft(box);
   await expect(box).toHaveCount(0);
-  const toast = page.getByTestId('picker-toast');
-  await expect(toast).toContainText('Matlådorna med Linsgryta är slut.');
+  await expect(toast).toContainText('Tog bort matlådorna med Linsgryta.');
   await toast.getByRole('button', { name: 'Ångra' }).tap();
-  await expect(box).toContainText('2 portioner kvar');
+  await expect(box).toContainText('1,5 portioner kvar');
+
+  // Ta bort i detaljvyn frågar först; receptet och loggen finns kvar.
+  await box.getByRole('button').tap();
+  await boxDetail.getByRole('button', { name: 'Ta bort matlådorna' }).tap();
+  const confirm = page.getByRole('dialog', { name: 'Ta bort matlådorna med Linsgryta?' });
+  await expect(confirm).toContainText('Receptet och det du redan loggat finns kvar.');
+  await confirm.getByRole('button', { name: 'Ta bort', exact: true }).tap();
+  await expect(box).toHaveCount(0);
+  await toast.getByRole('button', { name: 'Ångra' }).tap();
+  await expect(box).toContainText('1,5 portioner kvar');
 
   const stored = await dump(page);
   expect(stored.foodLog).toHaveLength(2);
   expect(stored.recipes).toEqual([
     expect.objectContaining({
       id: 'linsgryta',
-      batch: { startedAt: expect.any(Number), portions: 4 },
+      // 1,5 kvar + 2 loggade.
+      batch: { startedAt: expect.any(Number), portions: 3.5 },
     }),
   ]);
   expect(errors).toEqual([]);
@@ -207,6 +231,7 @@ test('laga en rätt: engångsrätten loggas direkt och hamnar under Arkiv i Egna
 
   // Spara bland mina recept: flyttas upp.
   await archive.getByTestId('own-recipe').getByRole('button').first().tap();
+  await page.getByTestId('own-detail').getByRole('button', { name: 'Redigera' }).tap();
   await page.getByTestId('recipe-keep').getByRole('switch').check();
   await page.getByRole('button', { name: 'Spara recept' }).tap();
   await expect(visibleRecipes).toHaveCount(2);

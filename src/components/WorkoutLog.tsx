@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AppData } from '../lib/useAppData.ts';
+import { workoutTypes } from '../lib/workouts.ts';
 import { SegmentedControl } from './SegmentedControl.tsx';
 import { WorkoutForm } from './WorkoutForm.tsx';
 import { WorkoutPlans } from './WorkoutPlans.tsx';
@@ -23,7 +24,7 @@ export function WorkoutLog({ data, onChange }: WorkoutLogProps) {
     <>
       <SegmentedControl label="Träning" options={TABS} value={tab} onChange={setTab} />
       {tab === 'pass' ? (
-        <WorkoutForm data={data} onChange={onChange} />
+        <WorkoutForm types={workoutTypes(data.workouts, data.workoutPlans)} onChange={onChange} />
       ) : (
         <WorkoutPlans data={data} onChange={onChange} />
       )}

@@ -7,18 +7,26 @@ import {
   putFoodLogEntries,
   putMealSlots,
 } from '../db/db.ts';
-import { MEAL_KIND_LABELS, applyMealOrder, type MealId, type MealSlot } from '../lib/mealSlots.ts';
+import {
+  MEAL_KIND_LABELS,
+  applyMealOrder,
+  moveTargetFor,
+  type MealId,
+  type MealSlot,
+} from '../lib/mealSlots.ts';
 import { useDragReorder } from '../lib/useDragReorder.ts';
 import { useUndoToast } from '../lib/useUndoToast.ts';
 import { BottomSheet } from './BottomSheet.tsx';
 import { ListRow } from './ListRow.tsx';
+import { MealSlotDetail } from './MealSlotDetail.tsx';
 import { MealSlotForm, type MealSlotValues } from './MealSlotForm.tsx';
 import { MealSlotRemove } from './MealSlotRemove.tsx';
 import { Toast } from './Toast.tsx';
 
-/** Panelen ovanpå listan: ny måltid, redigera eller ta bort (med flytt av posterna). */
+/** Panelen ovanpå listan: ny måltid, detaljvyn, redigera eller ta bort (med flytt av posterna). */
 type Sheet =
   | { kind: 'new' }
+  | { kind: 'detail'; slot: MealSlot; count: number }
   | { kind: 'edit'; slot: MealSlot }
   | { kind: 'remove'; slot: MealSlot; count: number };
 
@@ -37,9 +45,10 @@ function GripIcon() {
 }
 
 /**
- * Inställningar → Måltider: dagens måltider med namn, ungefärlig tid och typ. Tryck = redigera,
- * dra i handtaget (eller piltangenter) = ändra ordning, svep vänster = ta bort. Har måltiden poster
- * frågar appen vilken måltid de ska flyttas till.
+ * Inställningar → Måltider: dagens måltider med namn, ungefärlig tid och typ. Tryck = detaljvyn
+ * (Redigera, Ta bort med bekräftelse), dra i handtaget (eller piltangenter) = ändra ordning, svep
+ * vänster = ta bort direkt med Ångra. Måltidens poster flyttas alltid till en annan måltid
+ * (förval: närmast i tid, samma typ först) – inget tas bort ur loggen.
  */
 export function MealSettings() {
   const [slots, setSlots] = useState<MealSlot[] | null>(null);
@@ -90,14 +99,16 @@ export function MealSettings() {
     toast.show(slot ? `Sparade ${next.name}.` : `La till ${next.name}.`);
   }
 
-  async function startRemove(slot: MealSlot) {
-    if (list.length <= 1) return;
+  async function openDetail(slot: MealSlot) {
+    toast.close();
     const count = (await countFoodLogByMeal()).get(slot.id) ?? 0;
-    if (count > 0) {
-      setSheet({ kind: 'remove', slot, count });
-      return;
-    }
-    const target = list.find((s) => s.id !== slot.id);
+    setSheet({ kind: 'detail', slot, count });
+  }
+
+  /** Svep: ta bort direkt och flytta posterna till förvalet – med Ångra. */
+  async function swipeRemove(slot: MealSlot) {
+    if (list.length <= 1) return;
+    const target = moveTargetFor(slot, others(slot)) ?? list.find((s) => s.id !== slot.id);
     if (!target) return;
     setSheet(null);
     await remove(slot, target.id);
@@ -142,14 +153,12 @@ export function MealSettings() {
                 primary={slot.name}
                 secondary={`${slot.time} · ${MEAL_KIND_LABELS[slot.kind]}`}
                 dragOffset={reorder.dragging?.id === slot.id ? reorder.dragging.offset : undefined}
-                onClick={() => {
-                  setSheet({ kind: 'edit', slot });
-                }}
+                onClick={() => void openDetail(slot)}
                 swipeLeft={
                   list.length > 1
                     ? {
                         label: 'Ta bort',
-                        onSwipe: () => void startRemove(slot),
+                        onSwipe: () => void swipeRemove(slot),
                       }
                     : undefined
                 }
@@ -185,7 +194,24 @@ export function MealSettings() {
       >
         Lägg till måltid
       </button>
-      {sheet && (
+      {sheet?.kind === 'detail' && (
+        <MealSlotDetail
+          sheet={sheet}
+          target={moveTargetFor(sheet.slot, others(sheet.slot))}
+          removable={list.length > 1}
+          onEdit={() => {
+            setSheet({ kind: 'edit', slot: sheet.slot });
+          }}
+          onRemove={(targetId) => void remove(sheet.slot, targetId)}
+          onChooseTarget={() => {
+            setSheet({ kind: 'remove', slot: sheet.slot, count: sheet.count });
+          }}
+          onClose={() => {
+            setSheet(null);
+          }}
+        />
+      )}
+      {sheet && sheet.kind !== 'detail' && (
         <BottomSheet
           title={
             sheet.kind === 'new'
@@ -205,7 +231,7 @@ export function MealSettings() {
               count={sheet.count}
               onRemove={(targetId) => void remove(sheet.slot, targetId)}
               onCancel={() => {
-                setSheet({ kind: 'edit', slot: sheet.slot });
+                setSheet({ kind: 'detail', slot: sheet.slot, count: sheet.count });
               }}
             />
           ) : (
@@ -214,11 +240,6 @@ export function MealSettings() {
               slot={sheet.kind === 'edit' ? sheet.slot : null}
               others={others(sheet.kind === 'edit' ? sheet.slot : null)}
               onSave={(values) => void save(values, sheet.kind === 'edit' ? sheet.slot : null)}
-              onRemove={
-                sheet.kind === 'edit' && list.length > 1
-                  ? () => void startRemove(sheet.slot)
-                  : undefined
-              }
             />
           )}
         </BottomSheet>

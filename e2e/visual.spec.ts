@@ -211,9 +211,13 @@ for (const theme of ['light', 'dark'] as const) {
       );
       await sheet.getByRole('button', { name: 'Granska svaret' }).tap();
       await sheet.getByRole('button', { name: 'Granska ingredienser' }).tap();
-      await expect(sheet.getByTestId('import-row')).toHaveCount(5);
-      await sheet.getByRole('button', { name: 'Hoppa över salt och peppar' }).tap();
+      await expect(sheet.getByTestId('recipe-ingredient')).toHaveCount(5);
+      await expect(sheet.getByTestId('uncounted-tag')).toBeVisible();
       await shot(page, `${theme}-sheet-receptimport`, false);
+      // En ingrediens: originaltexten, matchningen, mängd och enhet.
+      await sheet.getByTestId('recipe-ingredient').first().getByRole('button').first().tap();
+      await expect(page.getByTestId('ingredient-sheet')).toBeVisible();
+      await shot(page, `${theme}-sheet-receptimport-ingrediens`, false);
     });
 
     test('snabblogg, recept och veckobudget', async ({ page }) => {
@@ -249,6 +253,9 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.getByTestId('recipe-archive').getByTestId('own-recipe')).toBeVisible();
       await shot(page, `${theme}-mat-egna-arkiv`);
       await page.getByTestId('own-recipe').getByRole('button').first().tap();
+      await expect(page.getByTestId('own-detail')).toBeVisible();
+      await shot(page, `${theme}-sheet-recept-detalj`, false);
+      await page.getByTestId('own-detail').getByRole('button', { name: 'Redigera' }).tap();
       await expect(page.getByTestId('recipe-per-portion')).toBeVisible();
       await shot(page, `${theme}-mat-recept-formular`);
 
@@ -307,7 +314,7 @@ for (const theme of ['light', 'dark'] as const) {
         (el as HTMLDetailsElement).open = true;
       });
       await shot(page, `${theme}-kalender-vecka`);
-      // Radmenyn för ett pass i dagsvyn.
+      // Detaljvyn för ett pass i dagsvyn.
       await page
         .getByTestId('calendar-day')
         .getByTestId('workout')
@@ -487,6 +494,9 @@ for (const theme of ['light', 'dark'] as const) {
       const sheet = page.getByRole('dialog', { name: 'Tillskott' });
       await expect(sheet).toBeVisible();
       await sheet.getByTestId('supplement').filter({ hasText: 'Magnesium' }).tap();
+      await expect(page.getByTestId('supplement-detail')).toBeVisible();
+      await shot(page, `${theme}-sheet-tillskott-detalj`, false);
+      await page.getByTestId('supplement-detail').getByRole('button', { name: 'Redigera' }).tap();
       await expect(sheet.getByTestId('supplement-form')).toBeVisible();
       await shot(page, `${theme}-sheet-tillskott-formular`, false);
       await sheet.getByRole('button', { name: 'Avbryt' }).tap();

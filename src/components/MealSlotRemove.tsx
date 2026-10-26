@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { entryCountText } from '../lib/foodDay.ts';
 import {
   MEAL_KIND_LABELS,
-  minutesOf,
-  nearestMeal,
+  moveTargetFor,
   sortMealSlots,
   type MealId,
   type MealSlot,
@@ -24,13 +23,7 @@ interface MealSlotRemoveProps {
 export function MealSlotRemove({ slot, others, count, onRemove, onCancel }: MealSlotRemoveProps) {
   // Förval: måltiden vars tid ligger närmast (samma typ först).
   const [target, setTarget] = useState<MealId | null>(
-    () =>
-      (
-        nearestMeal(
-          others.filter((m) => m.kind === slot.kind),
-          minutesOf(slot.time),
-        ) ?? nearestMeal(others, minutesOf(slot.time))
-      )?.id ?? null,
+    () => moveTargetFor(slot, others)?.id ?? null,
   );
   const options = sortMealSlots(others).map((m) => ({
     id: m.id,

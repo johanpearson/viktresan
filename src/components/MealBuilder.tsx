@@ -16,12 +16,10 @@ interface MealBuilderProps {
   source: FoodSource;
   onSaved: (meal: SavedMeal) => void;
   onCancel: () => void;
-  /** Visar "Ta bort måltiden" längst ner (bara vid redigering). */
-  onDelete?: () => void;
 }
 
 /** Sparad måltid: flera ingredienser, var och en i gram eller en enhet. */
-export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealBuilderProps) {
+export function MealBuilder({ meal, source, onSaved, onCancel }: MealBuilderProps) {
   const ingredients = useIngredients(meal?.items ?? [], source.foodData, source.livsmedel);
   const [name, setName] = useState(meal?.name ?? '');
   const [picking, setPicking] = useState(false);
@@ -129,15 +127,6 @@ export function MealBuilder({ meal, source, onSaved, onCancel, onDelete }: MealB
             Avbryt
           </button>
         </div>
-        {onDelete && (
-          <button
-            type="button"
-            className="button button-ghost button-small button-danger-text"
-            onClick={onDelete}
-          >
-            Ta bort måltiden
-          </button>
-        )}
       </form>
       {picking && (
         <FoodPicker
