@@ -72,22 +72,17 @@ test('en vanlig dag ryms på ungefär en och en halv skärmhöjd', async ({ page
   expect(errors).toEqual([]);
 });
 
-test('viktkortet: trendvikt, en rad under stapeln och tryck → Framsteg → Historik', async ({
+test('viktkortet: senaste vikten, en rad under stapeln och tryck → Framsteg → Historik', async ({
   page,
 }) => {
   await open(page, NORMAL_DAY);
   const hero = page.getByTestId('hero');
-  await expect(hero.getByTestId('trend-weight')).toHaveText('87,5 kg');
+  await expect(hero.getByTestId('current-weight')).toHaveText('86,8 kg');
+  await expect(hero.getByText('Trendvikt')).toHaveCount(0);
   await expect(hero.getByTestId('hero-summary')).toHaveText(
     /^−\d+,\d kg · \d+,\d kg kvar · mål ca [a-zåäö]+\. \d{4}$/,
   );
-  // Förklaringen om vätska och salt finns bara bakom info-ikonen.
-  await expect(hero).not.toContainText('vätska och salt');
-  await hero.getByTestId('trend-info').tap();
-  await expect(hero.getByTestId('trend-info-text')).toContainText('vätska och salt');
-
-  await hero.getByTestId('trend-info').tap();
-  await expect(hero.getByTestId('trend-info-text')).toHaveCount(0);
+  await expect(hero.getByTestId('trend-info')).toHaveCount(0);
 
   // Prognosens förklaring bakom info-ikonen vid måldatumet.
   await expect(hero).not.toContainText('glykogen');
@@ -107,8 +102,8 @@ test('viktkortet: trendvikt, en rad under stapeln och tryck → Framsteg → His
   await expect(details.getByTestId('forecast-explanation')).toContainText('vätska och glykogen');
 });
 
-test('ingen motsägande prognostext: enligt plan tills trenden räcker', async ({ page }) => {
-  // En enda vägning: ingen trendprognos → datum enligt vald takt.
+test('ingen motsägande prognostext: enligt plan tills vägningarna räcker', async ({ page }) => {
+  // En enda vägning: ingen prognos ur vägningarna → datum enligt vald takt.
   await open(page, {
     profile: VISUAL_DATA.profile,
     weights: [{ id: 'w1', date: TODAY, weightKg: 91, createdAt: Date.parse(FROZEN_NOW) }],
@@ -119,16 +114,16 @@ test('ingen motsägande prognostext: enligt plan tills trenden räcker', async (
   await expect(page.locator('body')).not.toContainText('Logga några mätningar');
   await expect(page.getByText(/mål ca/)).toHaveCount(1);
 
-  // Med fyra veckors vägningar: trendbaserad prognos, utan "enligt plan".
+  // Med fyra veckors vägningar: prognos ur vägningarna, utan "enligt plan".
   await open(page, NORMAL_DAY);
-  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'trend');
+  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'forecast');
   await expect(page.getByTestId('goal-eta')).not.toContainText('enligt plan');
   await expect(page.getByText(/mål ca/)).toHaveCount(1);
   await expect(page.locator('body')).not.toContainText('Logga några mätningar');
 });
 
 test('snabbare takt än taket: prognosen utgår från en hållbar takt', async ({ page }) => {
-  // −0,3 kg/dag (−2,1 kg/vecka) i 40 dagar; taket = max(0,5; 1 % av trendvikten) ≈ 0,9 kg/vecka.
+  // −0,3 kg/dag (−2,1 kg/vecka) i 40 dagar; taket = max(0,5; 1 % av vikten) ≈ 0,9 kg/vecka.
   const weights = Array.from({ length: 41 }, (_, k) => ({
     id: `w${String(k)}`,
     date: daysAgo(40 - k),
@@ -144,7 +139,7 @@ test('snabbare takt än taket: prognosen utgår från en hållbar takt', async (
     },
     weights,
   });
-  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'trend');
+  await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'forecast');
   await expect(page.getByTestId('goal-eta-capped')).toHaveText(
     'Takten är just nu snabbare än planerat, prognosen utgår från en hållbar takt.',
   );
@@ -171,7 +166,7 @@ test('varje ring och kort navigerar rätt', async ({ page }) => {
   // Kalorier → kalorimålet: mål, takt, förbrukning och "Så räknas målet ut".
   await page.getByRole('button', { name: 'Kalorier – visa kalorimålet' }).tap();
   await expect(sheet).toHaveAccessibleName('Kalorimål');
-  await expect(sheet.getByTestId('calorie-target')).toHaveText('1 680 kcal');
+  await expect(sheet.getByTestId('calorie-target')).toHaveText('1 670 kcal');
   await expect(sheet.getByTestId('plan-rate')).toBeVisible();
   await expect(sheet.getByTestId('plan-tdee')).toBeVisible();
   await sheet.getByText('Så räknas målet ut').tap();

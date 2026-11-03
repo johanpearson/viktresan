@@ -7,13 +7,13 @@ import { formatDate, formatInt, formatKcal, formatRate } from './format.ts';
 export function limitText(limit: PlanLimit, plan: CaloriePlan): string {
   switch (limit) {
     case 'rate-capped':
-      return `Vald takt (${formatRate(plan.chosenRateKg)}) är snabbare än 1 % av din trendvikt per vecka. Kalorimålet bygger därför på högst ${formatRate(plan.maxRateKg)}.`;
+      return `Vald takt (${formatRate(plan.chosenRateKg)}) är snabbare än 1 % av din vikt per vecka. Kalorimålet bygger därför på högst ${formatRate(plan.maxRateKg)}.`;
     case 'calorie-floor':
       return plan.rateKg > 0
         ? `Kalorimålet har höjts till lägsta rekommenderade intag, ${formatKcal(plan.floorKcal)} per dag. Det motsvarar en takt på omkring ${formatRate(plan.rateKg)}.`
         : `Din beräknade förbrukning ligger under lägsta rekommenderade intag (${formatKcal(plan.floorKcal)} per dag). Kalorimålet är satt till den nivån, vilket ungefär motsvarar att hålla vikten.`;
     case 'goal-reached':
-      return 'Trendvikten har nått målvikten. Kalorimålet är satt för att hålla vikten.';
+      return 'Vikten har nått målvikten. Kalorimålet är satt för att hålla vikten.';
     case 'maintenance':
       return 'Du har valt att hålla vikten. Kalorimålet motsvarar din beräknade förbrukning.';
   }

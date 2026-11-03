@@ -16,7 +16,7 @@ import {
   ANGLE_LABELS,
   CAPTURE_ANGLES,
   pickGhost,
-  trendWeightText,
+  weightText,
   type CaptureAngle,
   type ProfileSide,
 } from '../lib/photoSessions.ts';
@@ -54,7 +54,7 @@ interface PhotoSessionFlowProps {
 }
 
 /**
- * Guiden för ett fototillfälle i en panel: datum, vikt (förifylld från trendvikten) och
+ * Guiden för ett fototillfälle i en panel: datum, vikt (förifylld från senaste vägningen) och
  * anteckning, sedan vinkel för vinkel. Varje steg kan hoppas över. Bilden tas med den
  * egna kameravyn eller, om getUserMedia saknas eller nekas, med filväljaren; galleriet
  * går alltid att välja. Tillfället sparas först när den första bilden sparas.
@@ -73,7 +73,7 @@ export function PhotoSessionFlow({
   const step = steps[stepIndex] ?? 'done';
 
   const [date, setDate] = useState(todayIso);
-  const [weight, setWeight] = useState(() => trendWeightText(weights, todayIso()));
+  const [weight, setWeight] = useState(() => weightText(weights, todayIso()));
   const [note, setNote] = useState('');
   const [session, setSession] = useState<PhotoSession | null>(
     mode.kind === 'add' ? mode.session : null,
@@ -188,7 +188,7 @@ export function PhotoSessionFlow({
                 max={todayIso()}
                 onChange={(e) => {
                   setDate(e.target.value);
-                  setWeight(trendWeightText(weights, e.target.value));
+                  setWeight(weightText(weights, e.target.value));
                 }}
               />
             </label>
@@ -207,7 +207,7 @@ export function PhotoSessionFlow({
             </label>
           </div>
           <p className="muted form-note" id="flow-weight-note">
-            Vikten förifylls med trendvikten den dagen.
+            Vikten förifylls med senaste vägningen den dagen.
           </p>
           <label className="field">
             <span className="field-label">Anteckning (valfri)</span>

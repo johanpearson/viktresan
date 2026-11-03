@@ -35,11 +35,11 @@ function weighings(daysBack: number, kg: (daysAgo: number) => number, skip = new
   return list;
 }
 
-/** Litet deterministiskt brus (±0,3 kg) som ändå ger en platt trend. */
+/** Litet deterministiskt brus (±0,3 kg) runt en platt nivå. */
 const flat = (i: number) => 88 + ((i * 7) % 5) * 0.15 - 0.3;
 
 describe('detectPlateau', () => {
-  it('platå: trendvikten har ändrats < 0,2 kg på 21 dagar', () => {
+  it('platå: snittvikten första och sista veckan av 21 dagar skiljer < 0,2 kg', () => {
     const check = detectPlateau({ profile, weights: weighings(60, flat), today: TODAY });
     expect(check.kind).toBe('plateau');
     if (check.kind !== 'plateau') return;
@@ -48,7 +48,7 @@ describe('detectPlateau', () => {
     expect(check.weighDays).toBe(21);
   });
 
-  it('ingen platå när trenden går nedåt', () => {
+  it('ingen platå när vikten går nedåt', () => {
     const check = detectPlateau({
       profile,
       weights: weighings(60, (i) => 88 + i * 0.07),
@@ -289,7 +289,7 @@ describe('analyzePlateau – senaste 3 veckorna mot de 3 innan', () => {
     if (check.kind !== 'plateau') throw new Error('väntade platå');
     const a = analyzePlateau(input, TODAY);
     const lines = plateauPromptLines(check, a, comparisonRows(a), a.explanations.slice(0, 2));
-    expect(lines[0]).toMatch(/^Trendvikten har ändrats/);
+    expect(lines[0]).toMatch(/^Snittvikten har ändrats .* på 3 veckor/);
     expect(lines).toContain('- Snittintag: 1 800 kcal (innan 1 500 kcal)');
     expect(lines).toContain('Möjliga förklaringar enligt appen:');
   });

@@ -1,5 +1,5 @@
 /**
- * Sätter ihop profil, vikter och matlogg till dagens kalorimål: trendvikt,
+ * Sätter ihop profil, vikter och matlogg till dagens kalorimål: senaste vikten,
  * formel-TDEE, adaptiv TDEE och spärrar. Ren funktion.
  */
 import { adaptiveTdee, type AdaptiveTdee } from './adaptiveTdee.ts';
@@ -12,7 +12,7 @@ import {
   type CaloriePlan,
 } from './energy.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
-import { dailyWeights, emaTrend, type DatedWeight } from './stats.ts';
+import { dailyWeights, type DatedWeight } from './stats.ts';
 
 export interface PlanProfile {
   startWeightKg: number;
@@ -27,7 +27,7 @@ export interface PlanProfile {
 
 export type PlanResult =
   | { kind: 'incomplete-profile' }
-  | { kind: 'plan'; plan: CaloriePlan; adaptive: AdaptiveTdee; trendKg: number };
+  | { kind: 'plan'; plan: CaloriePlan; adaptive: AdaptiveTdee; weightKg: number };
 
 export function buildPlan(
   profile: PlanProfile,
@@ -38,12 +38,11 @@ export function buildPlan(
   const energy = energyProfileFrom(profile);
   if (!energy) return { kind: 'incomplete-profile' };
   const daily = dailyWeights(weights.filter((w) => w.date <= today));
-  const trend = emaTrend(daily);
-  const trendKg = trend[trend.length - 1]?.trendKg ?? profile.startWeightKg;
+  const weightKg = daily[daily.length - 1]?.weightKg ?? profile.startWeightKg;
   const formulaTdee =
     bmrMifflinStJeor(
       energy.sex,
-      trendKg,
+      weightKg,
       energy.heightCm,
       ageFromBirthYear(energy.birthYear, today),
     ) * activityFactor(energy.activityLevel);
@@ -55,9 +54,9 @@ export function buildPlan(
   const adaptive = adaptiveTdee({ daily, intake, today, formulaTdee });
   const plan = caloriePlan({
     profile: energy,
-    trendKg,
+    weightKg,
     today,
     tdeeOverride: adaptive.kind === 'adaptive' ? adaptive.tdee : null,
   });
-  return { kind: 'plan', plan, adaptive, trendKg };
+  return { kind: 'plan', plan, adaptive, weightKg };
 }

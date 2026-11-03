@@ -1,6 +1,6 @@
 /**
  * Visningsinställningar som hör till enheten (inte till säkerhetskopian):
- * trendvikt som huvudsiffra, vilket veckokort som stängts, profilsida, kameravyns
+ * vilket veckokort som stängts, profilsida, kameravyns
  * spökbild, vad "Fråga AI" tar med i prompten, haptik, stängt platåkort, rapportens val och vad Översikt
  * döljer (ringar och kort), senast stängda milstolpekortet, dolda näringsetiketter och om namnet på
  * "Vad ska jag äta?"-ikonen och notisen om nedladdade säkerhetskopior visats. Lagras i `settings`
@@ -14,8 +14,6 @@ import { isProfileSide, type ProfileSide } from './photoSessions.ts';
 import { DEFAULT_REPORT_SETTINGS, parseReportSettings, type ReportSettings } from './report.ts';
 
 export interface Preferences {
-  /** Översikt visar trendvikten stort och dagsvikten litet under. */
-  trendHero: boolean;
   /** Måndagen för det senast stängda veckokortet. */
   weekCardDismissed: string | null;
   /** Vilken sida som vänds mot kameran i profilbilder. */
@@ -52,7 +50,6 @@ export const GHOST_OPACITY_MIN = 0.1;
 export const GHOST_OPACITY_MAX = 0.9;
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  trendHero: true,
   weekCardDismissed: null,
   profileSide: 'vanster',
   ghostEnabled: true,
@@ -74,8 +71,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
 export function parsePreferences(raw: unknown): Preferences {
   const stored = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   return {
-    trendHero:
-      typeof stored.trendHero === 'boolean' ? stored.trendHero : DEFAULT_PREFERENCES.trendHero,
     weekCardDismissed:
       typeof stored.weekCardDismissed === 'string' ? stored.weekCardDismissed : null,
     profileSide: isProfileSide(stored.profileSide)

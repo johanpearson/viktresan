@@ -45,7 +45,7 @@ function workout(date: string): Workout {
 const ids = (list: readonly { milestone: { id: string } }[]) => list.map((r) => r.milestone.id);
 
 describe('syncMilestones', () => {
-  it('firar en milstolpe en gång – och den tas inte tillbaka när trenden vänder', async () => {
+  it('firar en milstolpe en gång – och den tas inte tillbaka när vikten går upp igen', async () => {
     await saveProfile(profile);
     for (let i = 0; i < 5; i++) await putWeight(weight(addDays(TODAY, i - 4), 98.5));
     const first = await syncMilestones({ mode: 'live', today: TODAY, now: 1 });
@@ -61,13 +61,13 @@ describe('syncMilestones', () => {
     ]);
   });
 
-  it('en tillfällig dipp i dagsvikten ger ingen milstolpe', async () => {
+  it('viktmilstolpen mäts på den faktiska vikten', async () => {
     await saveProfile(profile);
     await putWeight(weight(addDays(TODAY, -2), 100));
-    await putWeight(weight(addDays(TODAY, -1), 100));
-    await putWeight(weight(TODAY, 97));
+    await putWeight(weight(addDays(TODAY, -1), 99.2));
     expect(await syncMilestones({ mode: 'live', today: TODAY })).toEqual([]);
-    expect(await listMilestones()).toEqual([]);
+    await putWeight(weight(TODAY, 98.9));
+    expect(ids(await syncMilestones({ mode: 'live', today: TODAY }))).toEqual(['kg-1']);
   });
 
   it('silent (appstart) sparar passerade milstolpar utan att fira dem', async () => {

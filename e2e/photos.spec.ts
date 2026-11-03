@@ -228,8 +228,8 @@ test('nytt fototillfälle med båda vinklarna via filväljaren när kameran neka
   await page.getByRole('button', { name: 'Nytt fototillfälle' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Nytt fototillfälle' });
   await expect(sheet).toBeVisible();
-  // Vikten förifylls med trendvikten (EMA): 90 → 88 efter två dagar ger 89,6.
-  await expect(sheet.getByLabel('Vikt (kg, valfri)')).toHaveValue('89,6');
+  // Vikten förifylls med senaste vägningen: 88.
+  await expect(sheet.getByLabel('Vikt (kg, valfri)')).toHaveValue('88,0');
   await expect(sheet.getByLabel('Datum')).toHaveValue(isoDaysFromToday(0));
   await sheet.getByLabel('Anteckning (valfri)').fill('Morgon, samma spegel');
   await sheet.getByRole('button', { name: 'Börja' }).tap();
@@ -272,7 +272,7 @@ test('nytt fototillfälle med båda vinklarna via filväljaren när kameran neka
   // Galleriet: en rad med datum och vikt ovanför, framifrån och profil sida vid sida.
   const row = page.getByTestId('photo-session');
   await expect(row).toHaveCount(1);
-  await expect(row).toContainText('89,6 kg');
+  await expect(row).toContainText('88,0 kg');
   await expect(row).toContainText('Morgon, samma spegel');
   await expect(row.getByTestId('photo')).toHaveCount(2);
   await expect(row.getByTestId('photo').nth(0)).toHaveAttribute('data-angle', 'fram');
@@ -313,7 +313,7 @@ test('nytt fototillfälle med båda vinklarna via filväljaren när kameran neka
     {
       id: stored[0]?.sessionId,
       date: isoDaysFromToday(0),
-      weightKg: 89.6,
+      weightKg: 88,
       note: 'Morgon, samma spegel',
       createdAt: expect.any(Number) as unknown as number,
     },
@@ -330,7 +330,7 @@ test('nytt fototillfälle med båda vinklarna via filväljaren när kameran neka
   // Helskärmsvyn visar vinkeln och tar bort bilden direkt, med Ångra.
   await page.getByTestId('photo').tap();
   const viewer = page.getByRole('dialog', { name: /Profil \(vänster sida\)/ });
-  await expect(viewer).toContainText('89,6 kg');
+  await expect(viewer).toContainText('88,0 kg');
   await viewer.getByRole('button', { name: 'Ta bort bilden' }).tap();
   await expect(viewer).toBeHidden();
   await expect(page.getByText('Inga bilder i profil än.')).toBeVisible();

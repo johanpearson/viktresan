@@ -27,7 +27,7 @@ const NO_LOG: readonly never[] = [];
 
 /**
  * Framsteg → Veckor: en rad per avslutad vecka med data, senaste först (vecka, datum, snittvikt
- * (tidigare "Snitt per vecka" på Översikt), loggade dagar, trendens förändring). Veckor utan data visas inte. Tryck = hela summeringen i en panel, med "Fråga AI".
+ * (tidigare "Snitt per vecka" på Översikt), loggade dagar, viktens förändring). Veckor utan data visas inte. Tryck = hela summeringen i en panel, med "Fråga AI".
  */
 export function Veckor() {
   const { data } = useAppData();
@@ -55,7 +55,7 @@ export function Veckor() {
         <ul className="list">
           {weeks.map((entry) => {
             const { summary } = entry;
-            const change = summary.trendChangeKg;
+            const change = summary.weightChangeKg;
             return (
               <ListRow
                 key={summary.from}
@@ -73,7 +73,7 @@ export function Veckor() {
                 value={
                   change == null ? undefined : (
                     <span className="num">
-                      <span className="visually-hidden">Trendvikt </span>
+                      <span className="visually-hidden">Viktförändring </span>
                       {formatKg(change, { signed: true })}
                     </span>
                   )

@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { collectErrors, dump, seed, type SeedData } from './helpers.ts';
 
 /**
- * Platåkortet på Översikt: trendvikten har stått still i tre veckor. Tiden fryses till
+ * Platåkortet på Översikt: vikten har stått still i tre veckor. Tiden fryses till
  * måndag 28 sep 2026 kl. 09:00.
  */
 
@@ -79,7 +79,7 @@ test('platå: kortet jämför perioderna, Fråga AI och Stäng', async ({ page }
   await open(page, data(0.5));
   const card = page.getByTestId('plateau-card');
   await expect(card).toBeVisible();
-  await expect(card.getByRole('heading', { name: 'Trendvikten står still' })).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'Vikten står still' })).toBeVisible();
   await expect(card.getByTestId('plateau-row').filter({ hasText: 'Snittintag' })).toContainText(
     '2 000 kcal',
   );
@@ -128,6 +128,6 @@ test('platå: kortet jämför perioderna, Fråga AI och Stäng', async ({ page }
 
 test('ingen platåvarning i viktstabiliseringsläget', async ({ page }) => {
   await open(page, data(0));
-  await expect(page.getByTestId('trend-weight')).toBeVisible();
+  await expect(page.getByTestId('current-weight')).toBeVisible();
   await expect(page.getByTestId('plateau-card')).toHaveCount(0);
 });

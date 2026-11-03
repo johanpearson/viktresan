@@ -1,12 +1,12 @@
 /**
  * Adaptiv TDEE: skattar den verkliga energiförbrukningen ur matloggen och
- * trendviktens förändring, och viktar skattningen mot formelvärdet efter hur
+ * viktens förändring, och viktar skattningen mot formelvärdet efter hur
  * mycket och hur bra data som finns.
  *
  *   observerad TDEE = snittintag − (viktförändring per dag × 7 700)
  *
  * Viktförändringen är lutningen i en minsta kvadrat-anpassning av dagsvikterna
- * i fönstret (trendvikten), vilket är robust mot vätskesvängningar dag för dag.
+ * i fönstret, vilket är robust mot vätskesvängningar dag för dag.
  * Dagens datum räknas inte – dagen är inte slut och matloggen är ofullständig.
  */
 import { addDays, daysBetween, toDayNumber } from './dates.ts';

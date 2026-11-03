@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from './dates.ts';
 import { goalEta, overviewStats } from './overview.ts';
-import { bmi, emaTrend, forecastGoal, goalProgress, type DailyWeight } from './stats.ts';
+import { bmi, forecastGoal, goalProgress, type DailyWeight } from './stats.ts';
 
 const profile = {
   startWeightKg: 90,
@@ -11,7 +11,7 @@ const profile = {
   ratePerWeekKg: 0.5,
 };
 const today = '2026-02-14';
-// Varannan dag ≈ −0,5 kg/vecka i sex veckor med en vätskedipp sist: dagsvikt och trend skiljer sig.
+// Varannan dag ≈ −0,5 kg/vecka i sex veckor med en vätskedipp sist.
 const daily: DailyWeight[] = [
   ...Array.from({ length: 22 }, (_, i) => ({
     date: addDays('2026-01-01', i * 2),
@@ -20,7 +20,6 @@ const daily: DailyWeight[] = [
   })),
   { date: today, weightKg: 86, count: 1 },
 ];
-const trendKg = emaTrend(daily).at(-1)?.trendKg ?? NaN;
 const dailyKg = 86;
 
 /** Alla härledda värden räknade på en given vikt. */
@@ -40,28 +39,9 @@ function derivedFrom(weightKg: number) {
 }
 
 describe('overviewStats', () => {
-  it('förutsättning: trend och dagsvikt skiljer sig', () => {
-    expect(Math.abs(trendKg - dailyKg)).toBeGreaterThan(0.5);
-  });
-
-  it('trendläge: förändring, kvar, %, BMI och prognos räknas alla på trendvikten', () => {
-    const s = overviewStats({ profile, daily, today, preferTrend: true });
-    expect(s.source).toBe('trend');
-    expect(s.weightKg).toBeCloseTo(trendKg);
-    expect(s.trendKg).toBeCloseTo(trendKg);
-    expect(s.dailyKg).toBe(dailyKg);
-    expect({ progress: s.progress, bmi: s.bmi, forecast: s.forecast }).toEqual(
-      derivedFrom(trendKg),
-    );
-    // Förändring mot startvikten.
-    expect(s.progress.changeKg).toBeCloseTo(trendKg - 90);
-    expect(s.progress.remainingKg).toBeCloseTo(trendKg - 80);
-    expect(s.progress.fraction).toBeCloseTo((90 - trendKg) / 10);
-  });
-
-  it('dagsläge: förändring, kvar, %, BMI och prognos räknas alla på dagsvikten', () => {
-    const s = overviewStats({ profile, daily, today, preferTrend: false });
-    expect(s.source).toBe('dag');
+  it('förändring, kvar, %, BMI och prognos räknas alla på senaste dagsvikten', () => {
+    const s = overviewStats({ profile, daily, today });
+    expect(s.latestDate).toBe(today);
     expect(s.weightKg).toBe(dailyKg);
     expect({ progress: s.progress, bmi: s.bmi, forecast: s.forecast }).toEqual(
       derivedFrom(dailyKg),
@@ -72,33 +52,19 @@ describe('overviewStats', () => {
     expect(s.forecast.kind).toBe('forecast');
   });
 
-  it('prognosen utgår från samma vikt: trenden ligger högre och når målet senare', () => {
-    const trend = overviewStats({ profile, daily, today, preferTrend: true }).forecast;
-    const day = overviewStats({ profile, daily, today, preferTrend: false }).forecast;
-    expect(trend.kind).toBe('forecast');
-    expect(day.kind).toBe('forecast');
-    if (trend.kind === 'forecast' && day.kind === 'forecast') {
-      expect(trend.weeklyChangeKg).toBeCloseTo(day.weeklyChangeKg);
-      expect(trend.date > day.date).toBe(true);
-    }
-  });
-
-  it('utan vägning används startvikten i båda lägena', () => {
-    for (const preferTrend of [true, false]) {
-      const s = overviewStats({ profile, daily: [], today, preferTrend });
-      expect(s.source).toBe('dag');
-      expect(s.weightKg).toBe(90);
-      expect(s.trendKg).toBeNull();
-      expect(s.progress).toMatchObject({ changeKg: 0, fraction: 0, remainingKg: 10 });
-      expect(s.forecast).toEqual({ kind: 'insufficient-data', reason: 'few-weigh-ins' });
-    }
+  it('utan vägning används startvikten', () => {
+    const s = overviewStats({ profile, daily: [], today });
+    expect(s.weightKg).toBe(90);
+    expect(s.latestDate).toBeNull();
+    expect(s.progress).toMatchObject({ changeKg: 0, fraction: 0, remainingKg: 10 });
+    expect(s.forecast).toEqual({ kind: 'insufficient-data', reason: 'few-weigh-ins' });
   });
 });
 
 describe('goalEta', () => {
   const progress = goalProgress(90, 86, 80);
 
-  it('trendbaserad prognos när trenden leder mot målet', () => {
+  it('prognos ur vägningarna när takten leder mot målet', () => {
     const eta = goalEta({
       stats: {
         progress,
@@ -117,7 +83,7 @@ describe('goalEta', () => {
       planDate: '2026-04-01',
     });
     expect(eta).toEqual({
-      kind: 'trend',
+      kind: 'forecast',
       date: '2026-05-01',
       range: null,
       weeklyChangeKg: -0.6,
@@ -143,10 +109,10 @@ describe('goalEta', () => {
       today,
       rateKg: 0.5,
     });
-    expect(eta).toMatchObject({ kind: 'trend', range, capped: true, weeklyChangeKg: -0.9 });
+    expect(eta).toMatchObject({ kind: 'forecast', range, capped: true, weeklyChangeKg: -0.9 });
   });
 
-  it('snabb tidig nedgång (dag 1–14): ingen trendprognos, datum enligt plan', () => {
+  it('snabb tidig nedgång (dag 1–14): ingen prognos ur vägningarna, datum enligt plan', () => {
     // −0,4 kg/dag i två veckor (−2,8 kg/vecka extrapolerat).
     const early: DailyWeight[] = Array.from({ length: 14 }, (_, i) => ({
       date: addDays('2026-01-01', i),
@@ -154,7 +120,7 @@ describe('goalEta', () => {
       count: 1,
     }));
     const day14 = '2026-01-14';
-    const stats = overviewStats({ profile, daily: early, today: day14, preferTrend: true });
+    const stats = overviewStats({ profile, daily: early, today: day14 });
     expect(stats.forecast).toEqual({ kind: 'insufficient-data', reason: 'early' });
     const eta = goalEta({ stats, today: day14, rateKg: 0.5 });
     expect(eta).toMatchObject({ kind: 'plan', rateKg: 0.5, reason: 'early' });
@@ -180,7 +146,7 @@ describe('goalEta', () => {
     });
   });
 
-  it('trenden leder inte mot målet: enligt plan, aldrig två motsägande datum', () => {
+  it('vikten går inte mot målet: enligt plan, aldrig två motsägande datum', () => {
     const eta = goalEta({
       stats: { progress, forecast: { kind: 'not-progressing', weeklyChangeKg: 0.2 } },
       today,
@@ -189,7 +155,7 @@ describe('goalEta', () => {
     expect(eta).toMatchObject({ kind: 'plan', reason: 'not-progressing' });
   });
 
-  it('takt 0 utan trend: inget datum; nått mål: reached', () => {
+  it('takt 0 utan prognos: inget datum; nått mål: reached', () => {
     const stats = { progress, forecast: { kind: 'insufficient-data', reason: 'early' } as const };
     expect(goalEta({ stats, today, rateKg: 0 })).toBeNull();
     expect(

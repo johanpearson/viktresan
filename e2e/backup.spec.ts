@@ -271,7 +271,7 @@ test('inställningarna följer med: funktioner och visning gäller direkt efter 
     ...DATA,
     settings: {
       features: { glp1: true, tillskott: true, steg: false, version: 4 },
-      preferences: { trendHero: false, haptics: false },
+      preferences: { ghostEnabled: false, haptics: false },
       ingredientMatches: { 'krossade tomater': 'lv:1' },
     },
   });
@@ -311,7 +311,7 @@ test('inställningarna följer med: funktioner och visning gäller direkt efter 
 
   const { settings } = await dump(page);
   expect(settings.features).toMatchObject({ glp1: true, tillskott: true, steg: false });
-  expect(settings.preferences).toMatchObject({ trendHero: false, haptics: false });
+  expect(settings.preferences).toMatchObject({ ghostEnabled: false, haptics: false });
   expect(settings.ingredientMatches).toEqual({ 'krossade tomater': 'lv:1' });
 
   // Utan omladdning: brytarna visar de importerade lägena.

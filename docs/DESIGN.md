@@ -44,7 +44,7 @@ utanför intervallet (≈, µ …) tas ur systemets typsnitt.
 | `--text-lg`      | 20 px   | Nyckeltal (827 kcal), panelrubriker, ikoner (⋯)                 |
 | `--text-xl`      | 28 px   | Stora nyckeltal                                                 |
 | `--text-title`   | 32 px   | Sidrubriken (`Page`, 800, tätare spärrning, krymper vid scroll) |
-| `--text-display` | 44 px   | Översikts huvudsiffra (trendvikt)                               |
+| `--text-display` | 44 px   | Översikts huvudsiffra (vikt)                                    |
 
 - **Siffror**: alltid `font-variant-numeric: tabular-nums` (klasserna `.num`, `.kcal`, `.list-row-value`,
   `.stat-bar-value`) så att kolumner linjerar och värden inte hoppar när de ändras.
@@ -529,7 +529,7 @@ Streckade ramar betyder tomt läge – inte "ej nådd".
 Snitt mot mål visas som `StatBar` (samma som Mat → Dag) i stället för meningar i löptext. Gemensam förklaring
 ("Snitt per loggad dag …") är en dämpad rad under staplarna – metaraden i en `StatBar` bryts aldrig och ska vara kort.
 `.table` är en tät tabell (`--text-sm`, 8/4 px cellmarginal) för data med flera kolumner per rad (dag, intag, mot mål,
-protein; vikt och trend) – där en `ListRow` skulle tappa kolumnerna.
+protein) – där en `ListRow` skulle tappa kolumnerna.
 
 ### PeriodBar
 
@@ -643,7 +643,7 @@ filter. Samma knapp (`ShowMore`) används för "Visa alla N obesvarade" på Öve
 - Ett värde per dag (steg, dryck): `DailyBarChart` med `colorVar`, `label`, `format`, `step` (avrundning av
   y-axelns tak) och valfri `goalOn(date)`. Vikt (`WeightChart`) och intag (`IntakeChart`) har egna grafer.
 - Rapporten (utskrift, PDF) använder `SvgChart` i stället för uPlot: SVG är skarp i PDF och behöver ingen canvas.
-  Serier: `points` (svaga dagsvärden), `line` (trend), `line-points` (midja, aptit), `bars` (steg). Legenden är
+  Serier: `points` (svaga punkter), `line`, `line-points` (vikt, midja, aptit), `bars` (steg). Legenden är
   `bar-legend` under grafen när det finns flera serier.
 - Grafen ligger i ett `Card` med rubrik och `className="chart-card"`; sammanfattningen (snitt, mål nått) är en
   dämpad rad under grafen.
@@ -848,10 +848,10 @@ Formuläret (`SupplementForm`) har enhet som chips, näringsämnen som rader (m�
 Status och det som kräver handling idag – detaljer ett tryck bort. En vanlig dag ryms på ungefär 1,5 skärmhöjder
 (Pixel 7, vaktas i `e2e/overview.spec.ts`). Ordning:
 
-1. **Viktkortet** (`hero-card`): trendvikten i `--text-xl`, dagsvikt och datum som en rad `--text-xs`, tunn
-   `ProgressBar` och **en** rad under: "−4,5 kg · 7,5 kg kvar · mål ca dec. 2026". Måldatumet är trendens prognos
+1. **Viktkortet** (`hero-card`): senaste vikten i `--text-xl` (ingen trendvikt), datumet som en rad `--text-xs`, tunn
+   `ProgressBar` och **en** rad under: "−4,5 kg · 7,5 kg kvar · mål ca dec. 2026". Måldatumet är prognosen ur vägningarna
    när den räcker, annars datumet enligt vald takt med "enligt plan" (`goalEta`) – aldrig två datum eller en text om
-   att prognosen saknas. Förklaringen om vätska och salt ligger bakom info-ikonen. Hela kortet är en länk (`hero-link`,
+   att prognosen saknas. Förklaringen av prognosen ligger bakom info-ikonen. Hela kortet är en länk (`hero-link`,
    `::after` över kortet, › uppe till höger) till Framsteg → Historik, där `WeightDetails` visar BMI och prognosen.
 2. **Kontextkort** – bara när de är aktuella, alla kan stängas: ny version (`UpdateCard`), ny milstolpe
    (`MilestoneCard`), förra veckan (`WeekSummaryCard`, en rad med rubriken → Framsteg → Veckor), platå
@@ -875,7 +875,7 @@ målhöjning – bara dagen biverkningen loggades.
 
 ### Platåkortet (Översikt)
 
-`Card` med `tone="info"` och "Stäng" (ghost, liten) i rubrikraden. En saklig mening om trendvikten, sedan en `.table`
+`Card` med `tone="info"` och "Stäng" (ghost, liten) i rubrikraden. En saklig mening om snittvikten, sedan en `.table`
 med de senaste tre veckorna mot de tre innan (rader med `feature`, filtreras), dosbyten som dämpad rad, rubriken
 "Det här kan förklara platån" med högst två förklaringar som punktlista, alltid notisen om vätska och mätbrus och
 "Fråga AI om platån" som sekundär knapp (helskärmspanel med `AskAi`). Formuleringar beskriver vad datan visar – aldrig

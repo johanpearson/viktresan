@@ -1,5 +1,5 @@
 interface InfoButtonProps {
-  /** Knappens namn för skärmläsare, t.ex. "Vad är trendvikt?". */
+  /** Knappens namn för skärmläsare, t.ex. "Hur räknas prognosen?". */
   label: string;
   expanded: boolean;
   /** Id för förklaringen som knappen fäller ut. */

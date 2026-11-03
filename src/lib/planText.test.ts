@@ -15,24 +15,24 @@ const man: EnergyProfile = {
 
 describe('planText', () => {
   it('förklarar taktspärren', () => {
-    const plan = caloriePlan({ profile: man, trendKg: 70, today: TODAY });
+    const plan = caloriePlan({ profile: man, weightKg: 70, today: TODAY });
     expect(limitText('rate-capped', plan)).toBe(
-      'Vald takt (1 kg/vecka) är snabbare än 1 % av din trendvikt per vecka. Kalorimålet bygger därför på högst 0,7 kg/vecka.',
+      'Vald takt (1 kg/vecka) är snabbare än 1 % av din vikt per vecka. Kalorimålet bygger därför på högst 0,7 kg/vecka.',
     );
   });
 
   it('förklarar kaloriegolvet, även när det inte ger något underskott', () => {
-    const plan = caloriePlan({ profile: man, trendKg: 70, today: TODAY, tdeeOverride: 1800 });
+    const plan = caloriePlan({ profile: man, weightKg: 70, today: TODAY, tdeeOverride: 1800 });
     expect(limitText('calorie-floor', plan)).toContain('1 500 kcal per dag');
     expect(limitText('calorie-floor', plan)).toContain('0,27 kg/vecka');
-    const none = caloriePlan({ profile: man, trendKg: 70, today: TODAY, tdeeOverride: 1400 });
+    const none = caloriePlan({ profile: man, weightKg: 70, today: TODAY, tdeeOverride: 1400 });
     expect(limitText('calorie-floor', none)).toContain('hålla vikten');
   });
 
   it('förklarar ett orimligt måldatum och föreslår tidigaste datum', () => {
     const plan = caloriePlan({
       profile: { ...man, ratePerWeekKg: 0.5, goalWeightKg: 80, goalDate: '2026-11-06' },
-      trendKg: 90,
+      weightKg: 90,
       today: TODAY,
     });
     const text = goalDateText(plan, '2026-11-06');
@@ -43,7 +43,7 @@ describe('planText', () => {
   });
 
   it('säger inget om måldatum saknas', () => {
-    const plan = caloriePlan({ profile: man, trendKg: 90, today: TODAY });
+    const plan = caloriePlan({ profile: man, weightKg: 90, today: TODAY });
     expect(goalDateText(plan, undefined)).toBeNull();
   });
 

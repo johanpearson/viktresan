@@ -15,7 +15,7 @@ import { todayIso } from '../lib/dates.ts';
 import { useFeatures } from '../lib/features.ts';
 import { formatMg } from '../lib/format.ts';
 import { doseChanges } from '../lib/glp1.ts';
-import { dailyWeights, emaTrend, filterRange, type RangeId } from '../lib/stats.ts';
+import { dailyWeights, filterRange, type RangeId } from '../lib/stats.ts';
 import { useAppData } from '../lib/useAppData.ts';
 import { drinkEntries, waterGoalFor } from '../lib/water.ts';
 
@@ -30,12 +30,9 @@ export function Historik() {
 
   if (data === null) return <Skeleton cards={3} lines={3} />;
 
-  // Trenden räknas på hela historiken så att filtret inte "nollställer" den.
   const today = todayIso();
   const allDaily = dailyWeights(data.weights);
   const daily = filterRange(allDaily, range, today);
-  const trend = filterRange(emaTrend(allDaily), range, today);
-  const trendByDate = new Map(trend.map((t) => [t.date, t.trendKg]));
   const first = daily[0]?.date ?? today;
   const changes = features.isEnabled('glp1')
     ? doseChanges(data.injections).filter((c) => c.date >= first && c.date <= today)
@@ -58,7 +55,7 @@ export function Historik() {
           title="Inga mätningar ännu"
           action={{ label: 'Logga vikt', href: '#/logga/vikt' }}
         >
-          Viktgrafen och trenden visas här när du har vägt dig.
+          Viktgrafen visas här när du har vägt dig.
         </EmptyState>
       ) : daily.length === 0 ? (
         <EmptyState>Inga mätningar i vald period.</EmptyState>
@@ -66,7 +63,6 @@ export function Historik() {
         <Card title="Vikt" className="chart-card">
           <WeightChart
             daily={daily}
-            trend={trend}
             goalKg={data.profile?.goalWeightKg ?? null}
             markers={changes.map((c) => ({ date: c.date, label: formatMg(c.doseMg) }))}
           />
@@ -91,7 +87,7 @@ export function Historik() {
           today={today}
         />
       </Feature>
-      {daily.length > 0 && <WeightDays key={range} daily={daily} trendByDate={trendByDate} />}
+      {daily.length > 0 && <WeightDays key={range} daily={daily} />}
     </>
   );
 }

@@ -140,7 +140,7 @@ describe('reportRange', () => {
 describe('buildReport – aggregering per period', () => {
   const range = { from: ago(83), to: TODAY };
 
-  it('grunddata: trendvikt vid periodens slut, förändring i kg och %, BMI', () => {
+  it('grunddata: senaste vikten vid periodens slut, förändring i kg och %, BMI', () => {
     const input: ReportInput = {
       ...empty(),
       weights: Array.from({ length: 121 }, (_, i) => ({
@@ -155,18 +155,17 @@ describe('buildReport – aggregering per period', () => {
     const b = r.basics;
     expect(b).not.toBeNull();
     if (!b) return;
-    // Trenden (EMA) ligger lite efter dagsvikten (88 kg).
-    expect(b.trendKg).toBeGreaterThan(88);
-    expect(b.trendKg).toBeLessThan(89.5);
-    expect(b.changeKg).toBeCloseTo(b.trendKg - 100);
+    expect(b.weightKg).toBeCloseTo(88);
+    expect(b.weightDate).toBe(TODAY);
+    expect(b.changeKg).toBeCloseTo(-12);
     expect(b.changePct).toBeCloseTo(b.changeKg);
-    expect(b.periodChangeKg).toBeCloseTo(-8.4, 0);
-    expect(b.bmi).toBeCloseTo(b.trendKg / 1.8 ** 2);
+    // 88 kg idag mot 96,4 kg dagen före perioden.
+    expect(b.periodChangeKg).toBeCloseTo(-8.4);
+    expect(b.bmi).toBeCloseTo(88 / 1.8 ** 2);
     expect(b.bmiCategory).toBe('Övervikt');
     // Viktgrafen: bara dagar i perioden.
     expect(r.weight.points).toHaveLength(84);
     expect(r.weight.points[0]?.date).toBe(range.from);
-    expect(r.weight.trend).toHaveLength(84);
   });
 
   it('utan profil saknas grunddata', () => {

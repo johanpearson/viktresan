@@ -104,24 +104,31 @@ describe('describeMilestone', () => {
   });
 });
 
-describe('viktmilstolpar (trendvikt)', () => {
-  it('första kilot nås när trenden – inte dagsvikten – är ett kilo under start', () => {
-    // Dagsvikten dippar 2 kg en dag och går sedan tillbaka: trenden rör sig bara 0,2 kg.
+describe('viktmilstolpar (faktisk vikt)', () => {
+  it('första kilot nås första dagen vikten är ett kilo under start', () => {
     const dip = input({
       weights: [
         { date: START, weightKg: 100 },
-        { date: addDays(START, 1), weightKg: 98 },
-        { date: addDays(START, 2), weightKg: 100 },
+        { date: addDays(START, 1), weightKg: 99.5 },
+        { date: addDays(START, 2), weightKg: 99 },
       ],
     });
-    expect(dateOf(dip, 'kg-1')).toBeNull();
+    expect(dateOf(dip, 'kg-1')).toBe(addDays(START, 2));
 
-    // Stadig nedgång 0,1 kg/dag: trenden släpar efter dagsvikten.
+    // Stadig nedgång 0,1 kg/dag: 99 kg dag 10.
     const steady = input({ weights: series(START, 40, 100, -0.1) });
-    const date = dateOf(steady, 'kg-1');
-    expect(date).not.toBeNull();
-    // Dagsvikten passerade 99 kg dag 10, trenden först senare.
-    expect(date && date > addDays(START, 10)).toBe(true);
+    expect(dateOf(steady, 'kg-1')).toBe(addDays(START, 10));
+  });
+
+  it('flera vägningar samma dag räknas som dagens medel', () => {
+    const data = input({
+      weights: [
+        { date: START, weightKg: 100 },
+        { date: addDays(START, 1), weightKg: 98.6 },
+        { date: addDays(START, 1), weightKg: 99.8 },
+      ],
+    });
+    expect(dateOf(data, 'kg-1')).toBeNull();
   });
 
   it('var 5:e kg: 5 och 10 kg nås i ordning, bara nästa steg finns bland kommande', () => {
@@ -150,9 +157,8 @@ describe('viktmilstolpar (trendvikt)', () => {
     const data = input({ weights: series(START, 60, 94, -0.1) });
     const list = evaluateMilestones(data, TODAY);
     expect(candidate(list, 'procent-5').date).toBe(START);
-    // 10 % = 90 kg: dagsvikten når dit dag 40, trenden några dagar senare.
-    const ten = candidate(list, 'procent-10').date;
-    expect(ten && ten > addDays(START, 40)).toBe(true);
+    // 10 % = 90 kg: vikten når dit dag 40.
+    expect(candidate(list, 'procent-10').date).toBe(addDays(START, 40));
   });
 
   it('ny BMI-kategori: under 30 och under 25, aldrig undervikt', () => {
@@ -350,7 +356,7 @@ describe('upcomingMilestones', () => {
     const list = evaluateMilestones(data, TODAY);
     const upcoming = upcomingMilestones(list, new Set(['pass-1']));
     expect(upcoming).toHaveLength(3);
-    // 8 av 10 pass, trenden ~0,4 kg ner, 31 av 100 loggade dagar.
+    // 8 av 10 pass, vikten ~0,4 kg ner, 31 av 100 loggade dagar.
     expect(upcoming.map((c) => c.milestone.id)).toEqual(['pass-10', 'kg-1', 'dagar-100']);
     for (const c of upcoming) expect(c.date).toBeNull();
     expect(upcomingMilestones(list, new Set(['pass-10']))[0]?.milestone.id).toBe('kg-1');

@@ -158,7 +158,7 @@ describe('whatToEatSubject → prompt', () => {
     age: 45,
     sex: 'man',
     heightCm: 180,
-    trendKg: 90,
+    weightKg: 90,
     goalWeightKg: 80,
     ratePerWeekKg: 0.5,
     targetKcal: 2000,

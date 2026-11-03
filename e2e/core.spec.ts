@@ -69,24 +69,23 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByTestId('log-tile-vikt')).toContainText('Senast 86,0 kg');
 
-  // Översikt: trendvikten (EMA 88 → 87,48 → 86,71) är huvudsiffran och alla härledda värden
-  // räknas på den.
+  // Översikt: senaste vikten är huvudsiffran och alla härledda värden räknas på den.
   await nav(page).getByRole('link', { name: 'Översikt' }).tap();
-  await expect(page.getByTestId('trend-weight')).toHaveText('86,7 kg');
   await expect(page.getByTestId('current-weight')).toHaveText('86,0 kg');
-  await expect(page.getByTestId('hero-change')).toHaveText(/^[−-]3,3 kg$/);
-  await expect(page.getByTestId('hero-remaining')).toHaveText('6,7 kg kvar');
+  await expect(page.getByTestId('trend-weight')).toHaveCount(0);
+  await expect(page.getByTestId('hero-change')).toHaveText(/^[−-]4,0 kg$/);
+  await expect(page.getByTestId('hero-remaining')).toHaveText('6,0 kg kvar');
   await expect(page.getByRole('progressbar', { name: 'Framsteg mot målvikten' })).toHaveAttribute(
     'aria-valuenow',
-    '33',
+    '40',
   );
-  // Tre vägningar räcker inte för en trendprognos (kräver 21 dagar och 12 vägningar): enligt plan.
+  // Tre vägningar räcker inte för en prognos ur vägningarna (kräver 21 dagar och 12 vägningar): enligt plan.
   await expect(page.getByTestId('goal-eta')).toHaveAttribute('data-kind', 'plan');
   await expect(page.getByTestId('goal-eta')).toHaveText(/^mål ca .+ enligt plan$/);
 
   await expect(page.getByTestId('today-card')).toBeVisible();
 
-  // Framsteg → Historik: graf med tre punkter, trend och mål + lista.
+  // Framsteg → Historik: graf med tre punkter och mål + lista.
   await nav(page).getByRole('link', { name: 'Framsteg' }).tap();
   await expect(page.getByRole('button', { name: 'Historik', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -94,18 +93,18 @@ test('fyll profil, logga tre vikter och se översikt och graf', async ({ page })
   );
   // Detaljerna bakom Översikts viktkort: förändring, kvar, BMI och prognosen.
   const details = page.getByTestId('weight-details');
-  await expect(details.getByTestId('total-change')).toHaveText(/^[−-]3,3 kg$/);
-  await expect(details.getByTestId('remaining')).toHaveText('6,7 kg');
-  await expect(details.getByTestId('bmi')).toHaveText('26,8');
+  await expect(details.getByTestId('total-change')).toHaveText(/^[−-]4,0 kg$/);
+  await expect(details.getByTestId('remaining')).toHaveText('6,0 kg');
+  await expect(details.getByTestId('bmi')).toHaveText('26,5');
   await expect(details).toContainText('Övervikt');
   await expect(details).toContainText(
-    'Enligt plan (0,5 kg/vecka) – trendprognos efter 21 dagar och 12 vägningar',
+    'Enligt plan (0,5 kg/vecka) – prognos ur vägningarna efter 21 dagar och 12 vägningar',
   );
   const chart = page.getByRole('img', { name: /Viktgraf/ });
   await expect(chart.locator('canvas')).toBeVisible();
   await expect(chart).toHaveAttribute('data-points', '3');
-  await expect(chart.locator('.u-legend')).toContainText('Daglig vikt');
-  await expect(chart.locator('.u-legend')).toContainText('Trend');
+  await expect(chart.locator('.u-legend')).toContainText('Vikt');
+  await expect(chart.locator('.u-legend')).not.toContainText('Trend');
   await expect(chart.locator('.u-legend')).toContainText('Mål');
   await expect(page.getByTestId('history-table').locator('tbody tr')).toHaveCount(3);
 

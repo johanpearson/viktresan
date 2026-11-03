@@ -1,5 +1,5 @@
 /**
- * Veckosummering (måndag–söndag): trendförändring, snittintag, protein, fiber (med
+ * Veckosummering (måndag–söndag): viktförändring, snittintag, protein, fiber (med
  * fibermålet), vatten, genomförda pass och snittsteg, jämfört med veckan innan. Rena funktioner.
  */
 import { weekdayIndex } from './calendar.ts';
@@ -9,7 +9,13 @@ import { formatInt, formatKcal, formatKg, formatMl, formatShortDate } from './fo
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { buildPlan, type PlanProfile } from './plan.ts';
 import { proteinGoalFor } from './protein.ts';
-import { dailySteps, dailyWeights, emaTrend, type DatedSteps, type DatedWeight } from './stats.ts';
+import {
+  dailySteps,
+  dailyWeights,
+  weightChange,
+  type DatedSteps,
+  type DatedWeight,
+} from './stats.ts';
 import {
   dailyWater,
   drinkEntries,
@@ -48,8 +54,8 @@ export interface WeekSummary {
   from: string;
   /** Söndag. */
   to: string;
-  /** Trendvikt vid veckans slut − vid veckans början. `null` utan vägning i veckan. */
-  trendChangeKg: number | null;
+  /** Vikt vid veckans slut − vid veckans början (senaste vägningen före veckan). `null` utan vägning i veckan. */
+  weightChangeKg: number | null;
   /** Dagar med vägning. */
   weighDays: number;
   /** Snitt av dagsvikterna i veckan (Framsteg → Veckor), `null` utan vägning. */
@@ -106,15 +112,11 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
   const to = addDays(from, 6);
   const { profile } = input;
 
-  // Trend: EMA över alla dagsvikter fram till veckans slut. Utgångsläget är trenden
-  // dagen före veckan, eller (utan tidigare vägning) veckans första vägning.
+  // Vikt: veckans sista vägning mot senaste vägningen före veckan, eller (utan tidigare
+  // vägning) veckans första vägning.
   const daily = dailyWeights(input.weights.filter((w) => w.date <= to));
-  const trend = emaTrend(daily);
-  const weekTrend = inWeek(trend, from, to);
-  const before = trend.filter((t) => t.date < from).at(-1);
-  const end = weekTrend.at(-1);
-  const start = before ?? (weekTrend.length > 1 ? weekTrend[0] : undefined);
-  const trendChangeKg = end && start ? end.trendKg - start.trendKg : null;
+  const weekDaily = inWeek(daily, from, to);
+  const weightChangeKg = weightChange(daily, from, to);
 
   const intake = inWeek(dailyIntake(input.foodLog), from, to);
   const water = inWeek(dailyWater(drinkEntries(input.water, input.foodLog)), from, to);
@@ -129,7 +131,7 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
   }
 
   const logged = new Set([
-    ...weekTrend.map((d) => d.date),
+    ...weekDaily.map((d) => d.date),
     ...intake.map((d) => d.date),
     ...water.map((d) => d.date),
     ...steps.map((d) => d.date),
@@ -139,9 +141,9 @@ export function summarizeWeek(input: WeekInput, from: string): WeekSummary {
   return {
     from,
     to,
-    trendChangeKg,
-    weighDays: weekTrend.length,
-    averageKg: mean(inWeek(daily, from, to).map((d) => d.weightKg)),
+    weightChangeKg,
+    weighDays: weekDaily.length,
+    averageKg: mean(weekDaily.map((d) => d.weightKg)),
     kcal: mean(intake.map((d) => d.kcal)),
     proteinG: mean(intake.map((d) => d.proteinG)),
     foodDays: intake.length,
@@ -226,7 +228,7 @@ export function compareValues(
 }
 
 export interface WeekRow extends FeatureGated {
-  id: 'trend' | 'budget' | 'kcal' | 'protein' | 'fiber' | 'vatten' | 'traning' | 'steg';
+  id: 'vikt' | 'budget' | 'kcal' | 'protein' | 'fiber' | 'vatten' | 'traning' | 'steg';
   label: string;
   /** Värdet som jämförs mellan veckorna. */
   value: (s: WeekSummary) => number | null;
@@ -247,11 +249,11 @@ function daysText(days: number): string {
 /** Raderna på veckokortet, i visningsordning. Filtreras med funktionsbrytarna. */
 export const WEEK_ROWS: readonly WeekRow[] = [
   {
-    id: 'trend',
-    label: 'Trendvikt',
-    value: (s) => s.trendChangeKg,
+    id: 'vikt',
+    label: 'Vikt',
+    value: (s) => s.weightChangeKg,
     tolerance: 0.05,
-    text: (s) => (s.trendChangeKg == null ? null : formatKg(s.trendChangeKg, { signed: true })),
+    text: (s) => (s.weightChangeKg == null ? null : formatKg(s.weightChangeKg, { signed: true })),
   },
   {
     // Budget mot utfall: veckans loggade kcal mot 7 × dagsmålet. Dagar utan matlogg räknas
@@ -347,17 +349,17 @@ export function weekHeadline(
   summary: WeekSummary,
   profile: { startWeightKg: number; goalWeightKg: number } | null,
 ): string {
-  const change = summary.trendChangeKg;
+  const change = summary.weightChangeKg;
   if (change == null) {
-    return 'Ingen vägning den här veckan, så trenden syns nästa gång du väger dig.';
+    return 'Ingen vägning den här veckan, så förändringen syns nästa gång du väger dig.';
   }
-  if (Math.abs(change) < 0.05) return 'Trenden höll sig stabil. Stabilitet är också ett resultat.';
+  if (Math.abs(change) < 0.05) return 'Vikten höll sig stabil. Stabilitet är också ett resultat.';
   const direction = profile ? Math.sign(profile.goalWeightKg - profile.startWeightKg) || -1 : -1;
   const amount = formatKg(Math.abs(change));
   if (Math.sign(change) === direction) {
-    return `Trenden rörde sig ${amount} mot målet. Fint jobbat!`;
+    return `Vikten rörde sig ${amount} mot målet. Fint jobbat!`;
   }
-  return 'Trenden planade ut, det händer. En vecka säger lite – det är riktningen över tid som räknas.';
+  return 'Vikten planade ut, det händer. En vecka säger lite – det är riktningen över tid som räknas.';
 }
 
 /** Kort rad om hur mycket som loggades. */

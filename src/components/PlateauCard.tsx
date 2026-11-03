@@ -27,7 +27,7 @@ interface PlateauCardProps {
 const MAX_EXPLANATIONS = 2;
 
 /**
- * Översikt: trendvikten har stått still i tre veckor. Saklig jämförelse av de senaste
+ * Översikt: vikten har stått still i tre veckor. Saklig jämförelse av de senaste
  * tre veckorna mot de tre innan, de mest sannolika förklaringarna och "Fråga AI om
  * platån". Kan stängas; visas igen tidigast efter 14 dagar (om platån håller i sig).
  */
@@ -54,7 +54,7 @@ export function PlateauCard({ data, now }: PlateauCardProps) {
   return (
     <>
       <Card
-        title="Trendvikten står still"
+        title="Vikten står still"
         tone="info"
         testId="plateau-card"
         action={

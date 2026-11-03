@@ -24,7 +24,7 @@ const LIVSMEDEL = {
   ],
 };
 
-/** Man född 1986, 180 cm, måttligt aktiv, 0,5 kg/vecka, ingen vikt loggad (trend = 90 kg). */
+/** Man född 1986, 180 cm, måttligt aktiv, 0,5 kg/vecka, ingen vikt loggad (vikt = 90 kg). */
 const PROFILE = {
   startDate: '2026-09-01',
   startWeightKg: 90,

@@ -80,7 +80,7 @@ test('rapport för 12 veckor med alla sektioner utom bilder', async ({ page }) =
   // Grafer som SVG, inte canvas.
   await expect(page.getByTestId('report-weight-chart').locator('svg')).toBeVisible();
   await expect(report.locator('canvas')).toHaveCount(0);
-  await expect(report.getByRole('img', { name: /^Vikt .*trendlinje$/ })).toBeVisible();
+  await expect(report.getByRole('img', { name: /^Vikt .*dag för dag$/ })).toBeVisible();
 
   // Midja: tre mätningar och förändringen.
   await expect(page.getByTestId('report-midja')).toContainText('−3 cm');
