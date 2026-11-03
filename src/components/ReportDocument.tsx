@@ -100,9 +100,9 @@ export function ReportDocument({ report, sections, createdOn, photos = [] }: Rep
               value={formatKg(b.startWeightKg)}
             />
             <ListRow
-              primary="Trendvikt"
-              secondary={`Utjämnat snitt, ${formatDate(report.to)}`}
-              value={formatKg(b.trendKg)}
+              primary="Vikt"
+              secondary={b.weightDate === null ? undefined : formatDate(b.weightDate)}
+              value={formatKg(b.weightKg)}
             />
             <ListRow
               primary="Förändring sedan start"
@@ -138,19 +138,22 @@ export function ReportDocument({ report, sections, createdOn, photos = [] }: Rep
         ) : (
           <>
             <SvgChart
-              label={`Vikt ${range}: dagsvikter och trendlinje`}
+              label={`Vikt ${range} dag för dag`}
               from={report.from}
               to={report.to}
               format={axis}
               series={[
-                { label: 'Dagsvikt', tone: 'weight', kind: 'points', points: report.weight.points },
-                { label: 'Trendvikt', tone: 'weight', kind: 'line', points: report.weight.trend },
+                {
+                  label: 'Vikt',
+                  tone: 'weight',
+                  kind: 'line-points',
+                  points: report.weight.points,
+                },
               ]}
               testId="report-weight-chart"
             />
             <p className="form-note muted">
-              Vägd {days(report.weight.weighDays)} av {String(report.days)}. Trendlinjen är ett
-              utjämnat snitt som dämpar svängningar i vätska och salt.
+              Vägd {days(report.weight.weighDays)} av {String(report.days)}.
             </p>
           </>
         ),

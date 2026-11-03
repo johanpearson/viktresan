@@ -18,7 +18,7 @@ const rows = () => screen.getAllByRole('row').length - 1; // utan rubrikraden
 describe('WeightDays', () => {
   it('visar de 14 senaste dagarna, nyast först, och fler per tryck', async () => {
     const user = userEvent.setup();
-    render(<WeightDays daily={days(50)} trendByDate={new Map()} />);
+    render(<WeightDays daily={days(50)} />);
     expect(rows()).toBe(14);
     expect(screen.getAllByRole('row')[1]).toHaveTextContent('20 juli 2026');
 
@@ -30,7 +30,7 @@ describe('WeightDays', () => {
   });
 
   it('ingen knapp när allt ryms', () => {
-    render(<WeightDays daily={days(5)} trendByDate={new Map()} />);
+    render(<WeightDays daily={days(5)} />);
     expect(rows()).toBe(5);
     expect(screen.queryByRole('button')).toBeNull();
   });

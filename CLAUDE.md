@@ -43,7 +43,7 @@ src/lib/useHashRoute.ts Hash-routing via useSyncExternalStore → { route, sub }
 src/lib/navigation.ts   Historiken/bakåtknappen: stackregler (chainFor, planNavigation), navigate(), useOverlay() för paneler
                         och dialoger, consumeSubPath(), "Kasta ändringar?" (DiscardPrompt), omladdning/lås (abandonOverlays)
 src/lib/features.ts     Funktionsbrytare: FEATURES, useFeatures() (filter/isEnabled), lagras i settings
-src/lib/preferences.ts  Visningsinställningar per enhet (trendHero, stängt veckokort, profilsida, spökbild), usePreferences()
+src/lib/preferences.ts  Visningsinställningar per enhet (stängt veckokort, profilsida, spökbild), usePreferences()
 src/lib/shortcuts.ts    Genvägar på appikonen: SHORTCUTS (även manifestet), ?action= → åtgärd
 src/lib/useShortcut.ts  Kör genvägen vid start: öppna panel, +250 ml med Ångra, erbjud att slå på funktion
 src/lib/protein.ts      Proteinmål (faktor × målvikt)
@@ -51,13 +51,13 @@ src/lib/fiber.ts        Fibermål (NNR 2023, upptrappning 3 g/vecka), fiber per 
                         fiber i matloggningen (fiberForItem per mängd, fiberSum, FiberAmount: null = "–", partial = "*"), formatMacroG
 src/lib/useFiber.ts     Hook: fibermålet + fiber per dag (läser livsmedel.json/egna livsmedel bara när målet visas), sparar trappans start
 src/data/fiberReference.ts  Referensvärden för fiber (35 g män, 25 g kvinnor, 30 g utan kön) med källa (NNR 2023)
-src/lib/milestones.ts   Milstolpar: regler (trendvikt), evaluateMilestones, kommande, diffMilestones, texter
+src/lib/milestones.ts   Milstolpar: regler (faktisk vikt), evaluateMilestones, kommande, diffMilestones, texter
 src/lib/milestoneSync.ts  Milstolpar mot databasen: syncMilestones('silent' | 'live'), köade körningar
 src/lib/celebration.ts  Kö med firanden (useCelebration); confetti.ts = canvas-confetti utan worker
-src/lib/plateau.ts      Platå: regeln (takt > 0, ≥ 4 v sedan start, ≥ 70 % vägda dagar, trend < 0,2 kg på 21 d), vilotid 14 d,
+src/lib/plateau.ts      Platå: regeln (takt > 0, ≥ 4 v sedan start, ≥ 70 % vägda dagar, snittvikt första/sista veckan av 21 d skiljer < 0,2 kg), vilotid 14 d,
                         jämförelse 3 v mot 3 v innan (intag, loggade dagar, steg, pass, dos, TDEE) och förklaringar
 src/lib/report.ts       Rapport: perioder, sektioner (med funktion), inställningar (preferences.report), buildReport per period
-src/lib/weekSummary.ts  Veckosummering mån–sön: trend, intag, protein, vatten, pass, steg + pilar och texter
+src/lib/weekSummary.ts  Veckosummering mån–sön: vikt, intag, protein, vatten, pass, steg + pilar och texter
 src/lib/pwaUpdate.ts    Registrerar sw.js, söker uppdateringar, toast-tillstånd, SKIP_WAITING
 src/lib/version.ts      Version, commit och byggtid (Vite define)
 src/lib/calendar.ts     Månads-/veckorutnät + vad som loggats/planerats per dag (buildDayIndex)
@@ -68,20 +68,20 @@ src/lib/glp1.ts         GLP-1: schema, dostrappa, planerade/loggade doser, näst
 src/lib/storage.ts      Storage API: persist(), persisted(), estimate()
 src/lib/useAppData.ts   Hook: läser vikt, midja, steg + profil; `reload()` returnerar ny data
 src/lib/usePhotos.ts    Hook: läser fototillfällen och bilder + skapar/frigör object URLs
-src/lib/photoSessions.ts  Fototillfällen/vinklar: gruppering, vinkelfilter, spökbild (pickGhost), trendvikt, jämförelse
+src/lib/photoSessions.ts  Fototillfällen/vinklar: gruppering, vinkelfilter, spökbild (pickGhost), förifylld vikt, jämförelse
 src/lib/camera.ts       Kameravyn: getUserMedia-stöd, felmeddelanden, bildruta ur video (grabFrame)
 src/lib/image.ts        Bildkomprimering (max 1080 px WebP, JPEG-reserv) + borttagning av EXIF/XMP
 src/lib/dates.ts        ISO-datum (YYYY-MM-DD): dagaritmetik i UTC, todayIso()
-src/lib/overview.ts     Översikts nyckeltal på en gemensam viktkälla (trend eller dag): overviewStats; goalEta = en enda
-                        måldatumsuppgift (trendprognos, annars "enligt plan" med vald takt)
+src/lib/overview.ts     Översikts nyckeltal på senaste dagsvikten: overviewStats; goalEta = en enda
+                        måldatumsuppgift (prognos ur vägningarna, annars "enligt plan" med vald takt)
 src/lib/overviewItems.ts  Ringar och kort som kan döljas på Översikt (OVERVIEW_ITEMS, preferences.overviewHidden)
 src/lib/todo.ts         Översikt → Att göra idag: buildTodo (tillskott, dos, pass, obesvarade, dagar utan matlogg, backup) + raden Nästa dos
 src/lib/missedDays.ts   Dagar utan matlogg (missedFoodDays: 7 dagar bakåt, aktiv matloggare), "Som vanligt" (usualDay/usualEntries:
                         en uppskattad post per måltid ur typicalMeal, `usual: true`), Hoppa över (withSkipped)
-src/lib/stats.ts        Rena beräkningar: dagsvärden, EMA-trend, mål, BMI, veckosnitt, prognos (forecastGoal: spärrar, tak,
-                        intervall – se Trendvikt)
+src/lib/stats.ts        Rena beräkningar: dagsvärden, weightOn/weightChange, mål, BMI, veckosnitt, prognos (forecastGoal: spärrar,
+                        tak, intervall – se Vikt och prognos)
 src/lib/energy.ts       BMR (Mifflin-St Jeor), TDEE, kalorimål, spärrar, måldatumskontroll
-src/lib/adaptiveTdee.ts Adaptiv TDEE ur trendvikt + matlogg, viktad mot formeln
+src/lib/adaptiveTdee.ts Adaptiv TDEE ur dagsvikter + matlogg, viktad mot formeln
 src/lib/plan.ts         buildPlan(): profil + vikter + matlogg → dagens kalorimål
 src/lib/planText.ts     Sakliga förklaringar (spärrar, måldatum, TDEE-källa)
 src/lib/nutrition.ts    Näring per 100 g → per post/dag, makroandelar, 7-dagarssnitt, måltider
@@ -310,18 +310,18 @@ kind: huvudmal|mellanmal, order }`, nyckel = id; standard Frukost 07, Förmiddag
   Migreringen v2 → v3 (`splitLegacyMeasurements`) flyttar midja/steg ur `weights`; per dag vinner
   den senast registrerade posten.
   `settings`-nycklar: `lastExportAt` (ms, senaste lyckade export), `lock` (`{ credentialId, createdAt }`
-  när låset är på), `features` (funktionsbrytarna), `preferences` (`trendHero`, `weekCardDismissed`, `profileSide`,
+  när låset är på), `features` (funktionsbrytarna), `preferences` (`weekCardDismissed`, `profileSide`,
   `ghostEnabled`, `ghostOpacity`, `aiOptions` – kryssrutorna i "Fråga AI", `haptics` – vibration vid spara,
   `plateauDismissed` – dagen platåkortet stängdes, `report` – rapportens period och sektioner, `reportPrintHintSeen`, `overviewHidden` – dolda ringar/kort på Översikt, `milestoneCardDismissed`, `claimsHidden` – dolda näringsetiketter, `whatToEatTipSeen` – namnet på "Vad ska jag äta?"-ikonen har visats, `backupDownloadHintSeen` – notisen om äldre nedladdade kopior har visats, `missedDaysSkipped` – dagar utan matlogg där "Hoppa över" valts, högst två veckor bakåt), `backupFile` (filhandtaget som säkerhetskopian skrivs över i), `ingredientMatches` (receptimportens minne: normaliserad ingredienstext → livsmedels-id, högst 500). `features`, `preferences` och `ingredientMatches` ingår i säkerhetskopior (sedan version 14); `lock` (passkeyn
   finns bara på enheten – en återställd nyckel på en annan enhet skulle låsa ute användaren), `backupFile` och `lastExportAt` ingår inte.
   Flera viktmätningar samma dag är tillåtna och slås ihop till dagsmedel.
 - **Beräkningar** ligger som rena funktioner i `src/lib/stats.ts` (tar in `today`, ingen
-  I/O). Trenden är ett EMA (alpha 0,1/dag, luckor viktas som missade dagar); prognosen är
-  en linjär regression på trendvikten över de senaste 28 dagarna (utan de första 14 efter start).
+  I/O). **Ingen trendvikt** – överallt används den faktiska vikten (dagsvikten, medel vid flera vägningar samma
+  dag); prognosen är en linjär regression på dagsvikterna över de senaste 28 dagarna (utan de första 14 efter start).
   Schemaändring = höj `DB_VERSION` och lägg till ett nytt `if (oldVersion < N)`-block.
   Ändra aldrig befintliga migreringsblock – användarens data finns bara på enheten.
 - **Kalorimål** (`energy.ts`, `adaptiveTdee.ts`, `plan.ts`): mål = TDEE − takt × 7 700 / 7.
-  Spärrar: takt ≤ 1 kg/vecka och ≤ 1 % av trendvikten, mål ≥ 1 500 (man) / 1 200 (kvinna) kcal.
+  Spärrar: takt ≤ 1 kg/vecka och ≤ 1 % av vikten, mål ≥ 1 500 (man) / 1 200 (kvinna) kcal.
   Måldatum höjer aldrig underskottet – orimligt datum ger varning + tidigaste rimliga datum.
   Adaptiv TDEE: fönster ≤ 28 dagar t.o.m. igår, kräver ≥ 14 dagar med både vikt och matlogg och
   ≥ 80 % loggade dagar; regression på dagsvikterna, vikt = 0,9 × längd × täckning × precision
@@ -460,29 +460,30 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   veckokortet, platån, dryckespåminnelse, övre gränsvärden), Idag (ringar, chips för steg/träning, kort veckorad) och
   `TodoCard` (Att göra idag / "Allt klart för idag"). Inställningar → Översikt döljer ringar och kort. En vanlig dag ryms
   på ~1,5 skärmhöjder (`e2e/overview.spec.ts`).
-- **Trendvikt**: `preferences.trendHero` (på som standard, Inställningar → Visning) visar trendvikten som
-  huvudsiffra och dagsvikt + datum som en liten rad (`current-weight`); förklaringen bakom en info-knapp (`trend-info`,
-  "Vad är trendvikt?"). Under stapeln en rad "−X kg · Y kg kvar · mål ca [månad år]" (`goalEta`: trendens prognos, annars
+- **Vikt och prognos**: Översikts viktkort visar senaste dagsvikten ("Vikt", `current-weight`) och datumet. Det finns
+  ingen trendvikt (togs bort – den gjorde det förvirrande; `trendHero` i gamla inställningar släpps av `parsePreferences`).
+  Under stapeln en rad "−X kg · Y kg kvar · mål ca [månad år]" (`goalEta` `forecast`: prognos ur vägningarna, annars
   datumet enligt vald takt märkt "enligt plan") med en info-ikon (`eta-info`, `ForecastExplanation`; i Framsteg →
-  Historik "Hur räknas prognosen?"). Prognosen (`forecastGoal`) är robust mot den snabba starten: trendprognos först
+  Historik "Hur räknas prognosen?"). Prognosen (`forecastGoal`) är robust mot den snabba starten: prognos ur vägningarna först
   ≥ 21 dagar efter `profile.startDate` och med ≥ 12 vägningsdagar (annars `insufficient-data` med `reason` → "enligt
-  plan"); takten = linjär regression på EMA-trendvikten de senaste 28 dagarna utan de första 14 dagarna efter start
-  (vätskefasen); tak = max(vald takt, 1 % av trendvikten per vecka) – vid tak `capped` och raden `goal-eta-capped`
+  plan"); takten = linjär regression på dagsvikterna de senaste 28 dagarna utan de första 14 dagarna efter start
+  (vätskefasen); tak = max(vald takt, 1 % av vikten per vecka) – vid tak `capped` och raden `goal-eta-capped`
   ("Takten är just nu snabbare än planerat …", `CAPPED_NOTE`); intervall (`range`, "ca mars–maj 2027",
   `formatMonthRange`) när lutningen ± 2 standardfel skiljer ≥ 15 % och ger olika månader; når den långsamma änden inte
   målet = `reason: 'uncertain'` → plan. BMI och prognosens detaljer finns i Framsteg → Historik
   (`WeightDetails`). Alla härledda värden (förändring mot startvikten, kvar till mål, %, BMI, prognosens
-  utgångsvikt) räknas på samma vikt som huvudsiffran – trendvikten när inställningen är på, annars dagsvikten
-  (`overviewStats` i `src/lib/overview.ts`; `forecastGoal({ fromKg })` tar takten från linjen). Viktgrafen: trendlinjen
-  tjock, dagsvärden som svaga punkter (`--chart-point-faint`).
+  utgångsvikt, kalorimålets BMR och spärr) räknas på senaste dagsvikten (`overviewStats` i `src/lib/overview.ts`;
+  `forecastGoal({ fromKg })` tar takten från linjen). Viktgrafen: dagsvikterna som linje med punkter, målvikten streckad;
+  tabellen "Vikt dag för dag" har bara datum och vikt.
 - **Veckosummering** (`weekSummary.ts`, veckor mån–sön): `WeekSummaryCard` på Översikt visar förra veckans rubrik
   (en rad → Framsteg → Veckor) från veckans första öppning tills den stängs (`preferences.weekCardDismissed` = måndagen); alla avslutade
-  veckor med data under Framsteg → Veckor (`pastWeeks`; en `ListRow` per vecka med snittvikt (`averageKg`), tryck = summeringen och "Fråga AI" i en panel). Trend = EMA vid veckans slut − dagen före veckan
-  (kräver vägning i veckan); snitt räknas över loggade dagar. Rader har `feature` och filtreras. Texter är
+  veckor med data under Framsteg → Veckor (`pastWeeks`; en `ListRow` per vecka med snittvikt (`averageKg`), tryck = summeringen och "Fråga AI" i en panel). Vikt = veckans sista vägning − senaste vägningen före veckan
+  (`weightChange`; kräver vägning i veckan, utan tidigare vägning veckans första); snitt räknas över loggade dagar. Rader har `feature` och filtreras. Texter är
   sakliga och uppmuntrande, aldrig skuldbeläggande; uppgång (bort från målet) beskrivs neutralt.
 - **Platå** (`plateau.ts`, `PlateauCard` på Översikt efter veckokortet): utvärderas bara när takten > 0 (aldrig i
   viktstabiliseringsläget), ≥ 28 dagar efter `profile.startDate` och med vägning ≥ 70 % av de senaste 21 dagarna. Platå =
-  EMA-trendvikten idag − dagen före fönstret är < 0,2 kg (absolut). Stäng sparar dagen i `preferences.plateauDismissed`;
+  snittvikten de sista 7 dagarna − snittvikten de första 7 dagarna i fönstret är < 0,2 kg (absolut) – snitt dämpar
+  dagsbruset. Jämförelsens rad Vikt = `weightChange` per period. Stäng sparar dagen i `preferences.plateauDismissed`;
   kortet visas igen tidigast 14 dagar senare. Analysen jämför de senaste 21 hela dagarna (t.o.m. igår) mot de 21 innan:
   snittintag per loggad dag, loggade matdagar, snittsteg, pass/vecka, GLP-1-dos och förbrukning (`buildPlan` dagen efter
   perioden, adaptiv eller formel). Förklaringar (`Explanation`, med `feature`) rangordnas efter ungefärlig kcal/dag; de två
@@ -498,7 +499,7 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   Inga nätverksanrop (livsmedel.json är precachad).
 - **Milstolpar** (`milestones.ts`, id:n `kg-1`, `kg-5`/`kg-10`/…, `procent-5|10`, `bmi-overvikt|normalvikt`,
   `halvvags-<mål>`, `mal-<mål>`, `dagar-7|30|100`, `pass-1|10|50`, `vatten-7`, `protein-7`, `bild-1`, `bild-30`):
-  viktmilstolparna mäts på EMA-trendvikten (en dipp i dagsvikten triggar inte). Varje milstolpe sparas en gång
+  viktmilstolparna mäts på den faktiska vikten (första dagen dagsvikten når tröskeln). Varje milstolpe sparas en gång
   med dagen den nåddes. `db.ts` meddelar `onDataChange` efter sparningar (vikt, midja, steg, profil, mat, vatten,
   pass, bilder); `MilestoneCenter` (i `App`) kör då `syncMilestones({ mode: 'live' })` och firar det viktigaste
   nyss nådda (inom 7 dagar, påslagen funktion). Vid start och efter import körs `silent`: passerade milstolpar
@@ -620,7 +621,7 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   protein/100 kcal, fiber/1 000 kcal, andel av kalorimålet. Bytesförslag för de tre poster med mest energi: samma
   kategori (`foodProfile`, inte `ovrigt`/`sas`/`kryddor`/`maltid`), protein/100 kcal +3 g och ×1,3 eller fiber/100 kcal
   +1 g och ×1,5, energi för samma mängd högst +5 % och minst 40 %.
-- **Fråga AI** (`AskAi`, `aiPrompt.ts`): kryssrutor (ålder/kön, längd/trendvikt, mål/takt, kcal-/proteinmål, dagens
+- **Fråga AI** (`AskAi`, `aiPrompt.ts`): kryssrutor (ålder/kön, längd/vikt, mål/takt, kcal-/proteinmål, dagens
   intag hittills – bara måltid, innehåll, matpreferenser, GLP-1 – av som standard och bara när funktionen är på),
   förhandsvisning, Dela (Web Share, `text`), Kopiera (toast), Öppna i ChatGPT/Claude (`?q=` om adressen ≤ 6 000 tecken,
   annars kopiera + startsidan). Appen gör inga anrop själv. Finns för måltid, dag och vecka (Framsteg → Veckor).
@@ -673,7 +674,7 @@ portions = servings }` på receptet. Kvar = portioner − poster av receptet log
   `define`. Deploy-workflowen sätter `APP_COMMIT`/`APP_BUILD_TIME`; lokalt läses git.
 - **Bilder**: `compressImage()` skalar ner via canvas och kör `stripMetadata()` på resultatet
   (orientering bakas in via `createImageBitmap`). Kodningen är injicerbar (`ImageCodec`) för tester.
-  Fototillfällen (`PhotoSessionFlow` i en panel): datum, vikt (förifylld med trendvikten, högst 7 dagar gammal) och
+  Fototillfällen (`PhotoSessionFlow` i en panel): datum, vikt (förifylld med senaste vägningen, högst 7 dagar gammal) och
   anteckning → framifrån → profil; varje steg kan hoppas över, tillfället sparas vid första bilden. `CameraCapture`
   (getUserMedia, modal `<dialog>`): bakre/främre kamera (främre speglas i förhandsvisningen men sparas oförändrad),
   självutlösare 3/10 s, spökbild = senaste bilden i samma vinkel från ett annat tillfälle (profil: samma sida först),

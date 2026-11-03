@@ -494,7 +494,7 @@ const seedHidden: HiddenFood[] = [
 
 const seedSettings: SnapshotSettings = {
   features: { ...DEFAULT_FLAGS, glp1: true, tillskott: true, version: FLAGS_VERSION },
-  preferences: { ...DEFAULT_PREFERENCES, trendHero: false, overviewHidden: ['steg'] },
+  preferences: { ...DEFAULT_PREFERENCES, haptics: false, overviewHidden: ['steg'] },
   ingredientMatches: { 'krossade tomater': 'lv:1' },
 };
 
@@ -2058,7 +2058,6 @@ describe('backup fullständighet', () => {
         version: FLAGS_VERSION,
       },
       preferences: {
-        trendHero: false,
         weekCardDismissed: '2026-02-02',
         profileSide: 'hoger',
         ghostEnabled: false,
@@ -2168,12 +2167,12 @@ describe('backup inställningar', () => {
   it('okända och felaktiga värden släpps vid importen', async () => {
     const snapshot = await roundTrip({
       features: { glp1: true, okand: true, steg: 'ja', version: FLAGS_VERSION },
-      preferences: { trendHero: false, ghostOpacity: 5, okand: 1 },
+      preferences: { haptics: false, ghostOpacity: 5, okand: 1, trendHero: false },
       ingredientMatches: { tomat: 'lv:1', tom: 7 },
     });
     expect(snapshot.settings).toEqual({
       features: { ...DEFAULT_FLAGS, glp1: true, version: FLAGS_VERSION },
-      preferences: { ...DEFAULT_PREFERENCES, trendHero: false },
+      preferences: { ...DEFAULT_PREFERENCES, haptics: false },
       ingredientMatches: { tomat: 'lv:1' },
     });
   });

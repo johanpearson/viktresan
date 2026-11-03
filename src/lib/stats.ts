@@ -1,5 +1,5 @@
 /**
- * Rena beräkningar för vikt, trend, mål och prognos. Inga sidoeffekter och
+ * Rena beräkningar för vikt, mål och prognos. Inga sidoeffekter och
  * ingen databasåtkomst – allt som behövs skickas in, inklusive "idag".
  */
 import { addDays, daysBetween, toDayNumber } from './dates.ts';
@@ -17,15 +17,7 @@ export interface DailyWeight {
   count: number;
 }
 
-export interface TrendPoint {
-  date: string;
-  trendKg: number;
-}
-
-/** Utjämningsfaktor per dag för det exponentiella glidande medlet. */
-export const EMA_ALPHA = 0.1;
-
-/** Fönster (dagar) för trendlutningen som prognosen bygger på. */
+/** Fönster (dagar) för lutningen som prognosen bygger på. */
 export const TREND_WINDOW_DAYS = 28;
 
 /** Minsta tidsspann (dagar) mellan första och sista mätning i fönstret för en prognos. */
@@ -61,26 +53,32 @@ export function dailyWeights(entries: readonly DatedWeight[]): DailyWeight[] {
     .map(([date, values]) => ({ date, weightKg: mean(values), count: values.length }));
 }
 
-/**
- * Exponentiellt glidande medel över dagliga värden. Luckor i datum hanteras
- * genom att vikten för det nya värdet motsvarar alla missade dagar:
- * `a = 1 − (1 − alpha)^dagar`. En lucka på 10 dagar drar alltså trenden
- * närmare det nya värdet än en enda dag gör.
- */
-export function emaTrend(daily: readonly DailyWeight[], alpha = EMA_ALPHA): TrendPoint[] {
-  const result: TrendPoint[] = [];
-  let prev: { date: string; trendKg: number } | null = null;
+/** Senaste dagsvikten på eller före `date`, eller `null`. */
+export function weightOn(daily: readonly DailyWeight[], date: string): number | null {
+  let value: number | null = null;
   for (const point of daily) {
-    if (!prev) {
-      prev = { date: point.date, trendKg: point.weightKg };
-    } else {
-      const gap = Math.max(1, daysBetween(prev.date, point.date));
-      const a = 1 - (1 - alpha) ** gap;
-      prev = { date: point.date, trendKg: prev.trendKg + a * (point.weightKg - prev.trendKg) };
-    }
-    result.push(prev);
+    if (point.date > date) break;
+    value = point.weightKg;
   }
-  return result;
+  return value;
+}
+
+/**
+ * Förändringen i faktisk vikt under perioden `from`–`to`: senaste vägningen t.o.m. `to` −
+ * senaste vägningen före `from` (saknas den: periodens första vägning, om perioden har minst
+ * två). `null` utan vägning i perioden.
+ */
+export function weightChange(
+  daily: readonly DailyWeight[],
+  from: string,
+  to: string,
+): number | null {
+  const inPeriod = daily.filter((d) => d.date >= from && d.date <= to);
+  const end = inPeriod.at(-1);
+  if (!end) return null;
+  const before = weightOn(daily, addDays(from, -1));
+  const start = before ?? (inPeriod.length > 1 ? inPeriod[0]?.weightKg : undefined);
+  return start == null ? null : end.weightKg - start;
 }
 
 export interface GoalProgress {
@@ -205,7 +203,7 @@ export function linearTrend(
   return { slopeKgPerDay: slope, fittedKg: yMean + slope * (lastX - xMean), lastDate: last.date };
 }
 
-/** Trendprognos först när det gått så här många dagar sedan start … */
+/** Prognos ur vägningarna först när det gått så här många dagar sedan start … */
 export const FORECAST_MIN_DAYS = 21;
 
 /** … och det finns så här många vägningar (dagar med minst en vägning). */
@@ -214,7 +212,7 @@ export const FORECAST_MIN_WEIGH_INS = 12;
 /** De första dagarna efter start (mest vätska och glykogen) räknas inte in i takten. */
 export const FORECAST_EXCLUDED_DAYS = 14;
 
-/** Hållbar takt per vecka som andel av trendvikten (prognosens tak, tillsammans med vald takt). */
+/** Hållbar takt per vecka som andel av vikten (prognosens tak, tillsammans med vald takt). */
 export const SUSTAINABLE_SHARE_PER_WEEK = 0.01;
 
 /** Intervallets bredd i standardfel för lutningen (≈ 95 %). */
@@ -265,7 +263,7 @@ function regression(points: readonly { date: string; kg: number }[]): TrendSlope
   };
 }
 
-/** Varför det inte finns någon trendprognos. */
+/** Varför det inte finns någon prognos ur vägningarna. */
 export type InsufficientReason =
   /** Färre än `FORECAST_MIN_DAYS` dagar sedan start. */
   | 'early'
@@ -304,8 +302,8 @@ export interface ForecastInput {
   rateKg?: number | undefined;
   windowDays?: number;
   /**
-   * Vikten prognosen utgår från (t.ex. trendvikten eller senaste dagsvikten). Saknas den används
-   * den anpassade linjens värde. Takten kommer alltid från linjen.
+   * Vikten prognosen utgår från (senaste dagsvikten). Saknas den används den anpassade linjens
+   * värde. Takten kommer alltid från linjen.
    */
   fromKg?: number | undefined;
 }
@@ -321,9 +319,9 @@ function daysAt(remainingKg: number, kgPerWeek: number): number | null {
  * Datum då målvikten nås, robust mot den snabba starten:
  * - först när det gått `FORECAST_MIN_DAYS` dagar sedan start och finns `FORECAST_MIN_WEIGH_INS`
  *   vägningar (annars `insufficient-data` → datum enligt vald takt),
- * - takten = linjär regression på trendvikten (EMA) de senaste `windowDays` dagarna, utan de
+ * - takten = linjär regression på dagsvikterna de senaste `windowDays` dagarna, utan de
  *   första `FORECAST_EXCLUDED_DAYS` dagarna efter start (vätskefasen),
- * - aldrig snabbare än det högsta av vald takt och 1 % av trendvikten per vecka (`capped`),
+ * - aldrig snabbare än det högsta av vald takt och 1 % av vikten per vecka (`capped`),
  * - intervall (`range`) när lutningens spridning är stor.
  */
 export function forecastGoal({
@@ -346,11 +344,12 @@ export function forecastGoal({
     return { kind: 'insufficient-data', reason: 'few-weigh-ins' };
   }
 
-  const trend = emaTrend(weighIns);
   const windowStart = addDays(today, -(windowDays - 1));
   const afterWaterPhase = addDays(start, FORECAST_EXCLUDED_DAYS);
   const from = windowStart > afterWaterPhase ? windowStart : afterWaterPhase;
-  const points = trend.filter((t) => t.date >= from).map((t) => ({ date: t.date, kg: t.trendKg }));
+  const points = weighIns
+    .filter((d) => d.date >= from)
+    .map((d) => ({ date: d.date, kg: d.weightKg }));
   const firstPoint = points[0];
   const fit = regression(points);
   if (!fit || !firstPoint || daysBetween(firstPoint.date, fit.lastDate) < MIN_TREND_SPAN_DAYS) {

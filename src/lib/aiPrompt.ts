@@ -25,7 +25,7 @@ import { dailyIntake, scaleNutrients, totalOf, type Nutrients } from './nutritio
 import { mealName, sortMealSlots, type MealSlot } from './mealSlots.ts';
 import { buildPlan } from './plan.ts';
 import { proteinGoalFor } from './protein.ts';
-import { dailyWeights, emaTrend } from './stats.ts';
+import { dailyWeights } from './stats.ts';
 import { loggedAmountText } from './units.ts';
 
 export type AiOption =
@@ -45,7 +45,7 @@ const FOOD: readonly AiScope[] = ['meal', 'day', 'week', 'eat'];
 
 export const AI_OPTIONS: readonly AiOptionInfo[] = [
   { id: 'personal', label: 'Ålder och kön', scopes: ALL },
-  { id: 'body', label: 'Längd och trendvikt', scopes: ALL },
+  { id: 'body', label: 'Längd och vikt', scopes: ALL },
   { id: 'goal', label: 'Målvikt och takt', scopes: ALL },
   { id: 'targets', label: 'Kcal- och proteinmål', scopes: ALL },
   { id: 'dayIntake', label: 'Dagens intag hittills', scopes: ['meal'] },
@@ -93,7 +93,7 @@ export interface AiContext {
   age: number | null;
   sex: Sex | null;
   heightCm: number | null;
-  trendKg: number | null;
+  weightKg: number | null;
   goalWeightKg: number | null;
   ratePerWeekKg: number | null;
   targetKcal: number | null;
@@ -153,16 +153,16 @@ function glp1Text(input: AiContextInput, today: string): string | null {
 export function aiContextFrom(input: AiContextInput, today: string): AiContext {
   const { profile } = input;
   const plan = profile ? buildPlan(profile, input.weights, input.foodLog, today) : null;
-  const trend = emaTrend(dailyWeights(input.weights.filter((w) => w.date <= today)));
+  const daily = dailyWeights(input.weights.filter((w) => w.date <= today));
   const todays = input.foodLog.filter((e) => e.date === today);
   return {
     age: profile?.birthYear !== undefined ? ageFromBirthYear(profile.birthYear, today) : null,
     sex: profile?.sex ?? null,
     heightCm: profile?.heightCm ?? null,
-    trendKg:
+    weightKg:
       plan?.kind === 'plan'
-        ? plan.trendKg
-        : (trend[trend.length - 1]?.trendKg ?? profile?.startWeightKg ?? null),
+        ? plan.weightKg
+        : (daily[daily.length - 1]?.weightKg ?? profile?.startWeightKg ?? null),
     goalWeightKg: profile?.goalWeightKg ?? null,
     ratePerWeekKg: profile ? (profile.ratePerWeekKg ?? 0.5) : null,
     targetKcal: plan?.kind === 'plan' ? plan.plan.targetKcal : null,
@@ -359,7 +359,7 @@ export function contextLines(subject: AiSubject, context: AiContext, options: Ai
   }
   if (on('body')) {
     if (context.heightCm !== null) about.push(`${formatInt(context.heightCm)} cm`);
-    if (context.trendKg !== null) about.push(`trendvikt ${formatKg(context.trendKg)}`);
+    if (context.weightKg !== null) about.push(`vikt ${formatKg(context.weightKg)}`);
   }
   if (about.length > 0) lines.push(`Om mig: ${about.join(', ')}.`);
   if (on('goal') && context.goalWeightKg !== null) {

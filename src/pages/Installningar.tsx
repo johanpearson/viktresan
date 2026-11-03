@@ -203,9 +203,9 @@ const GROUPS: readonly Group[] = [
       },
       {
         id: 'visning',
-        keywords: 'trendvikt vibration näringsetiketter',
+        keywords: 'vibration näringsetiketter',
         title: 'Visning',
-        secondary: () => 'Trendvikt och vibration',
+        secondary: () => 'Vibration och näringsetiketter',
       },
       {
         id: 'oversikt',

@@ -10,8 +10,8 @@ import {
   photosWithAngle,
   pickGhost,
   sessionRows,
-  trendWeightOn,
-  trendWeightText,
+  weightOnDate,
+  weightText,
 } from './photoSessions.ts';
 
 const blob = new Blob(['x'], { type: 'image/webp' });
@@ -102,28 +102,36 @@ describe('pickGhost', () => {
   });
 });
 
-describe('trendWeightOn', () => {
+describe('weightOnDate', () => {
   const weights = [
     { date: '2026-01-01', weightKg: 90 },
     { date: '2026-01-02', weightKg: 91 },
     { date: '2026-01-10', weightKg: 89 },
   ];
 
-  it('trendvikten (EMA) den dagen, avrundad', () => {
-    expect(trendWeightOn(weights, '2026-01-01')).toBe(90);
-    expect(trendWeightOn(weights, '2026-01-02')).toBe(90.1);
-    expect(trendWeightText(weights, '2026-01-02')).toBe('90,1');
+  it('senaste vägningen den dagen', () => {
+    expect(weightOnDate(weights, '2026-01-01')).toBe(90);
+    expect(weightOnDate(weights, '2026-01-02')).toBe(91);
+    expect(weightText(weights, '2026-01-02')).toBe('91,0');
+  });
+
+  it('flera vägningar samma dag → medel, avrundat', () => {
+    const same = [
+      { date: '2026-01-01', weightKg: 90 },
+      { date: '2026-01-01', weightKg: 90.25 },
+    ];
+    expect(weightOnDate(same, '2026-01-01')).toBe(90.1);
   });
 
   it('räknar bara med vägningar t.o.m. dagen', () => {
-    expect(trendWeightOn(weights, '2026-01-05')).toBe(90.1);
+    expect(weightOnDate(weights, '2026-01-05')).toBe(91);
   });
 
   it('ingen vägning inom en vecka före → tomt', () => {
-    expect(trendWeightOn(weights, '2025-12-31')).toBeNull();
-    expect(trendWeightOn(weights, '2026-01-18')).toBeNull();
-    expect(trendWeightText(weights, '2026-01-18')).toBe('');
-    expect(trendWeightOn([], '2026-01-01')).toBeNull();
+    expect(weightOnDate(weights, '2025-12-31')).toBeNull();
+    expect(weightOnDate(weights, '2026-01-18')).toBeNull();
+    expect(weightText(weights, '2026-01-18')).toBe('');
+    expect(weightOnDate([], '2026-01-01')).toBeNull();
   });
 });
 

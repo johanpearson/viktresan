@@ -29,7 +29,7 @@ import type { FiberSource } from './fiber.ts';
 import { partsOf } from './mealAnalysis.ts';
 import { dailyIntake } from './nutrition.ts';
 import { proteinGoalFor } from './protein.ts';
-import { bmi, bmiCategory, dailySteps, dailyWeights, emaTrend } from './stats.ts';
+import { bmi, bmiCategory, dailySteps, dailyWeights, weightChange, weightOn } from './stats.ts';
 import { describeSupplement } from './supplements.ts';
 import { mondayOf } from './weekSummary.ts';
 
@@ -59,9 +59,9 @@ export const REPORT_SECTIONS: readonly ReportSectionInfo[] = [
   {
     id: 'grunddata',
     label: 'Grunddata',
-    description: 'Längd, startvikt, trendvikt, förändring och BMI',
+    description: 'Längd, startvikt, senaste vikt, förändring och BMI',
   },
-  { id: 'vikt', label: 'Viktgraf', description: 'Dagsvikter och trendlinje' },
+  { id: 'vikt', label: 'Viktgraf', description: 'Vikten dag för dag' },
   { id: 'midja', label: 'Midjemått', description: 'Mätningar och förändring', feature: 'midja' },
   {
     id: 'glp1',
@@ -202,13 +202,15 @@ export interface ReportBasics {
   startDate: string;
   startWeightKg: number;
   goalWeightKg: number;
-  /** Trendvikt vid periodens slut (startvikten om ingen vägning finns). */
-  trendKg: number;
-  /** Trendvikt − startvikt. */
+  /** Senaste vikten t.o.m. periodens slut (startvikten om ingen vägning finns). */
+  weightKg: number;
+  /** Datumet för `weightKg`, `null` utan vägning. */
+  weightDate: string | null;
+  /** Vikt − startvikt. */
   changeKg: number;
   /** Förändring i procent av startvikten. */
   changePct: number;
-  /** Trendvikten under perioden: slut − början. `null` utan vägning i perioden. */
+  /** Vikten under perioden: senaste vägningen − senaste före perioden. `null` utan vägning i perioden. */
   periodChangeKg: number | null;
   bmi: number | null;
   bmiCategory: string | null;
@@ -216,7 +218,6 @@ export interface ReportBasics {
 
 export interface ReportWeight {
   points: { date: string; value: number }[];
-  trend: { date: string; value: number }[];
   weighDays: number;
 }
 
@@ -305,35 +306,23 @@ function mean(values: readonly number[]): number | null {
   return values.length === 0 ? null : values.reduce((s, v) => s + v, 0) / values.length;
 }
 
-function trendAt(trend: readonly { date: string; trendKg: number }[], date: string): number | null {
-  let value: number | null = null;
-  for (const point of trend) {
-    if (point.date > date) break;
-    value = point.trendKg;
-  }
-  return value;
-}
-
 function basicsOf(input: ReportInput, range: ReportRange): ReportBasics | null {
   const { profile } = input;
   if (!profile) return null;
-  const trend = emaTrend(dailyWeights(input.weights.filter((w) => w.date <= range.to)));
-  const trendKg = trendAt(trend, range.to) ?? profile.startWeightKg;
-  const inPeriod = trend.filter((t) => t.date >= range.from && t.date <= range.to);
-  const before = trendAt(trend, addDays(range.from, -1));
-  const start = before ?? (inPeriod.length > 1 ? inPeriod[0]?.trendKg : undefined);
-  const end = inPeriod.at(-1)?.trendKg;
-  const bmiValue = bmi(trendKg, profile.heightCm);
-  const changeKg = trendKg - profile.startWeightKg;
+  const daily = dailyWeights(input.weights.filter((w) => w.date <= range.to));
+  const weightKg = weightOn(daily, range.to) ?? profile.startWeightKg;
+  const bmiValue = bmi(weightKg, profile.heightCm);
+  const changeKg = weightKg - profile.startWeightKg;
   return {
     heightCm: profile.heightCm,
     startDate: profile.startDate,
     startWeightKg: profile.startWeightKg,
     goalWeightKg: profile.goalWeightKg,
-    trendKg,
+    weightKg,
+    weightDate: daily.at(-1)?.date ?? null,
     changeKg,
     changePct: profile.startWeightKg > 0 ? (changeKg / profile.startWeightKg) * 100 : 0,
-    periodChangeKg: start != null && end != null ? end - start : null,
+    periodChangeKg: weightChange(daily, range.from, range.to),
     bmi: bmiValue,
     bmiCategory: bmiValue === null ? null : bmiCategory(bmiValue),
   };
@@ -341,11 +330,9 @@ function basicsOf(input: ReportInput, range: ReportRange): ReportBasics | null {
 
 function weightOf(input: ReportInput, range: ReportRange): ReportWeight {
   const daily = dailyWeights(input.weights.filter((w) => w.date <= range.to));
-  const trend = emaTrend(daily);
   const points = between(daily, range.from, range.to);
   return {
     points: points.map((d) => ({ date: d.date, value: d.weightKg })),
-    trend: between(trend, range.from, range.to).map((t) => ({ date: t.date, value: t.trendKg })),
     weighDays: points.length,
   };
 }

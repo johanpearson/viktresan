@@ -73,8 +73,7 @@ export function CalorieDetails({ profile, result, eatenKcal }: CalorieDetailsPro
           Basalomsättning {formatKcal(plan.bmr)} (Mifflin-St Jeor, {plan.ageYears} år) × aktivitet ={' '}
           {formatKcal(plan.formulaTdee)}. Underskott {formatInt(Math.round(plan.deficitKcal))}{' '}
           kcal/dag ({formatRate(plan.rateKg)} × 7 700 kcal/kg ÷ 7). Högsta tillåtna takt är 1 % av
-          trendvikten per vecka, högst 1 kg, och målet går aldrig under {formatKcal(plan.floorKcal)}
-          .
+          vikten per vecka, högst 1 kg, och målet går aldrig under {formatKcal(plan.floorKcal)}.
         </p>
         <p>
           Veckobudget = 7 × dagsmålet = {formatKcal(Math.round(plan.targetKcal) * 7)}{' '}

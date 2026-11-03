@@ -2,7 +2,6 @@ import type { Profile } from '../db/db.ts';
 import { addDays } from './dates.ts';
 import {
   bmi,
-  emaTrend,
   forecastGoal,
   goalProgress,
   type DailyWeight,
@@ -14,18 +13,9 @@ import {
 /** Standardtakten när profilen saknar vald takt (samma som i profilen). */
 const DEFAULT_RATE_KG = 0.5;
 
-/** Vilken vikt Översikts härledda värden räknas på. */
-export type WeightSource = 'trend' | 'dag';
-
 export interface OverviewStats {
-  /** Källan som faktiskt används (trend kräver minst en vägning). */
-  source: WeightSource;
-  /** Vikten alla härledda värden räknas på. */
+  /** Senaste dagsvikten (startvikten utan vägning) – alla härledda värden räknas på den. */
   weightKg: number;
-  /** Senaste dagsvikten (startvikten utan vägning). */
-  dailyKg: number;
-  /** Trendvikten (EMA) på senaste vägningsdagen, `null` utan vägning. */
-  trendKg: number | null;
   /** Senaste vägningsdagen. */
   latestDate: string | null;
   /** Förändring mot startvikten, kvar till mål och andel av vägen. */
@@ -36,14 +26,12 @@ export interface OverviewStats {
 
 /**
  * Översikts nyckeltal. Förändring (mot startvikten), kvar till mål, framsteg i %, BMI och
- * prognosens utgångsvikt räknas alla på samma vikt: trendvikten när den är huvudsiffran,
- * annars senaste dagsvikten.
+ * prognosens utgångsvikt räknas alla på senaste dagsvikten.
  */
 export function overviewStats({
   profile,
   daily,
   today,
-  preferTrend,
 }: {
   profile: Pick<
     Profile,
@@ -51,18 +39,11 @@ export function overviewStats({
   >;
   daily: readonly DailyWeight[];
   today: string;
-  preferTrend: boolean;
 }): OverviewStats {
   const latest = daily[daily.length - 1];
-  const dailyKg = latest?.weightKg ?? profile.startWeightKg;
-  const trendKg = emaTrend(daily).at(-1)?.trendKg ?? null;
-  const source: WeightSource = preferTrend && trendKg != null ? 'trend' : 'dag';
-  const weightKg = source === 'trend' && trendKg != null ? trendKg : dailyKg;
+  const weightKg = latest?.weightKg ?? profile.startWeightKg;
   return {
-    source,
     weightKg,
-    dailyKg,
-    trendKg,
     latestDate: latest?.date ?? null,
     progress: goalProgress(profile.startWeightKg, weightKg, profile.goalWeightKg),
     bmi: bmi(weightKg, profile.heightCm),
@@ -80,16 +61,16 @@ export function overviewStats({
 
 /**
  * När målvikten nås – en enda uppgift på Översikt:
- * - `trend`: trendbaserad prognos (≥ 21 dagar sedan start, ≥ 12 vägningar och trenden leder mot
- *   målet); `range` = intervall vid stor osäkerhet, `capped` = takten begränsad till en hållbar takt,
- * - `plan`: annars datumet enligt vald takt ("enligt plan"); `reason` säger varför trenden inte räcker,
+ * - `forecast`: prognos ur vägningarna (≥ 21 dagar sedan start, ≥ 12 vägningar och takten leder
+ *   mot målet); `range` = intervall vid stor osäkerhet, `capped` = takten begränsad till en hållbar takt,
+ * - `plan`: annars datumet enligt vald takt ("enligt plan"); `reason` säger varför vägningarna inte räcker,
  * - `reached`: målet är nått,
  * - `null`: inget datum går att räkna ut (takt 0, ingen takt att räkna på).
  */
 export type GoalEta =
   | { kind: 'reached' }
   | {
-      kind: 'trend';
+      kind: 'forecast';
       date: string;
       range: { from: string; to: string } | null;
       weeklyChangeKg: number;
@@ -97,7 +78,7 @@ export type GoalEta =
     }
   | { kind: 'plan'; date: string; rateKg: number; reason: PlanReason };
 
-/** Varför datumet är enligt plan: för tidigt/för få vägningar, osäker trend eller fel riktning. */
+/** Varför datumet är enligt plan: för tidigt/för få vägningar, osäker takt eller fel riktning. */
 export type PlanReason = InsufficientReason | 'not-progressing';
 
 /** Visas när prognosen har begränsats till en hållbar takt. */
@@ -121,7 +102,7 @@ export function goalEta({
   if (progress.reached || forecast.kind === 'reached') return { kind: 'reached' };
   if (forecast.kind === 'forecast') {
     return {
-      kind: 'trend',
+      kind: 'forecast',
       date: forecast.date,
       range: forecast.range,
       weeklyChangeKg: forecast.weeklyChangeKg,

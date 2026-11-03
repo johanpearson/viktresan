@@ -82,14 +82,14 @@ test('veckokortet på måndagen: förra veckan mot veckan innan, stängs och fin
   await expect(card).toBeVisible();
   await expect(card.getByRole('heading', { name: 'Förra veckan' })).toBeVisible();
   await expect(card).toContainText(/Vecka 38 · 14 sep\.?–20 sep\.?/);
-  await expect(card.getByTestId('week-headline')).toHaveText(/^Trenden rörde sig .* mot målet\./);
+  await expect(card.getByTestId('week-headline')).toHaveText(/^Vikten rörde sig .* mot målet\./);
 
   // Kortet är en rad; hela summeringen ligger under Framsteg → Veckor (tryck på raden).
   await expect(card.getByTestId('week-kcal')).toHaveCount(0);
   await card.getByRole('link').tap();
   await page.getByTestId('week-list').getByTestId('week').first().getByRole('button').tap();
   const summary = page.getByRole('dialog');
-  await expect(summary.getByTestId('week-trend')).toContainText('−');
+  await expect(summary.getByTestId('week-vikt')).toContainText('−');
   await expect(summary.getByTestId('week-kcal')).toContainText('1 900 kcal (mål');
   await expect(summary.getByTestId('week-kcal')).toContainText('2 dagar');
   await expect(summary.getByTestId('week-protein')).toContainText('110 g (mål 128 g)');
@@ -152,12 +152,12 @@ test('uppgång beskrivs neutralt och avstängda funktioner syns inte', async ({ 
   });
   const card = page.getByTestId('week-card');
   await expect(card.getByTestId('week-headline')).toHaveText(
-    'Trenden planade ut, det händer. En vecka säger lite – det är riktningen över tid som räknas.',
+    'Vikten planade ut, det händer. En vecka säger lite – det är riktningen över tid som räknas.',
   );
   await card.getByRole('link').tap();
   await page.getByTestId('week-list').getByTestId('week').first().getByRole('button').tap();
   const summary = page.getByRole('dialog');
-  await expect(summary.getByTestId('week-trend')).toContainText('+');
+  await expect(summary.getByTestId('week-vikt')).toContainText('+');
   await expect(summary.getByTestId('week-kcal')).toHaveCount(0);
   await expect(summary.getByTestId('week-protein')).toHaveCount(0);
   await expect(summary.getByTestId('week-steg')).toHaveCount(0);
@@ -165,54 +165,32 @@ test('uppgång beskrivs neutralt och avstängda funktioner syns inte', async ({ 
   expect(errors).toEqual([]);
 });
 
-test('trendvikt som huvudsiffra, dagsvikt under och inställning för att stänga av', async ({
-  page,
-}) => {
+test('viktkortet visar den faktiska vikten och räknar allt på den', async ({ page }) => {
   const errors = collectErrors(page);
   await start(page, {
     profile: PROFILE,
     weights: [weight('2026-09-19', 86), weight('2026-09-20', 84), weight('2026-09-21', 85)],
   });
   const hero = page.getByTestId('hero');
-  await expect(hero.getByText('Trendvikt')).toBeVisible();
-  // EMA: 86 → 85,8 → 85,72.
-  await expect(page.getByTestId('trend-weight')).toHaveText('85,7 kg');
-  await expect(page.getByTestId('current-weight')).toHaveText('85,0 kg');
-  // Förklaringen om vätska och salt finns bara bakom info-knappen.
-  await expect(hero).not.toContainText('vätska och salt');
-  // Förändring, kvar och % räknas på trendvikten (85,72 kg, start 90, mål 80).
-  await expect(page.getByTestId('hero-change')).toHaveText(/^[−-]4,3 kg$/);
-  await expect(page.getByTestId('hero-remaining')).toHaveText('5,7 kg kvar');
-  const progress = page.getByRole('progressbar', { name: 'Framsteg mot målvikten' });
-  await expect(progress).toHaveAttribute('aria-valuenow', '43');
-
-  // Info-knappen fäller ut en kort förklaring.
-  const info = hero.getByRole('button', { name: 'Vad är trendvikt?' });
-  await expect(info).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByTestId('trend-info-text')).toHaveCount(0);
-  await info.tap();
-  await expect(info).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByTestId('trend-info-text')).toContainText('ungefär 10 %');
-  await expect(page.getByTestId('trend-info-text')).toContainText('vätska och salt');
-  await info.tap();
-  await expect(page.getByTestId('trend-info-text')).toHaveCount(0);
-
-  await page.goto('./#/installningar/visning');
-  const toggle = page.getByRole('switch', { name: /Visa trendvikt som huvudsiffra/ });
-  await expect(toggle).toBeChecked();
-  await toggle.tap();
-  await expect(toggle).not.toBeChecked();
-  await page.goto('./#/');
-  await expect(hero.getByText('Dagsvikt', { exact: true })).toBeVisible();
+  await expect(hero.getByText('Vikt', { exact: true })).toBeVisible();
+  await expect(hero).not.toContainText('Trendvikt');
   await expect(page.getByTestId('current-weight')).toHaveText('85,0 kg');
   await expect(page.getByTestId('trend-weight')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Vad är trendvikt?' })).toHaveCount(0);
-  // Av: alla härledda värden räknas på dagsvikten (85,0 kg).
+  // Förändring, kvar och % räknas på senaste vikten (85,0 kg, start 90, mål 80).
   await expect(page.getByTestId('hero-change')).toHaveText(/^[−-]5,0 kg$/);
   await expect(page.getByTestId('hero-remaining')).toHaveText('5,0 kg kvar');
+  const progress = page.getByRole('progressbar', { name: 'Framsteg mot målvikten' });
   await expect(progress).toHaveAttribute('aria-valuenow', '50');
+
+  // Inställningen för trendvikt finns inte längre.
+  await page.goto('./#/installningar/visning');
+  await expect(page.getByRole('switch', { name: 'Vibration vid spara' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: /trendvikt/i })).toHaveCount(0);
+  await page.goto('./#/');
   // BMI finns i Framsteg → Historik, på samma vikt.
   await hero.tap();
   await expect(page.getByTestId('weight-details').getByTestId('bmi')).toHaveText('26,2');
+  await expect(page.getByTestId('history-table')).not.toContainText('Trend');
   expect(errors).toEqual([]);
 });

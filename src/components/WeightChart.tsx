@@ -3,7 +3,7 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import { toChartSeconds } from '../lib/dates.ts';
 import { formatKg } from '../lib/format.ts';
-import type { DailyWeight, TrendPoint } from '../lib/stats.ts';
+import type { DailyWeight } from '../lib/stats.ts';
 import { baseAxes, cssVar, dateSeries, observeWidth } from './chartUtils.ts';
 
 /** En vertikal markering i grafen, t.ex. ett dosbyte. */
@@ -16,8 +16,6 @@ export interface ChartMarker {
 interface WeightChartProps {
   /** Dagliga värden, äldst först. */
   daily: readonly DailyWeight[];
-  /** Trend för samma datum som `daily`. */
-  trend: readonly TrendPoint[];
   goalKg?: number | null;
   /** Vertikala markeringar (dosbyten). */
   markers?: readonly ChartMarker[];
@@ -25,13 +23,12 @@ interface WeightChartProps {
 }
 
 /**
- * Viktgraf (uPlot): dagliga värden som svaga punkter, utjämnad trend som tydlig linje och
- * målvikten som streckad linje. Legenden visar värden för dagen under markören.
+ * Viktgraf (uPlot): den faktiska vikten dag för dag som linje med punkter och målvikten som
+ * streckad linje. Legenden visar värden för dagen under markören.
  * Markeringar (dosbyten) ritas som streckade vertikala linjer med en etikett.
  */
 export function WeightChart({
   daily,
-  trend,
   goalKg = null,
   markers = NO_MARKERS,
   height = 260,
@@ -42,15 +39,12 @@ export function WeightChart({
     const el = containerRef.current;
     if (!el) return;
 
-    const trendByDate = new Map(trend.map((t) => [t.date, t.trendKg]));
     const data: uPlot.AlignedData = [
       daily.map((d) => toChartSeconds(d.date)),
       daily.map((d) => d.weightKg),
-      daily.map((d) => trendByDate.get(d.date) ?? null),
       ...(goalKg != null ? [daily.map(() => goalKg)] : []),
     ];
     const accent = cssVar(el, '--data-weight');
-    const pointColor = cssVar(el, '--chart-point-faint');
     const goalColor = cssVar(el, '--chart-goal');
     const surface = cssVar(el, '--surface');
     const markerColor = cssVar(el, '--chart-dose');
@@ -59,14 +53,12 @@ export function WeightChart({
     const series: uPlot.Series[] = [
       dateSeries(),
       {
-        label: 'Daglig vikt',
-        stroke: pointColor,
-        paths: () => null,
-        // Dagsvärden svagt: de varierar med vätska och salt. Trenden är huvudsaken.
-        points: { show: true, size: 6, width: 0, stroke: surface, fill: pointColor },
+        label: 'Vikt',
+        stroke: accent,
+        width: 2.5,
+        points: { show: true, size: 6, width: 0, stroke: surface, fill: accent },
         value: fmt,
       },
-      { label: 'Trend', stroke: accent, width: 3.5, points: { show: false }, value: fmt },
     ];
     if (goalKg != null) {
       series.push({
@@ -105,7 +97,7 @@ export function WeightChart({
       stopObserving();
       chart.destroy();
     };
-  }, [daily, trend, goalKg, markers, height]);
+  }, [daily, goalKg, markers, height]);
 
   return (
     <div
@@ -114,8 +106,8 @@ export function WeightChart({
       role="img"
       aria-label={
         markers.length > 0
-          ? 'Viktgraf med dagliga värden, trendlinje, målvikt och dosbyten'
-          : 'Viktgraf med dagliga värden, trendlinje och målvikt'
+          ? 'Viktgraf med vikten dag för dag, målvikt och dosbyten'
+          : 'Viktgraf med vikten dag för dag och målvikt'
       }
       data-points={daily.length}
       data-markers={markers.length}

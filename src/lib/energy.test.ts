@@ -53,7 +53,7 @@ describe('BMR och TDEE', () => {
 });
 
 describe('maxRateKg', () => {
-  it('är 1 % av trendvikten men högst 1 kg/vecka', () => {
+  it('är 1 % av vikten men högst 1 kg/vecka', () => {
     expect(maxRateKg(70)).toBeCloseTo(0.7);
     expect(maxRateKg(100)).toBe(1);
     expect(maxRateKg(140)).toBe(1);
@@ -62,7 +62,7 @@ describe('maxRateKg', () => {
 
 describe('caloriePlan', () => {
   it('kalorimål = TDEE − takt × 7 700 / 7', () => {
-    const plan = caloriePlan({ profile: man, trendKg: 90, today: TODAY });
+    const plan = caloriePlan({ profile: man, weightKg: 90, today: TODAY });
     expect(plan.ageYears).toBe(40);
     expect(plan.bmr).toBe(1830);
     expect(plan.formulaTdee).toBeCloseTo(2836.5);
@@ -77,16 +77,16 @@ describe('caloriePlan', () => {
   });
 
   it('använder en skattad TDEE när den finns', () => {
-    const plan = caloriePlan({ profile: man, trendKg: 90, today: TODAY, tdeeOverride: 2500 });
+    const plan = caloriePlan({ profile: man, weightKg: 90, today: TODAY, tdeeOverride: 2500 });
     expect(plan.tdee).toBe(2500);
     expect(plan.targetKcal).toBe(1950);
     expect(plan.formulaTdee).toBeCloseTo(2836.5);
   });
 
-  it('spärr: takten sänks till 1 % av trendvikten', () => {
+  it('spärr: takten sänks till 1 % av vikten', () => {
     const plan = caloriePlan({
       profile: { ...man, ratePerWeekKg: 1, goalWeightKg: 60 },
-      trendKg: 70,
+      weightKg: 70,
       today: TODAY,
     });
     expect(plan.limits).toEqual(['rate-capped']);
@@ -95,10 +95,10 @@ describe('caloriePlan', () => {
     expect(plan.deficitKcal).toBeCloseTo(770);
   });
 
-  it('spärr: 1 kg/vecka tillåts först från 100 kg trendvikt', () => {
+  it('spärr: 1 kg/vecka tillåts först från 100 kg', () => {
     const heavy = caloriePlan({
       profile: { ...man, ratePerWeekKg: 1 },
-      trendKg: 120,
+      weightKg: 120,
       today: TODAY,
     });
     expect(heavy.limits).toEqual([]);
@@ -117,7 +117,7 @@ describe('caloriePlan', () => {
         ratePerWeekKg: 0.5,
         goalWeightKg: 55,
       },
-      trendKg: 60,
+      weightKg: 60,
       today: TODAY,
     });
     expect(plan.formulaTdee).toBeCloseTo(1426.8);
@@ -130,7 +130,7 @@ describe('caloriePlan', () => {
   it('spärr: kalorimålet går aldrig under 1 500 kcal för män', () => {
     const plan = caloriePlan({
       profile: { ...man, activityLevel: 'stillasittande', goalWeightKg: 55 },
-      trendKg: 62,
+      weightKg: 62,
       today: TODAY,
       tdeeOverride: 1600,
     });
@@ -142,7 +142,7 @@ describe('caloriePlan', () => {
   it('TDEE under golvet: målet blir golvet, takten 0 och ingen prognos', () => {
     const plan = caloriePlan({
       profile: { ...man, sex: 'kvinna' },
-      trendKg: 90,
+      weightKg: 90,
       today: TODAY,
       tdeeOverride: 1100,
     });
@@ -154,7 +154,7 @@ describe('caloriePlan', () => {
   it('kan ge både takt- och golvspärr samtidigt', () => {
     const plan = caloriePlan({
       profile: { ...man, sex: 'kvinna', ratePerWeekKg: 1, goalWeightKg: 50 },
-      trendKg: 60,
+      weightKg: 60,
       today: TODAY,
       tdeeOverride: 1600,
     });
@@ -163,7 +163,7 @@ describe('caloriePlan', () => {
   });
 
   it('målet nått: underhåll', () => {
-    const plan = caloriePlan({ profile: man, trendKg: 79.96, today: TODAY });
+    const plan = caloriePlan({ profile: man, weightKg: 79.96, today: TODAY });
     expect(plan.limits).toEqual(['goal-reached']);
     expect(plan.targetKcal).toBe(Math.round(plan.tdee));
     expect(plan.rateKg).toBe(0);
@@ -174,7 +174,7 @@ describe('caloriePlan', () => {
   it('takt 0 (håll vikten): kalorimålet är TDEE, ingen prognos och ingen måldatumskontroll', () => {
     const plan = caloriePlan({
       profile: { ...man, ratePerWeekKg: 0, goalDate: '2026-12-01' },
-      trendKg: 90,
+      weightKg: 90,
       today: TODAY,
     });
     expect(plan.limits).toEqual(['maintenance']);
@@ -186,18 +186,18 @@ describe('caloriePlan', () => {
   });
 
   it('under målvikten: också underhåll', () => {
-    expect(caloriePlan({ profile: man, trendKg: 75, today: TODAY }).limits).toEqual([
+    expect(caloriePlan({ profile: man, weightKg: 75, today: TODAY }).limits).toEqual([
       'goal-reached',
     ]);
   });
 
   describe('måldatum', () => {
     it('orimligt måldatum: varning med tidigaste rimliga datum, underskottet höjs inte', () => {
-      const without = caloriePlan({ profile: man, trendKg: 90, today: TODAY });
+      const without = caloriePlan({ profile: man, weightKg: 90, today: TODAY });
       // 6 veckor för 10 kg kräver 1,67 kg/vecka; max är 0,9 (1 % av 90).
       const plan = caloriePlan({
         profile: { ...man, goalDate: '2026-11-06' },
-        trendKg: 90,
+        weightKg: 90,
         today: TODAY,
       });
       expect(plan.goalDateCheck.kind).toBe('unrealistic');
@@ -212,7 +212,7 @@ describe('caloriePlan', () => {
     it('måldatum som kräver snabbare takt än vald men inom spärrarna', () => {
       const plan = caloriePlan({
         profile: { ...man, goalDate: '2027-01-03' }, // 100 dagar
-        trendKg: 90,
+        weightKg: 90,
         today: TODAY,
       });
       expect(plan.goalDateCheck).toEqual({ kind: 'needs-faster', requiredRateKg: 0.7 });
@@ -221,14 +221,18 @@ describe('caloriePlan', () => {
     it('måldatum som nås med vald takt', () => {
       const plan = caloriePlan({
         profile: { ...man, goalDate: '2027-04-13' }, // 200 dagar
-        trendKg: 90,
+        weightKg: 90,
         today: TODAY,
       });
       expect(plan.goalDateCheck).toEqual({ kind: 'ok', requiredRateKg: 0.35 });
     });
 
     it('passerat måldatum', () => {
-      const plan = caloriePlan({ profile: { ...man, goalDate: TODAY }, trendKg: 90, today: TODAY });
+      const plan = caloriePlan({
+        profile: { ...man, goalDate: TODAY },
+        weightKg: 90,
+        today: TODAY,
+      });
       expect(plan.goalDateCheck).toEqual({ kind: 'passed' });
     });
 
@@ -244,7 +248,7 @@ describe('caloriePlan', () => {
           goalWeightKg: 55,
           goalDate: '2026-12-25',
         },
-        trendKg: 60,
+        weightKg: 60,
         today: TODAY,
       });
       expect(plan.goalDateCheck.kind).toBe('unrealistic');

@@ -93,7 +93,7 @@ describe('summarizeWeek', () => {
     expect(summarizeWeek({ ...empty(), glp1: true }, MON).waterGoalMl).toBe(2100);
   });
 
-  it('summerar trend, intag, protein, vatten, pass och steg', () => {
+  it('summerar vikt, intag, protein, vatten, pass och steg', () => {
     const input: WeekInput = {
       ...empty(),
       weights: [
@@ -128,10 +128,8 @@ describe('summarizeWeek', () => {
     expect(s.from).toBe(MON);
     expect(s.to).toBe('2026-09-20');
     expect(s.weighDays).toBe(2);
-    // Trend före veckan 85; EMA 3 dagar mot 84, sedan 4 dagar mot 84.
-    const t1 = 85 + (1 - 0.9 ** 3) * (84 - 85);
-    const t2 = t1 + (1 - 0.9 ** 4) * (84 - t1);
-    expect(s.trendChangeKg).toBeCloseTo(t2 - 85, 6);
+    // Senaste vägningen före veckan 85, veckans sista 84.
+    expect(s.weightChangeKg).toBeCloseTo(-1, 6);
     expect(s.kcal).toBe(1800);
     expect(s.proteinG).toBe(120);
     expect(s.foodDays).toBe(2);
@@ -150,7 +148,7 @@ describe('summarizeWeek', () => {
   it('vecka utan data ger tomma värden', () => {
     const s = summarizeWeek(empty(), MON);
     expect(s).toMatchObject({
-      trendChangeKg: null,
+      weightChangeKg: null,
       kcal: null,
       proteinG: null,
       waterMl: null,
@@ -160,12 +158,12 @@ describe('summarizeWeek', () => {
     });
   });
 
-  it('ingen vägning i veckan: trenden saknas även om tidigare vägningar finns', () => {
+  it('ingen vägning i veckan: förändringen saknas även om tidigare vägningar finns', () => {
     const input = { ...empty(), weights: [{ date: '2026-09-10', weightKg: 85 }] };
-    expect(summarizeWeek(input, MON).trendChangeKg).toBeNull();
+    expect(summarizeWeek(input, MON).weightChangeKg).toBeNull();
   });
 
-  it('utan tidigare vägning räknas trenden från veckans första vägning', () => {
+  it('utan tidigare vägning räknas förändringen från veckans första vägning', () => {
     const input = {
       ...empty(),
       weights: [
@@ -173,10 +171,10 @@ describe('summarizeWeek', () => {
         { date: '2026-09-15', weightKg: 85 },
       ],
     };
-    expect(summarizeWeek(input, MON).trendChangeKg).toBeCloseTo(-0.1, 6);
+    expect(summarizeWeek(input, MON).weightChangeKg).toBeCloseTo(-1, 6);
     // En enda vägning ger ingen förändring att visa.
     const one = { ...empty(), weights: [{ date: '2026-09-14', weightKg: 86 }] };
-    expect(summarizeWeek(one, MON).trendChangeKg).toBeNull();
+    expect(summarizeWeek(one, MON).weightChangeKg).toBeNull();
   });
 
   it('snitt räknas bara över loggade dagar (luckor är inte noll)', () => {
@@ -256,22 +254,22 @@ describe('presentation', () => {
   });
 
   it('rubriken är uppmuntrande mot målet och neutral vid uppgång', () => {
-    expect(weekHeadline(summary({ trendChangeKg: -0.4 }), profile)).toBe(
-      'Trenden rörde sig 0,4 kg mot målet. Fint jobbat!',
+    expect(weekHeadline(summary({ weightChangeKg: -0.4 }), profile)).toBe(
+      'Vikten rörde sig 0,4 kg mot målet. Fint jobbat!',
     );
-    expect(weekHeadline(summary({ trendChangeKg: 0.3 }), profile)).toMatch(
-      /^Trenden planade ut, det händer\./,
+    expect(weekHeadline(summary({ weightChangeKg: 0.3 }), profile)).toMatch(
+      /^Vikten planade ut, det händer\./,
     );
-    expect(weekHeadline(summary({ trendChangeKg: 0.02 }), profile)).toMatch(/stabil/);
-    expect(weekHeadline(summary({ trendChangeKg: null }), profile)).toMatch(/Ingen vägning/);
+    expect(weekHeadline(summary({ weightChangeKg: 0.02 }), profile)).toMatch(/stabil/);
+    expect(weekHeadline(summary({ weightChangeKg: null }), profile)).toMatch(/Ingen vägning/);
     // Mål att gå upp i vikt: uppgång är mot målet.
     const gain = { startWeightKg: 60, goalWeightKg: 65 };
-    expect(weekHeadline(summary({ trendChangeKg: 0.3 }), gain)).toMatch(/mot målet/);
+    expect(weekHeadline(summary({ weightChangeKg: 0.3 }), gain)).toMatch(/mot målet/);
   });
 
   it('aldrig skuldbeläggande ord', () => {
     const texts = [-1, -0.2, 0, 0.2, 1, null].map((c) =>
-      weekHeadline(summary({ trendChangeKg: c }), profile),
+      weekHeadline(summary({ weightChangeKg: c }), profile),
     );
     texts.push(
       weekLoggedText(summary({ loggedDays: 0 })),
@@ -282,7 +280,7 @@ describe('presentation', () => {
 
   it('rader: text med mål och bara loggade värden', () => {
     const s = summary({
-      trendChangeKg: -0.36,
+      weightChangeKg: -0.36,
       kcal: 1812.4,
       foodDays: 5,
       targetKcal: 1900,
@@ -296,7 +294,7 @@ describe('presentation', () => {
     });
     const text = Object.fromEntries(WEEK_ROWS.map((r) => [r.id, r.text(s)]));
     expect(text).toEqual({
-      trend: '−0,4 kg',
+      vikt: '−0,4 kg',
       budget: null,
       kcal: '1 812 kcal (mål 1 900 kcal) · 5 dagar',
       protein: '102 g (mål 128 g)',

@@ -4,7 +4,7 @@
  */
 import type { PhotoEntry, PhotoSession } from '../db/db.ts';
 import { daysBetween } from './dates.ts';
-import { dailyWeights, emaTrend, roundKg, type DatedWeight } from './stats.ts';
+import { dailyWeights, roundKg, type DatedWeight } from './stats.ts';
 
 /** Vinkel för en bild. `okand` = migrerad bild där vinkeln inte är angiven än. */
 export type PhotoAngle = 'fram' | 'profil' | 'okand';
@@ -135,23 +135,23 @@ export function pickGhost<P extends PhotoEntry>(
   return candidates[0] ?? null;
 }
 
-/** Hur långt tillbaka en trendvikt får ligga för att förifyllas (dagar). */
-export const TREND_PREFILL_MAX_AGE_DAYS = 7;
+/** Hur långt tillbaka en vägning får ligga för att förifyllas (dagar). */
+export const WEIGHT_PREFILL_MAX_AGE_DAYS = 7;
 
 /**
- * Trendvikten (EMA) en viss dag, avrundad till en decimal: senaste trendpunkten
- * på eller före dagen, om den är högst en vecka gammal. Annars null.
+ * Vikten en viss dag, avrundad till en decimal: senaste dagsvikten på eller före dagen
+ * (medel vid flera vägningar), om den är högst en vecka gammal. Annars null.
  */
-export function trendWeightOn(weights: readonly DatedWeight[], date: string): number | null {
-  const trend = emaTrend(dailyWeights(weights.filter((w) => w.date <= date)));
-  const last = trend[trend.length - 1];
-  if (!last || daysBetween(last.date, date) > TREND_PREFILL_MAX_AGE_DAYS) return null;
-  return roundKg(last.trendKg);
+export function weightOnDate(weights: readonly DatedWeight[], date: string): number | null {
+  const daily = dailyWeights(weights.filter((w) => w.date <= date));
+  const last = daily[daily.length - 1];
+  if (!last || daysBetween(last.date, date) > WEIGHT_PREFILL_MAX_AGE_DAYS) return null;
+  return roundKg(last.weightKg);
 }
 
-/** Trendvikten som förifyllt värde i formulär ("84,2"), eller tom sträng. */
-export function trendWeightText(weights: readonly DatedWeight[], date: string): string {
-  const kg = trendWeightOn(weights, date);
+/** Vikten som förifyllt värde i formulär ("84,2"), eller tom sträng. */
+export function weightText(weights: readonly DatedWeight[], date: string): string {
+  const kg = weightOnDate(weights, date);
   return kg == null ? '' : kg.toFixed(1).replace('.', ',');
 }
 

@@ -3,8 +3,8 @@
  *
  * Regeln (`detectPlateau`): utvärderas bara när takten är > 0 (inte i
  * viktstabiliseringsläget), minst 4 veckor efter start och med vägning minst 70 %
- * av dagarna de senaste 21 dagarna. Platå = EMA-trendvikten har ändrats mindre än
- * 0,2 kg under de 21 dagarna.
+ * av dagarna de senaste 21 dagarna. Platå = snittvikten den sista veckan i fönstret skiljer sig
+ * mindre än 0,2 kg från snittvikten den första veckan (snitt jämnar ut dag-till-dag-bruset).
  *
  * Analysen (`analyzePlateau`) jämför de senaste tre veckorna med de tre innan
  * (hela dagar, t.o.m. igår – dagens matlogg är inte klar) och lyfter fram de en till
@@ -18,14 +18,22 @@ import { formatInt, formatKcal, formatKg, formatMg, formatShortDate } from './fo
 import { describeDose, doseChanges, doseOn, isActive, medicationStart } from './glp1.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { buildPlan, type PlanProfile } from './plan.ts';
-import { dailySteps, dailyWeights, emaTrend, type DatedSteps, type DatedWeight } from './stats.ts';
+import {
+  dailySteps,
+  dailyWeights,
+  weightChange,
+  type DatedSteps,
+  type DatedWeight,
+} from './stats.ts';
 
 /** Fönstret som platån bedöms över (dagar, t.o.m. idag). */
 export const PLATEAU_WINDOW_DAYS = 21;
-/** Trendvikten ska ha ändrats mindre än så här för att det ska räknas som platå. */
+/** Snittvikten ska ha ändrats mindre än så här för att det ska räknas som platå. */
 export const PLATEAU_THRESHOLD_KG = 0.2;
 /** Tidigast så här många dagar efter start. */
 export const PLATEAU_MIN_DAYS_SINCE_START = 28;
+/** Snittvikten jämförs mellan fönstrets första och sista så många dagar. */
+export const PLATEAU_AVERAGE_DAYS = 7;
 /** Minsta andel dagar med vägning i fönstret. */
 export const PLATEAU_MIN_WEIGH_FRACTION = 0.7;
 /** Ett stängt platåkort visas igen tidigast efter så här många dagar. */
@@ -43,7 +51,7 @@ export interface PlateauInput {
 
 export interface PlateauResult {
   kind: 'no-plateau' | 'plateau';
-  /** Trendvikt idag − trendvikt dagen före fönstret. */
+  /** Snittvikt fönstrets sista vecka − snittvikt fönstrets första vecka. */
   changeKg: number;
   from: string;
   to: string;
@@ -57,14 +65,14 @@ export type PlateauCheck =
     }
   | PlateauResult;
 
-/** Trendvikten vid ett datum (senaste punkten på eller före), eller `null`. */
-function trendAt(trend: readonly { date: string; trendKg: number }[], date: string): number | null {
-  let value: number | null = null;
-  for (const point of trend) {
-    if (point.date > date) break;
-    value = point.trendKg;
-  }
-  return value;
+/** Snittvikten för dagsvikterna `from`–`to`, eller `null` utan vägning. */
+function averageBetween(
+  daily: readonly { date: string; weightKg: number }[],
+  from: string,
+  to: string,
+): number | null {
+  const values = daily.filter((d) => d.date >= from && d.date <= to).map((d) => d.weightKg);
+  return values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 export function detectPlateau({ profile, weights, today }: PlateauInput): PlateauCheck {
@@ -81,10 +89,8 @@ export function detectPlateau({ profile, weights, today }: PlateauInput): Platea
   if (weighDays / PLATEAU_WINDOW_DAYS < PLATEAU_MIN_WEIGH_FRACTION) {
     return { kind: 'not-evaluated', reason: 'too-few-weighins' };
   }
-  const trend = emaTrend(daily);
-  // Utgångsläget är trenden dagen före fönstret, annars fönstrets första vägning.
-  const start = trendAt(trend, addDays(from, -1)) ?? trend.find((t) => t.date >= from)?.trendKg;
-  const end = trendAt(trend, today);
+  const start = averageBetween(daily, from, addDays(from, PLATEAU_AVERAGE_DAYS - 1));
+  const end = averageBetween(daily, addDays(today, -(PLATEAU_AVERAGE_DAYS - 1)), today);
   if (start == null || end == null) return { kind: 'not-evaluated', reason: 'too-few-weighins' };
   const changeKg = end - start;
   return {
@@ -113,8 +119,8 @@ export interface PeriodStats {
   from: string;
   to: string;
   days: number;
-  /** Trendvikt vid periodens slut − dagen före perioden. */
-  trendChangeKg: number | null;
+  /** Vikt vid periodens slut − senaste vägningen före perioden. */
+  weightChangeKg: number | null;
   /** Snitt per loggad matdag. */
   kcal: number | null;
   foodDays: number;
@@ -203,9 +209,7 @@ function activeDoses(
 
 export function periodStats(input: PlateauAnalysisInput, from: string, to: string): PeriodStats {
   const days = daysBetween(from, to) + 1;
-  const trend = emaTrend(dailyWeights(input.weights.filter((w) => w.date <= to)));
-  const end = trendAt(trend, to);
-  const start = trendAt(trend, addDays(from, -1));
+  const daily = dailyWeights(input.weights.filter((w) => w.date <= to));
   const intake = between(dailyIntake(input.foodLog), from, to).filter((d) => d.kcal > 0);
   const steps = between(dailySteps(input.steps), from, to);
   const done = between(input.workouts, from, to).filter((w) => w.status === 'genomford');
@@ -222,7 +226,7 @@ export function periodStats(input: PlateauAnalysisInput, from: string, to: strin
     from,
     to,
     days,
-    trendChangeKg: end !== null && start !== null ? end - start : null,
+    weightChangeKg: weightChange(daily, from, to),
     kcal: mean(intake.map((d) => d.kcal)),
     foodDays: intake.length,
     foodShare: intake.length / days,
@@ -361,11 +365,11 @@ export const PLATEAU_NOISE_NOTE =
 
 /** Rubriktext för kortet. */
 export function plateauHeadline(check: PlateauResult): string {
-  return `Trendvikten har ändrats ${formatKg(Math.abs(check.changeKg))} de senaste ${String(PLATEAU_WINDOW_DAYS)} dagarna.`;
+  return `Snittvikten har ändrats ${formatKg(Math.abs(check.changeKg))} på ${String(PLATEAU_WINDOW_DAYS / 7)} veckor.`;
 }
 
 export interface ComparisonRow extends FeatureGated {
-  id: 'trend' | 'kcal' | 'mat' | 'steg' | 'pass' | 'tdee' | 'dos';
+  id: 'vikt' | 'kcal' | 'mat' | 'steg' | 'pass' | 'tdee' | 'dos';
   label: string;
   recent: string;
   previous: string;
@@ -383,10 +387,10 @@ export function comparisonRows(analysis: PlateauAnalysis): ComparisonRow[] {
     p.steps === null ? null : formatInt(Math.round(p.steps / 100) * 100);
   const tdee = (p: PeriodStats) =>
     p.tdee === null ? null : `${formatKcal(p.tdee)}${p.tdeeSource === 'formel' ? ' (formel)' : ''}`;
-  const trend = (p: PeriodStats) =>
-    p.trendChangeKg === null ? null : formatKg(p.trendChangeKg, { signed: true });
+  const weight = (p: PeriodStats) =>
+    p.weightChangeKg === null ? null : formatKg(p.weightChangeKg, { signed: true });
   const rows: ComparisonRow[] = [
-    { id: 'trend', label: 'Trendvikt', recent: or(trend(recent)), previous: or(trend(previous)) },
+    { id: 'vikt', label: 'Vikt', recent: or(weight(recent)), previous: or(weight(previous)) },
     {
       id: 'kcal',
       label: 'Snittintag',
@@ -438,7 +442,7 @@ export function plateauPromptLines(
 ): string[] {
   const { recent, previous } = analysis;
   return [
-    `Trendvikten har ändrats ${formatKg(check.changeKg, { signed: true })} de senaste ${String(PLATEAU_WINDOW_DAYS)} dagarna (vägd ${String(check.weighDays)} av ${String(PLATEAU_WINDOW_DAYS)} dagar).`,
+    `Snittvikten har ändrats ${formatKg(check.changeKg, { signed: true })} på ${String(PLATEAU_WINDOW_DAYS / 7)} veckor (första mot sista veckan, vägd ${String(check.weighDays)} av ${String(PLATEAU_WINDOW_DAYS)} dagar).`,
     `Jämförelse – senaste 3 veckorna (${formatShortDate(recent.from)}–${formatShortDate(recent.to)}) mot de 3 innan (${formatShortDate(previous.from)}–${formatShortDate(previous.to)}):`,
     ...rows.map((r) => `- ${r.label}: ${r.recent} (innan ${r.previous})`),
     ...analysis.doseChanges.map((c) => `- Dosbyte ${c.text}`),

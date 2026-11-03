@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, daysBetween } from './dates.ts';
 import {
-  EMA_ALPHA,
   bmi,
   bmiCategory,
   dailySteps,
   dailyWeights,
-  emaTrend,
   filterRange,
   forecastGoal,
   goalProgress,
@@ -54,34 +52,6 @@ describe('dailyWeights', () => {
 
   it('ignorerar ogiltiga värden', () => {
     expect(dailyWeights([{ date: '2026-01-01', weightKg: Number.NaN }])).toEqual([]);
-  });
-});
-
-describe('emaTrend', () => {
-  it('startar på första värdet', () => {
-    expect(emaTrend(series('2026-01-01', [80]))).toEqual([{ date: '2026-01-01', trendKg: 80 }]);
-  });
-
-  it('följer standardformeln för dagliga värden', () => {
-    const trend = emaTrend(series('2026-01-01', [80, 81, 81]));
-    expect(trend[1]?.trendKg).toBeCloseTo(80 + EMA_ALPHA * 1);
-    expect(trend[2]?.trendKg).toBeCloseTo(80.1 + EMA_ALPHA * 0.9);
-  });
-
-  it('väger en lucka i datum som motsvarande antal missade dagar', () => {
-    const withGap = emaTrend([
-      { date: '2026-01-01', weightKg: 80, count: 1 },
-      { date: '2026-01-11', weightKg: 70, count: 1 },
-    ]);
-    // Samma resultat som tio dagliga värden på 70.
-    const daily = emaTrend(series('2026-01-01', [80, ...Array<number>(10).fill(70)]));
-    expect(withGap[1]?.trendKg).toBeCloseTo(daily[10]?.trendKg ?? Number.NaN);
-    // Och närmare det nya värdet än en enda dags steg.
-    expect(withGap[1]?.trendKg).toBeLessThan(80 - EMA_ALPHA * 10);
-  });
-
-  it('ger tom trend för tom indata', () => {
-    expect(emaTrend([])).toEqual([]);
   });
 });
 
@@ -206,7 +176,7 @@ describe('forecastGoal', () => {
     }));
   }
 
-  it('snabb tidig nedgång dag 1–14: ingen trendprognos (plan visas)', () => {
+  it('snabb tidig nedgång dag 1–14: ingen prognos ur vägningarna (plan visas)', () => {
     // −0,4 kg/dag = −2,8 kg/vecka de första två veckorna.
     const daily = weighIns(14, { kgPerDay: -0.4 });
     const f = forecastGoal({
@@ -237,7 +207,7 @@ describe('forecastGoal', () => {
     });
   });
 
-  it('dag 30 med stabil takt: regressionsprognos på trendvikten', () => {
+  it('dag 30 med stabil takt: regressionsprognos på dagsvikterna', () => {
     // −0,07 kg/dag ≈ −0,5 kg/vecka, en vägning per dag.
     const daily = weighIns(31);
     const today = addDays(start, 30);
@@ -246,19 +216,19 @@ describe('forecastGoal', () => {
     if (f.kind !== 'forecast') return;
     expect(f.weeklyChangeKg).toBeCloseTo(-0.49, 1);
     expect(f.weeklyChangeKg).toBe(f.measuredWeeklyChangeKg);
-    // Från trendvikten: datumet = idag + kvar ÷ takt.
-    const trendKg = emaTrend(daily).at(-1)?.trendKg ?? NaN;
-    const fromTrend = forecastGoal({ daily, goalKg: 85, today, startDate: start, fromKg: trendKg });
-    const days = Math.ceil(((trendKg - 85) / -f.weeklyChangeKg) * 7);
-    expect(fromTrend).toMatchObject({ kind: 'forecast', date: addDays(today, days) });
+    // Från senaste vikten (lite högre än linjen): datumet = idag + kvar ÷ takt.
+    const lastKg = (daily.at(-1)?.weightKg ?? NaN) + 0.3;
+    const fromLast = forecastGoal({ daily, goalKg: 85, today, startDate: start, fromKg: lastKg });
+    const days = Math.ceil(((lastKg - 85) / -f.weeklyChangeKg) * 7);
+    expect(fromLast).toMatchObject({ kind: 'forecast', date: addDays(today, days) });
   });
 
   it('exkluderar de första 14 dagarna (vätskefasen) ur takten', () => {
-    // Dag 0–13: −0,4 kg/dag (−2,8 kg/vecka), därefter stilla.
+    // Dag 0–13: −0,4 kg/dag (−2,8 kg/vecka), därefter −0,05 kg/dag.
     const early = weighIns(14, { kgPerDay: -0.4 });
     const later = Array.from({ length: 17 }, (_, i) => ({
       date: addDays(start, 14 + i),
-      weightKg: 95 - 0.4 * 14,
+      weightKg: 95 - 0.4 * 14 - 0.05 * i,
       count: 1,
     }));
     const input = { daily: [...early, ...later], goalKg: 80, today: addDays(start, 30), rateKg: 5 };
@@ -272,17 +242,18 @@ describe('forecastGoal', () => {
     }
   });
 
-  it('takt över taket: prognosen räknar med det högsta av vald takt och 1 % av trendvikten', () => {
-    // −0,2 kg/dag = −1,4 kg/vecka från 100 kg; taket = max(0,5; 1 % av ~93 kg) ≈ 0,93 kg/vecka.
+  it('takt över taket: prognosen räknar med det högsta av vald takt och 1 % av vikten', () => {
+    // −0,2 kg/dag = −1,4 kg/vecka från 100 kg; taket = max(0,5; 1 % av 93 kg) = 0,93 kg/vecka.
     const daily = weighIns(36, { fromKg: 100, kgPerDay: -0.2 });
     const today = addDays(start, 35);
     const f = forecastGoal({ daily, goalKg: 80, today, startDate: start, rateKg: 0.5 });
     expect(f).toMatchObject({ kind: 'forecast', capped: true });
     if (f.kind !== 'forecast') return;
-    const trendKg = emaTrend(daily).at(-1)?.trendKg ?? NaN;
-    expect(f.weeklyChangeKg).toBeCloseTo(-0.01 * trendKg);
+    // Rak linje: linjens värde = senaste vikten.
+    const lastKg = daily.at(-1)?.weightKg ?? NaN;
+    expect(f.weeklyChangeKg).toBeCloseTo(-0.01 * lastKg);
     expect(f.measuredWeeklyChangeKg).toBeLessThan(-1.2);
-    expect(f.date).toBe(addDays(today, Math.ceil(((trendKg - 80) / (0.01 * trendKg)) * 7)));
+    expect(f.date).toBe(addDays(today, Math.ceil(((lastKg - 80) / (0.01 * lastKg)) * 7)));
 
     // En vald takt över 1 % höjer taket: 1,2 kg/vecka.
     const faster = forecastGoal({ daily, goalKg: 80, today, startDate: start, rateKg: 1.2 });
@@ -291,8 +262,8 @@ describe('forecastGoal', () => {
   });
 
   it('stor spridning: intervall i stället för ett datum', () => {
-    // Var annan dag, ±2 kg i block om två vägningar runt −0,5 kg/vecka.
-    const noise = (i: number) => (i % 4 < 2 ? 2 : -2);
+    // Var annan dag, ±0,6 kg i block om två vägningar runt −0,5 kg/vecka.
+    const noise = (i: number) => (i % 4 < 2 ? 0.6 : -0.6);
     const daily = weighIns(20, { step: 2, noise });
     const today = addDays(start, 38);
     const f = forecastGoal({ daily, goalKg: 85, today, startDate: start, rateKg: 0.5 });
@@ -306,7 +277,7 @@ describe('forecastGoal', () => {
 
     // Liten spridning: ett datum.
     const calm = forecastGoal({
-      daily: weighIns(20, { step: 2, noise: (i) => (i % 4 < 2 ? 0.2 : -0.2) }),
+      daily: weighIns(20, { step: 2, noise: (i) => (i % 4 < 2 ? 0.1 : -0.1) }),
       goalKg: 85,
       today,
       startDate: start,
@@ -335,7 +306,7 @@ describe('forecastGoal', () => {
     if (f.kind === 'forecast') expect(f.daysVsGoalDate).toBe(daysBetween('2026-04-01', f.date));
   });
 
-  it('säger ifrån när trenden går åt fel håll eller står still', () => {
+  it('säger ifrån när vikten går åt fel håll eller står still', () => {
     const today = addDays(start, 30);
     const rising = weighIns(31, { kgPerDay: 0.05 });
     expect(forecastGoal({ daily: rising, goalKg: 85, today, startDate: start }).kind).toBe(

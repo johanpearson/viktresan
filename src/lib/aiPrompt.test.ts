@@ -96,7 +96,7 @@ describe('buildAiPrompt', () => {
   it('bygger en svensk prompt med mål, innehåll och instruktioner', () => {
     const prompt = buildAiPrompt(breakfast, context(), DEFAULT_AI_OPTIONS);
     expect(prompt).toContain('förbättra min frukost 26 sep');
-    expect(prompt).toContain('Om mig: 40 år, man, 180 cm, trendvikt 88');
+    expect(prompt).toContain('Om mig: 40 år, man, 180 cm, vikt 88');
     expect(prompt).toContain('Mål: 80,0 kg, takt 0,5 kg/vecka.');
     expect(prompt).toMatch(/Dagsmål: [\d ]+ kcal och 128 g protein\./);
     expect(prompt).toContain('Dagens intag hittills (inklusive måltiden): 660 kcal, 66 g protein.');
@@ -125,7 +125,7 @@ describe('buildAiPrompt', () => {
 
   const cases: [AiOption, string[]][] = [
     ['personal', ['40 år', ', man,']],
-    ['body', ['180 cm', 'trendvikt']],
+    ['body', ['180 cm', 'vikt 8']],
     ['goal', ['Mål: 80,0 kg', 'takt 0,5']],
     ['targets', ['Dagsmål:']],
     ['dayIntake', ['Dagens intag hittills']],
@@ -202,12 +202,12 @@ describe('buildAiPrompt', () => {
 });
 
 describe('buildAiPrompt – platå', () => {
-  const plateau = { kind: 'plateau' as const, lines: ['Trendvikten har ändrats +0,1 kg.'] };
+  const plateau = { kind: 'plateau' as const, lines: ['Snittvikten har ändrats +0,1 kg.'] };
 
   it('använder platåmallen med analysen som underlag, utan matpreferenser', () => {
     const prompt = buildAiPrompt(plateau, context(), DEFAULT_AI_OPTIONS);
     expect(prompt).toContain('förstå min viktplatå');
-    expect(prompt).toContain('Trendvikten har ändrats +0,1 kg.');
+    expect(prompt).toContain('Snittvikten har ändrats +0,1 kg.');
     expect(prompt).toContain('inga ändringar av läkemedelsdoser');
     expect(prompt).not.toContain('Mina matpreferenser');
   });

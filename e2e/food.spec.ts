@@ -25,7 +25,7 @@ const LIVSMEDEL = {
 const EAN = '4006381333931';
 const UNKNOWN_EAN = '73513537';
 
-/** Man född 1986, 180 cm, måttligt aktiv, 0,5 kg/vecka, ingen vikt loggad (trend = 90 kg). */
+/** Man född 1986, 180 cm, måttligt aktiv, 0,5 kg/vecka, ingen vikt loggad (vikt = 90 kg). */
 const PROFILE = {
   startDate: isoDaysFromToday(-10),
   startWeightKg: 90,
@@ -751,7 +751,7 @@ test('historik och översikt: intag mot mål, 7-dagarssnitt och förklarade spä
   // Måldatumet visas bara på viktkortet – panelen har inget andra datum.
   await expect(page.getByTestId('plan-forecast')).toHaveCount(0);
   const notes = page.getByTestId('plan-notes');
-  await expect(notes).toContainText('Vald takt (1 kg/vecka) är snabbare än 1 % av din trendvikt');
+  await expect(notes).toContainText('Vald takt (1 kg/vecka) är snabbare än 1 % av din vikt');
   await expect(notes).toContainText('Underskottet höjs inte');
   await expect(notes).toContainText('Tidigaste rimliga datum är omkring');
   await page.getByText('Så räknas målet ut').tap();

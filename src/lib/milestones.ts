@@ -2,23 +2,15 @@
  * Milstolpar: regler, utvärdering, "nästa på tur" och texter. Rena funktioner utan I/O –
  * allt som behövs skickas in, inklusive "idag".
  *
- * Viktmilstolparna mäts på trendvikten (EMA), inte på dagsvikten, så att en tillfällig dipp
- * (vätska, salt) inte ger en milstolpe som sedan "tas tillbaka". En milstolpe som en gång
- * nåtts sparas och ligger kvar (se `milestoneSync.ts`).
+ * Viktmilstolparna mäts på den faktiska vikten (dagsvikten, medel vid flera vägningar samma dag).
+ * En milstolpe som en gång nåtts sparas och ligger kvar (se `milestoneSync.ts`).
  */
 import { addDays, daysBetween } from './dates.ts';
 import type { FeatureGated } from './features.ts';
 import { formatInt, formatKg } from './format.ts';
 import { dailyIntake, type DatedPortion } from './nutrition.ts';
 import { proteinGoalFor } from './protein.ts';
-import {
-  bmi,
-  dailyWeights,
-  emaTrend,
-  roundKg,
-  type DatedWeight,
-  type TrendPoint,
-} from './stats.ts';
+import { bmi, dailyWeights, roundKg, type DailyWeight, type DatedWeight } from './stats.ts';
 import {
   dailyWater,
   drinkEntries,
@@ -262,9 +254,9 @@ function daysText(n: number): string {
   return n === 1 ? '1 dag' : `${formatInt(n)} dagar`;
 }
 
-/** Första trendpunkten som uppfyller villkoret. */
-function firstTrend(trend: readonly TrendPoint[], test: (kg: number) => boolean): string | null {
-  return trend.find((p) => test(p.trendKg))?.date ?? null;
+/** Första vägningsdagen som uppfyller villkoret. */
+function firstWeight(daily: readonly DailyWeight[], test: (kg: number) => boolean): string | null {
+  return daily.find((p) => test(p.weightKg))?.date ?? null;
 }
 
 /** Datumet då räkningen nådde `n` (datumen sorterade, ett per dag), annars null. */
@@ -285,17 +277,17 @@ export function evaluateMilestones(input: MilestoneInput, today: string): Milest
   const upToToday = <T extends { date: string }>(items: readonly T[]) =>
     items.filter((i) => i.date <= today);
   const { profile } = input;
-  const trend = emaTrend(dailyWeights(upToToday(input.weights)));
+  const daily = dailyWeights(upToToday(input.weights));
 
   if (profile) {
     const start = profile.startWeightKg;
-    const current = trend.at(-1)?.trendKg ?? start;
+    const current = daily.at(-1)?.weightKg ?? start;
     const goal = profile.goalWeightKg;
     const losing = goal < start;
 
-    /** Milstolpe vid en tröskel i kg (trendvikten på eller under). */
+    /** Milstolpe vid en tröskel i kg (vikten på eller under). */
     const weightCandidate = (id: string, thresholdKg: number, upcoming = true) => {
-      const date = firstTrend(trend, (kg) => roundKg(kg) <= roundKg(thresholdKg));
+      const date = firstWeight(daily, (kg) => roundKg(kg) <= roundKg(thresholdKg));
       result.push({
         milestone: known(id),
         date,
@@ -314,7 +306,7 @@ export function evaluateMilestones(input: MilestoneInput, today: string): Milest
     for (let kg = KG_STEP; start - kg >= MIN_WEIGHT_KG; kg += KG_STEP) kgSteps.push(kg);
     for (const kg of kgSteps) {
       const threshold = start - kg;
-      const reached = firstTrend(trend, (t) => roundKg(t) <= roundKg(threshold)) !== null;
+      const reached = firstWeight(daily, (t) => roundKg(t) <= roundKg(threshold)) !== null;
       if (!reached && nextKgIncluded) continue;
       if (!reached) nextKgIncluded = true;
       weightCandidate(`kg-${String(kg)}`, threshold, !reached && beforeGoal(threshold));
@@ -330,8 +322,8 @@ export function evaluateMilestones(input: MilestoneInput, today: string): Milest
       const m2 = (profile.heightCm / 100) ** 2;
       for (const step of BMI_STEPS) {
         if (startBmi < step.limit) continue;
-        const date = firstTrend(
-          trend,
+        const date = firstWeight(
+          daily,
           (kg) => (bmi(kg, profile.heightCm) ?? Infinity) < step.limit,
         );
         const threshold = step.limit * m2;
@@ -553,14 +545,14 @@ export function milestoneMessages(milestone: Milestone): string[] {
       if (n === 1) {
         return [
           'Första kilot är borta – ungefär som en liter mjölk. Starten är gjord!',
-          'Trenden visar ett kilo mindre. Små steg blir stora över tid.',
-          'Ett kilo på trenden, inte bara en bra dag på vågen. Fint!',
+          'Vågen visar ett kilo mindre. Små steg blir stora över tid.',
+          'Ett kilo mindre än när du började. Fint!',
         ];
       }
       return [
-        `${String(n)} kg lättare på trendvikten. ${kgComparison(n)}`,
+        `${String(n)} kg lättare än vid start. ${kgComparison(n)}`,
         `Du har tagit dig ${String(n)} kg närmare. ${kgComparison(n)} Tänk på allt arbete bakom det.`,
-        `${String(n)} kg – och det är trenden, så det håller. ${kgComparison(n)}`,
+        `${String(n)} kg – det är mycket. ${kgComparison(n)}`,
       ];
     case 'procent':
       return n >= 10
@@ -574,7 +566,7 @@ export function milestoneMessages(milestone: Milestone): string[] {
           ];
     case 'bmi':
       return [
-        'Trendvikten har tagit dig in i en ny BMI-kategori. Ett tydligt tecken på att det går åt rätt håll.',
+        'Vikten har tagit dig in i en ny BMI-kategori. Ett tydligt tecken på att det går åt rätt håll.',
         'Nytt BMI-intervall! Siffran är bara en del av bilden, men riktningen är din förtjänst.',
       ];
     case 'halvvags':
@@ -595,11 +587,11 @@ export function milestoneMessages(milestone: Milestone): string[] {
           ]
         : n >= 30
           ? [
-              '30 dagar med loggning. En hel månads underlag – nu blir trenderna riktigt pålitliga.',
+              '30 dagar med loggning. En hel månads underlag – nu blir kurvorna riktigt pålitliga.',
               'Trettio loggade dagar! Du ser din egen utveckling tydligare för varje dag.',
             ]
           : [
-              'En veckas loggning! Varje dag du loggar gör trenden säkrare.',
+              'En veckas loggning! Varje dag du loggar gör bilden säkrare.',
               'Sju loggade dagar – en bra början på en vana.',
             ];
     case 'pass':

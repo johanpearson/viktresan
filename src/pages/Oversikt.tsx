@@ -21,7 +21,6 @@ import { formatKg, formatMonthRange, formatMonthYear, formatShortDate } from '..
 import { CAPPED_NOTE, goalEta, overviewStats, type GoalEta } from '../lib/overview.ts';
 import { useOverviewItems } from '../lib/overviewItems.ts';
 import { buildPlan } from '../lib/plan.ts';
-import { usePreferences } from '../lib/preferences.ts';
 import { dailyWeights } from '../lib/stats.ts';
 import { useAppData } from '../lib/useAppData.ts';
 
@@ -52,7 +51,7 @@ export function Oversikt() {
             title="Välkommen till Viktresan"
             action={{ label: 'Fyll i profilen', href: '#/installningar/profil' }}
           >
-            Börja med startvikt, längd och mål – sedan fylls Översikt med trend, dagens intag och
+            Börja med startvikt, längd och mål – sedan fylls Översikt med vikt, dagens intag och
             prognos.
           </EmptyState>
         </>
@@ -89,12 +88,12 @@ interface WeightCardProps {
   today: string;
 }
 
-/** "mål ca feb. 2027", "mål ca mars–maj 2027" (osäker trend) eller "mål ca feb. 2027 enligt plan". */
+/** "mål ca feb. 2027", "mål ca mars–maj 2027" (osäker takt) eller "mål ca feb. 2027 enligt plan". */
 function etaText(eta: GoalEta): string {
   switch (eta.kind) {
     case 'reached':
       return 'Målet nått!';
-    case 'trend':
+    case 'forecast':
       return `mål ca ${eta.range ? formatMonthRange(eta.range.from, eta.range.to) : formatMonthYear(eta.date)}`;
     case 'plan':
       return `mål ca ${formatMonthYear(eta.date)} enligt plan`;
@@ -102,16 +101,14 @@ function etaText(eta: GoalEta): string {
 }
 
 /**
- * Viktkortet: trendvikten stort (eller dagsvikten), dagsvikt och datum på en rad, framsteg mot
- * målet och en rad "−X kg · Y kg kvar · mål ca [månad år]" – en enda måldatumsuppgift. Tryck på
+ * Viktkortet: senaste vikten stort med datum, framsteg mot målet och en rad "−X kg · Y kg kvar · mål ca [månad år]" – en enda måldatumsuppgift. Tryck på
  * kortet = Framsteg → Historik (graf, BMI, prognosens detaljer).
  */
 function WeightCard({ profile, weights, foodLog, today }: WeightCardProps) {
   const daily = dailyWeights(weights);
-  const { prefs } = usePreferences();
   // Alla härledda värden (förändring, kvar, prognos) räknas på samma vikt som huvudsiffran.
-  const stats = overviewStats({ profile, daily, today, preferTrend: prefs.trendHero });
-  const { progress, dailyKg: currentKg, trendKg, latestDate } = stats;
+  const stats = overviewStats({ profile, daily, today });
+  const { progress, weightKg: currentKg, latestDate } = stats;
   const plan = buildPlan(profile, weights, foodLog, today);
   const eta = goalEta({
     stats,
@@ -119,43 +116,24 @@ function WeightCard({ profile, weights, foodLog, today }: WeightCardProps) {
     rateKg: profile.ratePerWeekKg,
     planDate: plan.kind === 'plan' ? plan.plan.forecastDate : null,
   });
-  const trendHero = stats.source === 'trend' && trendKg != null && latestDate != null;
   const [etaInfoOpen, setEtaInfoOpen] = useState(false);
   const etaInfoId = useId();
 
   return (
     <section className="card hero hero-card" data-testid="hero" aria-label="Vikt och mål">
-      {trendHero ? (
-        <>
-          <TrendLabel />
-          <p className="hero-value" data-testid="trend-weight">
-            {formatKg(trendKg)}
-          </p>
-          <p className="hero-sub">
-            Dagsvikt{' '}
-            <span className="num" data-testid="current-weight">
-              {formatKg(currentKg)}
-            </span>{' '}
-            · <span className="nowrap">{formatShortDate(latestDate)}</span>
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="hero-label">{latestDate ? 'Dagsvikt' : 'Startvikt'}</p>
-          <p className="hero-value" data-testid="current-weight">
-            {formatKg(currentKg)}
-          </p>
-          <p className="hero-sub">
-            {latestDate ? (
-              <>
-                Senast loggad <span className="nowrap">{formatShortDate(latestDate)}</span>
-              </>
-            ) : (
-              'Ingen vägning ännu'
-            )}
-          </p>
-        </>
-      )}
+      <p className="hero-label">{latestDate ? 'Vikt' : 'Startvikt'}</p>
+      <p className="hero-value" data-testid="current-weight">
+        {formatKg(currentKg)}
+      </p>
+      <p className="hero-sub">
+        {latestDate ? (
+          <>
+            Senast loggad <span className="nowrap">{formatShortDate(latestDate)}</span>
+          </>
+        ) : (
+          'Ingen vägning ännu'
+        )}
+      </p>
       <div className="hero-progress">
         <ProgressBar
           thin
@@ -195,7 +173,7 @@ function WeightCard({ profile, weights, foodLog, today }: WeightCardProps) {
             </>
           )}
         </p>
-        {eta?.kind === 'trend' && eta.capped && (
+        {eta?.kind === 'forecast' && eta.capped && (
           <p className="hero-sub" data-testid="goal-eta-capped">
             {CAPPED_NOTE}
           </p>
@@ -212,35 +190,5 @@ function WeightCard({ profile, weights, foodLog, today }: WeightCardProps) {
       </a>
       <span className="list-row-chevron hero-chevron" aria-hidden="true" />
     </section>
-  );
-}
-
-/** Rubriken "Trendvikt" med en info-knapp som fäller ut en kort förklaring. */
-function TrendLabel() {
-  const [open, setOpen] = useState(false);
-  const infoId = useId();
-  return (
-    <>
-      <p className="hero-label hero-label-info">
-        Trendvikt
-        <InfoButton
-          label="Vad är trendvikt?"
-          expanded={open}
-          controls={infoId}
-          testId="trend-info"
-          onToggle={() => {
-            setOpen((o) => !o);
-          }}
-        />
-      </p>
-      {open && (
-        <p className="hero-info" id={infoId} data-testid="trend-info-text">
-          Trendvikten är ett utjämnat snitt som varje dag rör sig ungefär 10 % mot dagens vikt. Den
-          släpar efter i början men filtrerar bort vätskesvängningar – dagsvikten varierar normalt
-          med vätska och salt, trenden visar den verkliga riktningen. Förändring, kvar till mål och
-          prognos räknas på trendvikten.
-        </p>
-      )}
-    </>
   );
 }

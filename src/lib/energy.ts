@@ -4,7 +4,7 @@
  *
  * - BMR enligt Mifflin-St Jeor, TDEE = BMR × aktivitetsfaktor.
  * - Dagligt kalorimål = TDEE − (takt × 7 700 / 7).
- * - Spärrar: takt högst 1 kg/vecka och högst 1 % av trendvikten per vecka,
+ * - Spärrar: takt högst 1 kg/vecka och högst 1 % av vikten per vecka,
  *   kalorimål aldrig under 1 500 kcal (man) / 1 200 kcal (kvinna).
  * - Måldatum höjer aldrig underskottet – det kontrolleras bara mot vad som är rimligt.
  */
@@ -53,7 +53,7 @@ export const DEFAULT_RATE_KG = 0.5;
 export const KCAL_PER_KG = 7700;
 /** Högsta tillåtna takt oavsett vikt (kg/vecka). */
 export const MAX_RATE_KG = 1;
-/** Högsta tillåtna takt som andel av trendvikten per vecka. */
+/** Högsta tillåtna takt som andel av vikten per vecka. */
 export const MAX_RATE_FRACTION = 0.01;
 
 export const CALORIE_FLOOR: Record<Sex, number> = { man: 1500, kvinna: 1200 };
@@ -77,9 +77,9 @@ export function bmrMifflinStJeor(
   return 10 * weightKg + 6.25 * heightCm - 5 * ageYears + (sex === 'man' ? 5 : -161);
 }
 
-/** Högsta tillåtna takt (kg/vecka) vid en viss trendvikt. */
-export function maxRateKg(trendKg: number): number {
-  return Math.min(MAX_RATE_KG, MAX_RATE_FRACTION * trendKg);
+/** Högsta tillåtna takt (kg/vecka) vid en viss vikt. */
+export function maxRateKg(weightKg: number): number {
+  return Math.min(MAX_RATE_KG, MAX_RATE_FRACTION * weightKg);
 }
 
 /** Dagligt underskott (kcal) för en takt i kg/vecka. */
@@ -104,11 +104,11 @@ export interface EnergyProfile {
 
 /** Spärrar som påverkat kalorimålet. */
 export type PlanLimit =
-  /** Vald takt överstiger 1 kg/vecka eller 1 % av trendvikten – takten sänktes. */
+  /** Vald takt överstiger 1 kg/vecka eller 1 % av vikten – takten sänktes. */
   | 'rate-capped'
   /** Kalorimålet skulle hamna under golvet – det höjdes och takten sänktes. */
   | 'calorie-floor'
-  /** Trendvikten ligger på eller under målvikten – målet är underhåll. */
+  /** Vikten ligger på eller under målvikten – målet är underhåll. */
   | 'goal-reached'
   /** Vald takt är 0 (viktstabilisering) – kalorimålet är förbrukningen. */
   | 'maintenance';
@@ -131,8 +131,8 @@ export type GoalDateCheck =
 
 export interface CaloriePlanInput {
   profile: EnergyProfile;
-  /** Aktuell trendvikt (kg). */
-  trendKg: number;
+  /** Senaste vikten (kg). */
+  weightKg: number;
   today: string;
   /** Skattad TDEE från loggdata (redan viktad mot formeln), om sådan finns. */
   tdeeOverride?: number | null | undefined;
@@ -171,18 +171,18 @@ function dateAfterWeeks(today: string, weeks: number): string {
 
 export function caloriePlan({
   profile,
-  trendKg,
+  weightKg,
   today,
   tdeeOverride,
 }: CaloriePlanInput): CaloriePlan {
   const ageYears = ageFromBirthYear(profile.birthYear, today);
-  const bmr = bmrMifflinStJeor(profile.sex, trendKg, profile.heightCm, ageYears);
+  const bmr = bmrMifflinStJeor(profile.sex, weightKg, profile.heightCm, ageYears);
   const formulaTdee = bmr * activityFactor(profile.activityLevel);
   const tdee = tdeeOverride ?? formulaTdee;
   const floorKcal = CALORIE_FLOOR[profile.sex];
-  const maxRate = maxRateKg(trendKg);
+  const maxRate = maxRateKg(weightKg);
   const chosenRateKg = profile.ratePerWeekKg;
-  const remainingKg = Math.max(0, trendKg - profile.goalWeightKg);
+  const remainingKg = Math.max(0, weightKg - profile.goalWeightKg);
   const limits: PlanLimit[] = [];
 
   let rateKg: number;

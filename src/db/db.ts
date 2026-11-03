@@ -427,7 +427,7 @@ export interface MilestoneRecord {
 }
 
 /**
- * Ett fototillfälle (sedan v9): datum, valfri vikt (förifylld från trendvikten) och
+ * Ett fototillfälle (sedan v9): datum, valfri vikt (förifylld från senaste vägningen) och
  * anteckning. Bilderna pekar på tillfället med `sessionId`.
  */
 export interface PhotoSession {
